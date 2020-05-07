@@ -1,0 +1,20 @@
+[package]
+name = "tor-bytes"
+version = "0.0.0"
+authors = ["Nick Mathewson <nickm@torproject.org>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+tor-llcrypto = { path="../tor-llcrypto" }
+
+arrayref = "*"
+# XXXX why did I have to downgrade?
+generic-array = "0.12"
+crypto-mac = "*"
+thiserror = "*"
+
+[dev-dependencies]
+hex-literal = "*"
+

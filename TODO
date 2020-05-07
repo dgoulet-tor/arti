@@ -1,0 +1,121 @@
+- Not done
+. Partially done
+o complete
+X Won't do.
+
+- Decisions
+  - Which protocols to support?
+  - How far up the stack to go?
+  - How speculative to get?
+
+- Specs
+  - Test vectors
+    - Add test vectors for ntor
+    - Add test vectors for relay crypto
+    - Add test vectors for hs-ntor
+    - Add test vectors for hs-relay crypto
+    - Add test vectors for TAP
+  - Clarity
+    - END cell format
+  - Directory consistency
+    - "-----BEGIN" should not be a valid keyword
+    - Whitespace at start of line, y/n?  Mixed whitespace, y/n? CR, y/n?
+    - UTF-8.
+
+- Primitive crypto
+  - Wrap x25519 in a trait
+  - Use signature trait for ed25519.
+  - Add RSA-pkcs1 signature support
+  - Add RSA-pem encode/decode support
+  - RSA-oaep, if supported.
+  - test vectors for sha1
+  - test vectors for sha2
+  - test vectors for sha3/shake
+  - RSA test vectors as needed
+
+- Higher level crypto
+  - Test vectors for hmac
+  - Test vectors for tap-kdf
+  - Test vectors for hkdf
+  - Test vectors for other kdfs
+
+- Main Protocol functionality
+  o encode and decode regular cell types.
+  . handshakes
+    o ntor
+  . relay crypto
+    o implement
+    - tests
+  - Internals:
+    - Consider using a safer thing instead of current bytereader.  Like the
+      one rustls has? Like "untrusted"?
+    - Consider using a writer trait that's agnostic about whether it's
+      writing into an expanding Vec or a fixed slice.
+  - Good API for "make this cell and encrypt it and write it"
+  - Good API for "take a cell out of a Reader" and stuff that comes after.
+  - Async variant of that API?
+  - Tests
+    - For all cell types
+    - for all relay cell types
+    - For all handshakes
+  - State for multiplexing circuits on a connection
+  - State for sending sendme cells, both versions.
+    - V1 sendmes
+  - State for managing streams
+  - Initial protocol handshake for client/relay authentication
+  - Initial protocol handshake for relay/relay authentication
+
+- Directory parsing stuff
+  . Parsing backend
+    o Get tokens
+    - Match tor's actual token behavior?
+    o Remove extraneous hoohaw.
+    o Get a "parse into a vector of maybe-tokens" thing.
+    o Get a "validate that every must-token is there" thing.
+    - Macro for making a Keyword type.
+    - maybe, macro for making a sectionrules
+  - Parse descriptors
+    - Parse into a reasonable routerdesc object.
+    - Parse a pile of them.
+    - Check ed signatures on router descriptors
+    - Check rsa signatures on descriptors
+    - Check additional invariants?
+  - Parse consensus directories, both variants.
+  - Parse microdescs
+  - Apply consensus diffs
+
+- Directory encoding stuff
+  - Encoding/signing backend
+  - Encode descriptors
+
+- Additional small functionality, protocol level
+  - Relay padding
+
+- HS functionality
+  - encode and decode hs cell types
+  - State as needed for hs lookup
+  - hs cell types
+  - hs directory stuff
+    - HSv3 directory obejcts, encode
+    - HSv3 directory objects, decode
+  - crypto variants
+    - hsv3 variant of relay crypto
+    - hsv3 variant of ntor
+    - tests and vectors for the above.
+
+X Not currently planning to do:
+  X Link protocol v1 (multicert)
+  X Link protocol v2 (renegotiation)
+
+- Unsure if planning to do:
+  - Link protocol v3 (short circuit IDs, PK comparison)
+  - Linkauth 1 (RSA-SHA256-TLSSecret)
+  - Parsing votes
+  - HSv2 directory support
+  - Supporting relays without ed25519 keys.
+  - Compute consensus diffs
+
+- Waiting on RSA-OAEP:
+  - Handshakes
+    - TAP
+  - HSv2 handshakes

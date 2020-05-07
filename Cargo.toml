@@ -1,0 +1,11 @@
+[workspace]
+
+members = [
+    "caret",
+    "tor-llcrypto",
+    "tor-protover",
+    "tor-bytes",
+    "tor-cert",
+    "tor-proto",
+    "tor-netdoc"
+    ]

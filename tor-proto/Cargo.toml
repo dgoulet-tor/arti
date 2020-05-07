@@ -1,0 +1,29 @@
+[package]
+name = "tor-proto"
+version = "0.0.0"
+authors = ["Nick Mathewson <nickm@torproject.org>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+tor-llcrypto = { path="../tor-llcrypto" }
+tor-bytes = { path="../tor-bytes" }
+
+arrayref = "*"
+rand = "*"
+digest = "*"
+typenum = "*"
+# XXXX why did I have to downgrade?
+generic-array = "0.12"
+stream-cipher = "*"
+rand_core = "*"
+crypto-mac = "*"
+hmac = "*"
+hkdf = "*"
+zeroize = "*"
+subtle = "2.2.2"
+
+[dev-dependencies]
+hex-literal = "*"
+

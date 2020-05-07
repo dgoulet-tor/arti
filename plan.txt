@@ -1,0 +1,23 @@
+
+be agile in use of other crates, but kinda flexible in main coding.
+
+guess those mean the same.
+
+instead, "make sure our dependencies on particular implementations of things
+are not hard to replace", and "assume we will refactor or rewrite everything
+we do."
+
+
+==========
+
+what architecture am I aiming for?  I'm hoping for a layer that is
+no-network, that doesn't even have a "network" as a thing in it.  That means
+it's going to have to have lots of encoding/decoding stuff, and maybe the
+crypto, and possibly it can handle a little state, but big state will be hard
+
+Hm.  This could actually help though.  There are circuits and streams and
+channels and they none of them need to actually "connect" until a different
+layer.  That would kinda rock, even.
+
+
+

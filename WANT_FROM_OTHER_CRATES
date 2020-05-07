@@ -1,0 +1,51 @@
+rust itself:
+ * specialization for u8.
+ * generic arrays via associated consts or whatever it's called.
+ * when an enum is c-like, implement try_into for numbers.  (but see num_enum and many similar crates.) 
+ * stabilize traling_one()
+
+curve25519-dalek:
+* let me go from a montogmery point to a compressed edwards point.
+
+*-dalek:
+* let me use the right rand trait kthx
+
+ed25519-dalek:
+* defer signature verification without prehash mode.  A signature
+  future would be great.
+
+base64:
+* multiline support.
+
+phf:
+* much cheaper hash function
+
+rsa-der:
+* Support for RSA key without OID
+
+pem:
+* should use multiline support or at least not copy when decoding
+  base64 multiline.
+* should be stricter?
+
+rsa:
+* oaep
+* if not oaep, raw?
+* get raw signed data to allow multiple signed formats.
+
+ring:
+* static curve25519
+
+crypto:
+* key agreement trait
+
+ed25519 trait:
+* batch support.
+
+sha1:
+* implement digest trait.
+
+bitvec
+* more efficient bitwise operations.
+
+

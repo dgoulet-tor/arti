@@ -1,0 +1,42 @@
+[package]
+name = "tor-llcrypto"
+version = "0.0.0"
+authors = ["Nick Mathewson <nickm@torproject.org>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+arrayref = "*"
+digest = "*"
+typenum = "*"
+# XXXX why did I have to downgrade?
+generic-array = "0.12"
+aes-ctr = "*"
+zeroize = "*"
+rsa = "*"
+simple_asn1= "*"
+subtle = "2.2.2"
+stream-cipher = "*"
+num-traits = "*"
+num-bigint = "*"
+curve25519-dalek = "*"
+
+[dependencies.x25519-dalek]
+version = "*"
+
+[dependencies.ed25519-dalek]
+# Why do I have to use this one?
+version = "1.0.0-pre.3"
+
+[dependencies.sha1]
+version = "0.6.0"
+
+[dependencies.sha2]
+version = "0.8.1"
+
+[dependencies.sha3]
+version = "0.8.2"
+
+[dev-dependencies]
+hex-literal = "*"

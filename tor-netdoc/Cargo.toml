@@ -1,0 +1,19 @@
+[package]
+name = "tor-netdoc"
+version = "0.0.0"
+authors = ["Nick Mathewson <nickm@torproject.org>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+tor-llcrypto = { path="../tor-llcrypto", version="*" }
+tor-cert = { path="../tor-cert", version="*" }
+tor-protover = { path="../tor-protover", version= "*" }
+
+phf = { version = "*", features = ["macros"] }
+hex = "*"
+lazy_static = "*"
+base64 = "*"
+thiserror = "*"
+chrono = "*"
