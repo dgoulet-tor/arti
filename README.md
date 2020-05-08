@@ -102,6 +102,15 @@ tor-proto
 of the Tor protocol.  Underdocumented, too big, needs
 refactoring.
 
+## Intended architecture
+
+I'm hoping to have small, optional, separable pieces here.  For everything
+I'm writing, I'm hoping it can go behind a configuration flag.
+
+I'm also hoping to focus on everything that _isn't_ the network first.  I'd
+like as little code as possible to actually read and write to the network,
+and as much code as possible to pretend that the network doesn't exist.  I
+hope this will make everything easier to test.
 
 ## Licence
 
