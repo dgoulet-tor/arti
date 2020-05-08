@@ -12,7 +12,7 @@ use std::{net, time};
 use tor_llcrypto as ll;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
-use ll::traits::Digest;
+use digest::Digest;
 
 pub struct RouterDesc {
     nickname: String,

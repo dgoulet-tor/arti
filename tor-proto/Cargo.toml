@@ -11,18 +11,18 @@ tor-llcrypto = { path="../tor-llcrypto" }
 tor-bytes = { path="../tor-bytes" }
 
 arrayref = "*"
-rand = "*"
 digest = "*"
+rand = "*"
 typenum = "*"
 # XXXX why did I have to downgrade?
 generic-array = "0.12"
-stream-cipher = "*"
 rand_core = "*"
 crypto-mac = "*"
 hmac = "*"
 hkdf = "*"
 zeroize = "*"
-subtle = "2.2.2"
+subtle = "*"
+stream-cipher = "*"
 
 [dev-dependencies]
 hex-literal = "*"

@@ -141,7 +141,7 @@ impl PublicKey {
     /// Compute the RSAIdentity for this public key.
     pub fn to_rsa_identity(&self) -> RSAIdentity {
         use crate::d::Sha1;
-        use crate::traits::Digest;
+        use digest::Digest;
         let id = Sha1::digest(&self.to_der()).into();
         RSAIdentity { id }
     }

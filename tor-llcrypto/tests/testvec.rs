@@ -1,4 +1,6 @@
+use digest::Digest;
 use hex_literal::hex;
+use stream_cipher::{NewStreamCipher, StreamCipher};
 use tor_llcrypto as ll;
 
 #[test]
@@ -124,7 +126,6 @@ fn tv_aes128_ctr() {
     // From NIST Special Publication 800-38A.
     // https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38a.pdf
     use ll::cipher::aes::Aes128Ctr;
-    use ll::traits::{NewStreamCipher, StreamCipher};
 
     let k1 = hex!("2b7e151628aed2a6abf7158809cf4f3c").into();
     let ctr1 = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff").into();
@@ -156,7 +157,6 @@ fn tv_aes256_ctr() {
     // https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38a.pdf
 
     use ll::cipher::aes::Aes256Ctr;
-    use ll::traits::{NewStreamCipher, StreamCipher};
 
     let k1 = hex!(
         "603deb1015ca71be2b73aef0857d7781
@@ -190,7 +190,6 @@ fn tv_aes256_ctr() {
 fn tv_sha1() {
     // From RFC 3174, extracted from the example C code.
     use ll::d::Sha1;
-    use ll::traits::Digest;
 
     fn run_test(inp: &[u8], repeatcount: usize, expect: &[u8]) {
         let mut d = Sha1::new();

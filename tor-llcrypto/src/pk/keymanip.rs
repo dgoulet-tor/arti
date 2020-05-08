@@ -1,5 +1,5 @@
 use crate::pk;
-use crate::traits::Digest;
+use digest::Digest;
 use zeroize::Zeroizing;
 
 /// Convert a curve25519 public key (with sign bit) to an ed25519

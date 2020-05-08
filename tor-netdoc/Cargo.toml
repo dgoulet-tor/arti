@@ -11,6 +11,7 @@ tor-llcrypto = { path="../tor-llcrypto", version="*" }
 tor-cert = { path="../tor-cert", version="*" }
 tor-protover = { path="../tor-protover", version= "*" }
 
+digest = "*"
 phf = { version = "*", features = ["macros"] }
 hex = "*"
 lazy_static = "*"
