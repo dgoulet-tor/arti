@@ -9,6 +9,7 @@
 //! Encryption is implemented in `cipher`, digests are in `d`, and
 //! public key cryptography (including signatures, encryption, and key
 //! agreement) are in `pk`.
+//!
 
 #![deny(missing_docs)]
 

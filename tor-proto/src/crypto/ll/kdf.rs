@@ -1,5 +1,5 @@
 use crate::{Error, Result, SecretBytes};
-use digest::{ExtendableOutput, Digest};
+use digest::{Digest, ExtendableOutput};
 use tor_llcrypto::d::{Sha1, Sha256, Shake256};
 
 use zeroize::Zeroizing;
