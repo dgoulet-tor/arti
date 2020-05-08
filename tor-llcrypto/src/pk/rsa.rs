@@ -1,11 +1,13 @@
 //! Re-exporting RSA implementations.
 //!
 //! This module can currently handle public keys and signature
-//! verification as they work in the Tor directory protocol and
+//! verification used in the Tor directory protocol and
 //! similar places.
 //!
 //! Currently, that means supporting validating PKCSv1
 //! signatures, and encoding and decoding keys from DER.
+//!
+//! Currently missing is signing and RSA-OEAP.
 use arrayref::array_ref;
 use subtle::*;
 use zeroize::Zeroize;
@@ -16,7 +18,7 @@ use zeroize::Zeroize;
 pub const RSA_ID_LEN: usize = 20;
 
 /// An identifier for a Tor relay, based on its legacy RSA
-/// identity key.
+/// identity key.  These are used all over the Tor protocol.
 #[derive(Clone, Zeroize, Debug)]
 pub struct RSAIdentity {
     pub id: [u8; RSA_ID_LEN],
@@ -31,9 +33,23 @@ impl PartialEq<RSAIdentity> for RSAIdentity {
 impl Eq for RSAIdentity {}
 
 impl RSAIdentity {
+    /// Expose and RSAIdentity as a slice of bytes.
     pub fn as_bytes(&self) -> &[u8] {
         &self.id[..]
     }
+    /// Construct an RSAIdentity from a slice of bytes.
+    ///
+    /// Returns None if the input is not of the correct length.
+    ///
+    /// ```
+    /// let bytes = b"xyzzyxyzzyxyzzyxyzzy";
+    /// let id = RSAIdentity::from_bytes(&bytes);
+    /// assert_eq!(id.unwrap().as_bytes(), bytes);
+    ///
+    /// let truncated = b"xyzzy";
+    /// let id = RSAIdentity::from_bytes(truncated);
+    /// assert_eq!(id, None);
+    /// ```
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() == RSA_ID_LEN {
             Some(RSAIdentity {
@@ -46,11 +62,15 @@ impl RSAIdentity {
 }
 
 /// An RSA public key.
+///
+/// This implementation is a simple wrapper so that we can define new
+/// methods and traits on the type.
 pub struct PublicKey(rsa::RSAPublicKey);
-/// An RSA Private key.
+/// An RSA private key.
 pub struct PrivateKey(rsa::RSAPrivateKey);
 
 impl PrivateKey {
+    /// Return the public component of this key.
     pub fn to_public_key(&self) -> PublicKey {
         PublicKey(self.0.to_public_key())
     }
@@ -73,16 +93,22 @@ impl PublicKey {
     ///
     /// Tor uses RSA-PKCSv1 signatures, with hash algorithm OIDs
     /// omitted.
+    ///
+    /// ## Issues
+    ///
+    /// XXXX We probably shouldn't be exposing rsa::errors::Result().
+    ///  
     pub fn verify(&self, hashed: &[u8], sig: &[u8]) -> rsa::errors::Result<()> {
         use rsa::PublicKey;
         self.0
             .verify::<rsa::hash::Hashes>(rsa::PaddingScheme::PKCS1v15, None, hashed, sig)
-        // XXXX I don't want to expose rsa::errors::Result, really.
     }
-    /// Decode an alleged DER byte string into a PublicKey. Return None
-    /// if the DER string does not have a valid PublicKey.
+    /// Decode an alleged DER byte string into a PublicKey.
     ///
-    /// (Does not expect or allow an OID.)
+    /// Return None  if the DER string does not have a valid PublicKey.
+    ///
+    /// (This function expects an RSAPublicKey, as used by Tor.  It
+    /// does not expect or accept a PublicKeyInfo.)
     pub fn from_der(der: &[u8]) -> Option<Self> {
         // We can't use the rsa-der crate, since it expects to find the
         // key inside of a bitstring inside of another asn1 object.
@@ -120,7 +146,7 @@ impl PublicKey {
     }
     /// Encode this public key into the DER format as used by Tor.
     ///
-    /// Does not attach an OID.
+    /// The result is an RSAPublicKey, not a PublicKeyInfo.
     pub fn to_der(&self) -> Vec<u8> {
         use simple_asn1::ASN1Block;
         // XXX do I really need both of these crates? rsa uses

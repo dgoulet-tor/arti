@@ -1,3 +1,15 @@
+//! Key manipulation functions for use with public keys.
+//!
+//! Tor does some interesting and not-really-standard things with its
+//! curve25519 and ed25519 keys, for several reasons.
+//!
+//! In order to prove ownership of a curve25519 private key, Tor
+//! converts it into an ed25519 key, and then uses that ed25519 key to
+//! sign its identity key.
+//!
+//! TODO: This is also where we would put the key-derivation code that
+//! Tor uses in the hsv3 onion services protocol.
+
 use crate::pk;
 use digest::Digest;
 use zeroize::Zeroizing;
@@ -7,6 +19,7 @@ use zeroize::Zeroizing;
 ///
 /// Note that this formula is not terribly standardized; don't use
 /// it for anything besides cross-certification.
+///
 pub fn convert_curve25519_to_ed25519_public(
     pubkey: &pk::curve25519::PublicKey,
     signbit: u8,
@@ -16,9 +29,10 @@ pub fn convert_curve25519_to_ed25519_public(
     let point = MontgomeryPoint(*pubkey.as_bytes());
     let edpoint = point.to_edwards(signbit)?;
 
-    // TODO: This is inefficient; we shouldn't have to re-compress this
-    // point to get the public key we wanted.  But there's no way I
-    // can to construct an ed25519 public key from a compressed point.
+    // TODO: This is inefficient; we shouldn't have to re-compress
+    // this point to get the public key we wanted.  But there's no way
+    // with the current API that I can to construct an ed25519 public
+    // key from a compressed point.
     let compressed_y = edpoint.compress();
     pk::ed25519::PublicKey::from_bytes(compressed_y.as_bytes()).ok()
 }

@@ -3,13 +3,16 @@
 //! In various places, for legacy reasons, Tor uses SHA1, SHA2,
 //! SHA3, and SHAKE.  We re-export them all here, implementing
 //! the Digest trait.
+//!
+//! Other code should access these digests via the Digest trait.
 
 // These implement Digest, so we can just use them as-is.
 pub use sha2::{Sha256, Sha512};
 pub use sha3::{Sha3_256, Shake128, Shake256};
 
-// The Sha1 crate, OTOH, doesn't expose Digest. I'll do it myself.
-/// Wrapper for Sha1 that implements the Digest trait.
+/// A Sha1 implementation that implements the Digest trait.
+///
+/// (This is just a thin wrapper around the Sha1 crate.)
 #[derive(Clone, Default)]
 pub struct Sha1(sha1::Sha1);
 

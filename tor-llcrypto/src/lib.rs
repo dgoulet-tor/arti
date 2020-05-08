@@ -1,17 +1,16 @@
 //! Low-level crypto implementations for Tor.
 //!
-//! This crate doesn't have anything interesting: it just wraps other
-//! crates that implement lower-level cryptographic functionality that
-//! Tor does not implement itself.  In some cases the functionality is
-//! just re-exported; in others, it is wrapped to present a
-//! conseistent interface.
+//! This crate doesn't have much of interest: for the most part it
+//! just wraps other crates that implement lower-level cryptographic
+//! functionality.  In some cases the functionality is just
+//! re-exported; in others, it is wrapped to present a conseistent
+//! interface.
 //!
 //! Encryption is implemented in `cipher`, digests are in `d`, and
 //! public key cryptography (including signatures, encryption, and key
 //! agreement) are in `pk`.
 
-// TODO -- the long-term intention here is that this functionality
-// should be replaceable at compile time with other implementations.
+#![deny(missing_docs)]
 
 pub mod cipher;
 pub mod d;
