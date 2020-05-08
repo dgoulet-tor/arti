@@ -103,3 +103,23 @@ of the Tor protocol.  Underdocumented, too big, needs
 refactoring.
 
 
+## Licence
+
+As appears to be standard practice in the Rust ecosystem, this code is
+licensed under either of
+
+ * [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
+ * [MIT license](http://opensource.org/licenses/MIT)
+
+at your option.
+
+## Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in the work by you, as defined in the Apache-2.0
+license, shall be dual licensed as above, without any additional terms or
+conditions.
+
+>(The above notice, or something like it, seems to be pretty standard in Rust
+>projects, so I'm using it here too.  This instance of it is copied from
+>the RustCrypto project's README.md file.)
