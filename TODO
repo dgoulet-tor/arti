@@ -1,7 +1,10 @@
+KEY:
 - Not done
 . Partially done
 o complete
 X Won't do.
+
+
 
 - Decisions
   - Which protocols to support?
@@ -10,7 +13,7 @@ X Won't do.
 
 - Specs
   - Test vectors
-    - Add test vectors for ntor
+    . Add test vectors for ntor
     - Add test vectors for relay crypto
     - Add test vectors for hs-ntor
     - Add test vectors for hs-relay crypto
@@ -25,10 +28,10 @@ X Won't do.
 - Primitive crypto
   - Wrap x25519 in a trait
   - Use signature trait for ed25519.
-  - Add RSA-pkcs1 signature support
-  - Add RSA-pem encode/decode support
+  o Add RSA-pkcs1 signature support
+  o Add RSA-pem encode/decode support
   - RSA-oaep, if supported.
-  - test vectors for sha1
+  o test vectors for sha1
   - test vectors for sha2
   - test vectors for sha3/shake
   - RSA test vectors as needed
@@ -72,14 +75,13 @@ X Won't do.
     o Remove extraneous hoohaw.
     o Get a "parse into a vector of maybe-tokens" thing.
     o Get a "validate that every must-token is there" thing.
-    - Macro for making a Keyword type.
-    - maybe, macro for making a sectionrules
+    o Macro for making a Keyword type.
   - Parse descriptors
-    - Parse into a reasonable routerdesc object.
+    o Parse into a reasonable routerdesc object.
     - Parse a pile of them.
-    - Check ed signatures on router descriptors
-    - Check rsa signatures on descriptors
-    - Check additional invariants?
+    o Check ed signatures on router descriptors
+    o Check rsa signatures on descriptors
+    o Check additional invariants?
   - Parse consensus directories, both variants.
   - Parse microdescs
   - Apply consensus diffs
