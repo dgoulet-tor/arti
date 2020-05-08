@@ -1,5 +1,5 @@
 use crate::{Error, Result, SecretBytes};
-use digest::{Digest, ExtendableOutput, Input};
+use digest::{ExtendableOutput, Digest};
 use tor_llcrypto::d::{Sha1, Sha256, Shake256};
 
 use zeroize::Zeroizing;
@@ -67,6 +67,7 @@ impl ShakeKDF {
 impl KDF for ShakeKDF {
     fn derive(&self, seed: &[u8], n_bytes: usize) -> Result<SecretBytes> {
         // XXX mark as zero-on-free?
+        use digest::Input;
         let mut xof = Shake256::default();
         xof.input(seed);
         Ok(Zeroizing::new(xof.vec_result(n_bytes)))

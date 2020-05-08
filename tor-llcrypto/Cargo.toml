@@ -29,8 +29,8 @@ version = "*"
 # Why do I have to use this one?
 version = "1.0.0-pre.3"
 
-[dependencies.sha1]
-version = "0.6.0"
+[dependencies.sha-1]
+version = "*"
 
 [dependencies.sha2]
 version = "0.8.1"
