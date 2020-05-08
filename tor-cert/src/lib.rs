@@ -1,8 +1,32 @@
-//! Implementation for the Tor certificate type
+//! Implementation for Tor certificates
 //!
-//! This is the certificate type as documented as Tor's cert-spec.txt.
-//! There are other types of certificate as well, but they will be
-//! implemented in other places.
+//! This is the certificate type as documented as Tor's cert-spec.txt,
+//! where everything is signed with ed25519 keys.
+//!
+//! There are other types of certificate used by Tor as well, but they
+//! will be implemented in other places.
+//!
+//! # Examples
+//!
+//! ```
+//! use base64::decode;
+//! use tor_cert::*;
+//! // Taken from a random relay on the Tor network.
+//! let cert_base64 =
+//!  "AQQABrntAThPWJ4nFH1L77Ar+emd4GPXZTPUYzIwmR2H6Zod5TvXAQAgBAC+vzqh
+//!   VFO1SGATubxcrZzrsNr+8hrsdZtyGg/Dde/TqaY1FNbeMqtAPMziWOd6txzShER4
+//!   qc/haDk5V45Qfk6kjcKw+k7cPwyJeu+UF/azdoqcszHRnUHRXpiPzudPoA4=";
+//! // Remove the whitespace, so base64 doesn't choke on it.
+//! let cert_base64: String = cert_base64.split_whitespace().collect();
+//! // Decode the base64.
+//! let cert_bin = base64::decode(cert_base64).unwrap();
+//!
+//! // Decode the cert and check its signature.
+//! let cert = Ed25519Cert::decode_and_check(&cert_bin, None).unwrap();
+//! let signed_key = cert.get_subject_key();
+//! ```
+
+#![deny(missing_docs)]
 
 use tor_bytes::{Error, Result};
 use tor_bytes::{Readable, Reader, Writeable, Writer};
@@ -32,6 +56,8 @@ pub mod certtype {
 
     // 08 through 09 are for onion services.
 
+    /// An ntor key converted to a ed25519 key, cross-certifying an
+    /// identity key.
     pub const NTOR_CC_IDENTITY: u8 = 0x0A;
 
     // 0B is for onion services.
@@ -45,11 +71,11 @@ pub mod exttype {
     pub const SIGNED_WITH_ED25519_KEY: u8 = 0x04;
 }
 
-/// Identifiers for the type of a key or object getting signed.
+/// Identifiers for the type of key or object getting signed.
 pub mod keytype {
     /// Identifier for an Ed25519 key.
     pub const ED25519_KEY: u8 = 0x01;
-    /// Identifies for the SHA256 of an DER-encoded RSA key.
+    /// Identifier for the SHA256 of an DER-encoded RSA key.
     pub const SHA256_OF_RSA: u8 = 0x02;
     /// Identifies the SHA256 of an X.509 certificate.
     pub const SHA256_OF_X509: u8 = 0x03;
@@ -75,15 +101,21 @@ pub struct Ed25519Cert {
 
 /// One of the data types that can be certified by an Ed25519Cert.
 pub enum CertifiedKey {
+    /// An Ed25519 public key, signed directly.
     Ed25519(ed25519::PublicKey),
-    RSADigest([u8; 32]),
-    X509Digest([u8; 32]),
+    /// The SHA256 digest of a DER-encoded RSAPublicKey
+    RSASha256Digest([u8; 32]),
+    /// The SHA256 digest of an X.509 certificate.
+    X509Sha256Digest([u8; 32]),
+    /// Some unrecognized key type.
     Unrecognized(UnrecognizedKey),
 }
 
 /// A key whose type we didn't recognize.
 pub struct UnrecognizedKey {
+    /// Actual type of the key.
     key_type: u8,
+    /// digest of the key, or the key itself.
     key_digest: [u8; 32],
 }
 
@@ -92,8 +124,8 @@ impl CertifiedKey {
     pub fn get_key_type(&self) -> u8 {
         match self {
             CertifiedKey::Ed25519(_) => keytype::ED25519_KEY,
-            CertifiedKey::RSADigest(_) => keytype::SHA256_OF_RSA,
-            CertifiedKey::X509Digest(_) => keytype::SHA256_OF_X509,
+            CertifiedKey::RSASha256Digest(_) => keytype::SHA256_OF_RSA,
+            CertifiedKey::X509Sha256Digest(_) => keytype::SHA256_OF_X509,
 
             CertifiedKey::Unrecognized(u) => u.key_type,
         }
@@ -103,8 +135,8 @@ impl CertifiedKey {
     pub fn as_bytes(&self) -> &[u8] {
         match self {
             CertifiedKey::Ed25519(k) => k.as_bytes(),
-            CertifiedKey::RSADigest(k) => &k[..],
-            CertifiedKey::X509Digest(k) => &k[..],
+            CertifiedKey::RSASha256Digest(k) => &k[..],
+            CertifiedKey::X509Sha256Digest(k) => &k[..],
             CertifiedKey::Unrecognized(u) => &u.key_digest[..],
         }
     }
@@ -121,8 +153,8 @@ impl CertifiedKey {
     fn from_reader(key_type: u8, r: &mut Reader) -> Result<Self> {
         Ok(match key_type {
             keytype::ED25519_KEY => CertifiedKey::Ed25519(r.extract()?),
-            keytype::SHA256_OF_RSA => CertifiedKey::RSADigest(r.extract()?),
-            keytype::SHA256_OF_X509 => CertifiedKey::X509Digest(r.extract()?),
+            keytype::SHA256_OF_RSA => CertifiedKey::RSASha256Digest(r.extract()?),
+            keytype::SHA256_OF_X509 => CertifiedKey::X509Sha256Digest(r.extract()?),
             _ => CertifiedKey::Unrecognized(UnrecognizedKey {
                 key_type,
                 key_digest: r.extract()?,
@@ -132,12 +164,14 @@ impl CertifiedKey {
 }
 
 /// An extension in a Tor certificate.
-pub enum CertExt {
+enum CertExt {
+    /// Indicates which Ed25519 public key signed this cert.
     SignedWithEd25519(SignedWithEd25519Ext),
+    /// An extension whose identity we don't recognize.
     Unrecognized(UnrecognizedExt),
 }
 
-pub struct UnrecognizedExt {
+struct UnrecognizedExt {
     /// True iff this extension must be understand in order to validate the
     /// certificate.
     affects_validation: bool,
@@ -166,8 +200,8 @@ impl Writeable for CertExt {
     }
 }
 
-/// Extension indicating that key that signed a given certificate.
-pub struct SignedWithEd25519Ext {
+/// Extension indicating that a key that signed a given certificate.
+struct SignedWithEd25519Ext {
     pk: ed25519::PublicKey,
 }
 
@@ -179,6 +213,7 @@ impl Writeable for SignedWithEd25519Ext {
         w.write_u8(exttype::SIGNED_WITH_ED25519_KEY);
         // flags = 0.
         w.write_u8(0);
+        // body
         w.write_all(self.pk.as_bytes());
     }
 }
@@ -234,6 +269,8 @@ impl Readable for CertExt {
 }
 
 impl Ed25519Cert {
+    /// Helper: Assert that there is nothing wrong with the
+    /// internal structure of this certificate.
     fn assert_rep_ok(&self) {
         assert!(self.extensions.len() <= std::u8::MAX as usize);
     }
@@ -330,6 +367,7 @@ impl Ed25519Cert {
         })
     }
 
+    /// Return the time at which this certificate becomes expired
     pub fn get_expiry(&self) -> std::time::SystemTime {
         let d = std::time::Duration::new((self.exp_hours as u64) * 3600, 0);
         std::time::SystemTime::UNIX_EPOCH + d
@@ -351,8 +389,10 @@ impl Ed25519Cert {
         &self.signed_with
     }
 
-    /// Return the type of this certificate (as one of certtype::* if this
-    /// certificate type is recognized).
+    /// Return the type of this certificate.
+    ///
+    /// The value will be one of certtype::* if this certificate type is
+    /// recognized.
     pub fn get_cert_type(&self) -> u8 {
         self.cert_type
     }
