@@ -1,10 +1,32 @@
+//! Implement port-based policies
+//!
+//! These are also known as "short policies" or "policy summaries".
+
 use std::fmt::Display;
 use std::str::FromStr;
 
 use super::{PolicyError, PortRange};
 
+/// A policy to match zero or more TCP/UDP ports.
+///
+/// These are used in Tor to summarize all policies in
+/// microdescriptors, and Ipv6 policies in router descriptors.
+///
+/// # Examples
+/// ```
+/// use tor_netdoc::policy::PortPolicy;
+/// let policy: PortPolicy = "accept 1-1023,8000-8999,60000-65535".parse().unwrap();
+///
+/// assert!(policy.allows_port(22));
+/// assert!(policy.allows_port(8000));
+/// assert!(! policy.allows_port(1024));
+/// assert!(! policy.allows_port(9000));
+/// ```
 #[derive(Clone)]
 pub struct PortPolicy {
+    /// A list of port ranges that this policy allows.
+    ///
+    /// These ranges are sorted and disjoint.
     allowed: Vec<PortRange>,
 }
 
@@ -25,6 +47,7 @@ impl Display for PortPolicy {
 }
 
 impl PortPolicy {
+    /// Helper: replace this policy with its inverse.
     fn invert(&mut self) {
         let mut prev_hi = 0;
         let mut new_allowed = Vec::new();
@@ -41,11 +64,14 @@ impl PortPolicy {
         }
         self.allowed = new_allowed;
     }
+    /// Return true iff `port` is allowed by this policy.
     pub fn allows_port(&self, port: u16) -> bool {
-        // TODO: A binary search would be more efficient.
-        self.allowed.iter().any(|range| range.contains(port))
+        self.allowed
+            .binary_search_by(|range| range.compare_to_port(port))
+            .is_ok()
     }
 }
+
 impl FromStr for PortPolicy {
     type Err = PolicyError;
     fn from_str(mut s: &str) -> Result<Self, PolicyError> {

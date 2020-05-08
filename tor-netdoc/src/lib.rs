@@ -1,16 +1,24 @@
-//! Parse and  represent directory objects used in Tor.
+//! Parse and represent directory objects used in Tor.
 //!
 //! Tor has several "directory objects" that it uses to convey
 //! information about relays on the network. They are documented in
 //! dir-spec.txt.
 //!
-//! TODO: Currently, this crate can handle the metaformat, along with
-//! certain parts of the router descriptor type. We will eventually
-//! need to handle more types.
+//! This crate has common code to parse and validate these documents.
+//! Currently, it can handle the metaformat, along with certain parts
+//! of the router descriptor type. We will eventually need to handle
+//! more types.
+//!
+//! # Caveat haxxor: limitations and infelicities
 //!
 //! TODO: This crate requires that all of its inputs be valid UTF-8.
+//!
+//! TODO: This crate has several pieces that should probably be split out
+//! into other smaller cases, including handling for version numbers
+//! and exit policies.
 
 #![allow(dead_code)]
+//#![warn(missing_docs)]
 
 mod argtype;
 mod err;
@@ -20,9 +28,10 @@ mod tokenize;
 mod util;
 #[macro_use]
 mod macros; // xxxx
-mod policy;
-mod routerdesc;
-mod version;
+pub mod policy;
+pub mod routerdesc;
+pub mod version;
 
 pub use err::{Error, Position};
+/// Alias for the Result type returned by most objects in this module.
 pub type Result<T> = std::result::Result<T, Error>;

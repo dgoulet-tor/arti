@@ -1,11 +1,15 @@
+/// Helper functions and types for use in parsing
+///
+/// For now this module has a single type -- an iterator that pauses
+/// when a certain predicate is true.  We use it for chunking
+/// documents into sections.  If it turns out to be useful somewhere
+/// else, we should move it.
 use std::iter::Peekable;
 
-///
-/// Iterator adaptor that pauses when a given predicate is true.
+/// An iterator adaptor that pauses when a given predicate is true.
 ///
 /// Unlike std::iter::TakeWhile, it doesn't consume the first non-returned
 /// element.
-///
 pub struct PauseAt<I: Iterator, F: FnMut(&I::Item) -> bool> {
     peek: Peekable<I>,
     pred: F,
@@ -13,12 +17,14 @@ pub struct PauseAt<I: Iterator, F: FnMut(&I::Item) -> bool> {
 
 /// Trait for iterators that support `pause_at()`.
 pub trait Pausable: Iterator + Sized {
+    /// Construct a new iterator based on 'self' that will pause when
+    /// the function 'pred' would be true of the next item.
     fn pause_at<F>(self, pred: F) -> PauseAt<Self, F>
     where
         F: FnMut(&Self::Item) -> bool;
 }
 
-// Make all iterators Trait for iterators support `pause_at()`
+// Make all iterators support `pause_at()`.
 impl<I> Pausable for I
 where
     I: Iterator,

@@ -1,20 +1,67 @@
+//! Parsing and comparison for Tor versions
+//!
+//! Tor versions use a slightly unusual encoding described in Tor's
+//! [version-spec.txt](https://spec.torproject.org/version-spec).
+//! Briefly, version numbers are of the form
+//!
+//! `MAJOR.MINOR.MICRO[.PATCHLEVEL][-STATUS_TAG][ (EXTRA_INFO)]*`
+//!
+//! Here we parse everything up to the first space, but ignore the
+//! "EXTRA_INFO" component.
+//!
+//! # Examples
+//!
+//! ```
+//! use tor_netdoc::version::TorVersion;
+//! let older: TorVersion = "0.3.5.8".parse()?;
+//! let latest: TorVersion = "0.4.3.4-rc".parse()?;
+//! assert!(older < latest);
+//!
+//! # tor_netdoc::Result::Ok(())
+//! ```
+//!
+//! # Limitations
+//!
+//! This module handles the version format which Tor has used ever
+//! since 0.1.0.1-rc.  Earlier versions used a different format, also
+//! documented in
+//! [version-spec.txt](https://spec.torproject.org/version-spec).
+//! Fortunately, those versions are long obsolete, and there's not
+//! much reason to parse them.
+//!
+//! TODO: Possibly, this module should be extracted into a crate of
+//! its own.  I'm not 100% sure though -- does anything need versions
+//! but not router docs?
+
 use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
 use crate::{Error, Position};
 
+/// Represents the status tag on a Tor version number
+///
+/// Status tags indicate that a release is alpha, beta (seldom used),
+/// a release candidate (rc), or stable.
+///
+/// We accept unrecognized tags, and store them as "Other".
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 #[repr(u8)]
-pub enum TorVerStatus {
+enum TorVerStatus {
+    /// An unknown release status
     Other,
+    /// An alpha release
     Alpha,
+    /// A beta release
     Beta,
+    /// A release candidate
     Rc,
+    /// A stable release
     Stable,
 }
 
 impl TorVerStatus {
+    /// Helper for encoding: return the suffix that represents a version.
     fn suffix(self) -> &'static str {
         use TorVerStatus::*;
         match self {
@@ -27,10 +74,11 @@ impl TorVerStatus {
     }
 }
 
+/// A parsed Tor version number.
 #[derive(Clone, Eq, PartialEq)]
 pub struct TorVersion {
-    maj: u8,
-    min: u8,
+    major: u8,
+    minor: u8,
     micro: u8,
     patch: u8,
     status: TorVerStatus,
@@ -43,8 +91,8 @@ impl Display for TorVersion {
         write!(
             f,
             "{}.{}.{}.{}{}{}",
-            self.maj,
-            self.min,
+            self.major,
+            self.minor,
             self.micro,
             self.patch,
             self.status.suffix(),
@@ -57,6 +105,9 @@ impl FromStr for TorVersion {
     type Err = crate::Error;
 
     fn from_str(s: &str) -> crate::Result<Self> {
+        // Split the string on "-" into "version", "status", and "dev."
+        // Note that "dev" may actually be in the "status" field if
+        // the version is stable; we'll handle that later.
         let mut parts = s.split('-').fuse();
         let ver_part = parts.next();
         let status_part = parts.next();
@@ -65,6 +116,7 @@ impl FromStr for TorVersion {
             return Err(Error::BadVersion(Position::None));
         }
 
+        // Split the version on "." into 3 or 4 numbers.
         let vers: Result<Vec<_>, _> = ver_part
             .ok_or(Error::BadVersion(Position::None))?
             .splitn(4, '.')
@@ -74,11 +126,12 @@ impl FromStr for TorVersion {
         if vers.len() < 3 {
             return Err(Error::BadVersion(Position::None));
         }
-        let maj = vers[0];
-        let min = vers[1];
+        let major = vers[0];
+        let minor = vers[1];
         let micro = vers[2];
         let patch = if vers.len() == 4 { vers[3] } else { 0 };
 
+        // Compute real status and version.
         let status = match status_part {
             Some("alpha") => TorVerStatus::Alpha,
             Some("beta") => TorVerStatus::Beta,
@@ -96,8 +149,8 @@ impl FromStr for TorVersion {
         };
 
         Ok(TorVersion {
-            maj,
-            min,
+            major,
+            minor,
             micro,
             patch,
             status,
@@ -105,11 +158,13 @@ impl FromStr for TorVersion {
         })
     }
 }
+
 impl TorVersion {
+    /// Helper: used to implement Ord.
     fn as_tuple(&self) -> (u8, u8, u8, u8, TorVerStatus, bool) {
         (
-            self.maj,
-            self.min,
+            self.major,
+            self.minor,
             self.micro,
             self.patch,
             self.status,
