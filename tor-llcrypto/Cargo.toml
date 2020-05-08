@@ -16,7 +16,7 @@ aes-ctr = "*"
 zeroize = "*"
 rsa = "*"
 simple_asn1= "*"
-subtle = "2.2.2"
+subtle = "*"
 stream-cipher = "*"
 num-traits = "*"
 num-bigint = "*"
@@ -40,3 +40,11 @@ version = "0.8.2"
 
 [dev-dependencies]
 hex-literal = "*"
+
+# This is a magic crate that runs the tests and checks the format
+# before it lets you commit or push.  It installs git hooks for this whenever
+# you say "cargo test".
+[dev-dependencies.cargo-husky]
+version = "1"
+features = ["precommit-hook", "run-cargo-test",
+            "run-cargo-fmt", "run-for-all" ]
