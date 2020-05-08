@@ -21,7 +21,7 @@ pub const RSA_ID_LEN: usize = 20;
 /// identity key.  These are used all over the Tor protocol.
 #[derive(Clone, Zeroize, Debug)]
 pub struct RSAIdentity {
-    pub id: [u8; RSA_ID_LEN],
+    id: [u8; RSA_ID_LEN],
 }
 
 impl PartialEq<RSAIdentity> for RSAIdentity {
@@ -42,8 +42,10 @@ impl RSAIdentity {
     /// Returns None if the input is not of the correct length.
     ///
     /// ```
+    /// use tor_llcrypto::pk::rsa::RSAIdentity;
+    ///
     /// let bytes = b"xyzzyxyzzyxyzzyxyzzy";
-    /// let id = RSAIdentity::from_bytes(&bytes);
+    /// let id = RSAIdentity::from_bytes(bytes);
     /// assert_eq!(id.unwrap().as_bytes(), bytes);
     ///
     /// let truncated = b"xyzzy";

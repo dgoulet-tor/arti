@@ -223,7 +223,7 @@ mod tests {
         let mut rng = rand_core::OsRng;
         let relay_secret = StaticSecret::new(&mut rng);
         let relay_public = PublicKey::from(&relay_secret);
-        let relay_identity = RSAIdentity { id: [12; 20] };
+        let relay_identity = RSAIdentity::from_bytes(&[12; 20]).unwrap();
         let relay_ntpk = NtorPublicKey {
             id: relay_identity,
             pk: relay_public.clone(),
@@ -296,7 +296,7 @@ mod tests {
         let keys = hex!("0c62dee7f48893370d0ef896758d35729867beef1a5121df80e00f79ed349af39b51cae125719182f19d932a667dae1afbf2e336e6910e7822223e763afad0a13342157969dc6b79");
 
         let relay_pk = NtorPublicKey {
-            id: RSAIdentity { id },
+            id: RSAIdentity::from_bytes(&id).unwrap(),
             pk: b_pk.into(),
         };
         let relay_sk = NtorSecretKey {

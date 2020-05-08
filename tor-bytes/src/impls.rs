@@ -191,20 +191,17 @@ mod curve25519_impls {
 /// Implement readable and writeable for the the RSAIdentity type.
 mod rsa_impls {
     use super::*;
-    use std::convert::TryInto;
     use tor_llcrypto::pk::rsa::*;
 
     impl Writeable for RSAIdentity {
         fn write_onto<B: Writer + ?Sized>(&self, b: &mut B) {
-            b.write_all(&self.id[..])
+            b.write_all(self.as_bytes())
         }
     }
     impl Readable for RSAIdentity {
         fn take_from(b: &mut Reader<'_>) -> Result<Self> {
             let m = b.take(RSA_ID_LEN)?;
-            Ok(RSAIdentity {
-                id: m.try_into().expect("take is broken"),
-            })
+            Ok(RSAIdentity::from_bytes(m).expect("take gave wrong length"))
         }
     }
 }
