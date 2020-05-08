@@ -1,16 +1,25 @@
 //! Implementations of Writeable and Readable for several items that
 //! we use in Tor.
+//!
+//! These don't need to be in a separate module, but for convenience
+//! this is where I'm putting them.
 
 use super::*;
 use generic_array::GenericArray;
 
 // ----------------------------------------------------------------------
 
+/// Vec<u8> is the main type that implements Writer.
 impl Writer for Vec<u8> {
     fn write_all(&mut self, bytes: &[u8]) {
         self.extend_from_slice(bytes);
     }
+    fn write_u8(&mut self, byte: u8) {
+        // specialize for performance
+        self.push(byte);
+    }
     fn write_zeros(&mut self, n: usize) {
+        // specialize for performance
         let new_len = self.len() + n;
         self.resize(new_len, 0);
     }
@@ -53,6 +62,8 @@ where
 }
 */
 
+/// The GenericArray type is defined to work around a limitation in Rust's
+/// typesystem.
 impl<T, N> Readable for GenericArray<T, N>
 where
     T: Readable + Clone,
@@ -80,6 +91,7 @@ where
     }
 }
 
+// Implementations for reading and writing the unsigned types.
 macro_rules! impl_u {
     ( $t:ty, $wrfn:ident, $rdfn:ident ) => {
         impl Writeable for $t {

@@ -3,8 +3,45 @@ use arrayref::array_ref;
 
 /// A type for reading messages from a slice of bytes.
 ///
-/// Unlike io::Read, this trait has a simpler error type, and is designed
+/// Unlike io::Read, this object has a simpler error type, and is designed
 /// for in-memory parsing only.
+///
+/// # Examples
+///
+/// You can use a Reader to extract information byte-by-byte:
+///
+/// ```
+/// use tor_bytes::{Reader,Result};
+/// let msg = [ 0x00, 0x01, 0x23, 0x45, 0x22, 0x00, 0x00, 0x00 ];
+/// let mut r = Reader::from_slice(&msg[..]);
+/// // Multi-byte values are always big-endian.
+/// assert_eq!(r.take_u32()?, 0x12345);
+/// assert_eq!(r.take_u8()?, 0x22);
+///
+/// // You can check on the length of the message...
+/// assert_eq!(r.total_len(), 8);
+/// assert_eq!(r.consumed(), 5);
+/// assert_eq!(r.remaining(), 3);
+/// // then skip over a some bytes...
+/// r.advance(3)?;
+/// // ... and check that the message is really exhausted.
+/// r.should_be_exhausted()?;
+/// # Result::Ok(())
+/// ```
+///
+/// You can also use a Reader to extract objects that implement Readable.
+/// ```
+/// use tor_bytes::{Reader,Result,Readable};
+/// use std::net::Ipv4Addr;
+/// let msg = [ 0x00, 0x04, 0x7f, 0x00, 0x00, 0x01];
+/// let mut r = Reader::from_slice(&msg[..]);
+///
+/// let tp: u16 = r.extract()?;
+/// let ip: Ipv4Addr = r.extract()?;
+/// assert_eq!(tp, 4);
+/// assert_eq!(ip, Ipv4Addr::LOCALHOST);
+/// # Result::Ok(())
+/// ```
 pub struct Reader<'a> {
     // The underlying slice that we're reading from
     b: &'a [u8],
@@ -48,8 +85,9 @@ impl<'a> Reader<'a> {
         self.off += n;
         Ok(())
     }
-    /// Check whether this reader is exhausted (out of bytes to
-    /// return).  Return Ok if it is, and Err(Error::ExtraneousBytes)
+    /// Check whether this reader is exhausted (out of bytes).
+    ///
+    /// Return Ok if it is, and Err(Error::ExtraneousBytes)
     /// if there were extra bytes.
     pub fn should_be_exhausted(&self) -> Result<()> {
         if self.remaining() != 0 {
@@ -80,6 +118,18 @@ impl<'a> Reader<'a> {
     ///
     /// On success, returns Ok(Slice).  If there are fewer than n
     /// bytes, returns Err(Error::Truncated).
+    ///
+    /// # Example
+    /// ```
+    /// use tor_bytes::{Reader,Result};
+    /// let m = b"Hello World";
+    /// let mut r = Reader::from_slice(m);
+    /// assert_eq!(r.take(5)?, b"Hello");
+    /// assert_eq!(r.take_u8()?, 0x20);
+    /// assert_eq!(r.take(5)?, b"World");
+    /// r.should_be_exhausted()?;
+    /// # Result::Ok(())
+    /// ```
     pub fn take(&mut self, n: usize) -> Result<&'a [u8]> {
         let b = self.peek(n)?;
         self.advance(n)?;
@@ -120,6 +170,16 @@ impl<'a> Reader<'a> {
     /// On success, returns Ok(Slice), where the slice does not
     /// include the terminating byte.  Returns Err(Error::Truncated)
     /// if we do not find the terminating bytes.
+    ///
+    /// # Example
+    /// ```
+    /// use tor_bytes::{Reader,Result};
+    /// let m = b"Hello\0wrld";
+    /// let mut r = Reader::from_slice(m);
+    /// assert_eq!(r.take_until(0)?, b"Hello");
+    /// assert_eq!(r.into_rest(), b"wrld");
+    /// # Result::Ok(())
+    /// ```
     pub fn take_until(&mut self, term: u8) -> Result<&'a [u8]> {
         let pos = self.b[self.off..]
             .iter()
@@ -131,6 +191,8 @@ impl<'a> Reader<'a> {
     }
     /// Try to decode and remove a Readable from this reader, using its
     /// take_from() method.
+    ///
+    /// On failure, consumes nothing.
     pub fn extract<E: Readable>(&mut self) -> Result<E> {
         let off_orig = self.off;
         let result = E::take_from(self);
@@ -143,6 +205,8 @@ impl<'a> Reader<'a> {
 
     /// Try to decode and remove `n` Readables from this reader, using the
     /// Readable's take_from() method.
+    ///
+    /// On failure, consumes nothing.
     pub fn extract_n<E: Readable>(&mut self, n: usize) -> Result<Vec<E>> {
         let mut result = Vec::new();
         let off_orig = self.off;
