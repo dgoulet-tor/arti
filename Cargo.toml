@@ -1,5 +1,7 @@
 [workspace]
 
+# Here we declare that this is a workspace, containing several crates
+# within it.
 members = [
     "caret",
     "tor-llcrypto",
