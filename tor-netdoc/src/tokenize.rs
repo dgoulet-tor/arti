@@ -329,12 +329,6 @@ impl<'a> Item<'a> {
     pub fn pos(&self) -> Position {
         Position::from_byte(self.off)
     }
-    /// Return the Position of this item within s.
-    pub fn pos_in(&self, s: &str) -> Position {
-        // There are crates that claim they can do this for us and let us
-        // throw out 'off' entirely, but I don't trust them.
-        Position::from_offset(s, self.off)
-    }
 }
 
 /// Represents an Item that might not be present, whose arguments we
@@ -357,6 +351,7 @@ impl<'a, 'b> MaybeItem<'a, 'b> {
             None => Ok(None), // XXXX is this correct?
         }
     }
+    #[allow(dead_code)]
     pub fn parse_optional_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
     where
         <V as FromStr>::Err: std::error::Error,
@@ -366,9 +361,11 @@ impl<'a, 'b> MaybeItem<'a, 'b> {
             None => Ok(None),
         }
     }
+    #[allow(dead_code)]
     pub fn args_as_str(&self) -> Option<&str> {
         self.0.map(|item| item.args_as_str())
     }
+    #[allow(dead_code)]
     pub fn get_obj(&self, want_tag: &str) -> Result<Option<Vec<u8>>> {
         match self.0 {
             Some(item) => Ok(Some(item.get_obj(want_tag)?)),

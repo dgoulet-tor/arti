@@ -21,7 +21,6 @@
 //!
 //! TODO: this crate needs far more tests!
 
-#![allow(dead_code)]
 //#![warn(missing_docs)]
 
 mod argtype;

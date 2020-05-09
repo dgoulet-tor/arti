@@ -1,5 +1,23 @@
-//use crate::rules::*;
-
+/// Parsing implementation for Tor router descriptors.
+///
+/// A "router descriptor" is a signed statment that a relay makes
+/// about itself, explaining its keys, its capabilities, its location,
+/// and its status.
+///
+///
+///
+/// # Limitations
+///
+/// TODO: This needs to get tested much more!
+///
+/// TODO: This implementation can be memory-inefficient.  In practice,
+/// it gets really expensive storing policy entries, family
+/// descriptions, parsed keys, and things like that.  We will probably want to
+/// de-duplicate those.
+///
+/// TODO: There should be accessor functions for some or all of the
+/// fields in RouterDesc.  I'm deferring those until I know what they
+/// should be.
 use crate::argtype::*;
 use crate::parse::{Section, SectionRules};
 use crate::policy::*;
@@ -14,6 +32,7 @@ use tor_llcrypto::pk::rsa::RSAIdentity;
 
 use digest::Digest;
 
+#[allow(dead_code)] // don't warn about fields not getting read.
 pub struct RouterDesc {
     nickname: String,
     ipv4addr: Option<net::Ipv4Addr>,
@@ -90,16 +109,6 @@ decl_keyword! {
         "proto" => PROTO,
         "router-sig-ed25519" => ROUTER_SIG_ED25519,
         "router-signature" => ROUTER_SIGNATURE,
-    }
-}
-
-impl RouterKW {
-    fn is_signature(self) -> bool {
-        use RouterKW::*;
-        match self {
-            ROUTER_SIG_ED25519 | ROUTER_SIGNATURE => true,
-            _ => false,
-        }
     }
 }
 
