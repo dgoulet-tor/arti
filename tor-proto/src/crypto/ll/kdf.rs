@@ -22,7 +22,6 @@ impl LegacyKDF {
 }
 impl KDF for LegacyKDF {
     fn derive(&self, seed: &[u8], n_bytes: usize) -> Result<SecretBytes> {
-        let mut d = Sha1::new();
         let mut result = Zeroizing::new(Vec::with_capacity(n_bytes + Sha1::output_size()));
         let mut k = 0u8;
         if n_bytes > Sha1::output_size() * 256 {
@@ -30,9 +29,10 @@ impl KDF for LegacyKDF {
         }
 
         while result.len() < n_bytes {
+            let mut d = Sha1::new();
             d.input(seed);
             d.input(&[k]);
-            result.extend(d.result_reset());
+            result.extend(d.result());
             k += 1;
         }
 
