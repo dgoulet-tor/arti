@@ -149,38 +149,6 @@ impl<'a, T: Keyword> Section<'a, T> {
     }
 }
 
-/// Check whether a single Item matches a TokenFmt rule, with respect
-/// to its number of arguments.
-///
-/// TODO: Move this to rules?
-fn item_matches_fmt_args<'a, T: Keyword>(t: T, fmt: &TokenFmt<T>, item: &Item<'a>) -> Result<()> {
-    let n_args = item.n_args();
-    if let Some(max) = fmt.max_args {
-        if n_args > max {
-            return Err(Error::TooManyArguments(t.to_str(), item.pos()));
-        }
-    }
-    if let Some(min) = fmt.min_args {
-        if n_args < min {
-            return Err(Error::TooFewArguments(t.to_str(), item.pos()));
-        }
-    }
-
-    Ok(())
-}
-
-/// Check whether a single Item matches a TokenFmt rule, with respect
-/// to its object's presence and type.
-///
-/// TODO: Move this to rules?
-fn item_matches_fmt_obj<'a, T: Keyword>(t: T, fmt: &TokenFmt<T>, item: &Item<'a>) -> Result<()> {
-    match (&fmt.obj, item.has_obj()) {
-        (ObjKind::NoObj, true) => Err(Error::UnexpectedObject(t.to_str(), item.pos())),
-        (ObjKind::RequireObj, false) => Err(Error::MissingObject(t.to_str(), item.pos())),
-        (_, _) => Ok(()),
-    }
-}
-
 impl<T: Keyword> SectionRules<T> {
     /// Create a new SectionRules with no rules.
     ///
@@ -265,8 +233,7 @@ impl<T: Keyword> SectionRules<T> {
                     // The number is right. Check each individual item.
                     for item in t.as_slice() {
                         let tok = T::from_idx(idx).unwrap();
-                        item_matches_fmt_args(tok, rule, item)?;
-                        item_matches_fmt_obj(tok, rule, item)?;
+                        rule.check_item(tok, item)?
                     }
                 }
             }
