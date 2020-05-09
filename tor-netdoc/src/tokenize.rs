@@ -1,4 +1,8 @@
 //! Break a string into a set of directory-object Items.
+//!
+//! This module defines Item, which represents a basic entry in a
+//! directory document, and NetDocReader, which is used to break a
+//! string into Items.
 
 use crate::{Error, Position, Result};
 use std::cell::{Ref, RefCell};
@@ -8,7 +12,9 @@ use std::str::FromStr;
 ///
 /// This represents a single blob within a pair of "-----BEGIN
 /// FOO-----" and "-----END FOO-----".  The data is not guaranteed to
-/// be actual base64 when this object is created.
+/// be actual base64 when this object is created: doing so would
+/// require either that we parse the base64 twice, or that we allocate
+/// a buffer to hold the data before it's needed.
 #[derive(Clone, Copy, Debug)]
 pub struct Object<'a> {
     tag: &'a str,

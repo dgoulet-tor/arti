@@ -1,16 +1,27 @@
+//! Types used to parse arguments of entries in a directory document.
+//!
+//! There are some types that are pretty common, like "ISOTime",
+//! "base64-encoded data", and so on.
+//!
+//! These types shouldn't be exposed outside of the netdoc crate.
+
 pub use b64impl::*;
 pub use curve25519impl::*;
 pub use timeimpl::*;
 
 use thiserror::Error;
 
+/// A problem that can occur when parsing an argument.
 #[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum ArgError {
+    /// Invalid base64.
     #[error("bad base64 encoding: {0}")]
     Base64(#[from] base64::DecodeError),
+    /// A time that was in the wrong form, or out of range.
     #[error("invalid time: {0}")]
     BadTime(#[from] chrono::ParseError),
+    /// Some other error, represented as a string.
     #[error("{0}")]
     Generic(&'static str),
 }
