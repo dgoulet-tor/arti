@@ -20,10 +20,12 @@
 /// assert_eq!(Location::from_str("stfff"), Location::UNRECOGNIZED);
 /// ```
 macro_rules! decl_keyword {
-    { $name:ident { $( $($s:literal)|+ => $i:ident),* $(,)? } } => {
+    { $(#[$meta:meta])* $v:vis
+      $name:ident { $( $($s:literal)|+ => $i:ident),* $(,)? } } => {
         #[derive(Copy,Clone,Eq,PartialEq,Debug,std::hash::Hash)]
         #[allow(non_camel_case_types)]
-        enum $name {
+        $(#[$meta])*
+        $v enum $name {
             $( $i , )*
             UNRECOGNIZED
         }

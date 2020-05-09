@@ -112,9 +112,9 @@ pub enum RelayPlatform {
     Other(String),
 }
 
-// RouterKW is an instance of Keyword, used to denote the different
-// Items that are recognized as appearing in a router descriptor.
 decl_keyword! {
+    /// RouterKW is an instance of Keyword, used to denote the different
+    /// Items that are recognized as appearing in a router descriptor.
     RouterKW {
         "accept" | "reject" => POLICY,
         "bandwidth" => BANDWIDTH,
