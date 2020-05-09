@@ -7,6 +7,14 @@ router", and to the Latin dative singular for "art".  It is
 also short for "artifact".   It has nothing to do with the
 "rt" issue tracker or the "rt" media outlet.)
 
+## Is this the future of Tor??!?11?!?
+
+No, this is a fun side project I'm doing on weekends to learn Rust.
+
+Maybe if it turns out great we can turn it into something official,
+but right now nobody's working on it but me, and I'm not working on
+it seriously at all.
+
 ## What's here and what isn't.
 
 So far the code has untested or under-tested implementations of:
