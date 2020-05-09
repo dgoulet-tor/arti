@@ -336,3 +336,43 @@ impl<'a> Item<'a> {
         Position::from_offset(s, self.off)
     }
 }
+
+/// Represents an Item that might not be present, whose arguments we
+/// want to inspect.  If the Item is there, this acts like a proxy to the
+/// item; otherwise, it treats the item as having no arguments.
+
+pub struct MaybeItem<'a, 'b>(Option<&'a Item<'b>>);
+
+// All methods here are as for Item.
+impl<'a, 'b> MaybeItem<'a, 'b> {
+    pub fn from_option(opt: Option<&'a Item<'b>>) -> Self {
+        MaybeItem(opt)
+    }
+    pub fn parse_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
+    where
+        <V as FromStr>::Err: std::error::Error,
+    {
+        match self.0 {
+            Some(item) => item.parse_arg(idx).map(Some),
+            None => Ok(None), // XXXX is this correct?
+        }
+    }
+    pub fn parse_optional_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
+    where
+        <V as FromStr>::Err: std::error::Error,
+    {
+        match self.0 {
+            Some(item) => item.parse_optional_arg(idx),
+            None => Ok(None),
+        }
+    }
+    pub fn args_as_str(&self) -> Option<&str> {
+        self.0.map(|item| item.args_as_str())
+    }
+    pub fn get_obj(&self, want_tag: &str) -> Result<Option<Vec<u8>>> {
+        match self.0 {
+            Some(item) => Ok(Some(item.get_obj(want_tag)?)),
+            None => Ok(None),
+        }
+    }
+}
