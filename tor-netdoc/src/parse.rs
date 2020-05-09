@@ -11,7 +11,7 @@
 
 use crate::rules::*;
 use crate::tokenize::*;
-use crate::{Error, Position, Result};
+use crate::{Error, Result};
 
 /// Describe the rules for one section of a document.
 ///
@@ -103,8 +103,11 @@ impl<'a, T: Keyword> Section<'a, T> {
     }
     /// Return a single Item for some Keyword, giving an error if there
     /// is not exactly one.
+    ///
+    /// It is usually a mistake to use this function on a Keyword that is
+    /// not required.
     pub fn get_required(&self, t: T) -> Result<&Item<'a>> {
-        self.get(t).ok_or(Error::Internal(Position::Unknown)) // XXXX
+        self.get(t).ok_or_else(|| Error::MissingToken(t.to_str()))
     }
     /// Return a proxy MaybeItem object for some keyword.
     //
