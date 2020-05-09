@@ -22,30 +22,33 @@ pub enum ObjKind {
     ObjOk,
 }
 
-// XXXX too public.
 #[derive(Clone)]
 pub struct TokenFmt<T: Keyword> {
-    pub kwd: T,
+    kwd: T,
     min_args: Option<usize>,
     max_args: Option<usize>,
-    pub required: bool,
-    pub may_repeat: bool,
+    required: bool,
+    may_repeat: bool,
     obj: ObjKind,
 }
 
 impl<T: Keyword> TokenFmt<T> {
+    // Return the keyword that this rule restricts.
+    pub fn get_kwd(&self) -> T {
+        self.kwd
+    }
     /// Check whether a single Item matches this TokenFmt rule, with respect
     /// to its number of arguments.
-    fn item_matches_args<'a>(&self, t: T, item: &Item<'a>) -> Result<()> {
+    fn item_matches_args<'a>(&self, item: &Item<'a>) -> Result<()> {
         let n_args = item.n_args();
         if let Some(max) = self.max_args {
             if n_args > max {
-                return Err(Error::TooManyArguments(t.to_str(), item.pos()));
+                return Err(Error::TooManyArguments(self.kwd.to_str(), item.pos()));
             }
         }
         if let Some(min) = self.min_args {
             if n_args < min {
-                return Err(Error::TooFewArguments(t.to_str(), item.pos()));
+                return Err(Error::TooFewArguments(self.kwd.to_str(), item.pos()));
             }
         }
         Ok(())
@@ -53,21 +56,39 @@ impl<T: Keyword> TokenFmt<T> {
 
     /// Check whether a single Item matches a TokenFmt rule, with respect
     /// to its object's presence and type.
-    ///
-    /// TODO: Move this to rules?
-    fn item_matches_obj<'a>(&self, t: T, item: &Item<'a>) -> Result<()> {
+    fn item_matches_obj<'a>(&self, item: &Item<'a>) -> Result<()> {
         match (&self.obj, item.has_obj()) {
-            (ObjKind::NoObj, true) => Err(Error::UnexpectedObject(t.to_str(), item.pos())),
-            (ObjKind::RequireObj, false) => Err(Error::MissingObject(t.to_str(), item.pos())),
+            (ObjKind::NoObj, true) => Err(Error::UnexpectedObject(self.kwd.to_str(), item.pos())),
+            (ObjKind::RequireObj, false) => {
+                Err(Error::MissingObject(self.kwd.to_str(), item.pos()))
+            }
             (_, _) => Ok(()),
         }
     }
 
     /// Check whether a single item has the right number of arguments
     /// and object.
-    pub fn check_item<'a>(&self, t: T, item: &Item<'a>) -> Result<()> {
-        self.item_matches_args(t, item)?;
-        self.item_matches_obj(t, item)
+    pub fn check_item<'a>(&self, item: &Item<'a>) -> Result<()> {
+        self.item_matches_args(item)?;
+        self.item_matches_obj(item)
+    }
+
+    /// Check whether this kind of item may appear this many times.
+    pub fn check_multiplicity<'a>(&self, items: &[Item<'a>]) -> Result<()> {
+        match items.len() {
+            0 => {
+                if self.required {
+                    return Err(Error::MissingToken(self.kwd.to_str()));
+                }
+            }
+            1 => (),
+            _ => {
+                if !self.may_repeat {
+                    return Err(Error::DuplicateToken(self.kwd.to_str(), items[1].pos()));
+                }
+            }
+        }
+        Ok(())
     }
 }
 

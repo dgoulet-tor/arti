@@ -51,15 +51,6 @@ impl<'a> TokVal<'a> {
             TokVal::Multi(v) => Some(&v[0]),
         }
     }
-    /// Return the second Item for this value, or None if there wasn't one.
-    ///
-    /// Used to make duplicate-token errors.
-    fn second(&self) -> Option<&Item<'a>> {
-        match self {
-            TokVal::Multi(v) if v.len() > 1 => Some(&v[1]),
-            _ => None,
-        }
-    }
     /// Return the Item for this value, if there is exactly one.
     fn singleton(&self) -> Option<&Item<'a>> {
         match self {
@@ -122,11 +113,10 @@ impl<'a, T: Keyword> Section<'a, T> {
     pub fn maybe<'b>(&'b self, t: T) -> MaybeItem<'b, 'a> {
         MaybeItem::from_option(self.get(t))
     }
-    /// Parsing implementation: try to insert an `item`.
+    /// Insert an `item`.
     ///
-    /// The `item` must have parsed Keyword `t`; it is allowed to repeat if
-    /// `may_repeat` is true.
-    fn add_tok(&mut self, t: T, may_repeat: bool, item: Item<'a>) -> Result<()> {
+    /// The `item` must have parsed Keyword `t`.
+    fn add_tok(&mut self, t: T, item: Item<'a>) {
         let idx = Keyword::idx(t);
         if idx >= self.v.len() {
             self.v.resize(idx + 1, TokVal::None);
@@ -136,16 +126,12 @@ impl<'a, T: Keyword> Section<'a, T> {
         match m {
             TokVal::None => *m = TokVal::Some([item]),
             TokVal::Some([x]) => {
-                if !may_repeat {
-                    return Err(Error::DuplicateToken(t.to_str(), item.pos()));
-                }
                 *m = TokVal::Multi(vec![x.clone(), item]);
             }
             TokVal::Multi(ref mut v) => {
                 v.push(item);
             }
         };
-        Ok(())
     }
 }
 
@@ -185,8 +171,9 @@ impl<T: Keyword> SectionRules<T> {
             let tok_idx = tok.idx();
             if let Some(rule) = &self.rules[tok_idx] {
                 // we want this token.
-                assert!(rule.kwd == tok);
-                section.add_tok(tok, rule.may_repeat, item)?;
+                assert!(rule.get_kwd() == tok);
+                section.add_tok(tok, item);
+                rule.check_multiplicity(section.v[tok_idx].as_slice())?;
             } else {
                 // We don't have a rule for this token.
                 return Err(Error::UnexpectedToken(tok.to_str(), item.pos()));
@@ -222,18 +209,10 @@ impl<T: Keyword> SectionRules<T> {
                 }
                 Some(rule) => {
                     // We're allowed to have this. Is the number right?
-                    if t.count() == 0 && rule.required {
-                        return Err(Error::MissingToken(T::idx_to_str(idx)));
-                    } else if t.count() > 1 && !rule.may_repeat {
-                        return Err(Error::DuplicateToken(
-                            T::idx_to_str(idx),
-                            t.second().unwrap().pos(),
-                        ));
-                    }
+                    rule.check_multiplicity(t.as_slice())?;
                     // The number is right. Check each individual item.
                     for item in t.as_slice() {
-                        let tok = T::from_idx(idx).unwrap();
-                        rule.check_item(tok, item)?
+                        rule.check_item(item)?
                     }
                 }
             }
