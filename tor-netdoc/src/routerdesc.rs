@@ -4,7 +4,17 @@
 /// about itself, explaining its keys, its capabilities, its location,
 /// and its status.
 ///
+/// Relays upload their router descriptors to authorities, which use
+/// them to build consensus documents.  Old clients and relays used to
+/// fetch and use router descriptors for all the relays, but nowadays they use
+/// microdescriptors instead.
 ///
+/// Clients still use router descriptors when communicating with
+/// bridges: since bridges are not passed through an authority,
+/// clients accept their descriptors directly.
+///
+/// For full information about the router descriptor format, see
+/// [dir-spec.txt](https://spec.torproject.org/dir-spec).
 ///
 /// # Limitations
 ///
@@ -32,6 +42,19 @@ use tor_llcrypto::pk::rsa::RSAIdentity;
 
 use digest::Digest;
 
+/// Information about a relay, parsed from a router descriptor.
+///
+/// This type does not hold all the information in the router descriptor
+///
+/// # Limitations
+///
+/// See module documentation.
+///
+/// Additionally, some fields that from router descriptors are not yet
+/// parsed: see the comments in ROUTER_BODY_RULES for information about those.
+///
+/// Before using this type to connect to a relay, you MUST check that
+/// it is valid, using is_expired_at().
 #[allow(dead_code)] // don't warn about fields not getting read.
 pub struct RouterDesc {
     nickname: String,
@@ -50,17 +73,26 @@ pub struct RouterDesc {
     is_dircache: bool,
     is_hsdir: bool,
     is_extrainfo_cache: bool,
-    // TODO: these families can get bulky. Perhaps we should memoize,
-    // like Tor does.
+    // TODO: these families can get bulky. Perhaps we should de-duplicate
+    // them in a cache, like Tor does.
     family: RelayFamily,
     platform: Option<RelayPlatform>,
-    // TODO: cache these.
+    // TODO: these polices can get bulky too. Perhaps we should
+    // de-duplicate them too.
     ipv4_policy: AddrPolicy,
     ipv6_policy: PortPolicy,
 }
 
+/// Information about a relay family.
+///
+/// Tor relays may declare that they belong to the same family, to
+/// indicate that they are controlled by the same party or parties,
+/// and as such should not be used in the same circuit. Two relays
+/// belong to the same family if and only if each one lists the other
+/// as belonging to its family.
 pub struct RelayFamily(Vec<RSAIdentity>);
 
+/// Parse a single family entry from a string.
 fn parse_family_ent(mut s: &str) -> Option<RSAIdentity> {
     if s.starts_with('$') {
         s = &s[1..];
@@ -72,47 +104,54 @@ fn parse_family_ent(mut s: &str) -> Option<RSAIdentity> {
     RSAIdentity::from_bytes(&bytes)
 }
 
+/// Description of the software a relay is running.
 pub enum RelayPlatform {
+    /// Software advertised to be some version of Tor, on some platform.
     Tor(TorVersion, String),
+    /// Software not advertised to be Tor.
     Other(String),
 }
 
+// RouterKW is an instance of Keyword, used to denote the different
+// Items that are recognized as appearing in a router descriptor.
 decl_keyword! {
     RouterKW {
-        "router" => ROUTER,
-        "identity-ed25519" => IDENTITY_ED25519,
-        "master-key-ed25519" => MASTER_KEY_ED25519,
+        "accept" | "reject" => POLICY,
         "bandwidth" => BANDWIDTH,
-        "platform" => PLATFORM,
-        "published" => PUBLISHED,
+        "bridge-distribution-request" => BRIDGE_DISTRIBUTION_REQUEST,
+        "caches-extra-info" => CACHES_EXTRA_INFO,
+        "contact" => CONTACT,
+        "extra-info-digest" => EXTRA_INFO_DIGEST,
+        "family" => FAMILY,
         "fingerprint" => FINGERPRINT,
         "hibernating" => HIBERNATING,
-        "uptime" => UPTIME,
-        "onion-key" => ONION_KEY,
-        "onion-key-crosscert" => ONION_KEY_CROSSCERT,
+        "hidden-service-dir" => HIDDEN_SERVICE_DIR,
+        "identity-ed25519" => IDENTITY_ED25519,
+        "ipv6-policy" => IPV6_POLICY,
+        "master-key-ed25519" => MASTER_KEY_ED25519,
         "ntor-onion-key" => NTOR_ONION_KEY,
         "ntor-onion-key-crosscert" => NTOR_ONION_KEY_CROSSCERT,
-        "signing-key" => SIGNING_KEY,
-        "accept" | "reject" => POLICY,
-        "ipv6-policy" => IPV6_POLICY,
-        "contact" => CONTACT,
-        "bridge-distribution-request" => BRIDGE_DISTRIBUTION_REQUEST,
-        "family" => FAMILY,
-        "caches-extra-info" => CACHES_EXTRA_INFO,
-        "extra-info-digest" => EXTRA_INFO_DIGEST,
-        "hidden-service-dir" => HIDDEN_SERVICE_DIR,
-        // "protocols" obsolete
-        // "eventdns" obsolete
-        // "allow-single-hop-exits" obsolete
+        "onion-key" => ONION_KEY,
+        "onion-key-crosscert" => ONION_KEY_CROSSCERT,
         "or-address" => OR_ADDRESS,
-        "tunnelled_dir_server" => TUNNELLED_DIR_SERVER,
+        "platform" => PLATFORM,
         "proto" => PROTO,
+        "published" => PUBLISHED,
+        "router" => ROUTER,
         "router-sig-ed25519" => ROUTER_SIG_ED25519,
         "router-signature" => ROUTER_SIGNATURE,
+        "signing-key" => SIGNING_KEY,
+        "tunnelled_dir_server" => TUNNELLED_DIR_SERVER,
+        "uptime" => UPTIME,
+        // "protocols" once existed, but is obsolete
+        // "eventdns" once existed, but is obsolete
+        // "allow-single-hop-exits" is also obsolete.
     }
 }
 
 lazy_static! {
+    /// Rules for tokens that are allowed in the first part of a
+    /// router descriptor.
     static ref ROUTER_HEADER_RULES : SectionRules<RouterKW> = {
         use RouterKW::*;
 
@@ -120,19 +159,22 @@ lazy_static! {
         rules.add(ROUTER.rule().required().args(5..));
         rules
     };
+    /// Rules for  tokens that are allowed in the first part of a
+    /// router descriptor.
     static ref ROUTER_BODY_RULES : SectionRules<RouterKW> = {
         use RouterKW::*;
 
         let mut rules = SectionRules::new();
-        // This is not yet required as of this writing; I'm assuming
-        // that proposal 315 will get accepted.
+        // IDENTITY_ED25519 is not yet required as of this writing;
+        // I'm assuming that proposal 315 will get accepted.
+        //
+        // TODO: Additionally, when present, this must be the second
+        // line in the document.  We don't currently enforce that.
         rules.add(IDENTITY_ED25519.rule().required().no_args().obj_required());
         rules.add(MASTER_KEY_ED25519.rule().args(1..));
-        rules.add(BANDWIDTH.rule().required().args(3..)); // todo -- auth only
         rules.add(PLATFORM.rule());
         rules.add(PUBLISHED.rule().required());
         rules.add(FINGERPRINT.rule());
-        rules.add(HIBERNATING.rule().args(1..)); //todo -- auth only
         rules.add(UPTIME.rule().args(1..));
         rules.add(ONION_KEY.rule().no_args().required().obj_required());
         rules.add(ONION_KEY_CROSSCERT.rule().no_args().obj_required());
@@ -141,22 +183,28 @@ lazy_static! {
         rules.add(SIGNING_KEY.rule().no_args().required().obj_required());
         rules.add(POLICY.rule().may_repeat().args(1..));
         rules.add(IPV6_POLICY.rule().args(2..));
-        rules.add(CONTACT.rule()); // todo; ignored for now.
-        rules.add(BRIDGE_DISTRIBUTION_REQUEST.rule().args(1..)); // todo; ignored for now. (auth only)
         rules.add(FAMILY.rule().args(1..));
-        // "protocols" obsolete
-        // "eventdns" obsolete
-        // "allow-single-hop-exits" obsolete
         rules.add(CACHES_EXTRA_INFO.rule().no_args());
-        rules.add(EXTRA_INFO_DIGEST.rule().args(1..)); // todo; ignored for now
         rules.add(HIDDEN_SERVICE_DIR.rule());
         rules.add(OR_ADDRESS.rule().may_repeat().args(1..));
         rules.add(TUNNELLED_DIR_SERVER.rule());
         rules.add(PROTO.rule().args(1..));
         rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
+        // TODO: these aren't parsed yet.  Only authorities use them.
+        {
+            rules.add(BANDWIDTH.rule().required().args(3..));
+            rules.add(BRIDGE_DISTRIBUTION_REQUEST.rule().args(1..));
+            rules.add(HIBERNATING.rule().args(1..));
+            rules.add(CONTACT.rule());
+        }
+        // TODO: this is ignored for now.
+        {
+            rules.add(EXTRA_INFO_DIGEST.rule().args(1..));
+        }
         rules
     };
 
+    /// Rules for items that appear at the end of a router descriptor.
     static ref ROUTER_SIG_RULES : SectionRules<RouterKW> = {
         use RouterKW::*;
 
@@ -168,10 +216,15 @@ lazy_static! {
 }
 
 impl RouterDesc {
+    /// Return true iff this router descriptor is expired.
+    ///
+    /// The check is performed under the assumption that the current
+    /// time is `when`.
     pub fn is_expired_at(&self, when: time::SystemTime) -> bool {
         self.expiry <= when
     }
 
+    /// Helper: tokenize `s`, and divide it into three validated sections.
     fn parse_sections<'a>(
         s: &'a str,
     ) -> Result<(
@@ -182,27 +235,52 @@ impl RouterDesc {
         use crate::util::*;
 
         let reader = crate::tokenize::NetDocReader::new(s);
+
+        // Parse everything up through the header.
         let mut reader =
             reader.pause_at(|item| item.is_ok() && item.as_ref().unwrap().get_kwd() != "router");
         let header = ROUTER_HEADER_RULES.parse(&mut reader)?;
 
+        // Parse everything up to but not including the signature.
         let mut reader = reader.new_pred(|item| {
             item.is_ok() && (item.as_ref().unwrap().get_kwd() == "router-signature")
                 || (item.as_ref().unwrap().get_kwd() == "router-sig-ed25519")
         });
         let body = ROUTER_BODY_RULES.parse(&mut reader)?;
 
+        // Parse the signature.
         let mut reader = reader.remaining();
         let sig = ROUTER_SIG_RULES.parse(&mut reader)?;
 
         Ok((header, body, sig))
     }
 
+    /// Try to parse `s` as a router descriptor.
+    ///
+    /// # Limitations
+    ///
+    /// This function does too much and too little.  It validates all
+    /// the signatures in the descriptor, which is too much for a
+    /// parsing function, but it doesn't check the expiration time,
+    /// because it doesn't know it.
+    ///
+    /// I would prefer that this function would instead return some
+    /// kind of object that could only be used as a router descriptor
+    /// after the signatures and expiration were checked.  But that's
+    /// future work for now, partially because of limitations in the
+    /// ed25519 API.
     pub fn parse(s: &str) -> Result<RouterDesc> {
         Self::parse_internal(s).map_err(|e| e.within(s))
     }
 
+    /// Helper: parse a router descriptor from `s`.
+    ///
+    /// This function does the same as parse(), but returns errors based on
+    /// byte-wise positions.  The parse() function converts such errors
+    /// into line-and-byte positions.
     fn parse_internal(s: &str) -> Result<RouterDesc> {
+        // TODO: This function is too long!  The little "paragraphs" here
+        // that parse one item at a time should be made into sub-functions.
         use RouterKW::*;
 
         let (header, body, sig) = RouterDesc::parse_sections(s)?;
