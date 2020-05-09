@@ -90,6 +90,8 @@ pub struct RouterDesc {
 /// and as such should not be used in the same circuit. Two relays
 /// belong to the same family if and only if each one lists the other
 /// as belonging to its family.
+///
+/// TODO: This type probably belongs in a different crate.
 pub struct RelayFamily(Vec<RSAIdentity>);
 
 /// Parse a single family entry from a string.
