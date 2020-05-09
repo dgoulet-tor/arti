@@ -179,7 +179,7 @@ impl<T: Keyword> SectionRules<T> {
                 None => {
                     if t.count() > 0 {
                         let tokname = T::idx_to_str(idx);
-                        return Err(Error::UnexpectedToken(tokname, t.second().unwrap().pos()));
+                        return Err(Error::UnexpectedToken(tokname, t.first().unwrap().pos()));
                     }
                 }
                 Some(rule) => {
