@@ -1,38 +1,58 @@
 //! Implementation of Tor's "subprotocol versioning" feature.
 //!
-//! Different aspects of the Tor protocol are given versions
-//! independently, and Tor implementations use these versions to tell
-//! which relays support which features.  They are also used to
-//! determine which versions of the protocol are required to connect
-//! to the network (or just recommended).
+//! Different aspects of the Tor protocol (called "subprotocols") are
+//! given versions independently, and Tor implementations use these
+//! versions to tell which relays support which features.  They are
+//! also used to determine which versions of the protocol are required
+//! to connect to the network (or just recommended).
+//!
+//! ## Caveats
 //!
 //! This implementation assumes that the "xxx-limit-protovers.md"
 //! proposal has been accepted, limiting versions to the range 0
 //! through 63.
 
+#![deny(missing_docs)]
+
 use caret::caret_enum;
 use thiserror::Error;
 
 caret_enum! {
-/// Recognized protocol identities.  These names are kept in sync with
-/// the names used in consensus documents; the values are kept in sync
-/// with the values in the cbor document format in the walking onions
-/// proposal.
-#[non_exhaustive]
-pub enum ProtoKind as u16 {
-    Link = 0,
-    LinkAuth = 1,
-    Relay = 2,
-    DirCache = 3,
-    HSDir = 4,
-    HSIntro = 5,
-    HSRend = 6,
-    Desc = 7,
-    MicroDesc = 8,
-    Cons = 9,
-    Padding = 10,
-    FlowCtrl = 11,
-}
+    /// A recognized subprotocol.
+    ///
+    /// These names are kept in sync with the names used in consensus
+    /// documents; the values are kept in sync with the values in the
+    /// cbor document format in the walking onions proposal.
+    ///
+    /// For the full semantics of each subprotocol, see tor-spec.txt.
+    #[non_exhaustive]
+    pub enum ProtoKind as u16 {
+        /// Initiating and receiving channels, and getting cells on them.
+        Link = 0,
+        /// Different kinds of authenticate cells
+        LinkAuth = 1,
+        /// CREATE cells, CREATED cells, and the encryption that they
+        /// create.
+        Relay = 2,
+        /// Serving and fetching network directory documents.
+        DirCache = 3,
+        /// Serving onion service descriptors
+        HSDir = 4,
+        /// Providing an onion service introduction point
+        HSIntro = 5,
+        /// Providing an onion service rendezvous point
+        HSRend = 6,
+        /// Describing a relay's functionality as a router descriptor
+        Desc = 7,
+        /// Describing a relay's functionality as a microdescriptor.
+        MicroDesc = 8,
+        /// Describing the network as a consensus directory document.
+        Cons = 9,
+        /// Sending and accepting circuit-level padding
+        Padding = 10,
+        /// Improved means of flow control on circuits.
+        FlowCtrl = 11,
+    }
 }
 
 /// How many recognized protocols are there?
@@ -72,7 +92,16 @@ struct SubprotocolEntry {
     supported: u64,
 }
 
-/// A set of supported or required protocol versions.
+/// A set of supported or required subprotocol versions.
+///
+/// This type supports both recognized subprotocols (listed in ProtoKind),
+/// and unrecognized subprotcols (stored by name).
+///
+/// To construct an instance, use the FromStr trait:
+/// ```
+/// use tor_protover::Protocols;
+/// let p: Result<Protocols,_> = "Link=1-3 LinkAuth=2-3 Relay=1-2".parse();
+/// ```
 pub struct Protocols {
     /// A mapping from protocols' integer encodings to bit-vectors.
     recognized: [u64; N_RECOGNIZED],
@@ -82,7 +111,7 @@ pub struct Protocols {
 
 impl Protocols {
     /// Return a new empty set of protocol versions.
-    pub fn new() -> Self {
+    fn new() -> Self {
         Protocols {
             recognized: [0u64; N_RECOGNIZED],
             unrecognized: Vec::new(),
@@ -117,14 +146,33 @@ impl Protocols {
             None => false,
         }
     }
-    /// Return true iff this protocol set contains version `ver`
-    /// of the protocol `proto`.
-    pub fn supports_subver(&self, proto: ProtoKind, ver: u8) -> bool {
+    /// Check whether a known protocol version is supported.
+    ///
+    /// ```
+    /// use tor_protover::*;
+    /// let protos: Protocols = "Link=1-3 HSDir=2,4-5".parse().unwrap();
+    ///
+    /// assert!(protos.supports_known_subver(ProtoKind::Link, 2));
+    /// assert!(protos.supports_known_subver(ProtoKind::HSDir, 4));
+    /// assert!(! protos.supports_known_subver(ProtoKind::HSDir, 3));
+    /// assert!(! protos.supports_known_subver(ProtoKind::LinkAuth, 3));
+    /// ```
+    pub fn supports_known_subver(&self, proto: ProtoKind, ver: u8) -> bool {
         self.supports_recognized_ver(proto as usize, ver)
     }
-    /// Return true iff this protocol set contains version `ver`
-    /// of the protocol represented by the string `proto`.
-    pub fn supports_raw_subver(&self, proto: &str, ver: u8) -> bool {
+    /// Check whether a protocol version identified by a string is supported.
+    ///
+    /// ```
+    /// use tor_protover::*;
+    /// let protos: Protocols = "Link=1-3 Foobar=7".parse().unwrap();
+    ///
+    /// assert!(protos.supports_subver("Link", 2));
+    /// assert!(protos.supports_subver("Foobar", 7));
+    /// assert!(! protos.supports_subver("Link", 5));
+    /// assert!(! protos.supports_subver("Foobar", 6));
+    /// assert!(! protos.supports_subver("Wombat", 3));
+    /// ```
+    pub fn supports_subver(&self, proto: &str, ver: u8) -> bool {
         match ProtoKind::from_string(proto) {
             Some(p) => self.supports_recognized_ver(p as usize, ver),
             None => self.supports_unrecognized_ver(proto, ver),
@@ -171,10 +219,13 @@ impl Default for Protocols {
 /// An error representing a failure to parse a set of protocol versions.
 #[derive(Error, Debug)]
 pub enum ParseError {
+    /// A protovol version was not in the range 0..=63.
     #[error("protocol version out of range")]
     OutOfRange,
+    /// Some subprotocol or protocol version appeared more than once.
     #[error("duplicate protocol entry")]
     Duplicate,
+    /// The list of protocol versions was malformed in some other way.
     #[error("malformed protocol entry")]
     Malformed,
 }
@@ -184,7 +235,14 @@ pub enum ParseError {
 ///
 /// In other words, `bitrange(a,b)` is how we represent the range of
 /// versions `a-b` in a protocol version bitmask.
-fn bitrange(lo: u64, hi: u64) -> u64 {
+///
+/// ```ignore
+/// # use tor_protover::bitrange;
+/// assert_eq!(bitrange(0, 5), 0b111111);
+/// assert_eq!(bitrange(2, 5), 0b111100);
+/// assert_eq!(bitrange(2, 7), 0b11111100);
+/// ```
+pub fn bitrange(lo: u64, hi: u64) -> u64 {
     assert!(lo <= hi && lo <= 63 && hi <= 63);
     let mut mask = !0;
     mask <<= 63 - hi;
@@ -279,6 +337,13 @@ impl std::str::FromStr for Protocols {
 /// This implementation constructs ranges greedily.  For example, the
 /// bitmask `0b0111011` will be represented as `0-1,3-5`, and not
 /// `0,1,3,4,5` or `0,1,3-5`.
+///
+/// ```ignore
+/// # use tor_protover::dumpmask;
+/// assert_eq!(dumpmask(0b111111), "0-5");
+/// assert_eq!(dumpmask(0b111100), "2-5");
+/// assert_eq!(dumpmask(0b11111100), "2-7");
+/// ```
 fn dumpmask(mut mask: u64) -> String {
     // We'll be building up our result here, then joining it with
     // commas.
@@ -320,6 +385,13 @@ fn dumpmask(mut mask: u64) -> String {
 
 /// The Display trait formats a protocol set in the format expected by Tor
 /// consensus documents.
+///
+/// ```
+/// use tor_protover::*;
+/// let protos: Protocols = "Link=1,2,3 Foobar=7 Relay=2".parse().unwrap();
+/// assert_eq!(format!("{}", protos),
+///            "Foobar=7 Link=1-3 Relay=2");
+/// ```
 impl std::fmt::Display for Protocols {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut entries = Vec::new();
