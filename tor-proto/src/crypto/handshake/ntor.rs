@@ -1,3 +1,13 @@
+//! Implements the ntor handshake, as used in modern Tor.
+//!
+//! # Limitations
+//!
+//! These functions should be extensible to work with the ntor variant
+//! used in v3 hidden services; but right now they aren't.
+//!
+//! TODO: this code should implement ClientHandshake and
+//! ServerHandshake, but right now it doesn't.
+
 use super::KeyGenerator;
 use crate::util::ct;
 use crate::{Error, Result, SecretBytes};
@@ -9,12 +19,15 @@ use crypto_mac::MacResult;
 use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroizing;
 
+/// A set of public keys used by a client to initiate an ntor handshake.
 #[derive(Clone)]
+
 pub struct NtorPublicKey {
     id: RSAIdentity,
     pk: PublicKey,
 }
 
+/// A secret key used by a relay to answer an ntor request
 pub struct NtorSecretKey {
     pk: NtorPublicKey,
     sk: StaticSecret,
@@ -27,17 +40,22 @@ impl NtorSecretKey {
     }
 }
 
+/// Client state for an ntor handshake.
 pub struct NtorHandshakeState {
     relay_public: NtorPublicKey,
-    my_sk: StaticSecret, // can't use ephemeralsecret -- need to use it twice.
+    // We'd like to EphemeralSecret here, but we can't since we need
+    // to use it twice.
+    my_sk: StaticSecret,
     my_public: PublicKey,
 }
 
+/// KeyGenerator for use with ntor circuit handshake.
 pub struct NtorHKDFKeyGenerator {
     seed: SecretBytes,
 }
 
 impl NtorHKDFKeyGenerator {
+    /// Create a new key generator to expand a given seed
     pub fn new(seed: SecretBytes) -> Self {
         NtorHKDFKeyGenerator { seed }
     }
@@ -54,6 +72,7 @@ impl KeyGenerator for NtorHKDFKeyGenerator {
 
 type Authcode = MacResult<typenum::U32>;
 
+/// Perform a client handshake, generating an onionskin and a state object
 pub fn client_handshake_ntor_v1<R>(
     rng: &mut R,
     relay_public: &NtorPublicKey,
@@ -67,6 +86,7 @@ where
     client_handshake_ntor_v1_no_keygen(my_public, my_sk, relay_public)
 }
 
+/// Helper: client handshake _without_ generating  new keys.
 fn client_handshake_ntor_v1_no_keygen(
     my_public: PublicKey,
     my_sk: StaticSecret,
@@ -89,6 +109,7 @@ fn client_handshake_ntor_v1_no_keygen(
     (state, v)
 }
 
+/// Complete a client handshake, returning a key generator on success.
 pub fn client_handshake2_ntor_v1<T>(
     msg: T,
     state: NtorHandshakeState,
@@ -113,6 +134,10 @@ where
     Ok(keygen)
 }
 
+/// helper: compute a key generator and an authentication code from a set
+/// of ntor parameters.
+///
+/// These parameter names are as described in tor-spec.txt
 fn ntor_derive(
     xy: &SharedSecret,
     xb: &SharedSecret,
@@ -160,6 +185,9 @@ fn ntor_derive(
     (keygen, auth_mac)
 }
 
+/// Perform a server-side ntor handshake.
+///
+/// On success returns a key generator and a server onionskin.
 pub fn server_handshake_ntor_v1<R, T>(
     rng: &mut R,
     msg: T,
@@ -178,6 +206,7 @@ where
     server_handshake_ntor_v1_no_keygen(ephem_pub, ephem, msg, keys)
 }
 
+/// Helper: perform a server handshake without generating any new keys.
 fn server_handshake_ntor_v1_no_keygen<T>(
     ephem_pub: PublicKey,
     ephem: EphemeralSecret,

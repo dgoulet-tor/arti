@@ -1,3 +1,15 @@
+//! Implementations for Tor's cell protocols.
+//!
+//! These are likely to be tremendously bad; I started them first.
+//!
+//! I will want to refacor them a LOT before calling this interface at
+//! all stable.
+//!
+//! Channel-level cell types are handled in the cellmsg module;
+//! relay cell messages are handled in the relaymsg module.
+
+#![allow(missing_docs)]
+
 use tor_bytes::{Error, Reader, Result, Writer};
 
 pub mod cellmsg;
@@ -7,6 +19,8 @@ pub const CELL_DATA_LEN: usize = 509;
 
 type CellCmd = u8;
 
+// TODO: Instead of a module this should be an enum-like type (though not
+// actually an enum).
 pub mod cellcmd {
     pub const PADDING: u8 = 0;
     pub const CREATE: u8 = 1;
@@ -30,6 +44,8 @@ pub mod cellcmd {
     pub const AUTHORIZE: u8 = 132;
 }
 
+// TODO: Instead of a module this should be an enum-like type (though not
+// actually an enum).
 pub mod relaycmd {
     pub const BEGIN: u8 = 1;
     pub const DATA: u8 = 2;

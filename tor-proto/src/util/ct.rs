@@ -1,7 +1,22 @@
+//! Constant-time utilities.
 use subtle::*;
 
-// Note that this doesn't necessarily do a constant-time comparison,
-// and that it is not constant-time for found/not-found case.
+/// Try to find an item in a slice without leaking where and whether the
+/// item was found.
+///
+/// If there is any item `x` in the `array` for which `matches(item,
+/// x)` is true, this function will return a reference to one such
+/// item.  (We don't specify which.)
+///
+/// Otherwise, this function returns none.
+///
+/// We evaluate `matches` on every item of the array, and try not to
+/// leak by timing which element (if any) matched.
+///
+/// Note that this doesn't necessarily do a constant-time comparison,
+/// and that it is not constant-time for found/not-found case.
+///
+/// TODO: the item 'item' should really be part of the 'matches' closure.
 pub fn lookup<'a, T, U, F>(item: &T, array: &'a [U], matches: F) -> Option<&'a U>
 where
     F: Fn(&T, &U) -> Choice,
@@ -25,6 +40,8 @@ where
     }
 }
 
+/// Return true if two slices are equal.  Performs its operation in constant
+/// time, but returns a bool instead of a subtle::Choice.
 pub fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     let choice = a.ct_eq(b);
     choice.unwrap_u8() == 1
