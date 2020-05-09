@@ -12,9 +12,9 @@ also short for "artifact".   It has nothing to do with the
 So far the code has untested or under-tested implementations of:
 
   * the ntor protocol
-  * the relay crypto algorithm
+  * the relay crypto algorithm [cruddy vesion]
   * parsing and encoding all the cell types (except for hs-related
-       ones)
+       ones).  [cruddy version]
   * parsing and validating ed25519 certificates
   * parsing and validating router descriptors
 
@@ -22,6 +22,8 @@ Before I share it, I think it needs more work on:
 
   * parsing the other kinds of network documents
   * link authentication
+  * refactoring everywhere
+  * lots of tests
   * a sensible api for cell types
   * a toy client that builds a circuit through the network
       and uses it to exit.
@@ -43,7 +45,7 @@ I do not plan to implement full versions of any of those before I
 share this code for more comment, though I might do a little.  Who
 knows?
 
-## What can I do?
+## What can I do with this?
 
 You can build this all with `cargo build`.
 
@@ -52,6 +54,28 @@ You can run the tests, such as they are, with `cargo test`.
 You can make documentation with `cargo doc`.  I prefer
 `cargo doc --no-deps --document-private-items`, to include documentation for
 private members but not for dependencies.
+
+## I want to help. What _should_ I do with this?
+
+More tests would be great.
+
+Parsing more document types would be great.
+
+More documentation examples would be great.
+
+Improvements or bugfixes to the existing code would be great.
+
+Improving the look and feel of the documentation would also rock.
+
+I've made a bunch of notes throughout the document in comments with strings
+like "XXX" or "TODO".
+
+There is a list of features that I wish other crates had in
+`WANT_FROM_OTHER_CRATES`.
+
+Please hold off on opening tickets unless you are pretty sure that you're
+reporting a problem I don't know about. :)
+
 
 ## Caveat haxxor: what to watch out for
 
