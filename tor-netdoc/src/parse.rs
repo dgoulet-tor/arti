@@ -1,13 +1,17 @@
 //! Based on a set of rules, validate a token stream and collect the
 //! tokens by type.
 //!
-//! See the "rules" module for definitions of rules that are used to
-//! govern this process.
+//! See the "rules" module for definitions of keywords types and
+//! per-keyword rules.
+//!
+//! The key types in this module are SectionRules, which explains how to
+//! validate and partition a stream of Item, and Section, which contains
+//! a validated set of Item, ready to be interpreted.
 //!
 //! # Example
 //!
-//! This is an internal API, so see the routerdesc.rs source for an
-//! example of use.
+//! (This is an internal API, so see the routerdesc.rs source for an
+//! example of use.)
 
 use crate::rules::*;
 use crate::tokenize::*;
@@ -153,9 +157,10 @@ impl<T: Keyword> SectionRules<T> {
     ///
     /// Requires that no rule yet exists for the provided keyword.
     pub fn add(&mut self, t: TokenFmtBuilder<T>) {
-        let idx = t.idx();
+        let rule: TokenFmt<_> = t.into();
+        let idx = rule.get_kwd().idx();
         assert!(self.rules[idx].is_none());
-        self.rules[idx] = Some(t.into());
+        self.rules[idx] = Some(rule);
     }
 
     /// Parse a stream of tokens into a Section object without (fully)

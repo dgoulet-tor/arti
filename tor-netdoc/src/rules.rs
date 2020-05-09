@@ -1,39 +1,82 @@
+//! Keywords for interpreting items and rules for validating them.
+
 use crate::tokenize::Item;
 use crate::{Error, Result};
 use std::hash::Hash;
 
+/// A Keyword identifies the possible types of a keyword for an Item.
+///
+/// These do not map one-to-one to Item strings: several Item strings
+/// may be placed in a single Keyword -- for example, when their order
+/// is signficant with respect to one another, like "accept" and
+/// "reject" in rotuer descriptors.
+///
+/// Every keyword has an "index", which is a small number suitable for
+/// indexing an array.  These are used in Section and SectionRules.
+///
+/// Turning a string into a keyword cannot fail: there is always an
+/// "UNRECOGNIZED" keyword.
+///
+/// See macro::decl_keyword! for help defining a Keyword type for a
+/// network document.
 pub trait Keyword: Hash + Eq + PartialEq + Copy + Clone {
+    /// Find a Keyword corresponding to a string that appears in a
+    /// network document.
     fn from_str(s: &str) -> Self;
+    /// Try to find the keyword corresponding to a given index value,
+    /// as used in Section and SectionRules.
     fn from_idx(i: usize) -> Option<Self>;
+    /// Find a string corresponding to this keyword.  This may not be the
+    /// actual string from the document; it is indended for reporting errors.
     fn to_str(&self) -> &'static str;
+    /// Return the index for this keyword.
     fn idx(self) -> usize;
+    /// Return the number of indices for this keyword.
     fn n_vals() -> usize;
+    /// Convert from an index to a human-readable string.
     fn idx_to_str(i: usize) -> &'static str {
         Self::from_idx(i)
             .map(|x| x.to_str())
             .unwrap_or("<out of range>")
     }
+    /// Return a new TokenFmtBuilder for creating rules about this keyword.
+    fn rule(&self) -> TokenFmtBuilder<Self> {
+        TokenFmtBuilder::new(*self)
+    }
 }
 
+/// May an Item take an object?
 #[derive(Copy, Clone)]
-pub enum ObjKind {
+enum ObjKind {
+    /// No object is allowed.
     NoObj,
+    /// An object is required.
     RequireObj,
+    /// An object is optional.
     ObjOk,
 }
 
+/// A set of restrictions to place on Items for a single keyword.
+///
+/// These are built by the TokenFmtBuilder API.
 #[derive(Clone)]
 pub struct TokenFmt<T: Keyword> {
+    /// Which keyword is being restricted?
     kwd: T,
+    /// If present, a lower bound on how many arguments may be present.
     min_args: Option<usize>,
+    /// If present, an upper bound on how many arguments may be present.
     max_args: Option<usize>,
+    /// If true, then at least one of this Item must appear.
     required: bool,
+    /// If false, then no more than one this Item may appear.
     may_repeat: bool,
+    /// May this Item have an object? Must it?
     obj: ObjKind,
 }
 
 impl<T: Keyword> TokenFmt<T> {
-    // Return the keyword that this rule restricts.
+    /// Return the keyword that this rule restricts.
     pub fn get_kwd(&self) -> T {
         self.kwd
     }
@@ -92,6 +135,18 @@ impl<T: Keyword> TokenFmt<T> {
     }
 }
 
+/// Represents a TokenFmt under construction.
+///
+/// To construct a rule, create this type with Keyword::rule(), then
+/// call method on it to set its fields, and then pass it to
+/// SectionRules::add().
+///
+/// # Example
+///
+/// ```ignore
+/// // There must be exactly one "ROUTER" entry, with 5 or more arguments.
+/// section_rules.add(D.rule().required().args(5..));
+/// ```
 pub struct TokenFmtBuilder<T: Keyword>(TokenFmt<T>);
 
 impl<T: Keyword> From<TokenFmtBuilder<T>> for TokenFmt<T> {
@@ -101,7 +156,11 @@ impl<T: Keyword> From<TokenFmtBuilder<T>> for TokenFmt<T> {
 }
 
 impl<T: Keyword> TokenFmtBuilder<T> {
-    pub fn new(t: T) -> Self {
+    /// Make a new TokenFmtBuilder with default behavior.
+    ///
+    /// (By default, all arguments are allowed, the Item may appear 0
+    /// or 1 times, and it may not take an object.)
+    fn new(t: T) -> Self {
         Self(TokenFmt {
             kwd: t,
             min_args: None,
@@ -112,16 +171,18 @@ impl<T: Keyword> TokenFmtBuilder<T> {
         })
     }
 
-    pub fn idx(&self) -> usize {
-        self.0.kwd.idx()
-    }
-
+    /// Indicate that this Item is required.
+    ///
+    /// By default, no item is required.
     pub fn required(self) -> Self {
         Self(TokenFmt {
             required: true,
             ..self.0
         })
     }
+    /// Indicate that this Item is required.
+    ///
+    /// By default, items may not repeat.
     pub fn may_repeat(self) -> Self {
         Self(TokenFmt {
             may_repeat: true,
@@ -129,12 +190,18 @@ impl<T: Keyword> TokenFmtBuilder<T> {
         })
     }
 
+    /// Indicate that this Item takes no arguments.
+    ///
+    /// By default, items may take any number of arguments.
     pub fn no_args(self) -> Self {
         Self(TokenFmt {
             max_args: Some(0),
             ..self.0
         })
     }
+    /// Indicate that this item takes a certain number of arguments.
+    ///
+    /// The number of arguments is provided as a range, like `5..`.
     pub fn args<R>(self, r: R) -> Self
     where
         R: std::ops::RangeBounds<usize>,
@@ -156,12 +223,18 @@ impl<T: Keyword> TokenFmtBuilder<T> {
             ..self.0
         })
     }
+    /// Indicate that this token takes an optional objet.
+    ///
+    /// By default, objects are not allowed.
     pub fn obj_optional(self) -> Self {
         Self(TokenFmt {
             obj: ObjKind::ObjOk,
             ..self.0
         })
     }
+    /// Indicate that this token takes an required objet.
+    ///
+    /// By default, objects are not allowed.
     pub fn obj_required(self) -> Self {
         Self(TokenFmt {
             obj: ObjKind::RequireObj,

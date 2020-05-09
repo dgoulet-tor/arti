@@ -52,14 +52,12 @@ macro_rules! decl_keyword {
             fn to_str(&self) -> &'static str {
                 use $name::*;
                 match self {
+                    // TODO: this turns "accept" | "reject" into
+                    // "acceptreject", which is not great.
+                    // "accept/reject" would be better.
                     $( $i => concat!{ $($s),+ } , )*
                     UNRECOGNIZED => "<unrecognized>"
                 }
-            }
-        }
-        impl $name {
-            pub fn rule(self) -> $crate::rules::TokenFmtBuilder<Self> {
-                $crate::rules::TokenFmtBuilder::new(self)
             }
         }
     }
