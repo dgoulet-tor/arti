@@ -21,7 +21,7 @@
 //!
 //! TODO: this crate needs far more tests!
 
-//#![warn(missing_docs)]
+#![deny(missing_docs)]
 
 mod argtype;
 mod err;

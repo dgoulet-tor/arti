@@ -25,10 +25,18 @@ pub enum Position {
     /// The error occurred at a particular byte within the string.
     ///
     /// We try to conver these to a Pos before displaying them to the user.
-    Byte { off: usize },
+    Byte {
+        /// Byte offset within a string.
+        off: usize,
+    },
     /// The error occurred at a particular line (and possibly at a
     /// particular byte within the line.)
-    Pos { line: usize, byte: usize },
+    Pos {
+        /// Line offset within a string.
+        line: usize,
+        /// Byte offset within the line.
+        byte: usize,
+    },
 }
 
 impl Position {

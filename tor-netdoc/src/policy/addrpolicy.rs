@@ -95,6 +95,7 @@ pub struct AddrPortPattern {
 }
 
 impl AddrPortPattern {
+    /// Return true iff this pattern matches a given address and port.
     pub fn matches(&self, addr: &IpAddr, port: u16) -> bool {
         self.pattern.matches(addr) && self.ports.contains(port)
     }

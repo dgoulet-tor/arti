@@ -1,33 +1,33 @@
-/// Parsing implementation for Tor router descriptors.
-///
-/// A "router descriptor" is a signed statment that a relay makes
-/// about itself, explaining its keys, its capabilities, its location,
-/// and its status.
-///
-/// Relays upload their router descriptors to authorities, which use
-/// them to build consensus documents.  Old clients and relays used to
-/// fetch and use router descriptors for all the relays, but nowadays they use
-/// microdescriptors instead.
-///
-/// Clients still use router descriptors when communicating with
-/// bridges: since bridges are not passed through an authority,
-/// clients accept their descriptors directly.
-///
-/// For full information about the router descriptor format, see
-/// [dir-spec.txt](https://spec.torproject.org/dir-spec).
-///
-/// # Limitations
-///
-/// TODO: This needs to get tested much more!
-///
-/// TODO: This implementation can be memory-inefficient.  In practice,
-/// it gets really expensive storing policy entries, family
-/// descriptions, parsed keys, and things like that.  We will probably want to
-/// de-duplicate those.
-///
-/// TODO: There should be accessor functions for some or all of the
-/// fields in RouterDesc.  I'm deferring those until I know what they
-/// should be.
+//! Parsing implementation for Tor router descriptors.
+//!
+//! A "router descriptor" is a signed statment that a relay makes
+//! about itself, explaining its keys, its capabilities, its location,
+//! and its status.
+//!
+//! Relays upload their router descriptors to authorities, which use
+//! them to build consensus documents.  Old clients and relays used to
+//! fetch and use router descriptors for all the relays, but nowadays they use
+//! microdescriptors instead.
+//!
+//! Clients still use router descriptors when communicating with
+//! bridges: since bridges are not passed through an authority,
+//! clients accept their descriptors directly.
+//!
+//! For full information about the router descriptor format, see
+//! [dir-spec.txt](https://spec.torproject.org/dir-spec).
+//!
+//! # Limitations
+//!
+//! TODO: This needs to get tested much more!
+//!
+//! TODO: This implementation can be memory-inefficient.  In practice,
+//! it gets really expensive storing policy entries, family
+//! descriptions, parsed keys, and things like that.  We will probably want to
+//! de-duplicate those.
+//!
+//! TODO: There should be accessor functions for some or all of the
+//! fields in RouterDesc.  I'm deferring those until I know what they
+//! should be.
 use crate::argtype::*;
 use crate::parse::{Section, SectionRules};
 use crate::policy::*;
