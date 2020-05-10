@@ -35,7 +35,7 @@ pub struct NtorSecretKey {
 
 use subtle::{Choice, ConstantTimeEq};
 impl NtorSecretKey {
-    fn matches_pk(&self, pk: PublicKey) -> Choice {
+    fn matches_pk(&self, pk: &PublicKey) -> Choice {
         self.pk.pk.as_bytes().ct_eq(pk.as_bytes())
     }
 }
@@ -222,7 +222,7 @@ where
     let my_key: PublicKey = cur.extract()?;
     let their_pk: PublicKey = cur.extract()?;
 
-    let keypair = ct::lookup(&my_key, keys, |a, b| b.matches_pk(*a));
+    let keypair = ct::lookup(keys, |key| key.matches_pk(&my_key));
     let keypair = match keypair {
         Some(k) => k,
         None => return Err(Error::MissingKey),

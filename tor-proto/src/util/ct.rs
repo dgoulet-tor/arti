@@ -4,8 +4,8 @@ use subtle::*;
 /// Try to find an item in a slice without leaking where and whether the
 /// item was found.
 ///
-/// If there is any item `x` in the `array` for which `matches(item,
-/// x)` is true, this function will return a reference to one such
+/// If there is any item `x` in the `array` for which `matches(x)`
+/// is true, this function will return a reference to one such
 /// item.  (We don't specify which.)
 ///
 /// Otherwise, this function returns none.
@@ -15,12 +15,9 @@ use subtle::*;
 ///
 /// Note that this doesn't necessarily do a constant-time comparison,
 /// and that it is not constant-time for found/not-found case.
-///
-/// TODO: the item 'item' should really be part of the 'matches' closure.
-pub fn lookup<'a, T, U, F>(item: &T, array: &'a [U], matches: F) -> Option<&'a U>
+pub fn lookup<T, F>(array: &[T], matches: F) -> Option<&T>
 where
-    F: Fn(&T, &U) -> Choice,
-    T: ?Sized,
+    F: Fn(&T) -> Choice,
 {
     // ConditionallySelectable isn't implemented for usize, so we need
     // to use u64.
@@ -28,7 +25,7 @@ where
     let mut found: Choice = 0.into();
 
     for (i, x) in array.iter().enumerate() {
-        let equal = matches(item, x);
+        let equal = matches(x);
         idx.conditional_assign(&(i as u64), equal);
         found.conditional_assign(&equal, equal)
     }
