@@ -159,6 +159,9 @@ lazy_static! {
 
         let mut rules = SectionRules::new();
         rules.add(ROUTER.rule().required().args(5..));
+        // IDENTITY_ED25519 is not yet required as of this writing;
+        // I'm assuming that proposal 315 will get accepted.
+        rules.add(IDENTITY_ED25519.rule().required().no_args().obj_required());
         rules
     };
     /// Rules for  tokens that are allowed in the first part of a
@@ -167,12 +170,6 @@ lazy_static! {
         use RouterKW::*;
 
         let mut rules = SectionRules::new();
-        // IDENTITY_ED25519 is not yet required as of this writing;
-        // I'm assuming that proposal 315 will get accepted.
-        //
-        // TODO: Additionally, when present, this must be the second
-        // line in the document.  We don't currently enforce that.
-        rules.add(IDENTITY_ED25519.rule().required().no_args().obj_required());
         rules.add(MASTER_KEY_ED25519.rule().args(1..));
         rules.add(PLATFORM.rule());
         rules.add(PUBLISHED.rule().required());
@@ -239,8 +236,11 @@ impl RouterDesc {
         let reader = crate::tokenize::NetDocReader::new(s);
 
         // Parse everything up through the header.
-        let mut reader =
-            reader.pause_at(|item| item.is_ok() && item.as_ref().unwrap().get_kwd() != "router");
+        let mut reader = reader.pause_at(|item| {
+            item.is_ok()
+                && item.as_ref().unwrap().get_kwd() != "router"
+                && item.as_ref().unwrap().get_kwd() != "identity-ed25519"
+        });
         let header = ROUTER_HEADER_RULES.parse(&mut reader)?;
 
         // Parse everything up to but not including the signature.
@@ -291,7 +291,10 @@ impl RouterDesc {
 
         // ed25519 identity and signing key.
         let (identity_cert, ed25519_signing_key) = {
-            let cert_tok = body.get_required(IDENTITY_ED25519)?;
+            let cert_tok = header.get_required(IDENTITY_ED25519)?;
+            if cert_tok.off < start_offset {
+                return Err(Error::MisplacedToken("identity-ed25519", cert_tok.pos()));
+            }
             let cert = cert_tok.get_obj("ED25519 CERT")?;
             let cert = tor_cert::Ed25519Cert::decode_and_check(&cert[..], None)
                 .map_err(|_| Error::BadSignature(cert_tok.pos()))?;

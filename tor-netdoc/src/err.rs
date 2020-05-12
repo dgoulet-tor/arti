@@ -128,10 +128,14 @@ pub enum Error {
     /// of entry, but we found one anyway.
     #[error("entry {0} unexpected{1}")]
     UnexpectedToken(&'static str, Position),
-    /// The document is not supposed to contain any of some particular kind
-    /// of entry, but we found one anyway.
+    /// The document is supposed to contain any of some particular kind
+    /// of entry, but we didn't find one one anyway.
     #[error("didn't find required entry {0}")]
     MissingToken(&'static str),
+    /// The document was supposed to have one of these, but not where we
+    /// found it.
+    #[error("found {0} out of place{1}")]
+    MisplacedToken(&'static str, Position),
     /// We found more arguments on an entry than it is allowed to hav.e
     #[error("too many arguments for {0}{1}")]
     TooManyArguments(&'static str, Position),
@@ -188,6 +192,7 @@ impl Error {
             DuplicateToken(_, p) => Some(p),
             UnexpectedToken(_, p) => Some(p),
             MissingToken(_) => None,
+            MisplacedToken(_, p) => Some(p),
             TooManyArguments(_, p) => Some(p),
             TooFewArguments(_, p) => Some(p),
             UnexpectedObject(_, p) => Some(p),
