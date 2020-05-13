@@ -37,6 +37,13 @@ pub enum Position {
         /// Byte offset within the line.
         byte: usize,
     },
+    /// The error occurred at a position in memory.  This shouldn't be
+    /// exposed to the user, but rather should be mapped to a position
+    /// in the string.
+    Raw {
+        /// A raw pointer to the position where the error occurred.
+        ptr: *const u8,
+    },
 }
 
 impl Position {
@@ -59,6 +66,13 @@ impl Position {
             }
         }
     }
+    /// Construct a Position from a slice of some other string.  This
+    /// Position won't be terribly helpful, but it may be converted
+    /// into a useful Position with `within`.
+    pub fn at(s: &str) -> Self {
+        let ptr = s.as_ptr();
+        Position::Raw { ptr }
+    }
     /// Construct a position from a byte offset.
     pub fn from_byte(off: usize) -> Self {
         Position::Byte { off }
@@ -74,6 +88,22 @@ impl Position {
     pub fn within(self, s: &str) -> Self {
         match self {
             Position::Byte { off } => Self::from_offset(s, off),
+            Position::Raw { ptr } => {
+                // We need to confirm that 'ptr' falls within 's' in order
+                // to subtract it meaningfully and find its offset.
+                // Otherwise, we'll get a bogus result.
+                //
+                // Fortunately, we _only_ get a bogus result: we don't
+                // hit unsafe behavior.
+                let ptr_u = ptr as usize;
+                let start_u = s.as_ptr() as usize;
+                let end_u = (s.as_ptr() as usize) + s.len();
+                if start_u <= ptr_u && ptr_u < end_u {
+                    Self::from_offset(s, ptr_u - start_u)
+                } else {
+                    self
+                }
+            }
             _ => self,
         }
     }
@@ -88,6 +118,7 @@ impl fmt::Display for Position {
             Invalid(off) => write!(f, " at invalid offset at index {}", off),
             Byte { off } => write!(f, " at byte {}", off),
             Pos { line, byte } => write!(f, " on line {}, byte {}", line, byte),
+            Raw { ptr } => write!(f, " at {:?}", ptr),
         }
     }
 }
@@ -218,7 +249,7 @@ impl Error {
 
     /// Return a new error based on this one, with the position (if
     /// any) replaced by 'p'.
-    pub fn at(mut self, p: Position) -> Error {
+    pub fn at_pos(mut self, p: Position) -> Error {
         if let Some(mypos) = self.pos_mut() {
             *mypos = p;
         }
