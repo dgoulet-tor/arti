@@ -37,7 +37,7 @@ use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
-use crate::{Error, Position};
+use crate::{Error, Pos};
 
 /// Represents the status tag on a Tor version number
 ///
@@ -113,18 +113,18 @@ impl FromStr for TorVersion {
         let status_part = parts.next();
         let dev_part = parts.next();
         if parts.next().is_some() {
-            return Err(Error::BadVersion(Position::None));
+            return Err(Error::BadVersion(Pos::None));
         }
 
         // Split the version on "." into 3 or 4 numbers.
         let vers: Result<Vec<_>, _> = ver_part
-            .ok_or(Error::BadVersion(Position::None))?
+            .ok_or(Error::BadVersion(Pos::None))?
             .splitn(4, '.')
             .map(|v| v.parse::<u8>())
             .collect();
-        let vers = vers.map_err(|_| Error::BadVersion(Position::None))?;
+        let vers = vers.map_err(|_| Error::BadVersion(Pos::None))?;
         if vers.len() < 3 {
-            return Err(Error::BadVersion(Position::None));
+            return Err(Error::BadVersion(Pos::None));
         }
         let major = vers[0];
         let minor = vers[1];
@@ -142,7 +142,7 @@ impl FromStr for TorVersion {
         let dev = match (status_part, dev_part) {
             (_, Some("dev")) => true,
             (_, Some(_)) => {
-                return Err(Error::BadVersion(Position::None));
+                return Err(Error::BadVersion(Pos::None));
             }
             (Some("dev"), None) => true,
             (_, _) => false,

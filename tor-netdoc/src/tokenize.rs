@@ -4,7 +4,7 @@
 //! directory document, and NetDocReader, which is used to break a
 //! string into Items.
 
-use crate::{Error, Position, Result};
+use crate::{Error, Pos, Result};
 use std::cell::{Ref, RefCell};
 use std::str::FromStr;
 
@@ -53,9 +53,9 @@ impl<'a> NetDocReader<'a> {
     pub fn new(s: &'a str) -> Self {
         NetDocReader { s, off: 0 }
     }
-    /// Return the current Position within the string.
-    fn get_pos(&self, pos: usize) -> Position {
-        Position::from_offset(self.s, pos)
+    /// Return the current Pos within the string.
+    fn get_pos(&self, pos: usize) -> Pos {
+        Pos::from_offset(self.s, pos)
     }
     /// Skip forward by n bytes.
     ///
@@ -63,7 +63,7 @@ impl<'a> NetDocReader<'a> {
     /// UTF-8 strings apply.)
     fn advance(&mut self, n: usize) -> Result<()> {
         if n > self.remaining() {
-            return Err(Error::Internal(Position::from_offset(self.s, self.off)));
+            return Err(Error::Internal(Pos::from_offset(self.s, self.off)));
         }
         self.off += n;
         Ok(())
@@ -326,8 +326,8 @@ impl<'a> Item<'a> {
     }
     /// Return the position of this item without reference to its containing
     /// string.
-    pub fn pos(&self) -> Position {
-        Position::from_byte(self.off)
+    pub fn pos(&self) -> Pos {
+        Pos::from_byte(self.off)
     }
 }
 

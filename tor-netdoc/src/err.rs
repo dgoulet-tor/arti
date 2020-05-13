@@ -7,7 +7,7 @@ use std::fmt;
 /// A position within a directory object. Used to tell where an error
 /// occurred.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Position {
+pub enum Pos {
     /// The error did not occur at any particular position.
     ///
     /// This can happen when the error is something like a missing entry:
@@ -31,7 +31,7 @@ pub enum Position {
     },
     /// The error occurred at a particular line (and possibly at a
     /// particular byte within the line.)
-    Pos {
+    PosInLine {
         /// Line offset within a string.
         line: usize,
         /// Byte offset within the line.
@@ -46,36 +46,36 @@ pub enum Position {
     },
 }
 
-impl Position {
-    /// Construct a Position from an offset within a &str slice.
+impl Pos {
+    /// Construct a Pos from an offset within a &str slice.
     pub fn from_offset(s: &str, off: usize) -> Self {
         if off > s.len() || !s.is_char_boundary(off) {
-            Position::Invalid(off)
+            Pos::Invalid(off)
         } else {
             let s = &s[..off];
             let last_nl = s.rfind('\n');
             match last_nl {
                 Some(pos) => {
                     let newlines = s.bytes().filter(|b| *b == b'\n').count();
-                    Position::Pos {
+                    Pos::PosInLine {
                         line: newlines + 1,
                         byte: off - pos,
                     }
                 }
-                None => Position::Pos { line: 1, byte: off },
+                None => Pos::PosInLine { line: 1, byte: off },
             }
         }
     }
-    /// Construct a Position from a slice of some other string.  This
-    /// Position won't be terribly helpful, but it may be converted
-    /// into a useful Position with `within`.
+    /// Construct a Pos from a slice of some other string.  This
+    /// Pos won't be terribly helpful, but it may be converted
+    /// into a useful Pos with `within`.
     pub fn at(s: &str) -> Self {
         let ptr = s.as_ptr();
-        Position::Raw { ptr }
+        Pos::Raw { ptr }
     }
     /// Construct a position from a byte offset.
     pub fn from_byte(off: usize) -> Self {
-        Position::Byte { off }
+        Pos::Byte { off }
     }
     /// Given a position, if it was at a byte offset, convert it to a
     /// line-and-byte position within `s`.
@@ -87,8 +87,8 @@ impl Position {
     /// guaranteed that we we always talking about the right string.
     pub fn within(self, s: &str) -> Self {
         match self {
-            Position::Byte { off } => Self::from_offset(s, off),
-            Position::Raw { ptr } => {
+            Pos::Byte { off } => Self::from_offset(s, off),
+            Pos::Raw { ptr } => {
                 // We need to confirm that 'ptr' falls within 's' in order
                 // to subtract it meaningfully and find its offset.
                 // Otherwise, we'll get a bogus result.
@@ -109,15 +109,15 @@ impl Position {
     }
 }
 
-impl fmt::Display for Position {
+impl fmt::Display for Pos {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use Position::*;
+        use Pos::*;
         match self {
             None => write!(f, ""),
             Unknown => write!(f, " at unknown position"),
             Invalid(off) => write!(f, " at invalid offset at index {}", off),
             Byte { off } => write!(f, " at byte {}", off),
-            Pos { line, byte } => write!(f, " on line {}, byte {}", line, byte),
+            PosInLine { line, byte } => write!(f, " on line {}, byte {}", line, byte),
             Raw { ptr } => write!(f, " at {:?}", ptr),
         }
     }
@@ -129,36 +129,36 @@ impl fmt::Display for Position {
 pub enum Error {
     /// An internal error in the parser: these should never happen.
     #[error("internal error{0}")]
-    Internal(Position), // TODO string.
+    Internal(Pos), // TODO string.
     /// An entry was found with no keyword.
     #[error("no keyword for entry{0}")]
-    MissingKeyword(Position),
+    MissingKeyword(Pos),
     /// An entry was found with no newline at the end.
     #[error("line truncated before newline{0}")]
-    TruncatedLine(Position),
+    TruncatedLine(Pos),
     /// A bad string was found in the keyword position.
     #[error("invalid keyword{0}")]
-    BadKeyword(Position),
+    BadKeyword(Pos),
     /// We found an ill-formed "BEGIN FOO" tag.
     #[error("invalid PEM BEGIN tag{0}")]
-    BadObjectBeginTag(Position),
+    BadObjectBeginTag(Pos),
     /// We found an ill-formed "END FOO" tag.
     #[error("invalid PEM END tag{0}")]
-    BadObjectEndTag(Position),
+    BadObjectEndTag(Pos),
     /// We found a "BEGIN FOO" tag with an "END FOO" tag that didn't match.
     #[error("mismatched PEM tags{0}")]
-    BadObjectMismatchedTag(Position),
+    BadObjectMismatchedTag(Pos),
     /// We found a base64 object with an invalid base64 encoding.
     #[error("invalid base64 in object around byte {0}")]
-    BadObjectBase64(Position),
+    BadObjectBase64(Pos),
     /// The document is not supposed to contain more than one of some
     /// kind of entry, but we found one anyway.
     #[error("duplicate entry for {0}{1}")]
-    DuplicateToken(&'static str, Position),
+    DuplicateToken(&'static str, Pos),
     /// The document is not supposed to contain any of some particular kind
     /// of entry, but we found one anyway.
     #[error("entry {0} unexpected{1}")]
-    UnexpectedToken(&'static str, Position),
+    UnexpectedToken(&'static str, Pos),
     /// The document is supposed to contain any of some particular kind
     /// of entry, but we didn't find one one anyway.
     #[error("didn't find required entry {0}")]
@@ -166,50 +166,50 @@ pub enum Error {
     /// The document was supposed to have one of these, but not where we
     /// found it.
     #[error("found {0} out of place{1}")]
-    MisplacedToken(&'static str, Position),
+    MisplacedToken(&'static str, Pos),
     /// We found more arguments on an entry than it is allowed to hav.e
     #[error("too many arguments for {0}{1}")]
-    TooManyArguments(&'static str, Position),
+    TooManyArguments(&'static str, Pos),
     /// We didn't fine enough arguments for some entry.
     #[error("too few arguments for {0}{1}")]
-    TooFewArguments(&'static str, Position),
+    TooFewArguments(&'static str, Pos),
     /// We found an object attached to an entry that isn't supposed to
     /// have one.
     #[error("unexpected object for {0}{1}")]
-    UnexpectedObject(&'static str, Position),
+    UnexpectedObject(&'static str, Pos),
     /// An entry was supposed to have an object, but it didn't.
     #[error("missing object for {0}{1}")]
-    MissingObject(&'static str, Position),
+    MissingObject(&'static str, Pos),
     /// We found an object on an entry, but the type was wrong.
     #[error("wrong object type for entry{0}")]
-    WrongObject(Position),
+    WrongObject(Pos),
     /// We tried to find an argument that we were sure would be there,
     /// but it wasn't!
     ///
     /// This error should never occur in correct code; it should be
     /// caught earlier by TooFewArguments.
     #[error("missing argument for entry{0}")]
-    MissingArgument(Position),
+    MissingArgument(Pos),
     /// We found an argument that couldn't be parsed.
     #[error("bad argument {0} for entry{1}: {2}")]
-    BadArgument(usize, Position, String), // converting to a string doesn't sit well with me. XXXX
+    BadArgument(usize, Pos, String), // converting to a string doesn't sit well with me. XXXX
     /// We found an object that couldn't be parsed after it was decoded.
     #[error("bad object for entry{0}: {1}")]
-    BadObjectVal(Position, String), // converting to a string doesn't sit well with me. XXXX
+    BadObjectVal(Pos, String), // converting to a string doesn't sit well with me. XXXX
     /// There was some signature that we couldn't validate.
     #[error("couldn't validate signature{0}")]
-    BadSignature(Position), // say which kind of signature. TODO
+    BadSignature(Pos), // say which kind of signature. TODO
     /// There was a tor version we couldn't parse.
     #[error("couldn't parse Tor version{0}")]
-    BadVersion(Position), // collapse into something else.
+    BadVersion(Pos), // collapse into something else.
     /// There was an ipv4 or ipv6 policy entry that we couldn't parse.
     #[error("invalid policy entry{0}: {1}")]
-    BadPolicy(Position, #[source] PolicyError),
+    BadPolicy(Pos, #[source] PolicyError),
 }
 
 impl Error {
     /// Helper: return a mutable reference to this error's position (if any)
-    fn pos_mut(&mut self) -> Option<&mut Position> {
+    fn pos_mut(&mut self) -> Option<&mut Pos> {
         use Error::*;
         match self {
             Internal(p) => Some(p),
@@ -249,7 +249,7 @@ impl Error {
 
     /// Return a new error based on this one, with the position (if
     /// any) replaced by 'p'.
-    pub fn at_pos(mut self, p: Position) -> Error {
+    pub fn at_pos(mut self, p: Pos) -> Error {
         if let Some(mypos) = self.pos_mut() {
             *mypos = p;
         }

@@ -35,6 +35,6 @@ pub mod policy;
 pub mod routerdesc;
 pub mod version;
 
-pub use err::{Error, Position};
+pub use err::{Error, Pos};
 /// Alias for the Result type returned by most objects in this module.
 pub type Result<T> = std::result::Result<T, Error>;
