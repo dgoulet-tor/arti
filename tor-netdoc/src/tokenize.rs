@@ -247,7 +247,7 @@ impl<'a> Item<'a> {
         self.args
     }
     /// Return the arguments of this item as a vector.
-    pub fn args_as_vec(&self) -> Ref<Vec<&'a str>> {
+    fn args_as_vec(&self) -> Ref<Vec<&'a str>> {
         // We're using an interior mutability pattern here to lazily
         // construct the vector.
         if self.split_args.borrow().is_none() {
