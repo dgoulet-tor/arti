@@ -287,12 +287,12 @@ impl RouterDesc {
 
         let (header, body, sig) = RouterDesc::parse_sections(s)?;
 
-        let start_offset = header.get_required(ROUTER)?.off;
+        let start_offset = header.get_required(ROUTER)?.offset_in(s).unwrap();
 
         // ed25519 identity and signing key.
         let (identity_cert, ed25519_signing_key) = {
             let cert_tok = header.get_required(IDENTITY_ED25519)?;
-            if cert_tok.off < start_offset {
+            if cert_tok.offset_in(s).unwrap() < start_offset {
                 return Err(Error::MisplacedToken("identity-ed25519", cert_tok.pos()));
             }
             let cert = cert_tok.get_obj("ED25519 CERT")?;
@@ -332,8 +332,10 @@ impl RouterDesc {
 
         let ed_sig = sig.get_required(ROUTER_SIG_ED25519)?;
         let rsa_sig = sig.get_required(ROUTER_SIGNATURE)?;
+        let ed_sig_pos = ed_sig.offset_in(s).unwrap();
+        let rsa_sig_pos = rsa_sig.offset_in(s).unwrap();
 
-        if ed_sig.off > rsa_sig.off {
+        if ed_sig_pos > rsa_sig_pos {
             return Err(Error::UnexpectedToken(
                 ROUTER_SIG_ED25519.to_str(),
                 ed_sig.pos(),
@@ -346,7 +348,7 @@ impl RouterDesc {
             // XXXX spec is ambiguous whether this prefix goes on
             // before or after taking the hash.
             d.input(&b"Tor router descriptor signature v1"[..]);
-            let signed_end = ed_sig.off + b"router-sig-ed25519 ".len();
+            let signed_end = ed_sig_pos + b"router-sig-ed25519 ".len();
             d.input(&s[start_offset..signed_end]);
             let d = d.result();
             let sig: B64 = ed_sig.parse_arg(0)?;
@@ -363,7 +365,7 @@ impl RouterDesc {
         // Check legacy RSA signature.
         {
             let mut d = ll::d::Sha1::new();
-            let signed_end = rsa_sig.off + b"router-signature\n".len();
+            let signed_end = rsa_sig_pos + b"router-signature\n".len();
             d.input(&s[start_offset..signed_end]);
             let d = d.result();
             let sig = rsa_sig.get_obj("SIGNATURE")?;

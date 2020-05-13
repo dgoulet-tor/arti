@@ -30,7 +30,6 @@ pub struct Object<'a> {
 /// containing string.
 #[derive(Clone, Debug)]
 pub struct Item<'a> {
-    pub off: usize, // don't make this pub.XXXX
     kwd: &'a str,
     args: &'a str,
     /// The arguments, split by whitespace.  This vector is contructed
@@ -168,12 +167,10 @@ impl<'a> NetDocReader<'a> {
         if self.remaining() == 0 {
             return Ok(None);
         }
-        let off = self.off;
         let (kwd, args) = self.get_kwdline()?;
         let object = self.get_object()?;
         let split_args = RefCell::new(None);
         Ok(Some(Item {
-            off,
             kwd,
             args,
             split_args,
@@ -324,10 +321,18 @@ impl<'a> Item<'a> {
             }
         }
     }
-    /// Return the position of this item without reference to its containing
-    /// string.
+    /// Return the position of this item.
+    ///
+    /// This position won't be useful unless it is later contextualized
+    /// with the containing string.
     pub fn pos(&self) -> Pos {
-        Pos::from_byte(self.off)
+        Pos::at(self.kwd)
+    }
+    /// Return the position of this Item in a string.
+    ///
+    /// Returns None if this item doesn't actually belong to the string.
+    pub fn offset_in(&self, s: &str) -> Option<usize> {
+        crate::util::str_offset(s, self.kwd)
     }
 }
 
