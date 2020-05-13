@@ -215,4 +215,13 @@ impl Error {
         }
         self
     }
+
+    /// Return a new error based on this one, with the position (if
+    /// any) replaced by 'p'.
+    pub fn at(mut self, p: Position) -> Error {
+        if let Some(mypos) = self.pos_mut() {
+            *mypos = p;
+        }
+        self
+    }
 }
