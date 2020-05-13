@@ -281,7 +281,7 @@ impl<'a> Item<'a> {
             None => Ok(None),
             Some(s) => match s.parse() {
                 Ok(r) => Ok(Some(r)),
-                Err(e) => Err(Error::BadArgument(idx, self.pos(), e.to_string())),
+                Err(e) => Err(Error::BadArgument(idx, Pos::at(s), e.to_string())),
             },
         }
     }
@@ -295,7 +295,7 @@ impl<'a> Item<'a> {
     {
         match self.parse_optional_arg(idx) {
             Ok(Some(v)) => Ok(v),
-            Ok(None) => Err(Error::MissingArgument(self.pos())),
+            Ok(None) => Err(Error::MissingArgument(self.arg_pos(idx))),
             Err(e) => Err(e),
         }
     }
@@ -310,13 +310,13 @@ impl<'a> Item<'a> {
     /// Try to decode the base64 contents of this Item's associated object.
     pub fn get_obj(&self, want_tag: &str) -> Result<Vec<u8>> {
         match self.object {
-            None => Err(Error::MissingObject("entry", self.pos())),
+            None => Err(Error::MissingObject("entry", self.end_pos())),
             Some(obj) => {
                 if obj.tag != want_tag {
-                    Err(Error::WrongObject(self.pos()))
+                    Err(Error::WrongObject(Pos::at(obj.tag)))
                 } else {
                     base64_decode_multiline(obj.data)
-                        .map_err(|_| Error::BadObjectBase64(self.pos()))
+                        .map_err(|_| Error::BadObjectBase64(Pos::at(obj.data)))
                 }
             }
         }
@@ -333,6 +333,35 @@ impl<'a> Item<'a> {
     /// Returns None if this item doesn't actually belong to the string.
     pub fn offset_in(&self, s: &str) -> Option<usize> {
         crate::util::str_offset(s, self.kwd)
+    }
+    /// Return the position of the n'th argument of this item.
+    ///
+    /// If this item does not have a n'th argument, return the
+    /// position of the end of the final argument.
+    pub fn arg_pos(&self, n: usize) -> Pos {
+        let args = self.args_as_vec();
+        if n < args.len() {
+            Pos::at(args[n])
+        } else {
+            self.last_arg_end_pos()
+        }
+    }
+    /// Return the position at the end of the last argument.
+    fn last_arg_end_pos(&self) -> Pos {
+        let args = self.args_as_vec();
+        if args.len() >= 1 {
+            let last_arg = args[args.len() - 1];
+            Pos::at_end_of(last_arg)
+        } else {
+            Pos::at_end_of(self.kwd)
+        }
+    }
+    /// Return the position of the end of this object.
+    fn end_pos(&self) -> Pos {
+        match self.object {
+            Some(o) => Pos::at_end_of(o.data),
+            None => self.last_arg_end_pos(),
+        }
     }
 }
 

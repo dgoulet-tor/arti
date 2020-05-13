@@ -73,6 +73,11 @@ impl Pos {
         let ptr = s.as_ptr();
         Pos::Raw { ptr }
     }
+    /// Constructg Pos from the end of some other string.
+    pub fn at_end_of(s: &str) -> Self {
+        let ending = &s[s.len()..];
+        Pos::at(ending)
+    }
     /// Construct a position from a byte offset.
     pub fn from_byte(off: usize) -> Self {
         Pos::Byte { off }
