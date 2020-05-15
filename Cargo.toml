@@ -9,5 +9,5 @@ members = [
     "tor-bytes",
     "tor-cert",
     "tor-proto",
-    "tor-netdoc"
+    "tor-netdoc",
     ]
