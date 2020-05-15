@@ -114,6 +114,22 @@ pub enum RelayPlatform {
     Other(String),
 }
 
+impl std::str::FromStr for RelayPlatform {
+    type Err = Error;
+    fn from_str(args: &str) -> Result<Self> {
+        if args.starts_with("Tor ") {
+            let v: Vec<_> = args.splitn(4, ' ').collect();
+            match &v[..] {
+                ["Tor", ver, "on", p] => Ok(RelayPlatform::Tor(ver.parse()?, (*p).to_string())),
+                ["Tor", ver, ..] => Ok(RelayPlatform::Tor(ver.parse()?, "".to_string())),
+                _ => unreachable!(),
+            }
+        } else {
+            Ok(RelayPlatform::Other(args.to_string()))
+        }
+    }
+}
+
 decl_keyword! {
     /// RouterKW is an instance of Keyword, used to denote the different
     /// Items that are recognized as appearing in a router descriptor.
@@ -501,19 +517,7 @@ impl RouterDesc {
 
         // platform
         let platform = if let Some(p_tok) = body.get(PLATFORM) {
-            let args = p_tok.args_as_str();
-            if args.starts_with("Tor ") {
-                let v: Vec<_> = args.splitn(4, ' ').collect();
-                match &v[..] {
-                    ["Tor", ver, "on", p] => {
-                        Some(RelayPlatform::Tor(ver.parse()?, (*p).to_string()))
-                    }
-                    ["Tor", ver, ..] => Some(RelayPlatform::Tor(ver.parse()?, "".to_string())),
-                    _ => None,
-                }
-            } else {
-                Some(RelayPlatform::Other(args.to_string()))
-            }
+            Some(p_tok.args_as_str().parse::<RelayPlatform>()?)
         } else {
             None
         };
