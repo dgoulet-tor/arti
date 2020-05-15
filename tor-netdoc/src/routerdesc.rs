@@ -75,7 +75,7 @@ pub struct RouterDesc {
     is_extrainfo_cache: bool,
     // TODO: these families can get bulky. Perhaps we should de-duplicate
     // them in a cache, like Tor does.
-    family: RelayFamily,
+    family: Option<RelayFamily>,
     platform: Option<RelayPlatform>,
     // TODO: these polices can get bulky too. Perhaps we should
     // de-duplicate them too.
@@ -497,13 +497,7 @@ impl RouterDesc {
         }
 
         // Family
-        let family = {
-            if let Some(fam_tok) = body.get(FAMILY) {
-                fam_tok.args_as_str().parse::<RelayFamily>()?
-            } else {
-                RelayFamily(Vec::new())
-            }
-        };
+        let family = body.maybe(FAMILY).parse_args_as_str::<RelayFamily>()?;
 
         // or-address
         // Extract at most one ipv6 address from the list.  It's not great,
@@ -518,11 +512,7 @@ impl RouterDesc {
         }
 
         // platform
-        let platform = if let Some(p_tok) = body.get(PLATFORM) {
-            Some(p_tok.args_as_str().parse::<RelayPlatform>()?)
-        } else {
-            None
-        };
+        let platform = body.maybe(PLATFORM).parse_args_as_str::<RelayPlatform>()?;
 
         // ipv4_policy
         let ipv4_policy = {

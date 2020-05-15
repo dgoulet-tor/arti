@@ -411,6 +411,16 @@ impl<'a, 'b> MaybeItem<'a, 'b> {
         self.0.map(|item| item.args_as_str())
     }
     #[allow(dead_code)]
+    pub fn parse_args_as_str<V>(&self) -> Result<Option<V>>
+    where
+        V: FromStr<Err = Error>,
+    {
+        match self.0 {
+            Some(item) => Ok(Some(item.args_as_str().parse::<V>()?)),
+            None => Ok(None),
+        }
+    }
+    #[allow(dead_code)]
     pub fn get_obj(&self, want_tag: &str) -> Result<Option<Vec<u8>>> {
         match self.0 {
             Some(item) => Ok(Some(item.get_obj(want_tag)?)),
