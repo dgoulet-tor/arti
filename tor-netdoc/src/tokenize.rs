@@ -281,7 +281,7 @@ impl<'a> Item<'a> {
             None => Ok(None),
             Some(s) => match s.parse() {
                 Ok(r) => Ok(Some(r)),
-                Err(e) => Err(Error::BadArgument(idx, Pos::at(s), e.to_string())),
+                Err(e) => Err(Error::BadArgument(Pos::at(s), e.to_string())),
             },
         }
     }

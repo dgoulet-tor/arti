@@ -196,8 +196,8 @@ pub enum Error {
     #[error("missing argument for entry{0}")]
     MissingArgument(Pos),
     /// We found an argument that couldn't be parsed.
-    #[error("bad argument {0} for entry{1}: {2}")]
-    BadArgument(usize, Pos, String), // converting to a string doesn't sit well with me. XXXX
+    #[error("bad argument for entry{0}: {1}")]
+    BadArgument(Pos, String), // converting to a string doesn't sit well with me. XXXX
     /// We found an object that couldn't be parsed after it was decoded.
     #[error("bad object for entry{0}: {1}")]
     BadObjectVal(Pos, String), // converting to a string doesn't sit well with me. XXXX
@@ -235,7 +235,7 @@ impl Error {
             MissingObject(_, p) => Some(p),
             WrongObject(p) => Some(p),
             MissingArgument(p) => Some(p),
-            BadArgument(_, p, _) => Some(p),
+            BadArgument(p, _) => Some(p),
             BadObjectVal(p, _) => Some(p),
             BadSignature(p) => Some(p),
             BadVersion(p) => Some(p),

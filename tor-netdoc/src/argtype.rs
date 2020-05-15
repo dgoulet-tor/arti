@@ -18,7 +18,7 @@ mod b64impl {
         type Err = Error;
         fn from_str(s: &str) -> Result<Self> {
             let bytes = base64::decode_config(s, base64::STANDARD_NO_PAD)
-                .map_err(|e| Error::BadArgument(0, Pos::at(s), format!("Invalid base64: {}", e)))?;
+                .map_err(|e| Error::BadArgument(Pos::at(s), format!("Invalid base64: {}", e)))?;
             Ok(B64(bytes))
         }
     }
@@ -51,7 +51,7 @@ mod curve25519impl {
         fn from_str(s: &str) -> Result<Self> {
             let b64: B64 = s.parse()?;
             let arry: [u8; 32] = b64.as_bytes().try_into().map_err(|_| {
-                Error::BadArgument(0, Pos::at(s), "bad length for curve25519 key.".into())
+                Error::BadArgument(Pos::at(s), "bad length for curve25519 key.".into())
             })?;
             Ok(Curve25519Public(arry.into()))
         }
@@ -77,7 +77,7 @@ mod timeimpl {
         fn from_str(s: &str) -> Result<ISO8601TimeSp> {
             use chrono::{DateTime, NaiveDateTime, Utc};
             let d = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
-                .map_err(|e| Error::BadArgument(0, Pos::at(s), format!("invalid time: {}", e)))?;
+                .map_err(|e| Error::BadArgument(Pos::at(s), format!("invalid time: {}", e)))?;
             let dt = DateTime::<Utc>::from_utc(d, Utc);
             Ok(ISO8601TimeSp(dt.into()))
         }

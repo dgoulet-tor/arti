@@ -413,7 +413,7 @@ impl RouterDesc {
             let sign: u8 = cc.parse_arg(0)?;
             let cert = cc.get_obj("ED25519 CERT")?;
             if sign != 0 && sign != 1 {
-                return Err(Error::BadArgument(1, cc.pos(), "not 0 or 1".to_string()));
+                return Err(Error::BadArgument(cc.pos(), "not 0 or 1".to_string()));
             }
             let ntor_as_ed =
                 ll::pk::keymanip::convert_curve25519_to_ed25519_public(&ntor_onion_key, sign)
@@ -468,7 +468,7 @@ impl RouterDesc {
             proto_tok
                 .args_as_str()
                 .parse::<tor_protover::Protocols>()
-                .map_err(|e| Error::BadArgument(1, proto_tok.pos(), e.to_string()))?
+                .map_err(|e| Error::BadArgument(proto_tok.pos(), e.to_string()))?
         };
 
         // tunneled-dir-server
@@ -484,10 +484,9 @@ impl RouterDesc {
         if let Some(fp_tok) = body.get(FINGERPRINT) {
             let fp_val = fp_tok.args_as_str().replace(' ', "");
             let bytes = hex::decode(&fp_val)
-                .map_err(|e| Error::BadArgument(1, fp_tok.pos(), e.to_string()))?;
+                .map_err(|e| Error::BadArgument(fp_tok.pos(), e.to_string()))?;
             if bytes != rsa_identity.to_rsa_identity().as_bytes() {
                 return Err(Error::BadArgument(
-                    1,
                     fp_tok.pos(),
                     "fingerprint does not match RSA identity".into(),
                 ));
@@ -498,13 +497,12 @@ impl RouterDesc {
         let family = {
             let mut family = RelayFamily(Vec::new());
             if let Some(fam_tok) = body.get(FAMILY) {
-                for (idx, ent) in fam_tok.args().enumerate() {
+                for ent in fam_tok.args() {
                     match parse_family_ent(ent) {
                         Some(id) => family.0.push(id),
                         None => {
                             // XXXX are we supposed to ignore this?
                             return Err(Error::BadArgument(
-                                idx + 1,
                                 fam_tok.pos(),
                                 "invalid family member".into(),
                             ));
