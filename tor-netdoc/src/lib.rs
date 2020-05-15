@@ -31,6 +31,8 @@ mod tokenize;
 mod util;
 #[macro_use]
 mod macros;
+
+pub mod family;
 pub mod policy;
 pub mod routerdesc;
 pub mod version;
