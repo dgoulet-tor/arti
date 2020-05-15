@@ -4,6 +4,7 @@
 //! directory document, and NetDocReader, which is used to break a
 //! string into Items.
 
+use crate::argtype::FromBytes;
 use crate::{Error, Pos, Result};
 use std::cell::{Ref, RefCell};
 use std::str::FromStr;
@@ -320,6 +321,12 @@ impl<'a> Item<'a> {
                 }
             }
         }
+    }
+    /// Try to decode the base64 contents of this item's associated object
+    /// as a given type that implements FromBytes.
+    pub fn parse_obj<V: FromBytes>(&self, want_tag: &str) -> Result<V> {
+        let bytes = self.get_obj(want_tag)?;
+        V::from_vec(bytes).map_err(|e| e.at_pos(Pos::at(self.object.unwrap().data)))
     }
     /// Return the position of this item.
     ///

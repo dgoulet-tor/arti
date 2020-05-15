@@ -7,7 +7,15 @@
 
 pub use b64impl::*;
 pub use curve25519impl::*;
+pub use rsa::*;
 pub use timeimpl::*;
+
+pub trait FromBytes: Sized {
+    fn from_bytes(b: &[u8]) -> crate::Result<Self>;
+    fn from_vec(v: Vec<u8>) -> crate::Result<Self> {
+        Self::from_bytes(&v[..])
+    }
+}
 
 mod b64impl {
     use crate::{Error, Pos, Result};
@@ -86,6 +94,54 @@ mod timeimpl {
     impl From<ISO8601TimeSp> for SystemTime {
         fn from(t: ISO8601TimeSp) -> SystemTime {
             t.0
+        }
+    }
+}
+
+mod rsa {
+    use crate::{Error, Pos, Result};
+    use std::ops::RangeBounds;
+    use tor_llcrypto::pk::rsa::PublicKey;
+
+    /// An RSA public key, as parsed from a base64-encoded object.
+    #[allow(non_camel_case_types)]
+    pub struct RSAPublic(PublicKey);
+
+    impl From<RSAPublic> for PublicKey {
+        fn from(k: RSAPublic) -> PublicKey {
+            k.0
+        }
+    }
+    impl super::FromBytes for RSAPublic {
+        fn from_bytes(b: &[u8]) -> Result<Self> {
+            let key = PublicKey::from_der(b).ok_or_else(|| {
+                Error::BadObjectVal(Pos::None, "unable to decode RSA public key".into())
+            })?;
+            Ok(RSAPublic(key))
+        }
+    }
+    impl RSAPublic {
+        /// Give an error if the exponent of this key is not 'e'
+        pub fn check_exponent(self, e: u32) -> Result<Self> {
+            if self.0.exponent_is(e) {
+                Ok(self)
+            } else {
+                Err(Error::BadObjectVal(
+                    Pos::None,
+                    "invalid RSA exponent".into(),
+                ))
+            }
+        }
+        /// Give an error if the exponent of this key is not contained in 'bounds'
+        pub fn check_len<B: RangeBounds<usize>>(self, bounds: B) -> Result<Self> {
+            if bounds.contains(&self.0.bits()) {
+                Ok(self)
+            } else {
+                Err(Error::BadObjectVal(Pos::None, "invalid RSA length".into()))
+            }
+        }
+        pub fn check_len_eq(self, n: usize) -> Result<Self> {
+            self.check_len(n..=n)
         }
     }
 }
