@@ -1,7 +1,7 @@
 use crate::crypto::cell::{RawCellBody, CELL_BODY_LEN};
 use tor_bytes::{Error, Reader, Result, Writer};
 
-use super::{cellcmd, CellData, CellRef, ChanCell, CircID};
+use super::{CellData, CellRef, ChanCell, ChanCmd, CircID};
 
 use std::net::{IpAddr, Ipv4Addr};
 
@@ -14,28 +14,24 @@ impl ChannelCell {
     fn get_circid(&self) -> CircID {
         self.circid
     }
-    fn get_cmd(&self) -> u8 {
+    fn get_cmd(&self) -> ChanCmd {
         self.body.get_cmd()
     }
     fn encode(self) -> ChanCell {
         let cmd = self.get_cmd();
-        let circid = self.get_circid();
+        let circ = self.get_circid();
         let body = self.body.encode();
-        ChanCell {
-            cmd: cmd.into(),
-            circ: circid,
-            body,
-        }
+        ChanCell { cmd, circ, body }
     }
     fn decode(c: ChanCell) -> Result<Self> {
         let circid = c.get_circid();
-        let cmd = c.get_cmd().0;
+        let cmd = c.get_cmd();
         let body = ChannelCellBody::decode(cmd, c.body)?;
         Ok(ChannelCell { circid, body })
     }
     fn decode_ref(c: &CellRef<'_>) -> Result<Self> {
         let circid = c.get_circid();
-        let cmd = c.get_cmd().0;
+        let cmd = c.get_cmd();
         let mut r = Reader::from_slice(c.body);
         let body = ChannelCellBody::decode_from_reader(cmd, &mut r)?;
         Ok(ChannelCell { circid, body })
@@ -62,32 +58,31 @@ pub enum ChannelCellBody {
     AuthChallenge(AuthChallengeBody),
     Authenticate(AuthenticateBody),
     Authorize(AuthorizeBody),
-    Unrecognized(u8, UnrecognizedBody),
+    Unrecognized(ChanCmd, UnrecognizedBody),
 }
 
 impl ChannelCellBody {
-    pub fn get_cmd(&self) -> u8 {
-        use cellcmd::*;
+    pub fn get_cmd(&self) -> ChanCmd {
         use ChannelCellBody::*;
         match self {
-            Padding(_) => PADDING,
-            VPadding(_) => VPADDING,
-            Create(_) => CREATE,
-            CreateFast(_) => CREATE_FAST,
-            Create2(_) => CREATE2,
-            Created(_) => CREATED,
-            CreatedFast(_) => CREATED_FAST,
-            Created2(_) => CREATED2,
-            Relay(_) => RELAY,
-            RelayEarly(_) => RELAY_EARLY,
-            Destroy(_) => DESTROY,
-            Netinfo(_) => NETINFO,
-            Versions(_) => VERSIONS,
-            PaddingNegotiate(_) => PADDING_NEGOTIATE,
-            Certs(_) => CERTS,
-            AuthChallenge(_) => AUTH_CHALLENGE,
-            Authenticate(_) => AUTHENTICATE,
-            Authorize(_) => AUTHORIZE,
+            Padding(_) => ChanCmd::PADDING,
+            VPadding(_) => ChanCmd::VPADDING,
+            Create(_) => ChanCmd::CREATE,
+            CreateFast(_) => ChanCmd::CREATE_FAST,
+            Create2(_) => ChanCmd::CREATE2,
+            Created(_) => ChanCmd::CREATED,
+            CreatedFast(_) => ChanCmd::CREATED_FAST,
+            Created2(_) => ChanCmd::CREATED2,
+            Relay(_) => ChanCmd::RELAY,
+            RelayEarly(_) => ChanCmd::RELAY_EARLY,
+            Destroy(_) => ChanCmd::DESTROY,
+            Netinfo(_) => ChanCmd::NETINFO,
+            Versions(_) => ChanCmd::VERSIONS,
+            PaddingNegotiate(_) => ChanCmd::PADDING_NEGOTIATE,
+            Certs(_) => ChanCmd::CERTS,
+            AuthChallenge(_) => ChanCmd::AUTH_CHALLENGE,
+            Authenticate(_) => ChanCmd::AUTHENTICATE,
+            Authorize(_) => ChanCmd::AUTHORIZE,
             Unrecognized(c, _) => *c,
         }
     }
@@ -117,54 +112,54 @@ impl ChannelCellBody {
         }
     }
 
-    fn decode(cmd: u8, b: Vec<u8>) -> Result<Self> {
-        use cellcmd::*;
+    fn decode(cmd: ChanCmd, b: Vec<u8>) -> Result<Self> {
         use ChannelCellBody::*;
         Ok(match cmd {
-            PADDING => Padding(PaddingBody::decode(b)?),
-            VPADDING => VPadding(VPaddingBody::decode(b)?),
-            CREATE => Create(CreateBody::decode(b)?),
-            CREATE_FAST => CreateFast(CreateFastBody::decode(b)?),
-            CREATE2 => Create2(Create2Body::decode(b)?),
-            CREATED => Created(CreatedBody::decode(b)?),
-            CREATED_FAST => CreatedFast(CreatedFastBody::decode(b)?),
-            CREATED2 => Created2(Created2Body::decode(b)?),
-            RELAY => Relay(RelayBody::decode(b)?),
-            RELAY_EARLY => RelayEarly(RelayBody::decode(b)?),
-            DESTROY => Destroy(DestroyBody::decode(b)?),
-            NETINFO => Netinfo(NetinfoBody::decode(b)?),
-            VERSIONS => Versions(VersionsBody::decode(b)?),
-            PADDING_NEGOTIATE => PaddingNegotiate(PaddingNegotiateBody::decode(b)?),
-            CERTS => Certs(CertsBody::decode(b)?),
-            AUTH_CHALLENGE => AuthChallenge(AuthChallengeBody::decode(b)?),
-            AUTHENTICATE => Authenticate(AuthenticateBody::decode(b)?),
-            AUTHORIZE => Authorize(AuthorizeBody::decode(b)?),
+            ChanCmd::PADDING => Padding(PaddingBody::decode(b)?),
+            ChanCmd::VPADDING => VPadding(VPaddingBody::decode(b)?),
+            ChanCmd::CREATE => Create(CreateBody::decode(b)?),
+            ChanCmd::CREATE_FAST => CreateFast(CreateFastBody::decode(b)?),
+            ChanCmd::CREATE2 => Create2(Create2Body::decode(b)?),
+            ChanCmd::CREATED => Created(CreatedBody::decode(b)?),
+            ChanCmd::CREATED_FAST => CreatedFast(CreatedFastBody::decode(b)?),
+            ChanCmd::CREATED2 => Created2(Created2Body::decode(b)?),
+            ChanCmd::RELAY => Relay(RelayBody::decode(b)?),
+            ChanCmd::RELAY_EARLY => RelayEarly(RelayBody::decode(b)?),
+            ChanCmd::DESTROY => Destroy(DestroyBody::decode(b)?),
+            ChanCmd::NETINFO => Netinfo(NetinfoBody::decode(b)?),
+            ChanCmd::VERSIONS => Versions(VersionsBody::decode(b)?),
+            ChanCmd::PADDING_NEGOTIATE => PaddingNegotiate(PaddingNegotiateBody::decode(b)?),
+            ChanCmd::CERTS => Certs(CertsBody::decode(b)?),
+            ChanCmd::AUTH_CHALLENGE => AuthChallenge(AuthChallengeBody::decode(b)?),
+            ChanCmd::AUTHENTICATE => Authenticate(AuthenticateBody::decode(b)?),
+            ChanCmd::AUTHORIZE => Authorize(AuthorizeBody::decode(b)?),
             _ => Unrecognized(cmd, UnrecognizedBody::decode(b)?),
         })
     }
 
-    fn decode_from_reader(cmd: u8, r: &mut Reader<'_>) -> Result<Self> {
-        use cellcmd::*;
+    fn decode_from_reader(cmd: ChanCmd, r: &mut Reader<'_>) -> Result<Self> {
         use ChannelCellBody::*;
         Ok(match cmd {
-            PADDING => Padding(PaddingBody::decode_from_reader(r)?),
-            VPADDING => VPadding(VPaddingBody::decode_from_reader(r)?),
-            CREATE => Create(CreateBody::decode_from_reader(r)?),
-            CREATE_FAST => CreateFast(CreateFastBody::decode_from_reader(r)?),
-            CREATE2 => Create2(Create2Body::decode_from_reader(r)?),
-            CREATED => Created(CreatedBody::decode_from_reader(r)?),
-            CREATED_FAST => CreatedFast(CreatedFastBody::decode_from_reader(r)?),
-            CREATED2 => Created2(Created2Body::decode_from_reader(r)?),
-            RELAY => Relay(RelayBody::decode_from_reader(r)?),
-            RELAY_EARLY => RelayEarly(RelayBody::decode_from_reader(r)?),
-            DESTROY => Destroy(DestroyBody::decode_from_reader(r)?),
-            NETINFO => Netinfo(NetinfoBody::decode_from_reader(r)?),
-            VERSIONS => Versions(VersionsBody::decode_from_reader(r)?),
-            PADDING_NEGOTIATE => PaddingNegotiate(PaddingNegotiateBody::decode_from_reader(r)?),
-            CERTS => Certs(CertsBody::decode_from_reader(r)?),
-            AUTH_CHALLENGE => AuthChallenge(AuthChallengeBody::decode_from_reader(r)?),
-            AUTHENTICATE => Authenticate(AuthenticateBody::decode_from_reader(r)?),
-            AUTHORIZE => Authorize(AuthorizeBody::decode_from_reader(r)?),
+            ChanCmd::PADDING => Padding(PaddingBody::decode_from_reader(r)?),
+            ChanCmd::VPADDING => VPadding(VPaddingBody::decode_from_reader(r)?),
+            ChanCmd::CREATE => Create(CreateBody::decode_from_reader(r)?),
+            ChanCmd::CREATE_FAST => CreateFast(CreateFastBody::decode_from_reader(r)?),
+            ChanCmd::CREATE2 => Create2(Create2Body::decode_from_reader(r)?),
+            ChanCmd::CREATED => Created(CreatedBody::decode_from_reader(r)?),
+            ChanCmd::CREATED_FAST => CreatedFast(CreatedFastBody::decode_from_reader(r)?),
+            ChanCmd::CREATED2 => Created2(Created2Body::decode_from_reader(r)?),
+            ChanCmd::RELAY => Relay(RelayBody::decode_from_reader(r)?),
+            ChanCmd::RELAY_EARLY => RelayEarly(RelayBody::decode_from_reader(r)?),
+            ChanCmd::DESTROY => Destroy(DestroyBody::decode_from_reader(r)?),
+            ChanCmd::NETINFO => Netinfo(NetinfoBody::decode_from_reader(r)?),
+            ChanCmd::VERSIONS => Versions(VersionsBody::decode_from_reader(r)?),
+            ChanCmd::PADDING_NEGOTIATE => {
+                PaddingNegotiate(PaddingNegotiateBody::decode_from_reader(r)?)
+            }
+            ChanCmd::CERTS => Certs(CertsBody::decode_from_reader(r)?),
+            ChanCmd::AUTH_CHALLENGE => AuthChallenge(AuthChallengeBody::decode_from_reader(r)?),
+            ChanCmd::AUTHENTICATE => Authenticate(AuthenticateBody::decode_from_reader(r)?),
+            ChanCmd::AUTHORIZE => Authorize(AuthorizeBody::decode_from_reader(r)?),
             _ => Unrecognized(cmd, UnrecognizedBody::decode_from_reader(r)?),
         })
     }

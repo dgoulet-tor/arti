@@ -1,5 +1,5 @@
 use super::cellmsg::{TAP_C_HANDSHAKE_LEN, TAP_S_HANDSHAKE_LEN};
-use super::relaycmd;
+use super::StreamCmd;
 use super::StreamID;
 use std::net::{IpAddr, Ipv4Addr};
 use tor_bytes::{Error, Result};
@@ -17,7 +17,7 @@ pub struct RelayCell {
 impl RelayCell {
     fn encode(self) -> Vec<u8> {
         let mut w = Vec::new();
-        w.write_u8(self.body.get_cmd());
+        w.write_u8(self.body.get_cmd().into());
         w.write_u16(0); // "Recognized"
         w.write_u16(self.streamid.0);
         w.write_u32(0); // Digest
@@ -32,7 +32,7 @@ impl RelayCell {
         w
     }
     fn decode_from_reader(r: &mut Reader) -> Result<Self> {
-        let cmd = r.take_u8()?;
+        let cmd = r.take_u8()?.into();
         r.advance(2)?; // "recognized"
         let streamid = StreamID(r.take_u16()?);
         r.advance(4)?; // digest
@@ -63,7 +63,7 @@ pub enum RelayCellBody {
     Resolved(ResolvedCellBody),
     BeginDir,
 
-    Unrecognized(u8, UnrecognizedCellBody),
+    Unrecognized(StreamCmd, UnrecognizedCellBody),
     // No hs for now.
 }
 
@@ -77,47 +77,45 @@ trait Body: Sized {
 }
 
 impl RelayCellBody {
-    pub fn get_cmd(&self) -> u8 {
-        use relaycmd::*;
+    pub fn get_cmd(&self) -> StreamCmd {
         use RelayCellBody::*;
         match self {
-            Begin(_) => BEGIN,
-            Data(_) => DATA,
-            End(_) => END,
-            Connected(_) => CONNECTED,
-            Sendme(_) => SENDME,
-            Extend(_) => EXTEND,
-            Extended(_) => EXTENDED,
-            Extend2(_) => EXTEND2,
-            Extended2(_) => EXTENDED2,
-            Truncate(_) => TRUNCATE,
-            Truncated(_) => TRUNCATED,
-            Drop => DROP,
-            Resolve(_) => RESOLVE,
-            Resolved(_) => RESOLVED,
-            BeginDir => BEGIN_DIR,
+            Begin(_) => StreamCmd::BEGIN,
+            Data(_) => StreamCmd::DATA,
+            End(_) => StreamCmd::END,
+            Connected(_) => StreamCmd::CONNECTED,
+            Sendme(_) => StreamCmd::SENDME,
+            Extend(_) => StreamCmd::EXTEND,
+            Extended(_) => StreamCmd::EXTENDED,
+            Extend2(_) => StreamCmd::EXTEND2,
+            Extended2(_) => StreamCmd::EXTENDED2,
+            Truncate(_) => StreamCmd::TRUNCATE,
+            Truncated(_) => StreamCmd::TRUNCATED,
+            Drop => StreamCmd::DROP,
+            Resolve(_) => StreamCmd::RESOLVE,
+            Resolved(_) => StreamCmd::RESOLVED,
+            BeginDir => StreamCmd::BEGIN_DIR,
             Unrecognized(cmd, _) => *cmd,
         }
     }
-    pub fn decode_from_reader(c: u8, r: &mut Reader<'_>) -> Result<Self> {
-        use relaycmd::*;
+    pub fn decode_from_reader(c: StreamCmd, r: &mut Reader<'_>) -> Result<Self> {
         use RelayCellBody::*;
         Ok(match c {
-            BEGIN => Begin(BeginCellBody::decode_from_reader(r)?),
-            DATA => Data(DataCellBody::decode_from_reader(r)?),
-            END => End(EndCellBody::decode_from_reader(r)?),
-            CONNECTED => Connected(ConnectedCellBody::decode_from_reader(r)?),
-            SENDME => Sendme(SendmeCellBody::decode_from_reader(r)?),
-            EXTEND => Extend(ExtendCellBody::decode_from_reader(r)?),
-            EXTENDED => Extended(ExtendedCellBody::decode_from_reader(r)?),
-            EXTEND2 => Extend2(Extend2CellBody::decode_from_reader(r)?),
-            EXTENDED2 => Extended2(Extended2CellBody::decode_from_reader(r)?),
-            TRUNCATE => Truncate(TruncateCellBody::decode_from_reader(r)?),
-            TRUNCATED => Truncated(TruncatedCellBody::decode_from_reader(r)?),
-            DROP => Drop,
-            RESOLVE => Resolve(ResolveCellBody::decode_from_reader(r)?),
-            RESOLVED => Resolved(ResolvedCellBody::decode_from_reader(r)?),
-            BEGIN_DIR => BeginDir,
+            StreamCmd::BEGIN => Begin(BeginCellBody::decode_from_reader(r)?),
+            StreamCmd::DATA => Data(DataCellBody::decode_from_reader(r)?),
+            StreamCmd::END => End(EndCellBody::decode_from_reader(r)?),
+            StreamCmd::CONNECTED => Connected(ConnectedCellBody::decode_from_reader(r)?),
+            StreamCmd::SENDME => Sendme(SendmeCellBody::decode_from_reader(r)?),
+            StreamCmd::EXTEND => Extend(ExtendCellBody::decode_from_reader(r)?),
+            StreamCmd::EXTENDED => Extended(ExtendedCellBody::decode_from_reader(r)?),
+            StreamCmd::EXTEND2 => Extend2(Extend2CellBody::decode_from_reader(r)?),
+            StreamCmd::EXTENDED2 => Extended2(Extended2CellBody::decode_from_reader(r)?),
+            StreamCmd::TRUNCATE => Truncate(TruncateCellBody::decode_from_reader(r)?),
+            StreamCmd::TRUNCATED => Truncated(TruncatedCellBody::decode_from_reader(r)?),
+            StreamCmd::DROP => Drop,
+            StreamCmd::RESOLVE => Resolve(ResolveCellBody::decode_from_reader(r)?),
+            StreamCmd::RESOLVED => Resolved(ResolvedCellBody::decode_from_reader(r)?),
+            StreamCmd::BEGIN_DIR => BeginDir,
 
             _ => Unrecognized(c, UnrecognizedCellBody::decode_from_reader(r)?),
         })

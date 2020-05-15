@@ -10,6 +10,7 @@
 
 #![allow(missing_docs)]
 
+use caret::caret_int;
 use tor_bytes::{Error, Reader, Result, Writer};
 
 pub mod cellmsg;
@@ -17,62 +18,60 @@ pub mod relaymsg;
 
 pub const CELL_DATA_LEN: usize = 509;
 
-type CellCmd = u8;
+caret_int! {
+    pub struct ChanCmd(u8) {
+        PADDING = 0,
+        CREATE = 1,
+        CREATED = 2,
+        RELAY = 3,
+        DESTROY = 4,
+        CREATE_FAST = 5,
+        CREATED_FAST = 6,
+        // note gap.
+        NETINFO = 8,
+        RELAY_EARLY = 9,
+        CREATE2 = 10,
+        CREATED2 = 11,
+        PADDING_NEGOTIATE = 12,
 
-// TODO: Instead of a module this should be an enum-like type (though not
-// actually an enum).
-pub mod cellcmd {
-    pub const PADDING: u8 = 0;
-    pub const CREATE: u8 = 1;
-    pub const CREATED: u8 = 2;
-    pub const RELAY: u8 = 3;
-    pub const DESTROY: u8 = 4;
-    pub const CREATE_FAST: u8 = 5;
-    pub const CREATED_FAST: u8 = 6;
-    // note gap.
-    pub const NETINFO: u8 = 8;
-    pub const RELAY_EARLY: u8 = 9;
-    pub const CREATE2: u8 = 10;
-    pub const CREATED2: u8 = 11;
-    pub const PADDING_NEGOTIATE: u8 = 12;
-
-    pub const VERSIONS: u8 = 7;
-    pub const VPADDING: u8 = 128;
-    pub const CERTS: u8 = 129;
-    pub const AUTH_CHALLENGE: u8 = 130;
-    pub const AUTHENTICATE: u8 = 131;
-    pub const AUTHORIZE: u8 = 132;
+        VERSIONS = 7,
+        VPADDING = 128,
+        CERTS = 129,
+        AUTH_CHALLENGE = 130,
+        AUTHENTICATE = 131,
+        AUTHORIZE = 132,
+    }
 }
 
-// TODO: Instead of a module this should be an enum-like type (though not
-// actually an enum).
-pub mod relaycmd {
-    pub const BEGIN: u8 = 1;
-    pub const DATA: u8 = 2;
-    pub const END: u8 = 3;
-    pub const CONNECTED: u8 = 4;
-    pub const SENDME: u8 = 5;
-    pub const EXTEND: u8 = 6;
-    pub const EXTENDED: u8 = 7;
-    pub const TRUNCATE: u8 = 8;
-    pub const TRUNCATED: u8 = 9;
-    pub const DROP: u8 = 10;
-    pub const RESOLVE: u8 = 11;
-    pub const RESOLVED: u8 = 12;
-    pub const BEGIN_DIR: u8 = 13;
-    pub const EXTEND2: u8 = 14;
-    pub const EXTENDED2: u8 = 15;
+caret_int! {
+    pub struct StreamCmd(u8) {
+        BEGIN = 1,
+        DATA = 2,
+        END = 3,
+        CONNECTED = 4,
+        SENDME = 5,
+        EXTEND = 6,
+        EXTENDED = 7,
+        TRUNCATE = 8,
+        TRUNCATED = 9,
+        DROP = 10,
+        RESOLVE = 11,
+        RESOLVED = 12,
+        BEGIN_DIR = 13,
+        EXTEND2 = 14,
+        EXTENDED2 = 15,
 
-    // hs-related
-    pub const ESTABLISH_INTRO: u8 = 32;
-    pub const ESTABLISH_RENDEZVOUS: u8 = 33;
-    pub const INTRODUCE1: u8 = 34;
-    pub const INTRODUCE2: u8 = 35;
-    pub const RENDEZVOUS1: u8 = 36;
-    pub const RENDEZVOUS2: u8 = 37;
-    pub const INTRO_ESABLISHED: u8 = 38;
-    pub const RENDEZVOUS_ESABLISHED: u8 = 39;
-    pub const INTRODUCE_ACK: u8 = 40;
+        // hs-related
+        ESTABLISH_INTRO = 32,
+        ESTABLISH_RENDEZVOUS = 33,
+        INTRODUCE1 = 34,
+        INTRODUCE2 = 35,
+        RENDEZVOUS1 = 36,
+        RENDEZVOUS2 = 37,
+        INTRO_ESABLISHED = 38,
+        RENDEZVOUS_ESABLISHED = 39,
+        INTRODUCE_ACK = 40,
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -80,15 +79,6 @@ pub struct CircID(u32);
 
 impl From<u32> for CircID {
     fn from(item: u32) -> Self {
-        Self(item)
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct ChanCmd(u8);
-
-impl From<u8> for ChanCmd {
-    fn from(item: u8) -> Self {
         Self(item)
     }
 }
@@ -108,8 +98,6 @@ pub struct CellRef<'a> {
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct StreamID(u16);
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct StreamCmd(u8);
 
 pub struct RelayCellRef<'a> {
     pub stream: StreamID,
@@ -124,7 +112,7 @@ pub struct ChannelProto {
 
 impl ChanCmd {
     pub fn is_var_cell(self) -> bool {
-        self.0 == cellcmd::VERSIONS as u8 || self.0 >= 128
+        self == ChanCmd::VERSIONS || self.0 >= 128u8
     }
 }
 
