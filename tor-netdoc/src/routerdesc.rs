@@ -33,7 +33,7 @@ use crate::parse::{Section, SectionRules};
 use crate::policy::*;
 use crate::rules::Keyword;
 use crate::version::TorVersion;
-use crate::{Error, Result};
+use crate::{Error, Pos, Result};
 
 use lazy_static::lazy_static;
 use std::{net, time};
@@ -94,16 +94,29 @@ pub struct RouterDesc {
 /// TODO: This type probably belongs in a different crate.
 pub struct RelayFamily(Vec<RSAIdentity>);
 
+impl std::str::FromStr for RelayFamily {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self> {
+        let mut family = RelayFamily(Vec::new());
+        for ent in s.split(crate::tokenize::is_sp) {
+            family.0.push(parse_family_ent(ent)?);
+        }
+        Ok(family)
+    }
+}
+
 /// Parse a single family entry from a string.
-fn parse_family_ent(mut s: &str) -> Option<RSAIdentity> {
+fn parse_family_ent(mut s: &str) -> Result<RSAIdentity> {
     if s.starts_with('$') {
         s = &s[1..];
     }
     if let Some(idx) = s.find(|ch| ch == '=' || ch == '~') {
         s = &s[..idx];
     }
-    let bytes = hex::decode(s).ok()?;
+    let bytes = hex::decode(s)
+        .map_err(|_| Error::BadArgument(Pos::at(s), "invalid hexadecimal in family".into()))?;
     RSAIdentity::from_bytes(&bytes)
+        .ok_or_else(|| Error::BadArgument(Pos::at(s), "wrong length on fingerprint".into()))
 }
 
 /// Description of the software a relay is running.
@@ -485,22 +498,11 @@ impl RouterDesc {
 
         // Family
         let family = {
-            let mut family = RelayFamily(Vec::new());
             if let Some(fam_tok) = body.get(FAMILY) {
-                for ent in fam_tok.args() {
-                    match parse_family_ent(ent) {
-                        Some(id) => family.0.push(id),
-                        None => {
-                            // XXXX are we supposed to ignore this?
-                            return Err(Error::BadArgument(
-                                fam_tok.pos(),
-                                "invalid family member".into(),
-                            ));
-                        }
-                    }
-                }
+                fam_tok.args_as_str().parse::<RelayFamily>()?
+            } else {
+                RelayFamily(Vec::new())
             }
-            family
         };
 
         // or-address

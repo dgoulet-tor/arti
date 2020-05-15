@@ -9,6 +9,12 @@ use crate::{Error, Pos, Result};
 use std::cell::{Ref, RefCell};
 use std::str::FromStr;
 
+/// Return true iff a given character is "space" according to the rules
+/// of dir-spec.txt
+pub fn is_sp(c: char) -> bool {
+    c == ' ' || c == '\t'
+}
+
 /// A tagged object that is part of a directory Item.
 ///
 /// This represents a single blob within a pair of "-----BEGIN
@@ -261,9 +267,6 @@ impl<'a> Item<'a> {
     }
     /// Return an iterator over the arguments of this item.
     pub fn args(&self) -> impl Iterator<Item = &'a str> {
-        fn is_sp(c: char) -> bool {
-            c == ' ' || c == '\t'
-        }
         self.args.split(is_sp).filter(|s| !s.is_empty())
     }
     /// Return the nth argument of this item, if there is one.
