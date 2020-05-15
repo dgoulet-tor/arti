@@ -147,7 +147,7 @@ mod rsa {
 
 mod edcert {
     use crate::{Error, Pos, Result};
-    use tor_cert::Ed25519Cert;
+    use tor_cert::{CertType, Ed25519Cert};
     use tor_llcrypto::pk::ed25519;
 
     /// An ed25519 certificate as parsed from a directory object, with
@@ -179,7 +179,7 @@ mod edcert {
     }
     impl ValidatedEdCert {
         /// Give an error if this certificate's type is not `desired_type`.
-        pub fn check_cert_type(self, desired_type: u8) -> Result<Self> {
+        pub fn check_cert_type(self, desired_type: CertType) -> Result<Self> {
             if self.0.get_cert_type() != desired_type {
                 return Err(Error::BadObjectVal(
                     self.1,

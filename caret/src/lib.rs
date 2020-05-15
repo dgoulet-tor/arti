@@ -274,7 +274,9 @@ macro_rules! caret_int {
             fn from(num: $numtype) -> $name { $name(num) }
         }
         impl $name {
-            $( pub const $id: $name = $name($num) ; )*
+            $(
+                $( #[$item_meta] )*
+                pub const $id: $name = $name($num) ; )*
             fn to_str(self) -> Option<&'static str> {
                 match self {
                     $( $name::$id => Some(stringify!($id)), )*

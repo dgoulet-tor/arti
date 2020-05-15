@@ -28,6 +28,7 @@
 
 #![deny(missing_docs)]
 
+use caret::caret_int;
 use tor_bytes::{Error, Result};
 use tor_bytes::{Readable, Reader, Writeable, Writer};
 use tor_llcrypto::pk::*;
@@ -36,52 +37,58 @@ use tor_llcrypto::pk::*;
 // checked" to help with bulk Ed25519 checks.  It should be a
 // generic trait.
 
-/// Recognized values for Tor's certificate type field.
-///
-/// In the names used here, "X_V_Y" means "key X verifying key Y",
-/// whereas "X_CC_Y" means "key X cros-certifying key Y".  In both
-/// cases, X is the key that is doing the signing, and Y is the key
-/// or object that is getting signed.
-pub mod certtype {
-    // 00 through 03 are reserved.
-
-    /// Identity verifying a signing key, directly.
-    pub const IDENTITY_V_SIGNING: u8 = 0x04;
-    /// Signing key verifying a TLS certificate by digest.
-    pub const SIGNING_V_TLS_CERT: u8 = 0x05;
-    /// Signing key verifying a link authentication key.
-    pub const SIGNING_V_LINK_AUTH: u8 = 0x06;
-
-    // 07 reserved for RSA cross-certification
-
-    // 08 through 09 are for onion services.
-
-    /// An ntor key converted to a ed25519 key, cross-certifying an
-    /// identity key.
-    pub const NTOR_CC_IDENTITY: u8 = 0x0A;
-
-    // 0B is for onion services.
-}
-
-/// Extension identifiers for extensions in certificates.
-pub mod exttype {
-    /// Extension indicating an Ed25519 key that signed this certificate.
+caret_int! {
+    /// Recognized values for Tor's certificate type field.
     ///
-    /// Certificates do not always contain the key that signed them.
-    pub const SIGNED_WITH_ED25519_KEY: u8 = 0x04;
+    /// In the names used here, "X_V_Y" means "key X verifying key Y",
+    /// whereas "X_CC_Y" means "key X cros-certifying key Y".  In both
+    /// cases, X is the key that is doing the signing, and Y is the key
+    /// or object that is getting signed.
+    pub struct CertType(u8) {
+        // 00 through 03 are reserved.
+
+        /// Identity verifying a signing key, directly.
+        IDENTITY_V_SIGNING = 0x04,
+        /// Signing key verifying a TLS certificate by digest.
+        SIGNING_V_TLS_CERT = 0x05,
+        /// Signing key verifying a link authentication key.
+        SIGNING_V_LINK_AUTH = 0x06,
+
+        // 07 reserved for RSA cross-certification
+
+        // 08 through 09 are for onion services.
+
+        /// An ntor key converted to a ed25519 key, cross-certifying an
+        /// identity key.
+        NTOR_CC_IDENTITY = 0x0A,
+
+        // 0B is for onion services.
+    }
 }
 
-/// Identifiers for the type of key or object getting signed.
-pub mod keytype {
-    /// Identifier for an Ed25519 key.
-    pub const ED25519_KEY: u8 = 0x01;
-    /// Identifier for the SHA256 of an DER-encoded RSA key.
-    pub const SHA256_OF_RSA: u8 = 0x02;
-    /// Identifies the SHA256 of an X.509 certificate.
-    pub const SHA256_OF_X509: u8 = 0x03;
+caret_int! {
+    /// Extension identifiers for extensions in certificates.
+    pub struct ExtType(u8) {
+        /// Extension indicating an Ed25519 key that signed this certificate.
+        ///
+        /// Certificates do not always contain the key that signed them.
+        SIGNED_WITH_ED25519_KEY = 0x04,
+    }
+}
 
-    // 08 through 09 and 0B are used for onion services.  They
-    // probably shouldn't be, but that's what Tor does.
+caret_int! {
+    /// Identifiers for the type of key or object getting signed.
+    pub struct KeyType(u8) {
+        /// Identifier for an Ed25519 key.
+        ED25519_KEY = 0x01,
+        /// Identifier for the SHA256 of an DER-encoded RSA key.
+        SHA256_OF_RSA = 0x02,
+        /// Identifies the SHA256 of an X.509 certificate.
+        SHA256_OF_X509 = 0x03,
+
+        // 08 through 09 and 0B are used for onion services.  They
+        // probably shouldn't be, but that's what Tor does.
+    }
 }
 
 /// Structure for an Ed25519-signed certificate as described in Tor's
@@ -90,7 +97,7 @@ pub struct Ed25519Cert {
     /// How many _hours_ after the epoch will this certificate expire?
     exp_hours: u32,
     /// Type of the certificate; recognized values are in certtype::*
-    cert_type: u8,
+    cert_type: CertType,
     /// The key or object being certified.
     cert_key: CertifiedKey,
     /// A list of extensions.
@@ -114,18 +121,18 @@ pub enum CertifiedKey {
 /// A key whose type we didn't recognize.
 pub struct UnrecognizedKey {
     /// Actual type of the key.
-    key_type: u8,
+    key_type: KeyType,
     /// digest of the key, or the key itself.
     key_digest: [u8; 32],
 }
 
 impl CertifiedKey {
     /// Return the byte that identifies the type of this key.
-    pub fn get_key_type(&self) -> u8 {
+    pub fn get_key_type(&self) -> KeyType {
         match self {
-            CertifiedKey::Ed25519(_) => keytype::ED25519_KEY,
-            CertifiedKey::RSASha256Digest(_) => keytype::SHA256_OF_RSA,
-            CertifiedKey::X509Sha256Digest(_) => keytype::SHA256_OF_X509,
+            CertifiedKey::Ed25519(_) => KeyType::ED25519_KEY,
+            CertifiedKey::RSASha256Digest(_) => KeyType::SHA256_OF_RSA,
+            CertifiedKey::X509Sha256Digest(_) => KeyType::SHA256_OF_X509,
 
             CertifiedKey::Unrecognized(u) => u.key_type,
         }
@@ -150,11 +157,11 @@ impl CertifiedKey {
     }
     /// Try to extract a CertifiedKey from a Reader, given that we have
     /// already read its type as `key_type`.
-    fn from_reader(key_type: u8, r: &mut Reader) -> Result<Self> {
+    fn from_reader(key_type: KeyType, r: &mut Reader) -> Result<Self> {
         Ok(match key_type {
-            keytype::ED25519_KEY => CertifiedKey::Ed25519(r.extract()?),
-            keytype::SHA256_OF_RSA => CertifiedKey::RSASha256Digest(r.extract()?),
-            keytype::SHA256_OF_X509 => CertifiedKey::X509Sha256Digest(r.extract()?),
+            KeyType::ED25519_KEY => CertifiedKey::Ed25519(r.extract()?),
+            KeyType::SHA256_OF_RSA => CertifiedKey::RSASha256Digest(r.extract()?),
+            KeyType::SHA256_OF_X509 => CertifiedKey::X509Sha256Digest(r.extract()?),
             _ => CertifiedKey::Unrecognized(UnrecognizedKey {
                 key_type,
                 key_digest: r.extract()?,
@@ -176,16 +183,16 @@ struct UnrecognizedExt {
     /// certificate.
     affects_validation: bool,
     /// The type of the extension
-    ext_type: u8,
+    ext_type: ExtType,
     /// The body of the extension.
     body: Vec<u8>,
 }
 
 impl CertExt {
     /// Return the identifier code for this Extension.
-    pub fn get_ext_id(&self) -> u8 {
+    pub fn get_ext_id(&self) -> ExtType {
         match self {
-            CertExt::SignedWithEd25519(_) => exttype::SIGNED_WITH_ED25519_KEY,
+            CertExt::SignedWithEd25519(_) => ExtType::SIGNED_WITH_ED25519_KEY,
             CertExt::Unrecognized(u) => u.ext_type,
         }
     }
@@ -210,7 +217,7 @@ impl Writeable for SignedWithEd25519Ext {
         // body length
         w.write_u16(32);
         // Signed-with-ed25519-key-extension
-        w.write_u8(exttype::SIGNED_WITH_ED25519_KEY);
+        w.write_u8(ExtType::SIGNED_WITH_ED25519_KEY.into());
         // flags = 0.
         w.write_u8(0);
         // body
@@ -228,7 +235,7 @@ impl Writeable for UnrecognizedExt {
     fn write_onto<B: Writer + ?Sized>(&self, w: &mut B) {
         self.assert_rep_ok();
         w.write_u16(self.body.len() as u16);
-        w.write_u8(self.ext_type);
+        w.write_u8(self.ext_type.into());
         let flags = if self.affects_validation { 1 } else { 0 };
         w.write_u8(flags);
         w.write_all(&self.body[..]);
@@ -238,12 +245,12 @@ impl Writeable for UnrecognizedExt {
 impl Readable for CertExt {
     fn take_from(b: &mut Reader<'_>) -> Result<Self> {
         let len = b.take_u16()?;
-        let ext_type = b.take_u8()?;
+        let ext_type: ExtType = b.take_u8()?.into();
         let flags = b.take_u8()?;
         let body = b.take(len as usize)?;
 
         Ok(match ext_type {
-            exttype::SIGNED_WITH_ED25519_KEY => {
+            ExtType::SIGNED_WITH_ED25519_KEY => {
                 if body.len() != 32 {
                     return Err(Error::BadMessage("wrong length on Ed25519 key"));
                 }
@@ -281,9 +288,9 @@ impl Ed25519Cert {
         self.assert_rep_ok();
         let mut w = Vec::new();
         w.write_u8(1); // Version
-        w.write_u8(self.cert_type);
+        w.write_u8(self.cert_type.into());
         w.write_u32(self.exp_hours);
-        w.write_u8(self.cert_key.get_key_type());
+        w.write_u8(self.cert_key.get_key_type().into());
         w.write_all(self.cert_key.as_bytes());
 
         for e in self.extensions.iter() {
@@ -316,9 +323,9 @@ impl Ed25519Cert {
             // understand those.
             return Err(Error::BadMessage("Unrecognized certificate version"));
         }
-        let cert_type = r.take_u8()?;
+        let cert_type = r.take_u8()?.into();
         let exp_hours = r.take_u32()?;
-        let cert_key_type = r.take_u8()?;
+        let cert_key_type = r.take_u8()?.into();
         let cert_key = CertifiedKey::from_reader(cert_key_type, &mut r)?;
         let n_exts = r.take_u8()?;
         let mut extensions = Vec::new();
@@ -333,7 +340,7 @@ impl Ed25519Cert {
 
         let keyext = extensions
             .iter()
-            .find(|e| e.get_ext_id() == exttype::SIGNED_WITH_ED25519_KEY);
+            .find(|e| e.get_ext_id() == ExtType::SIGNED_WITH_ED25519_KEY);
 
         let included_pkey = match keyext {
             Some(CertExt::SignedWithEd25519(s)) => Some(&s.pk),
@@ -390,10 +397,7 @@ impl Ed25519Cert {
     }
 
     /// Return the type of this certificate.
-    ///
-    /// The value will be one of certtype::* if this certificate type is
-    /// recognized.
-    pub fn get_cert_type(&self) -> u8 {
+    pub fn get_cert_type(&self) -> CertType {
         self.cert_type
     }
 }

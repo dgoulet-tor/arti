@@ -313,7 +313,7 @@ impl RouterDesc {
             let cert: tor_cert::Ed25519Cert = cert_tok
                 .parse_obj::<UnvalidatedEdCert>("ED25519 CERT")?
                 .validate(None)?
-                .check_cert_type(tor_cert::certtype::IDENTITY_V_SIGNING)?
+                .check_cert_type(tor_cert::CertType::IDENTITY_V_SIGNING)?
                 .into();
             let sk = cert.get_subject_key().as_ed25519().ok_or_else(|| {
                 Error::BadObjectVal(cert_tok.pos(), "no ed25519 signing key".to_string())
@@ -423,7 +423,7 @@ impl RouterDesc {
             let crosscert: tor_cert::Ed25519Cert = cc
                 .parse_obj::<UnvalidatedEdCert>("ED25519 CERT")?
                 .validate(Some(&ntor_as_ed))?
-                .check_cert_type(tor_cert::certtype::NTOR_CC_IDENTITY)?
+                .check_cert_type(tor_cert::CertType::NTOR_CC_IDENTITY)?
                 .check_subject_key_is(identity_cert.get_signing_key())?
                 .into();
             expiry = std::cmp::min(expiry, crosscert.get_expiry());
