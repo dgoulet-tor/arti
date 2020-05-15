@@ -260,4 +260,28 @@ impl Error {
         }
         self
     }
+
+    /// Return a new error based on this one, with the position (if
+    /// replaced by 'p' if it had no position before.
+    pub fn or_at_pos(mut self, p: Pos) -> Error {
+        if let Some(mypos) = self.pos_mut() {
+            if *mypos == Pos::None {
+                *mypos = p;
+            }
+        }
+        self
+    }
 }
+
+macro_rules! derive_from_err{
+    { $etype:ty } => {
+        impl From<$etype> for Error {
+            fn from(e: $etype) -> Error {
+                Error::BadArgument(Pos::None, e.to_string())
+            }
+        }
+    }
+}
+
+derive_from_err! {std::num::ParseIntError}
+derive_from_err! {std::net::AddrParseError}

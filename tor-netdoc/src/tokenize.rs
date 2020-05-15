@@ -279,13 +279,16 @@ impl<'a> Item<'a> {
     /// Returns Ok(None) if the argument doesn't exist.
     pub fn parse_optional_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
     where
-        <V as FromStr>::Err: std::error::Error,
+        Error: From<V::Err>,
     {
         match self.get_arg(idx) {
             None => Ok(None),
             Some(s) => match s.parse() {
                 Ok(r) => Ok(Some(r)),
-                Err(e) => Err(Error::BadArgument(Pos::at(s), e.to_string())),
+                Err(e) => {
+                    let e: Error = e.into();
+                    Err(e.or_at_pos(Pos::at(s)))
+                }
             },
         }
     }
@@ -295,7 +298,7 @@ impl<'a> Item<'a> {
     /// Return an error if the argument doesn't exist.
     pub fn parse_arg<V: FromStr>(&self, idx: usize) -> Result<V>
     where
-        <V as FromStr>::Err: std::error::Error,
+        Error: From<V::Err>,
     {
         match self.parse_optional_arg(idx) {
             Ok(Some(v)) => Ok(v),
@@ -389,7 +392,7 @@ impl<'a, 'b> MaybeItem<'a, 'b> {
     }
     pub fn parse_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
     where
-        <V as FromStr>::Err: std::error::Error,
+        Error: From<V::Err>,
     {
         match self.0 {
             Some(item) => item.parse_arg(idx).map(Some),
@@ -399,7 +402,7 @@ impl<'a, 'b> MaybeItem<'a, 'b> {
     #[allow(dead_code)]
     pub fn parse_optional_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
     where
-        <V as FromStr>::Err: std::error::Error,
+        Error: From<V::Err>,
     {
         match self.0 {
             Some(item) => item.parse_optional_arg(idx),
@@ -411,9 +414,9 @@ impl<'a, 'b> MaybeItem<'a, 'b> {
         self.0.map(|item| item.args_as_str())
     }
     #[allow(dead_code)]
-    pub fn parse_args_as_str<V>(&self) -> Result<Option<V>>
+    pub fn parse_args_as_str<V: FromStr>(&self) -> Result<Option<V>>
     where
-        V: FromStr<Err = Error>,
+        Error: From<V::Err>,
     {
         match self.0 {
             Some(item) => Ok(Some(item.args_as_str().parse::<V>()?)),
