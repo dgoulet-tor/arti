@@ -326,7 +326,8 @@ impl<'a> Item<'a> {
     /// as a given type that implements FromBytes.
     pub fn parse_obj<V: FromBytes>(&self, want_tag: &str) -> Result<V> {
         let bytes = self.get_obj(want_tag)?;
-        V::from_vec(bytes).map_err(|e| e.at_pos(Pos::at(self.object.unwrap().data)))
+        let p = Pos::at(self.object.unwrap().data);
+        V::from_vec(bytes, p).map_err(|e| e.at_pos(p))
     }
     /// Return the position of this item.
     ///

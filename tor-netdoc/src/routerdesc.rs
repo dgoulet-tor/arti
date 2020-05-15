@@ -295,15 +295,11 @@ impl RouterDesc {
             if cert_tok.offset_in(s).unwrap() < start_offset {
                 return Err(Error::MisplacedToken("identity-ed25519", cert_tok.pos()));
             }
-            let cert = cert_tok.get_obj("ED25519 CERT")?;
-            let cert = tor_cert::Ed25519Cert::decode_and_check(&cert[..], None)
-                .map_err(|_| Error::BadSignature(cert_tok.pos()))?;
-            if cert.get_cert_type() != tor_cert::certtype::IDENTITY_V_SIGNING {
-                return Err(Error::BadObjectVal(
-                    cert_tok.pos(),
-                    "wrong certificate type".to_string(),
-                ));
-            }
+            let cert: tor_cert::Ed25519Cert = cert_tok
+                .parse_obj::<UnvalidatedEdCert>("ED25519 CERT")?
+                .validate(None)?
+                .check_cert_type(tor_cert::certtype::IDENTITY_V_SIGNING)?
+                .into();
             let sk = cert.get_subject_key().as_ed25519().ok_or_else(|| {
                 Error::BadObjectVal(cert_tok.pos(), "no ed25519 signing key".to_string())
             })?;
@@ -403,24 +399,18 @@ impl RouterDesc {
             // Technically required? XXXX
             let cc = body.get_required(NTOR_ONION_KEY_CROSSCERT)?;
             let sign: u8 = cc.parse_arg(0)?;
-            let cert = cc.get_obj("ED25519 CERT")?;
             if sign != 0 && sign != 1 {
-                return Err(Error::BadArgument(cc.pos(), "not 0 or 1".to_string()));
+                return Err(Error::BadArgument(cc.arg_pos(0), "not 0 or 1".to_string()));
             }
             let ntor_as_ed =
                 ll::pk::keymanip::convert_curve25519_to_ed25519_public(&ntor_onion_key, sign)
                     .ok_or_else(|| Error::Internal(cc.pos()))?; // XXX not really 'internal'
-            let crosscert = tor_cert::Ed25519Cert::decode_and_check(&cert[..], Some(&ntor_as_ed))
-                .map_err(|_| Error::BadSignature(cc.pos()))?;
-            if crosscert.get_cert_type() != tor_cert::certtype::NTOR_CC_IDENTITY {
-                return Err(Error::BadObjectVal(
-                    cc.pos(),
-                    "wrong certificate type".into(),
-                ));
-            }
-            if crosscert.get_subject_key().as_ed25519() != Some(identity_cert.get_signing_key()) {
-                return Err(Error::BadSignature(cc.pos()));
-            }
+            let crosscert: tor_cert::Ed25519Cert = cc
+                .parse_obj::<UnvalidatedEdCert>("ED25519 CERT")?
+                .validate(Some(&ntor_as_ed))?
+                .check_cert_type(tor_cert::certtype::NTOR_CC_IDENTITY)?
+                .check_subject_key_is(identity_cert.get_signing_key())?
+                .into();
             expiry = std::cmp::min(expiry, crosscert.get_expiry());
         }
 

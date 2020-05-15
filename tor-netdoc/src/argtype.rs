@@ -7,13 +7,14 @@
 
 pub use b64impl::*;
 pub use curve25519impl::*;
+pub use edcert::*;
 pub use rsa::*;
 pub use timeimpl::*;
 
 pub trait FromBytes: Sized {
-    fn from_bytes(b: &[u8]) -> crate::Result<Self>;
-    fn from_vec(v: Vec<u8>) -> crate::Result<Self> {
-        Self::from_bytes(&v[..])
+    fn from_bytes(b: &[u8], p: crate::Pos) -> crate::Result<Self>;
+    fn from_vec(v: Vec<u8>, p: crate::Pos) -> crate::Result<Self> {
+        Self::from_bytes(&v[..], p)
     }
 }
 
@@ -105,7 +106,7 @@ mod rsa {
 
     /// An RSA public key, as parsed from a base64-encoded object.
     #[allow(non_camel_case_types)]
-    pub struct RSAPublic(PublicKey);
+    pub struct RSAPublic(PublicKey, Pos);
 
     impl From<RSAPublic> for PublicKey {
         fn from(k: RSAPublic) -> PublicKey {
@@ -113,11 +114,11 @@ mod rsa {
         }
     }
     impl super::FromBytes for RSAPublic {
-        fn from_bytes(b: &[u8]) -> Result<Self> {
+        fn from_bytes(b: &[u8], pos: Pos) -> Result<Self> {
             let key = PublicKey::from_der(b).ok_or_else(|| {
                 Error::BadObjectVal(Pos::None, "unable to decode RSA public key".into())
             })?;
-            Ok(RSAPublic(key))
+            Ok(RSAPublic(key, pos))
         }
     }
     impl RSAPublic {
@@ -126,10 +127,7 @@ mod rsa {
             if self.0.exponent_is(e) {
                 Ok(self)
             } else {
-                Err(Error::BadObjectVal(
-                    Pos::None,
-                    "invalid RSA exponent".into(),
-                ))
+                Err(Error::BadObjectVal(self.1, "invalid RSA exponent".into()))
             }
         }
         /// Give an error if the exponent of this key is not contained in 'bounds'
@@ -137,11 +135,68 @@ mod rsa {
             if bounds.contains(&self.0.bits()) {
                 Ok(self)
             } else {
-                Err(Error::BadObjectVal(Pos::None, "invalid RSA length".into()))
+                Err(Error::BadObjectVal(self.1, "invalid RSA length".into()))
             }
         }
         pub fn check_len_eq(self, n: usize) -> Result<Self> {
             self.check_len(n..=n)
+        }
+    }
+}
+
+mod edcert {
+    use crate::{Error, Pos, Result};
+    use tor_cert::Ed25519Cert;
+    use tor_llcrypto::pk::ed25519;
+
+    /// An ed25519 certificate as parsed from a directory object, with
+    /// signature not validated.
+    pub struct UnvalidatedEdCert(Vec<u8>, Pos);
+
+    /// An ed25519 certificate as parsed from a directory object, with
+    /// checked signature.
+    pub struct ValidatedEdCert(Ed25519Cert, Pos);
+    impl From<ValidatedEdCert> for Ed25519Cert {
+        fn from(c: ValidatedEdCert) -> Self {
+            c.0
+        }
+    }
+    impl super::FromBytes for UnvalidatedEdCert {
+        fn from_bytes(b: &[u8], p: Pos) -> Result<Self> {
+            Self::from_vec(b.into(), p)
+        }
+        fn from_vec(v: Vec<u8>, p: Pos) -> Result<Self> {
+            Ok(Self(v, p))
+        }
+    }
+    impl UnvalidatedEdCert {
+        pub fn validate(self, signing_key: Option<&ed25519::PublicKey>) -> Result<ValidatedEdCert> {
+            let cert = Ed25519Cert::decode_and_check(&self.0, signing_key)
+                .map_err(|e| Error::BadObjectVal(self.1, e.to_string()))?;
+            Ok(ValidatedEdCert(cert, self.1))
+        }
+    }
+    impl ValidatedEdCert {
+        /// Give an error if this certificate's type is not `desired_type`.
+        pub fn check_cert_type(self, desired_type: u8) -> Result<Self> {
+            if self.0.get_cert_type() != desired_type {
+                return Err(Error::BadObjectVal(
+                    self.1,
+                    format!(
+                        "bad certificate type {} (wanted {})",
+                        self.0.get_cert_type(),
+                        desired_type
+                    ),
+                ));
+            }
+            Ok(self)
+        }
+        /// Give an error if this certificate's subject_key is not `pk`
+        pub fn check_subject_key_is(self, pk: &ed25519::PublicKey) -> Result<Self> {
+            if self.0.get_subject_key().as_ed25519() != Some(pk) {
+                return Err(Error::BadObjectVal(self.1, "incorrect subject key".into()));
+            }
+            Ok(self)
         }
     }
 }
