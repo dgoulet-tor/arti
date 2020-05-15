@@ -33,7 +33,7 @@ use crate::parse::{Section, SectionRules};
 use crate::policy::*;
 use crate::rules::Keyword;
 use crate::version::TorVersion;
-use crate::{Error, Pos, Result};
+use crate::{Error, Result};
 
 use lazy_static::lazy_static;
 use std::{net, time};
@@ -99,24 +99,10 @@ impl std::str::FromStr for RelayFamily {
     fn from_str(s: &str) -> Result<Self> {
         let v: Result<Vec<RSAIdentity>> = s
             .split(crate::tokenize::is_sp)
-            .map(parse_family_ent)
+            .map(|e| e.parse::<LongIdent>().map(|v| v.into()))
             .collect();
         Ok(RelayFamily(v?))
     }
-}
-
-/// Parse a single family entry from a string.
-fn parse_family_ent(mut s: &str) -> Result<RSAIdentity> {
-    if s.starts_with('$') {
-        s = &s[1..];
-    }
-    if let Some(idx) = s.find(|ch| ch == '=' || ch == '~') {
-        s = &s[..idx];
-    }
-    let bytes = hex::decode(s)
-        .map_err(|_| Error::BadArgument(Pos::at(s), "invalid hexadecimal in family".into()))?;
-    RSAIdentity::from_bytes(&bytes)
-        .ok_or_else(|| Error::BadArgument(Pos::at(s), "wrong length on fingerprint".into()))
 }
 
 /// Description of the software a relay is running.
@@ -485,10 +471,8 @@ impl RouterDesc {
 
         // fingerprint: check for consistency with RSA identity.
         if let Some(fp_tok) = body.get(FINGERPRINT) {
-            let fp_val = fp_tok.args_as_str().replace(' ', "");
-            let bytes = hex::decode(&fp_val)
-                .map_err(|e| Error::BadArgument(fp_tok.pos(), e.to_string()))?;
-            if bytes != rsa_identity.to_rsa_identity().as_bytes() {
+            let fp: RSAIdentity = fp_tok.args_as_str().parse::<SpFingerprint>()?.into();
+            if fp != rsa_identity.to_rsa_identity() {
                 return Err(Error::BadArgument(
                     fp_tok.pos(),
                     "fingerprint does not match RSA identity".into(),

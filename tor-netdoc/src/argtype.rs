@@ -8,6 +8,7 @@
 pub use b64impl::*;
 pub use curve25519impl::*;
 pub use edcert::*;
+pub use fingerprint::*;
 pub use rsa::*;
 pub use timeimpl::*;
 
@@ -197,6 +198,58 @@ mod edcert {
                 return Err(Error::BadObjectVal(self.1, "incorrect subject key".into()));
             }
             Ok(self)
+        }
+    }
+}
+
+mod fingerprint {
+    use crate::{Error, Pos, Result};
+    use tor_llcrypto::pk::rsa::RSAIdentity;
+
+    // A hex-encoded fingerprint with spaces in it.
+    pub struct SpFingerprint(RSAIdentity);
+
+    // A "long identity" in the format used for Family members.
+    pub struct LongIdent(RSAIdentity);
+
+    impl From<SpFingerprint> for RSAIdentity {
+        fn from(f: SpFingerprint) -> RSAIdentity {
+            f.0
+        }
+    }
+
+    impl From<LongIdent> for RSAIdentity {
+        fn from(f: LongIdent) -> RSAIdentity {
+            f.0
+        }
+    }
+
+    fn parse_hex_ident(s: &str) -> Result<RSAIdentity> {
+        let bytes = hex::decode(s)
+            .map_err(|_| Error::BadArgument(Pos::at(s), "invalid hexadecimal in family".into()))?;
+        RSAIdentity::from_bytes(&bytes)
+            .ok_or_else(|| Error::BadArgument(Pos::at(s), "wrong length on fingerprint".into()))
+    }
+
+    impl std::str::FromStr for SpFingerprint {
+        type Err = Error;
+        fn from_str(s: &str) -> Result<SpFingerprint> {
+            let ident = parse_hex_ident(&s.replace(' ', "")).map_err(|e| e.at_pos(Pos::at(s)))?;
+            Ok(SpFingerprint(ident))
+        }
+    }
+
+    impl std::str::FromStr for LongIdent {
+        type Err = Error;
+        fn from_str(mut s: &str) -> Result<LongIdent> {
+            if s.starts_with('$') {
+                s = &s[1..];
+            }
+            if let Some(idx) = s.find(|ch| ch == '=' || ch == '~') {
+                s = &s[..idx];
+            }
+            let ident = parse_hex_ident(s)?;
+            Ok(LongIdent(ident))
         }
     }
 }
