@@ -315,20 +315,12 @@ impl RouterDesc {
         let mut expiry = identity_cert.get_expiry();
 
         // Legacy RSA identity
-        let rsa_identity = {
-            let ident_tok = body.get_required(SIGNING_KEY)?;
-            let ident_val = ident_tok.get_obj("RSA PUBLIC KEY")?;
-            let k = ll::pk::rsa::PublicKey::from_der(&ident_val).ok_or_else(|| {
-                Error::BadObjectVal(ident_tok.pos(), "invalid RSA key".to_string())
-            })?;
-            if k.bits() != 1024 || !k.exponent_is(65537) {
-                return Err(Error::BadObjectVal(
-                    ident_tok.pos(),
-                    "invalid RSA parameters".to_string(),
-                ));
-            }
-            k
-        };
+        let rsa_identity: ll::pk::rsa::PublicKey = body
+            .get_required(SIGNING_KEY)?
+            .parse_obj::<RSAPublic>("RSA PUBLIC KEY")?
+            .check_len_eq(1024)?
+            .check_exponent(65537)?
+            .into();
 
         let ed_sig = sig.get_required(ROUTER_SIG_ED25519)?;
         let rsa_sig = sig.get_required(ROUTER_SIGNATURE)?;
@@ -433,20 +425,12 @@ impl RouterDesc {
         }
 
         // TAP key
-        let tap_onion_key = {
-            let k_tok = body.get_required(ONION_KEY)?;
-            let k_val = k_tok.get_obj("RSA PUBLIC KEY")?;
-            let k = ll::pk::rsa::PublicKey::from_der(&k_val)
-                .ok_or_else(|| Error::BadObjectVal(k_tok.pos(), "invalid RSA key".to_string()))?;
-            if k.bits() != 1024 || !k.exponent_is(65537) {
-                return Err(Error::BadObjectVal(
-                    k_tok.pos(),
-                    "invalid RSA parameters".to_string(),
-                ));
-            }
-
-            k
-        };
+        let tap_onion_key: ll::pk::rsa::PublicKey = body
+            .get_required(ONION_KEY)?
+            .parse_obj::<RSAPublic>("RSA PUBLIC KEY")?
+            .check_len_eq(1024)?
+            .check_exponent(65537)?
+            .into();
 
         // TAP crosscert
         {
