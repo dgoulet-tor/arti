@@ -97,11 +97,11 @@ pub struct RelayFamily(Vec<RSAIdentity>);
 impl std::str::FromStr for RelayFamily {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
-        let mut family = RelayFamily(Vec::new());
-        for ent in s.split(crate::tokenize::is_sp) {
-            family.0.push(parse_family_ent(ent)?);
-        }
-        Ok(family)
+        let v: Result<Vec<RSAIdentity>> = s
+            .split(crate::tokenize::is_sp)
+            .map(parse_family_ent)
+            .collect();
+        Ok(RelayFamily(v?))
     }
 }
 
