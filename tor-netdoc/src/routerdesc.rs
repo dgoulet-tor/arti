@@ -396,14 +396,11 @@ impl RouterDesc {
         let uptime = body.maybe(UPTIME).parse_arg(0)?;
 
         // published time.
-        let published = {
-            let p_item = body.get_required(PUBLISHED)?;
-            let p: ISO8601TimeSp = p_item
-                .args_as_str()
-                .parse()
-                .map_err(|e: ArgError| Error::BadArgument(1, p_item.pos(), e.to_string()))?;
-            p.into()
-        };
+        let published = body
+            .get_required(PUBLISHED)?
+            .args_as_str()
+            .parse::<ISO8601TimeSp>()?
+            .into();
 
         // ntor key
         // XXXX technically this isn't "required"
