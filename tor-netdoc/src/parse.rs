@@ -237,6 +237,8 @@ impl<T: Keyword> SectionRules<T> {
         let mut section = Section::new();
         self.parse_unverified(tokens, &mut section)?;
         self.validate(&section)?;
+        // TODO: unrecognized tokens with objects won't actually get their
+        // objects checked for valid base64
         Ok(section)
     }
 }

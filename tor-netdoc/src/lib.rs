@@ -33,6 +33,7 @@ mod util;
 mod macros;
 
 pub mod family;
+pub mod microdesc;
 pub mod policy;
 pub mod routerdesc;
 pub mod version;

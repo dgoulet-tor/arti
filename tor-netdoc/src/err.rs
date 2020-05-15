@@ -282,6 +282,11 @@ macro_rules! derive_from_err{
         }
     }
 }
-
 derive_from_err! {std::num::ParseIntError}
 derive_from_err! {std::net::AddrParseError}
+
+impl From<crate::policy::PolicyError> for Error {
+    fn from(e: crate::policy::PolicyError) -> Error {
+        Error::BadPolicy(Pos::None, e)
+    }
+}

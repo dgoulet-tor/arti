@@ -7,6 +7,7 @@
 
 pub use b64impl::*;
 pub use curve25519impl::*;
+pub use ed25519impl::*;
 pub use edcert::*;
 pub use fingerprint::*;
 pub use rsa::*;
@@ -70,6 +71,32 @@ mod curve25519impl {
     impl From<Curve25519Public> for PublicKey {
         fn from(w: Curve25519Public) -> PublicKey {
             w.0
+        }
+    }
+}
+
+// ============================================================
+mod ed25519impl {
+    use super::B64;
+    use crate::{Error, Pos, Result};
+    use tor_llcrypto::pk::ed25519::PublicKey;
+
+    pub struct Ed25519Public(PublicKey);
+
+    impl std::str::FromStr for Ed25519Public {
+        type Err = Error;
+        fn from_str(s: &str) -> Result<Self> {
+            let b64: B64 = s.parse()?;
+            let key = PublicKey::from_bytes(b64.as_bytes()).map_err(|_| {
+                Error::BadArgument(Pos::at(s), "bad length for ed25519 key.".into())
+            })?;
+            Ok(Ed25519Public(key))
+        }
+    }
+
+    impl From<Ed25519Public> for PublicKey {
+        fn from(pk: Ed25519Public) -> PublicKey {
+            pk.0
         }
     }
 }

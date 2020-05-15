@@ -47,6 +47,12 @@ impl Display for PortPolicy {
 }
 
 impl PortPolicy {
+    /// Return a new PortPolicy that rejects all ports.
+    pub fn new_reject_all() -> Self {
+        PortPolicy {
+            allowed: Vec::new(),
+        }
+    }
     /// Helper: replace this policy with its inverse.
     fn invert(&mut self) {
         let mut prev_hi = 0;
