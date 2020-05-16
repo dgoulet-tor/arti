@@ -60,6 +60,22 @@ impl<I: Iterator, F: FnMut(&I::Item) -> bool> PauseAt<I, F> {
     pub fn remaining(self) -> Peekable<I> {
         self.peek
     }
+    /// Return the next item that will be yielded from this iterator, or
+    /// None if this iterator is about to yield None.
+    #[allow(unused)]
+    pub fn peek(&mut self) -> Option<&I::Item> {
+        // TODO: I wish it weren't necessary for this function to take
+        // a mutable reference.
+        if let Some(nextval) = self.peek.peek() {
+            if (self.pred)(nextval) {
+                None
+            } else {
+                Some(nextval)
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl<I: Iterator, F: FnMut(&I::Item) -> bool> Iterator for PauseAt<I, F> {
@@ -131,13 +147,16 @@ mod tests {
         assert_eq!(iter.next(), Some(3));
         assert_eq!(iter.next(), Some(4));
         assert_eq!(iter.next(), Some(5));
+        assert_eq!(iter.peek(), None);
         assert_eq!(iter.next(), None);
 
         let mut iter = iter.remaining();
         assert_eq!(iter.next(), Some(6));
+        assert_eq!(iter.peek(), Some(&7));
         assert_eq!(iter.next(), Some(7));
         assert_eq!(iter.next(), Some(8));
         assert_eq!(iter.next(), Some(9));
+        assert_eq!(iter.peek(), None);
         assert_eq!(iter.next(), None);
     }
 
