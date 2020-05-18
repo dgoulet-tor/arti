@@ -143,3 +143,13 @@ impl Microdesc {
         })
     }
 }
+#[cfg(test)]
+mod test {
+    use super::*;
+    const TESTDATA: &str = include_str!("../testdata/microdesc1.txt");
+
+    #[test]
+    fn parse_arbitrary() {
+        let _rd = Microdesc::parse(TESTDATA).unwrap();
+    }
+}
