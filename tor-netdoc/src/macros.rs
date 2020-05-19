@@ -27,11 +27,12 @@ macro_rules! decl_keyword {
         $(#[$meta])*
         $v enum $name {
             $( $i , )*
-            UNRECOGNIZED
+            UNRECOGNIZED,
+            ANN_UNRECOGNIZED
         }
         impl $crate::keyword::Keyword for $name {
             fn idx(self) -> usize { self as usize }
-            fn n_vals() -> usize { ($name::UNRECOGNIZED as usize) + 1 }
+            fn n_vals() -> usize { ($name::ANN_UNRECOGNIZED as usize) + 1 }
             fn from_str(s : &str) -> Self {
                 // Note usage of phf crate to create a perfect hash over
                 // the possible keywords.  It will be even better if someday
@@ -40,14 +41,23 @@ macro_rules! decl_keyword {
                 const KEYWORD: phf::Map<&'static str, $name> = phf::phf_map! {
                     $( $( $s => $name::$i , )+ )*
                 };
-                * KEYWORD.get(s).unwrap_or(& $name::UNRECOGNIZED)
+                match KEYWORD.get(s) {
+                    Some(k) => *k,
+                    None => if s.starts_with('@') {
+                        $name::ANN_UNRECOGNIZED
+                    } else {
+                        $name::UNRECOGNIZED
+                    }
+                }
             }
             fn from_idx(i : usize) -> Option<Self> {
                 // Note looking up the value in a vec.  This may or may
                 // not be faster than a case statement would be.
                 lazy_static::lazy_static! {
                     static ref VALS: Vec<$name> =
-                        vec![ $($name::$i , )* $name::UNRECOGNIZED ];
+                        vec![ $($name::$i , )*
+                              $name::UNRECOGNIZED,
+                              $name::ANN_UNRECOGNIZED ];
                 };
                 VALS.get(i).copied()
             }
@@ -58,7 +68,8 @@ macro_rules! decl_keyword {
                     // "acceptreject", which is not great.
                     // "accept/reject" would be better.
                     $( $i => concat!{ $($s),+ } , )*
-                    UNRECOGNIZED => "<unrecognized>"
+                    UNRECOGNIZED => "<unrecognized>",
+                    ANN_UNRECOGNIZED => "<unrecognized annotation>"
                 }
             }
         }

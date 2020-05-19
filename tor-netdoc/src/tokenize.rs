@@ -113,17 +113,17 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
     fn get_kwdline(&mut self) -> Result<(&'a str, &'a str)> {
         let pos = self.off;
         let line = self.get_line()?;
-        let line = if line.starts_with("opt ") {
-            &line[4..]
+        let (line, anno_ok) = if line.starts_with("opt ") {
+            (&line[4..], false)
         } else {
-            line
+            (line, true)
         };
         let mut parts_iter = line.splitn(2, |c| c == ' ' || c == '\t');
         let kwd = match parts_iter.next() {
             Some(k) => k,
             None => return Err(Error::MissingKeyword(self.get_pos(pos))),
         };
-        if !keyword_ok(kwd) {
+        if !keyword_ok(kwd, anno_ok) {
             return Err(Error::BadKeyword(self.get_pos(pos)));
         }
         // XXXX spec should allow unicode in args.
@@ -196,8 +196,10 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
     }
 }
 
-/// Return true iff 's' is a valid keyword.
-fn keyword_ok(s: &str) -> bool {
+/// Return true iff 's' is a valid keyword or annotation.
+///
+/// (Only allow annotations if `anno_ok` is true.`
+fn keyword_ok(mut s: &str, anno_ok: bool) -> bool {
     fn kwd_char_ok(c: char) -> bool {
         match c {
             'A'..='Z' => true,
@@ -210,6 +212,9 @@ fn keyword_ok(s: &str) -> bool {
 
     if s.is_empty() {
         return false;
+    }
+    if anno_ok && s.starts_with('@') {
+        s = &s[1..];
     }
     // XXXX I think we should disallow initial "-"
     s.chars().all(kwd_char_ok)
