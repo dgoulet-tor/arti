@@ -226,21 +226,22 @@ impl RouterDesc {
         Section<'a, RouterKW>,
     )> {
         use crate::util::*;
+        use RouterKW::*;
 
         let reader = crate::tokenize::NetDocReader::new(s);
 
         // Parse everything up through the header.
         let mut reader = reader.pause_at(|item| {
             item.is_ok()
-                && item.as_ref().unwrap().get_kwd() != "router"
-                && item.as_ref().unwrap().get_kwd() != "identity-ed25519"
+                && item.as_ref().unwrap().get_kwd() != ROUTER
+                && item.as_ref().unwrap().get_kwd() != IDENTITY_ED25519
         });
         let header = ROUTER_HEADER_RULES.parse(&mut reader)?;
 
         // Parse everything up to but not including the signature.
         let mut reader = reader.new_pred(|item| {
-            item.is_ok() && (item.as_ref().unwrap().get_kwd() == "router-signature")
-                || (item.as_ref().unwrap().get_kwd() == "router-sig-ed25519")
+            item.is_ok() && (item.as_ref().unwrap().get_kwd() == ROUTER_SIGNATURE)
+                || (item.as_ref().unwrap().get_kwd() == ROUTER_SIG_ED25519)
         });
         let body = ROUTER_BODY_RULES.parse(&mut reader)?;
 
@@ -481,7 +482,7 @@ impl RouterDesc {
         let ipv4_policy = {
             let mut pol = AddrPolicy::new();
             for ruletok in body.get_slice(POLICY).iter() {
-                let accept = ruletok.get_kwd() == "accept";
+                let accept = ruletok.get_kwd_str() == "accept";
                 let pat: AddrPortPattern = ruletok
                     .args_as_str()
                     .parse()

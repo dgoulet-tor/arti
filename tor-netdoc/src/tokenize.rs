@@ -5,6 +5,7 @@
 //! string into Items.
 
 use crate::argtype::FromBytes;
+use crate::keyword::Keyword;
 use crate::{Error, Pos, Result};
 use std::cell::{Ref, RefCell};
 use std::str::FromStr;
@@ -36,8 +37,9 @@ pub struct Object<'a> {
 /// This is a zero-copy implementation that points to slices within a
 /// containing string.
 #[derive(Clone, Debug)]
-pub struct Item<'a> {
-    kwd: &'a str,
+pub struct Item<'a, K: Keyword> {
+    kwd: K,
+    kwd_str: &'a str,
     args: &'a str,
     /// The arguments, split by whitespace.  This vector is contructed
     /// as needed, using interior mutability.
@@ -47,17 +49,23 @@ pub struct Item<'a> {
 
 /// A cursor into a string that returns Items one by one.
 #[derive(Clone, Debug)]
-pub struct NetDocReader<'a> {
+pub struct NetDocReader<'a, K: Keyword> {
     /// The string we're parsing.
     s: &'a str,
     /// Our position within the string.
     off: usize,
+    /// Tells Rust it's okay that we are parameterizing on K.
+    _k: std::marker::PhantomData<K>,
 }
 
-impl<'a> NetDocReader<'a> {
+impl<'a, K: Keyword> NetDocReader<'a, K> {
     /// Create a new NetDocReader to split a string into tokens.
     pub fn new(s: &'a str) -> Self {
-        NetDocReader { s, off: 0 }
+        NetDocReader {
+            s,
+            off: 0,
+            _k: std::marker::PhantomData,
+        }
     }
     /// Return the current Pos within the string.
     fn get_pos(&self, pos: usize) -> Pos {
@@ -170,15 +178,17 @@ impl<'a> NetDocReader<'a> {
     ///
     /// If successful, returns Ok(Some(Item)), or Ok(None) if exhausted.
     /// Returns Err on failure.
-    pub fn get_item(&mut self) -> Result<Option<Item<'a>>> {
+    pub fn get_item(&mut self) -> Result<Option<Item<'a, K>>> {
         if self.remaining() == 0 {
             return Ok(None);
         }
-        let (kwd, args) = self.get_kwdline()?;
+        let (kwd_str, args) = self.get_kwdline()?;
         let object = self.get_object()?;
         let split_args = RefCell::new(None);
+        let kwd = K::from_str(kwd_str);
         Ok(Some(Item {
             kwd,
+            kwd_str,
             args,
             split_args,
             object,
@@ -226,8 +236,8 @@ fn tag_keyword_ok(s: &str) -> bool {
 }
 
 /// When used as an Iterator, returns a sequence of Result<Item>.
-impl<'a> Iterator for NetDocReader<'a> {
-    type Item = Result<Item<'a>>;
+impl<'a, K: Keyword> Iterator for NetDocReader<'a, K> {
+    type Item = Result<Item<'a, K>>;
     fn next(&mut self) -> Option<Self::Item> {
         self.get_item().transpose()
     }
@@ -244,10 +254,14 @@ fn base64_decode_multiline(s: &str) -> std::result::Result<Vec<u8>, base64::Deco
     Ok(v)
 }
 
-impl<'a> Item<'a> {
-    /// Return the keyword part of this item.
-    pub fn get_kwd(&self) -> &'a str {
+impl<'a, K: Keyword> Item<'a, K> {
+    /// Return the parsed keyword part of this item.
+    pub fn get_kwd(&self) -> K {
         self.kwd
+    }
+    /// Return the keyword part of this item, as a string.
+    pub fn get_kwd_str(&self) -> &'a str {
+        self.kwd_str
     }
     /// Return the arguments of this item, as a single string.
     pub fn args_as_str(&self) -> &'a str {
@@ -340,13 +354,13 @@ impl<'a> Item<'a> {
     /// This position won't be useful unless it is later contextualized
     /// with the containing string.
     pub fn pos(&self) -> Pos {
-        Pos::at(self.kwd)
+        Pos::at(self.kwd_str)
     }
     /// Return the position of this Item in a string.
     ///
     /// Returns None if this item doesn't actually belong to the string.
     pub fn offset_in(&self, s: &str) -> Option<usize> {
-        crate::util::str_offset(s, self.kwd)
+        crate::util::str_offset(s, self.kwd_str)
     }
     /// Return the position of the n'th argument of this item.
     ///
@@ -367,7 +381,7 @@ impl<'a> Item<'a> {
             let last_arg = args[args.len() - 1];
             Pos::at_end_of(last_arg)
         } else {
-            Pos::at_end_of(self.kwd)
+            Pos::at_end_of(self.kwd_str)
         }
     }
     /// Return the position of the end of this object.
@@ -383,11 +397,11 @@ impl<'a> Item<'a> {
 /// want to inspect.  If the Item is there, this acts like a proxy to the
 /// item; otherwise, it treats the item as having no arguments.
 
-pub struct MaybeItem<'a, 'b>(Option<&'a Item<'b>>);
+pub struct MaybeItem<'a, 'b, K: Keyword>(Option<&'a Item<'b, K>>);
 
 // All methods here are as for Item.
-impl<'a, 'b> MaybeItem<'a, 'b> {
-    pub fn from_option(opt: Option<&'a Item<'b>>) -> Self {
+impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
+    pub fn from_option(opt: Option<&'a Item<'b, K>>) -> Self {
         MaybeItem(opt)
     }
     pub fn parse_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>

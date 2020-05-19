@@ -28,18 +28,18 @@ pub struct SectionRules<T: Keyword> {
 
 /// The entry or entries for a particular keyword within a document.
 #[derive(Clone)]
-enum TokVal<'a> {
+enum TokVal<'a, K: Keyword> {
     /// No value has been found.
     None,
     /// A single value has been found; we're storing it in place.
     ///
     /// We use a one-element array here so that we can return a slice
     /// of the array.
-    Some([Item<'a>; 1]),
+    Some([Item<'a, K>; 1]),
     /// Multiple vlaues have been found; they go in a vector.
-    Multi(Vec<Item<'a>>),
+    Multi(Vec<Item<'a, K>>),
 }
-impl<'a> TokVal<'a> {
+impl<'a, K: Keyword> TokVal<'a, K> {
     /// Return the number of Items for this value.
     fn count(&self) -> usize {
         match self {
@@ -49,7 +49,7 @@ impl<'a> TokVal<'a> {
         }
     }
     /// Return the first Item for this value, or None if there wasn't one.
-    fn first(&self) -> Option<&Item<'a>> {
+    fn first(&self) -> Option<&Item<'a, K>> {
         match self {
             TokVal::None => None,
             TokVal::Some([t]) => Some(t),
@@ -57,7 +57,7 @@ impl<'a> TokVal<'a> {
         }
     }
     /// Return the Item for this value, if there is exactly one.
-    fn singleton(&self) -> Option<&Item<'a>> {
+    fn singleton(&self) -> Option<&Item<'a, K>> {
         match self {
             TokVal::None => None,
             TokVal::Some([t]) => Some(t),
@@ -65,7 +65,7 @@ impl<'a> TokVal<'a> {
         }
     }
     /// Return all the Items for this value, as a slice.
-    fn as_slice(&self) -> &[Item<'a>] {
+    fn as_slice(&self) -> &[Item<'a, K>] {
         match self {
             TokVal::None => &[],
             TokVal::Some(t) => &t[..],
@@ -77,9 +77,7 @@ impl<'a> TokVal<'a> {
 /// A Section is the result of sorting a document's entries by keyword.
 pub struct Section<'a, T: Keyword> {
     /// Map from Keyword index to TokVal
-    v: Vec<TokVal<'a>>,
-    /// Tells Rust it's okay that we are parameterizing on T.
-    _t: std::marker::PhantomData<T>,
+    v: Vec<TokVal<'a, T>>,
 }
 
 impl<'a, T: Keyword> Section<'a, T> {
@@ -88,22 +86,19 @@ impl<'a, T: Keyword> Section<'a, T> {
         let n = T::n_vals();
         let mut v = Vec::with_capacity(n);
         v.resize(n, TokVal::None);
-        Section {
-            v,
-            _t: std::marker::PhantomData,
-        }
+        Section { v }
     }
     /// Helper: return the tokval for some Keyword.
-    fn get_tokval(&self, t: T) -> &TokVal<'a> {
+    fn get_tokval(&self, t: T) -> &TokVal<'a, T> {
         let idx = t.idx();
         &self.v[idx]
     }
     /// Return all the Items for some Keyword, as a slice.
-    pub fn get_slice(&self, t: T) -> &[Item<'a>] {
+    pub fn get_slice(&self, t: T) -> &[Item<'a, T>] {
         self.get_tokval(t).as_slice()
     }
     /// Return a single Item for some Keyword, if there is exactly one.
-    pub fn get(&self, t: T) -> Option<&Item<'a>> {
+    pub fn get(&self, t: T) -> Option<&Item<'a, T>> {
         self.get_tokval(t).singleton()
     }
     /// Return a single Item for some Keyword, giving an error if there
@@ -111,20 +106,20 @@ impl<'a, T: Keyword> Section<'a, T> {
     ///
     /// It is usually a mistake to use this function on a Keyword that is
     /// not required.
-    pub fn get_required(&self, t: T) -> Result<&Item<'a>> {
+    pub fn get_required(&self, t: T) -> Result<&Item<'a, T>> {
         self.get(t).ok_or_else(|| Error::MissingToken(t.to_str()))
     }
     /// Return a proxy MaybeItem object for some keyword.
     //
     /// A MaybeItem is used to represent an object that might or might
     /// not be there.
-    pub fn maybe<'b>(&'b self, t: T) -> MaybeItem<'b, 'a> {
+    pub fn maybe<'b>(&'b self, t: T) -> MaybeItem<'b, 'a, T> {
         MaybeItem::from_option(self.get(t))
     }
     /// Insert an `item`.
     ///
     /// The `item` must have parsed Keyword `t`.
-    fn add_tok(&mut self, t: T, item: Item<'a>) {
+    fn add_tok(&mut self, t: T, item: Item<'a, T>) {
         let idx = Keyword::idx(t);
         if idx >= self.v.len() {
             self.v.resize(idx + 1, TokVal::None);
@@ -171,12 +166,12 @@ impl<T: Keyword> SectionRules<T> {
     /// when we validate more carefully.
     fn parse_unverified<'a, I>(&self, tokens: &mut I, section: &mut Section<'a, T>) -> Result<()>
     where
-        I: Iterator<Item = Result<Item<'a>>>,
+        I: Iterator<Item = Result<Item<'a, T>>>,
     {
         for item in tokens {
             let item = item?;
 
-            let tok = T::from_str(item.get_kwd());
+            let tok = item.get_kwd();
             let tok_idx = tok.idx();
             if let Some(rule) = &self.rules[tok_idx] {
                 // we want this token.
@@ -233,7 +228,7 @@ impl<T: Keyword> SectionRules<T> {
     /// Parse a stream of tokens into a validated section.
     pub fn parse<'a, I>(&self, tokens: &mut I) -> Result<Section<'a, T>>
     where
-        I: Iterator<Item = Result<Item<'a>>>,
+        I: Iterator<Item = Result<Item<'a, T>>>,
     {
         let mut section = Section::new();
         self.parse_unverified(tokens, &mut section)?;

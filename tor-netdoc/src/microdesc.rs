@@ -77,7 +77,7 @@ impl Microdesc {
         let start_pos = {
             let first = items.peek();
             let kwd = match first {
-                Some(Ok(tok)) => tok.get_kwd(),
+                Some(Ok(tok)) => tok.get_kwd_str(),
                 _ => return Err(Error::MissingToken("onion-key")),
             };
             if kwd != "onion-key" {

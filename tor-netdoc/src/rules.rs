@@ -41,7 +41,7 @@ impl<T: Keyword> TokenFmt<T> {
     }
     /// Check whether a single Item matches this TokenFmt rule, with respect
     /// to its number of arguments.
-    fn item_matches_args<'a>(&self, item: &Item<'a>) -> Result<()> {
+    fn item_matches_args<'a>(&self, item: &Item<'a, T>) -> Result<()> {
         let n_args = item.n_args();
         if let Some(max) = self.max_args {
             if n_args > max {
@@ -58,7 +58,7 @@ impl<T: Keyword> TokenFmt<T> {
 
     /// Check whether a single Item matches a TokenFmt rule, with respect
     /// to its object's presence and type.
-    fn item_matches_obj<'a>(&self, item: &Item<'a>) -> Result<()> {
+    fn item_matches_obj<'a>(&self, item: &Item<'a, T>) -> Result<()> {
         match (&self.obj, item.has_obj()) {
             (ObjKind::NoObj, true) => Err(Error::UnexpectedObject(self.kwd.to_str(), item.pos())),
             (ObjKind::RequireObj, false) => {
@@ -70,13 +70,13 @@ impl<T: Keyword> TokenFmt<T> {
 
     /// Check whether a single item has the right number of arguments
     /// and object.
-    pub fn check_item<'a>(&self, item: &Item<'a>) -> Result<()> {
+    pub fn check_item<'a>(&self, item: &Item<'a, T>) -> Result<()> {
         self.item_matches_args(item)?;
         self.item_matches_obj(item)
     }
 
     /// Check whether this kind of item may appear this many times.
-    pub fn check_multiplicity<'a>(&self, items: &[Item<'a>]) -> Result<()> {
+    pub fn check_multiplicity<'a>(&self, items: &[Item<'a, T>]) -> Result<()> {
         match items.len() {
             0 => {
                 if self.required {
