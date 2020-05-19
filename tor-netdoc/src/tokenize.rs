@@ -263,6 +263,10 @@ impl<'a, K: Keyword> Item<'a, K> {
     pub fn get_kwd_str(&self) -> &'a str {
         self.kwd_str
     }
+    /// Return true if the keyword for this item is in 'ks'.
+    pub fn has_kwd_in(&self, ks: &[K]) -> bool {
+        ks.contains(&self.kwd)
+    }
     /// Return the arguments of this item, as a single string.
     pub fn args_as_str(&self) -> &'a str {
         self.args
@@ -442,6 +446,32 @@ impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
         match self.0 {
             Some(item) => Ok(Some(item.get_obj(want_tag)?)),
             None => Ok(None),
+        }
+    }
+}
+
+pub trait ItemResult<K: Keyword> {
+    /// Return true if this is an ok result with the keyword 'k'
+    fn is_ok_with_kwd(&self, k: K) -> bool {
+        self.is_ok_with_kwd_in(&[k])
+    }
+    /// Return true if this is an ok result with a keyword in the slice 'ks'
+    fn is_ok_with_kwd_in(&self, ks: &[K]) -> bool;
+    /// Return true if this is an ok result with a keyword not in the slice 'ks'
+    fn is_ok_with_kwd_not_in(&self, ks: &[K]) -> bool;
+}
+
+impl<'a, K: Keyword> ItemResult<K> for Result<Item<'a, K>> {
+    fn is_ok_with_kwd_in(&self, ks: &[K]) -> bool {
+        match self {
+            Ok(item) => item.has_kwd_in(ks),
+            Err(_) => false,
+        }
+    }
+    fn is_ok_with_kwd_not_in(&self, ks: &[K]) -> bool {
+        match self {
+            Ok(item) => !item.has_kwd_in(ks),
+            Err(_) => false,
         }
     }
 }

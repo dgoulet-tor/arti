@@ -33,6 +33,7 @@ use crate::family::RelayFamily;
 use crate::keyword::Keyword;
 use crate::parse::{Section, SectionRules};
 use crate::policy::*;
+use crate::tokenize::ItemResult;
 use crate::version::TorVersion;
 use crate::{Error, Result};
 
@@ -231,18 +232,13 @@ impl RouterDesc {
         let reader = crate::tokenize::NetDocReader::new(s);
 
         // Parse everything up through the header.
-        let mut reader = reader.pause_at(|item| {
-            item.is_ok()
-                && item.as_ref().unwrap().get_kwd() != ROUTER
-                && item.as_ref().unwrap().get_kwd() != IDENTITY_ED25519
-        });
+        let mut reader =
+            reader.pause_at(|item| item.is_ok_with_kwd_not_in(&[ROUTER, IDENTITY_ED25519]));
         let header = ROUTER_HEADER_RULES.parse(&mut reader)?;
 
         // Parse everything up to but not including the signature.
-        let mut reader = reader.new_pred(|item| {
-            item.is_ok() && (item.as_ref().unwrap().get_kwd() == ROUTER_SIGNATURE)
-                || (item.as_ref().unwrap().get_kwd() == ROUTER_SIG_ED25519)
-        });
+        let mut reader =
+            reader.new_pred(|item| item.is_ok_with_kwd_in(&[ROUTER_SIGNATURE, ROUTER_SIG_ED25519]));
         let body = ROUTER_BODY_RULES.parse(&mut reader)?;
 
         // Parse the signature.
@@ -532,8 +528,8 @@ mod test {
     const TESTDATA: &str = include_str!("../testdata/routerdesc1.txt");
 
     #[test]
-    fn parse_arbitrary() {
-        let rd = RouterDesc::parse(TESTDATA).unwrap();
+    fn parse_arbitrary() -> Result<()> {
+        let rd = RouterDesc::parse(TESTDATA)?;
 
         assert_eq!(rd.nickname, "idun2");
         assert_eq!(rd.orport, 9001);
@@ -541,5 +537,7 @@ mod test {
 
         assert_eq!(rd.uptime, Some(1828391));
         //assert_eq!(rd.platform.unwrap(), "Tor 0.4.2.6 on Linux");
+
+        Ok(())
     }
 }
