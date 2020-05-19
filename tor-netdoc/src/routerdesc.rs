@@ -30,9 +30,9 @@
 //! should be.
 use crate::argtype::*;
 use crate::family::RelayFamily;
+use crate::keyword::Keyword;
 use crate::parse::{Section, SectionRules};
 use crate::policy::*;
-use crate::rules::Keyword;
 use crate::version::TorVersion;
 use crate::{Error, Result};
 

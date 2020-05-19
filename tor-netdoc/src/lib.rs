@@ -25,6 +25,7 @@
 
 mod argtype;
 mod err;
+mod keyword;
 mod parse;
 mod rules;
 mod tokenize;

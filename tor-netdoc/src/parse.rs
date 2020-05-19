@@ -13,6 +13,7 @@
 //! (This is an internal API, so see the routerdesc.rs source for an
 //! example of use.)
 
+use crate::keyword::Keyword;
 use crate::rules::*;
 use crate::tokenize::*;
 use crate::{Error, Result};

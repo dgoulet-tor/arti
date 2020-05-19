@@ -10,9 +10,9 @@
 
 use crate::argtype::*;
 use crate::family::RelayFamily;
+use crate::keyword::Keyword;
 use crate::parse::SectionRules;
 use crate::policy::PortPolicy;
-use crate::rules::Keyword;
 use crate::util;
 use crate::{Error, Result};
 use tor_llcrypto::d;

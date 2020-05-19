@@ -29,7 +29,7 @@ macro_rules! decl_keyword {
             $( $i , )*
             UNRECOGNIZED
         }
-        impl $crate::rules::Keyword for $name {
+        impl $crate::keyword::Keyword for $name {
             fn idx(self) -> usize { self as usize }
             fn n_vals() -> usize { ($name::UNRECOGNIZED as usize) + 1 }
             fn from_str(s : &str) -> Self {
