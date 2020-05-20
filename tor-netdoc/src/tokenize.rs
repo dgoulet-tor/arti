@@ -91,18 +91,22 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
     fn starts_with(&self, s: &str) -> bool {
         self.s[self.off..].starts_with(s)
     }
-    /// Try to extract a NL-terminated line from this reader.
+    /// Try to extract a NL-terminated line from this reader.  Always
+    /// remove data if the reader is nonempty.
     fn get_line(&mut self) -> Result<&'a str> {
         let remainder = &self.s[self.off..];
-        let nl_pos = remainder
-            .find('\n')
-            .ok_or_else(|| Error::TruncatedLine(self.get_pos(self.s.len())))?;
-        let mut line = &remainder[..nl_pos];
-        self.advance(nl_pos + 1)?;
+        let mut line;
+        if let Some(nl_pos) = remainder.find('\n') {
+            self.advance(nl_pos + 1)?;
+            line = &remainder[..nl_pos];
+        } else {
+            self.advance(remainder.len())?; // drain everything.
+            return Err(Error::TruncatedLine(self.get_pos(self.s.len())));
+        }
 
         // Not in dirspec! XXXX
         if line.ends_with('\r') {
-            line = &line[..nl_pos - 1];
+            line = &line[..line.len() - 1];
         }
         Ok(line)
     }
@@ -178,6 +182,9 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
     ///
     /// If successful, returns Ok(Some(Item)), or Ok(None) if exhausted.
     /// Returns Err on failure.
+    ///
+    /// Always consumes at least one line if possible; always ends on a
+    /// line boundary if one exists.
     pub fn get_item(&mut self) -> Result<Option<Item<'a, K>>> {
         if self.remaining() == 0 {
             return Ok(None);
