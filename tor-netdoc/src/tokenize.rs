@@ -15,6 +15,25 @@ use std::str::FromStr;
 pub fn is_sp(c: char) -> bool {
     c == ' ' || c == '\t'
 }
+/// Check that all the characters in `s` are valid base64.
+///
+/// This is not a perfect check for base64ness -- it is mainly meant
+/// to help us recover after unterminated base64.
+fn b64check(s: &str) -> Result<()> {
+    for b in s.bytes() {
+        match b {
+            b'=' => (),
+            b'a'..=b'z' => (),
+            b'A'..=b'Z' => (),
+            b'0'..=b'9' => (),
+            b'/' | b'+' => (),
+            _ => {
+                return Err(Error::BadObjectBase64(Pos::at(s)));
+            }
+        };
+    }
+    Ok(())
+}
 
 /// A tagged object that is part of a directory Item.
 ///
@@ -166,6 +185,11 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
             if line.starts_with(END_STR) {
                 break (p, line);
             }
+            // Exit if this line isn't plausible base64.  Otherwise,
+            // an unterminated base64 block could potentially
+            // "consume" all the rest of the string, which would stop
+            // us from recovering.
+            b64check(line)?;
         };
         let data = &self.s[datapos..endlinepos];
         if !endline.ends_with(TAG_END) {
