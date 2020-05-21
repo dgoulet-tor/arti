@@ -236,6 +236,48 @@ fn tv_sha1() {
 
 #[test]
 fn tv_sha256() {
-    // From FIPS 180-3 at
-    // https://csrc.nist.gov/csrc/media/publications/fips/180/3/archive/2008-10-31/documents/fips180-3_final.pdf
+    // From https://csrc.nist.gov/csrc/media/projects/cryptographic-standards-and-guidelines/documents/examples/sha_all.pdf
+
+    let d = ll::d::Sha256::digest(b"abc");
+    assert_eq!(
+        &d[..],
+        hex!(
+            "BA7816BF 8F01CFEA 414140DE 5DAE2223
+             B00361A3 96177A9C B410FF61 F20015AD"
+        )
+    );
+
+    let d = ll::d::Sha256::digest(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
+    assert_eq!(
+        &d[..],
+        hex!(
+            "248D6A61 D20638B8 E5C02693 0C3E6039
+             A33CE459 64FF2167 F6ECEDD4 19DB06C1"
+        )
+    );
+}
+
+#[test]
+fn tv_sha512() {
+    // From https://csrc.nist.gov/csrc/media/projects/cryptographic-standards-and-guidelines/documents/examples/sha_all.pdf
+
+    let d = ll::d::Sha512::digest(b"abc");
+    assert_eq!(
+        &d[..],
+        &hex!(
+            "DDAF35A1 93617ABA CC417349 AE204131 12E6FA4E 89A97EA2
+             0A9EEEE6 4B55D39A 2192992A 274FC1A8 36BA3C23 A3FEEBBD
+             454D4423 643CE80E 2A9AC94F A54CA49F"
+        )[..]
+    );
+
+    let d = ll::d::Sha512::digest(b"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu");
+    assert_eq!(
+        &d[..],
+        &hex!(
+            "8E959B75 DAE313DA 8CF4F728 14FC143F 8F7779C6 EB9F7FA1
+             7299AEAD B6889018 501D289E 4900F7E4 331B99DE C4B5433A
+             C7D329EE B6DD2654 5E96E55B 874BE909"
+        )[..]
+    );
 }
