@@ -113,6 +113,8 @@ decl_keyword! {
     /// RouterKW is an instance of Keyword, used to denote the different
     /// Items that are recognized as appearing in a router descriptor.
     RouterKW {
+        annotation "@source" => A_SOURCE,
+        annotation "@downloaded-at" => A_DOWNLOADED_AT,
         "accept" | "reject" => POLICY,
         "bandwidth" => BANDWIDTH,
         "bridge-distribution-request" => BRIDGE_DISTRIBUTION_REQUEST,

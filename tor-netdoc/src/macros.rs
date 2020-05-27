@@ -21,7 +21,7 @@
 /// ```
 macro_rules! decl_keyword {
     { $(#[$meta:meta])* $v:vis
-      $name:ident { $( $($s:literal)|+ => $i:ident),* $(,)? } } => {
+      $name:ident { $( $($anno:ident)? $($s:literal)|+ => $i:ident),* $(,)? } } => {
         #[derive(Copy,Clone,Eq,PartialEq,Debug,std::hash::Hash)]
         #[allow(non_camel_case_types)]
         $(#[$meta])*
@@ -61,7 +61,7 @@ macro_rules! decl_keyword {
                 };
                 VALS.get(i).copied()
             }
-            fn to_str(&self) -> &'static str {
+            fn to_str(self) -> &'static str {
                 use $name::*;
                 match self {
                     // TODO: this turns "accept" | "reject" into
@@ -72,6 +72,17 @@ macro_rules! decl_keyword {
                     ANN_UNRECOGNIZED => "<unrecognized annotation>"
                 }
             }
+            fn is_annotation(self) -> bool {
+                use $name::*;
+                match self {
+                    $( $i => decl_keyword![@impl is_anno $($anno)? ], )*
+                    UNRECOGNIZED => false,
+                    ANN_UNRECOGNIZED => true,
+                }
+            }
         }
-    }
+    };
+    [ @impl is_anno annotation ] => ( true );
+    [ @impl is_anno $x:ident ] => ( compile_error!("unrecognized keyword; not annotation") );
+    [ @impl is_anno ] => ( false );
 }

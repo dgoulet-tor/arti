@@ -25,11 +25,13 @@ pub trait Keyword: Hash + Eq + PartialEq + Copy + Clone {
     fn from_idx(i: usize) -> Option<Self>;
     /// Find a string corresponding to this keyword.  This may not be the
     /// actual string from the document; it is indended for reporting errors.
-    fn to_str(&self) -> &'static str;
+    fn to_str(self) -> &'static str;
     /// Return the index for this keyword.
     fn idx(self) -> usize;
     /// Return the number of indices for this keyword.
     fn n_vals() -> usize;
+    /// Return true iff this keyword denotes an annotation.
+    fn is_annotation(self) -> bool;
     /// Convert from an index to a human-readable string.
     fn idx_to_str(i: usize) -> &'static str {
         Self::from_idx(i)
@@ -37,7 +39,7 @@ pub trait Keyword: Hash + Eq + PartialEq + Copy + Clone {
             .unwrap_or("<out of range>")
     }
     /// Return a new TokenFmtBuilder for creating rules about this keyword.
-    fn rule(&self) -> rules::TokenFmtBuilder<Self> {
-        rules::TokenFmtBuilder::new(*self)
+    fn rule(self) -> rules::TokenFmtBuilder<Self> {
+        rules::TokenFmtBuilder::new(self)
     }
 }
