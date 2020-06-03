@@ -137,6 +137,8 @@ impl Microdesc {
             }
         };
 
+        // TODO: This is the whole string! It just isn't the
+        // microdescriptor.
         let sha256 = d::Sha256::digest(&s[start_pos..].as_bytes()).into();
 
         Ok(Microdesc {
