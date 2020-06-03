@@ -67,8 +67,10 @@ pub struct Item<'a, K: Keyword> {
 }
 
 /// A cursor into a string that returns Items one by one.
-#[derive(Clone, Debug)]
-pub struct NetDocReader<'a, K: Keyword> {
+///
+/// (This type isn't used directly, but is returned wrapped in a Peekable.)
+#[derive(Debug)]
+struct NetDocReaderBase<'a, K: Keyword> {
     /// The string we're parsing.
     s: &'a str,
     /// Our position within the string.
@@ -77,10 +79,10 @@ pub struct NetDocReader<'a, K: Keyword> {
     _k: std::marker::PhantomData<K>,
 }
 
-impl<'a, K: Keyword> NetDocReader<'a, K> {
+impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
     /// Create a new NetDocReader to split a string into tokens.
-    pub fn new(s: &'a str) -> Self {
-        NetDocReader {
+    fn new(s: &'a str) -> Self {
+        NetDocReaderBase {
             s,
             off: 0,
             _k: std::marker::PhantomData,
@@ -202,14 +204,14 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
         Ok(Some(Object { tag, data }))
     }
 
-    /// Read the next Item from this NetDocReader.
+    /// Read the next Item from this NetDocReaderBase.
     ///
     /// If successful, returns Ok(Some(Item)), or Ok(None) if exhausted.
     /// Returns Err on failure.
     ///
     /// Always consumes at least one line if possible; always ends on a
     /// line boundary if one exists.
-    pub fn get_item(&mut self) -> Result<Option<Item<'a, K>>> {
+    fn get_item(&mut self) -> Result<Option<Item<'a, K>>> {
         if self.remaining() == 0 {
             return Ok(None);
         }
@@ -272,7 +274,7 @@ fn tag_keyword_ok(s: &str) -> bool {
 }
 
 /// When used as an Iterator, returns a sequence of Result<Item>.
-impl<'a, K: Keyword> Iterator for NetDocReader<'a, K> {
+impl<'a, K: Keyword> Iterator for NetDocReaderBase<'a, K> {
     type Item = Result<Item<'a, K>>;
     fn next(&mut self) -> Option<Self::Item> {
         self.get_item().transpose()
@@ -509,5 +511,32 @@ impl<'a, K: Keyword> ItemResult<K> for Result<Item<'a, K>> {
             Ok(item) => !item.has_kwd_in(ks),
             Err(_) => false,
         }
+    }
+}
+
+/// A peekable cursor into a string that returns Items one by one.
+#[derive(Debug)]
+pub struct NetDocReader<'a, K: Keyword> {
+    // TODO: I wish there were some way around having this string
+    // reference, since we already need one inside NetDocReaderBase.
+    s: &'a str,
+    tokens: std::iter::Peekable<NetDocReaderBase<'a, K>>,
+}
+
+impl<'a, K: Keyword> NetDocReader<'a, K> {
+    /// Construct a new NetDocReader to read tokens from `s`.
+    pub fn new(s: &'a str) -> Self {
+        NetDocReader {
+            s,
+            tokens: NetDocReaderBase::new(s).peekable(),
+        }
+    }
+    /// Return a reference to the string used for this NetDocReader.
+    pub fn str(&self) -> &'a str {
+        self.s
+    }
+    /// Return the peekable iterator over the string's tokens.
+    pub fn iter(&mut self) -> &mut std::iter::Peekable<impl Iterator<Item = Result<Item<'a, K>>>> {
+        &mut self.tokens
     }
 }

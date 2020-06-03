@@ -1,9 +1,4 @@
 /// Helper functions and types for use in parsing
-///
-/// For now this module has a single type -- an iterator that pauses
-/// when a certain predicate is true.  We use it for chunking
-/// documents into sections.  If it turns out to be useful somewhere
-/// else, we should move it.
 use std::iter::Peekable;
 
 /// An iterator adaptor that pauses when a given predicate is true.

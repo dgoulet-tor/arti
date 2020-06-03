@@ -13,6 +13,7 @@ use crate::family::RelayFamily;
 use crate::keyword::Keyword;
 use crate::parse::SectionRules;
 use crate::policy::PortPolicy;
+use crate::tokenize::NetDocReader;
 use crate::util;
 use crate::{Error, Result};
 use tor_llcrypto::d;
@@ -70,9 +71,14 @@ lazy_static! {
 impl Microdesc {
     /// Parse a string into a new microdescriptor.
     pub fn parse(s: &str) -> Result<Microdesc> {
+        let mut items = crate::tokenize::NetDocReader::new(s);
+        Self::parse_from_reader(&mut items)
+    }
+    /// Extract a single microdescriptor from a NetDocReader.
+    fn parse_from_reader(reader: &mut NetDocReader<'_, MicrodescKW>) -> Result<Microdesc> {
         use MicrodescKW::*;
-
-        let mut items = crate::tokenize::NetDocReader::new(s).peekable();
+        let s = reader.str();
+        let mut items = reader.iter();
 
         // We have to start with onion-key
         let start_pos = {

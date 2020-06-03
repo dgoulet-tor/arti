@@ -33,7 +33,7 @@ use crate::family::RelayFamily;
 use crate::keyword::Keyword;
 use crate::parse::{Section, SectionRules};
 use crate::policy::*;
-use crate::tokenize::ItemResult;
+use crate::tokenize::{ItemResult, NetDocReader};
 use crate::version::TorVersion;
 use crate::{Error, Result};
 
@@ -222,7 +222,7 @@ impl RouterDesc {
 
     /// Helper: tokenize `s`, and divide it into three validated sections.
     fn parse_sections<'a>(
-        s: &'a str,
+        reader: &mut NetDocReader<'a, RouterKW>,
     ) -> Result<(
         Section<'a, RouterKW>,
         Section<'a, RouterKW>,
@@ -231,11 +231,10 @@ impl RouterDesc {
         use crate::util::*;
         use RouterKW::*;
 
-        let reader = crate::tokenize::NetDocReader::new(s);
-
         // Parse everything up through the header.
-        let mut reader =
-            reader.pause_at(|item| item.is_ok_with_kwd_not_in(&[ROUTER, IDENTITY_ED25519]));
+        let mut reader = reader
+            .iter()
+            .pause_at(|item| item.is_ok_with_kwd_not_in(&[ROUTER, IDENTITY_ED25519]));
         let header = ROUTER_HEADER_RULES.parse(&mut reader)?;
 
         // Parse everything up to but not including the signature.
@@ -278,7 +277,8 @@ impl RouterDesc {
         // that parse one item at a time should be made into sub-functions.
         use RouterKW::*;
 
-        let (header, body, sig) = RouterDesc::parse_sections(s)?;
+        let mut r = NetDocReader::new(s);
+        let (header, body, sig) = RouterDesc::parse_sections(&mut r)?;
 
         let start_offset = header.get_required(ROUTER)?.offset_in(s).unwrap();
 
