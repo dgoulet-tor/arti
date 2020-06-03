@@ -6,6 +6,7 @@
 
 use crate::argtype::FromBytes;
 use crate::keyword::Keyword;
+use crate::util::PauseAt;
 use crate::{Error, Pos, Result};
 use std::cell::{Ref, RefCell};
 use std::str::FromStr;
@@ -538,5 +539,26 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
     /// Return the peekable iterator over the string's tokens.
     pub fn iter(&mut self) -> &mut std::iter::Peekable<impl Iterator<Item = Result<Item<'a, K>>>> {
         &mut self.tokens
+    }
+    /// Return a PauseAt wrapper around the peekable iterator in this
+    /// NetDocReader that reads tokens until it reaches an element where
+    /// 'f' is true.
+    pub fn pause_at<F>(&mut self, f: F) -> PauseAt<'_, impl Iterator<Item = Result<Item<'a, K>>>, F>
+    where
+        F: FnMut(&Result<Item<'a, K>>) -> bool,
+    {
+        PauseAt::from_peekable(&mut self.tokens, f)
+    }
+    /// Return a PauseAt wrapper around the peekable iterator in this
+    /// NetDocReader that returns all items.
+    #[allow(unused)]
+    pub fn pauseable(
+        &mut self,
+    ) -> PauseAt<
+        '_,
+        impl Iterator<Item = Result<Item<'a, K>>>,
+        impl FnMut(&Result<Item<'a, K>>) -> bool,
+    > {
+        self.pause_at(|_| false)
     }
 }

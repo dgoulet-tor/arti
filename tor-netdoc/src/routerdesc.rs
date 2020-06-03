@@ -228,13 +228,11 @@ impl RouterDesc {
         Section<'a, RouterKW>,
         Section<'a, RouterKW>,
     )> {
-        use crate::util::*;
         use RouterKW::*;
 
         // Parse everything up through the header.
-        let mut reader = PauseAt::from_peekable(reader.iter(), |item| {
-            item.is_ok_with_kwd_not_in(&[ROUTER, IDENTITY_ED25519])
-        });
+        let mut reader =
+            reader.pause_at(|item| item.is_ok_with_kwd_not_in(&[ROUTER, IDENTITY_ED25519]));
         let header = ROUTER_HEADER_RULES.parse(&mut reader)?;
 
         // Parse everything up to but not including the signature.
