@@ -42,7 +42,7 @@ pub struct Microdesc {
 decl_keyword! {
     /// Keyword type for recognized objects in microdescriptors.
     MicrodescKW {
-        annotation "last-listed" => A_LAST_LISTED,
+        annotation "last-listed" => ANN_LAST_LISTED,
         "onion-key" => ONION_KEY,
         "ntor-onion-key" => NTOR_ONION_KEY,
         "family" => FAMILY,
@@ -53,6 +53,13 @@ decl_keyword! {
 }
 
 lazy_static! {
+    static ref MICRODESC_ANNOTATIONS: SectionRules<MicrodescKW> = {
+        use MicrodescKW::*;
+        let mut rules = SectionRules::new();
+        rules.add(ANN_LAST_LISTED.rule().args(1..));
+        rules.add(ANN_UNRECOGNIZED.rule().may_repeat().obj_optional());
+        rules
+    };
     static ref MICRODESC_RULES: SectionRules<MicrodescKW> = {
         use MicrodescKW::*;
 
