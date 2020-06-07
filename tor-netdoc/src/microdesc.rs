@@ -22,6 +22,15 @@ use tor_llcrypto::pk::{curve25519, ed25519, rsa};
 use digest::Digest;
 use lazy_static::lazy_static;
 
+use std::time;
+
+/// Annotations prepended to a microdescriptor that has been stored to
+/// disk.
+#[allow(dead_code)]
+pub struct MicrodescAnnotation {
+    last_listed: Option<time::SystemTime>,
+}
+
 /// A single microdescriptor.
 #[allow(dead_code)]
 pub struct Microdesc {
@@ -75,17 +84,56 @@ lazy_static! {
     };
 }
 
+impl MicrodescAnnotation {
+    #[allow(dead_code)]
+    fn parse_from_reader(
+        reader: &mut NetDocReader<'_, MicrodescKW>,
+    ) -> Result<MicrodescAnnotation> {
+        use MicrodescKW::*;
+
+        let mut items = reader.pause_at(|item| match item {
+            Err(_) => false,
+            Ok(item) => !item.get_kwd().is_annotation(),
+        });
+
+        let body = MICRODESC_ANNOTATIONS.parse(&mut items)?;
+
+        let last_listed = match body.get(ANN_LAST_LISTED) {
+            None => None,
+            Some(item) => Some(item.args_as_str().parse::<ISO8601TimeSp>()?.into()),
+        };
+
+        Ok(MicrodescAnnotation { last_listed })
+    }
+}
+
 impl Microdesc {
     /// Parse a string into a new microdescriptor.
     pub fn parse(s: &str) -> Result<Microdesc> {
         let mut items = crate::tokenize::NetDocReader::new(s);
         Self::parse_from_reader(&mut items)
     }
+
     /// Extract a single microdescriptor from a NetDocReader.
     fn parse_from_reader(reader: &mut NetDocReader<'_, MicrodescKW>) -> Result<Microdesc> {
         use MicrodescKW::*;
         let s = reader.str();
-        let mut items = reader.iter();
+
+        let mut first_onion_key = true;
+        // We'll pause at the next annotation, or at the _second_ onion key.
+        let mut items = reader.pause_at(|item| match item {
+            Err(_) => false,
+            Ok(item) => {
+                item.get_kwd().is_annotation()
+                    || if item.get_kwd() == ONION_KEY {
+                        let was_first = first_onion_key;
+                        first_onion_key = false;
+                        !was_first
+                    } else {
+                        false
+                    }
+            }
+        });
 
         // We have to start with onion-key
         let start_pos = {
@@ -101,7 +149,6 @@ impl Microdesc {
         };
 
         let body = MICRODESC_RULES.parse(&mut items)?;
-
         // Legacy (tap) onion key
         let tap_onion_key: rsa::PublicKey = body
             .get_required(ONION_KEY)?
@@ -165,7 +212,8 @@ mod test {
     const TESTDATA: &str = include_str!("../testdata/microdesc1.txt");
 
     #[test]
-    fn parse_arbitrary() {
-        let _rd = Microdesc::parse(TESTDATA).unwrap();
+    fn parse_arbitrary() -> Result<()> {
+        let _md = Microdesc::parse(TESTDATA)?;
+        Ok(())
     }
 }
