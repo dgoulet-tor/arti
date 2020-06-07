@@ -48,6 +48,15 @@ pub struct Microdesc {
     // pr is obsolete and doesn't go here any more.
 }
 
+/// A microdescriptor annotated with additional data
+///
+/// TODO: rename this.
+#[allow(dead_code)]
+pub struct AnnotatedMicrodesc {
+    md: Microdesc,
+    ann: MicrodescAnnotation,
+}
+
 decl_keyword! {
     /// Keyword type for recognized objects in microdescriptors.
     MicrodescKW {
@@ -82,6 +91,12 @@ lazy_static! {
         rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
         rules
     };
+}
+
+impl Default for MicrodescAnnotation {
+    fn default() -> Self {
+        MicrodescAnnotation { last_listed: None }
+    }
 }
 
 impl MicrodescAnnotation {
@@ -206,14 +221,86 @@ impl Microdesc {
         })
     }
 }
+
+/// An iterator that parses one or more (possible annnotated)
+/// microdescriptors from a string.
+pub struct MicrodescReader<'a> {
+    annotated: bool,
+    reader: NetDocReader<'a, MicrodescKW>,
+}
+
+/// Indicates whether we should parse an annotated list of votes or a
+/// non-annotated list.
+///
+/// TODO: Move this.
+#[derive(PartialEq, Debug)]
+pub enum AllowAnnotations {
+    /// Parsing a document where items might be annotated.
+    ///
+    /// Annotations are a list of zero or more items with keywords
+    /// beginning with @ that precede the items that are actually part
+    /// of the document.
+    AnnotationsAllowed,
+    /// Parsing a document where annotations are not allowed.
+    AnnotationsNotAllowed,
+}
+
+impl<'a> MicrodescReader<'a> {
+    /// Construct a MicrodescReader to take microdescriptors from a string
+    /// 's'.
+    pub fn new(s: &'a str, allow: AllowAnnotations) -> Self {
+        let reader = NetDocReader::new(s);
+        let annotated = allow == AllowAnnotations::AnnotationsAllowed;
+        MicrodescReader { annotated, reader }
+    }
+
+    fn take_annotation(&mut self) -> Result<MicrodescAnnotation> {
+        if self.annotated {
+            MicrodescAnnotation::parse_from_reader(&mut self.reader)
+        } else {
+            Ok(MicrodescAnnotation::default())
+        }
+    }
+
+    fn take_annotated_microdesc(&mut self) -> Result<AnnotatedMicrodesc> {
+        let ann = self.take_annotation()?;
+        let md = Microdesc::parse_from_reader(&mut self.reader)?;
+        Ok(AnnotatedMicrodesc { md, ann })
+        // TODO need to advance to next likely md.
+    }
+}
+
+impl<'a> Iterator for MicrodescReader<'a> {
+    type Item = Result<AnnotatedMicrodesc>;
+    fn next(&mut self) -> Option<Self::Item> {
+        // If there is no next token, we're at the end.
+        self.reader.iter().peek()?;
+
+        Some(self.take_annotated_microdesc())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     const TESTDATA: &str = include_str!("../testdata/microdesc1.txt");
+    const TESTDATA2: &str = include_str!("../testdata/microdesc2.txt");
 
     #[test]
-    fn parse_arbitrary() -> Result<()> {
+    fn parse_single() -> Result<()> {
         let _md = Microdesc::parse(TESTDATA)?;
         Ok(())
+    }
+
+    #[test]
+    fn parse_multi() -> Result<()> {
+        let mut n: u32 = 0;
+        for md in MicrodescReader::new(TESTDATA2, AllowAnnotations::AnnotationsAllowed) {
+            md?;
+            n += 1;
+        }
+        assert_eq!(n, 4);
+        Ok(())
+        // TODO: test actual contents.
     }
 }
