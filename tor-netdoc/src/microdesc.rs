@@ -222,6 +222,32 @@ impl Microdesc {
     }
 }
 
+/// Consume tokens from 'reader' until the next token is the beginning
+/// of a microdescriptor: an annotation or an ONION_KEY.  If no such
+/// token exists, advance to the end of the reader.
+fn advance_to_next_microdesc(reader: &mut NetDocReader<'_, MicrodescKW>, annotated: bool) {
+    use MicrodescKW::*;
+    let iter = reader.iter();
+    loop {
+        let item = iter.peek();
+        match item {
+            Some(Ok(t)) => {
+                let kwd = t.get_kwd();
+                if (annotated && kwd.is_annotation()) || kwd == ONION_KEY {
+                    return;
+                }
+            }
+            Some(Err(_)) => {
+                // We skip over broken tokens here.
+            }
+            None => {
+                return;
+            }
+        };
+        let _ = iter.next();
+    }
+}
+
 /// An iterator that parses one or more (possible annnotated)
 /// microdescriptors from a string.
 pub struct MicrodescReader<'a> {
@@ -254,6 +280,8 @@ impl<'a> MicrodescReader<'a> {
         MicrodescReader { annotated, reader }
     }
 
+    /// If we're annotated, parse an annotation from the reader. Otherwise
+    /// return a default annotation.
     fn take_annotation(&mut self) -> Result<MicrodescAnnotation> {
         if self.annotated {
             MicrodescAnnotation::parse_from_reader(&mut self.reader)
@@ -262,11 +290,37 @@ impl<'a> MicrodescReader<'a> {
         }
     }
 
-    fn take_annotated_microdesc(&mut self) -> Result<AnnotatedMicrodesc> {
+    /// Parse a (possibly annotated) microdescriptor from the reader.
+    ///
+    /// On error, parsing stops after the first failure.
+    fn take_annotated_microdesc_raw(&mut self) -> Result<AnnotatedMicrodesc> {
         let ann = self.take_annotation()?;
         let md = Microdesc::parse_from_reader(&mut self.reader)?;
         Ok(AnnotatedMicrodesc { md, ann })
-        // TODO need to advance to next likely md.
+    }
+
+    /// Parse a (possibly annotated) microdescriptor from the reader.
+    ///
+    /// On error, advance the reader to the start of the next microdescriptor.
+    fn take_annotated_microdesc(&mut self) -> Result<AnnotatedMicrodesc> {
+        let result = self.take_annotated_microdesc_raw();
+        if result.is_err() {
+            // There is a subtle and tricky issue here:
+            // advance_to_next_microdesc() is not guaranteed to consume any
+            // tokens.  Neither is take_annotation() or
+            // Microdesc::parse_from_reader().  So how do we prevent an
+            // infinite loop here?
+            //
+            // The critical thing here is that if take_annotation() fails, it
+            // consumes at least one token, so take_annotated_microdesc() will
+            // advance.
+            //
+            // If parse_from_reader fails, either it has consumed at least one
+            // token, or the first token was not an ONION_KEY.  Either way,
+            // we advance.
+            advance_to_next_microdesc(&mut self.reader, self.annotated);
+        }
+        result
     }
 }
 

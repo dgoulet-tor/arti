@@ -537,7 +537,6 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
         self.s
     }
     /// Return the peekable iterator over the string's tokens.
-    #[allow(dead_code)]
     pub fn iter(&mut self) -> &mut std::iter::Peekable<impl Iterator<Item = Result<Item<'a, K>>>> {
         &mut self.tokens
     }
