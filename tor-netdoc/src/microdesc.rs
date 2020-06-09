@@ -157,6 +157,7 @@ impl Microdesc {
             // had there not been at least one item.
             let first = body.first_item().unwrap();
             if first.get_kwd() != ONION_KEY {
+                // TODO: this is not the best possible error.
                 return Err(Error::MissingToken("onion-key"));
             }
             // Unwrap is safe here because we are parsing these strings from s

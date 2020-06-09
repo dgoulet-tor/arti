@@ -410,6 +410,7 @@ impl RouterDesc {
             d.input(&s[start_offset..signed_end]);
             let d = d.result();
             let sig = rsa_sig.get_obj("SIGNATURE")?;
+            // TODO: we need to accept prefixes here. COMPAT BLOCKER.
             let verified = rsa_identity.verify(&d, &sig);
             if verified.is_err() {
                 return Err(Error::BadSignature(rsa_sig.pos()));
