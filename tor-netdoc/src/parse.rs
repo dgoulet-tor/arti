@@ -86,6 +86,7 @@ impl<'a, K: Keyword> TokVal<'a, K> {
 pub struct Section<'a, T: Keyword> {
     /// Map from Keyword index to TokVal
     v: Vec<TokVal<'a, T>>,
+    first: Option<T>,
     last: Option<T>,
 }
 
@@ -95,8 +96,11 @@ impl<'a, T: Keyword> Section<'a, T> {
         let n = T::n_vals();
         let mut v = Vec::with_capacity(n);
         v.resize(n, TokVal::None);
-        let last = None;
-        Section { v, last }
+        Section {
+            v,
+            first: None,
+            last: None,
+        }
     }
     /// Helper: return the tokval for some Keyword.
     fn get_tokval(&self, t: T) -> &TokVal<'a, T> {
@@ -126,8 +130,18 @@ impl<'a, T: Keyword> Section<'a, T> {
     pub fn maybe<'b>(&'b self, t: T) -> MaybeItem<'b, 'a, T> {
         MaybeItem::from_option(self.get(t))
     }
+    /// Return the first item that was accepted for this section, or None
+    /// if no items were accepted for this section.
+    #[allow(dead_code)]
+    pub fn first_item(&self) -> Option<&Item<'a, T>> {
+        match self.first {
+            None => None,
+            Some(t) => self.get_tokval(t).first(),
+        }
+    }
     /// Return the last item that was accepted for this section, or None
     /// if no items were accepted for this section.
+    #[allow(dead_code)]
     pub fn last_item(&self) -> Option<&Item<'a, T>> {
         match self.last {
             None => None,
@@ -153,6 +167,9 @@ impl<'a, T: Keyword> Section<'a, T> {
                 v.push(item);
             }
         };
+        if self.first.is_none() {
+            self.first = Some(t);
+        }
         self.last = Some(t);
     }
 }
