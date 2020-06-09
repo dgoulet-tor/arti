@@ -577,4 +577,13 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
     > {
         self.pause_at(|_| false)
     }
+
+    /// Give an error if there are remaining tokens in this NetDocReader.
+    pub fn should_be_exhausted(&mut self) -> Result<()> {
+        match self.iter().peek() {
+            None => Ok(()),
+            Some(Ok(t)) => Err(Error::UnexpectedToken(t.get_kwd().to_str(), t.pos())),
+            Some(Err(e)) => Err(e.clone()),
+        }
+    }
 }

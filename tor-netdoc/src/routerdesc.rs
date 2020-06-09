@@ -322,8 +322,9 @@ impl RouterDesc {
     /// ed25519 API.
     pub fn parse(s: &str) -> Result<RouterDesc> {
         let mut reader = crate::tokenize::NetDocReader::new(s);
-        Self::parse_internal(&mut reader).map_err(|e| e.within(s))
-        // TODO: must enforce that there are no more tokens in the reader.
+        let result = Self::parse_internal(&mut reader).map_err(|e| e.within(s));
+        reader.should_be_exhausted()?;
+        result
     }
 
     /// Helper: parse a router descriptor from `s`.
