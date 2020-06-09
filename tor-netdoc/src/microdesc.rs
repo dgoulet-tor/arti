@@ -126,7 +126,7 @@ impl Microdesc {
     /// Parse a string into a new microdescriptor.
     pub fn parse(s: &str) -> Result<Microdesc> {
         let mut items = crate::tokenize::NetDocReader::new(s);
-        Self::parse_from_reader(&mut items)
+        Self::parse_from_reader(&mut items).map_err(|e| e.within(s))
     }
 
     /// Extract a single microdescriptor from a NetDocReader.
@@ -340,7 +340,10 @@ impl<'a> Iterator for MicrodescReader<'a> {
         // If there is no next token, we're at the end.
         self.reader.iter().peek()?;
 
-        Some(self.take_annotated_microdesc())
+        Some(
+            self.take_annotated_microdesc()
+                .map_err(|e| e.within(self.reader.str())),
+        )
     }
 }
 
