@@ -72,12 +72,21 @@ impl<'a, K: Keyword> TokVal<'a, K> {
             TokVal::Multi(v) => &v[..],
         }
     }
+    /// Return the last Item for this value, if any.
+    fn last(&self) -> Option<&Item<'a, K>> {
+        match self {
+            TokVal::None => None,
+            TokVal::Some([t]) => Some(&t),
+            TokVal::Multi(v) => Some(&v[v.len() - 1]),
+        }
+    }
 }
 
 /// A Section is the result of sorting a document's entries by keyword.
 pub struct Section<'a, T: Keyword> {
     /// Map from Keyword index to TokVal
     v: Vec<TokVal<'a, T>>,
+    last: Option<T>,
 }
 
 impl<'a, T: Keyword> Section<'a, T> {
@@ -86,7 +95,8 @@ impl<'a, T: Keyword> Section<'a, T> {
         let n = T::n_vals();
         let mut v = Vec::with_capacity(n);
         v.resize(n, TokVal::None);
-        Section { v }
+        let last = None;
+        Section { v, last }
     }
     /// Helper: return the tokval for some Keyword.
     fn get_tokval(&self, t: T) -> &TokVal<'a, T> {
@@ -116,6 +126,14 @@ impl<'a, T: Keyword> Section<'a, T> {
     pub fn maybe<'b>(&'b self, t: T) -> MaybeItem<'b, 'a, T> {
         MaybeItem::from_option(self.get(t))
     }
+    /// Return the last item that was accepted for this section, or None
+    /// if no items were accepted for this section.
+    pub fn last_item(&self) -> Option<&Item<'a, T>> {
+        match self.last {
+            None => None,
+            Some(t) => self.get_tokval(t).last(),
+        }
+    }
     /// Insert an `item`.
     ///
     /// The `item` must have parsed Keyword `t`.
@@ -135,6 +153,7 @@ impl<'a, T: Keyword> Section<'a, T> {
                 v.push(item);
             }
         };
+        self.last = Some(t);
     }
 }
 
