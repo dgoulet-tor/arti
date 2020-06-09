@@ -33,6 +33,8 @@ mod util;
 #[macro_use]
 mod macros;
 
+#[allow(missing_docs, unused)]
+pub mod authcert;
 pub mod family;
 pub mod microdesc;
 pub mod policy;

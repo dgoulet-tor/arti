@@ -371,6 +371,10 @@ impl<'a, K: Keyword> Item<'a, K> {
     pub fn has_obj(&self) -> bool {
         self.object.is_some()
     }
+    /// Return the tag of this item's associated object, if it has one.
+    pub fn get_obj_tag(&self) -> Option<&'a str> {
+        self.object.map(|o| o.tag)
+    }
     /// Try to decode the base64 contents of this Item's associated object.
     pub fn get_obj(&self, want_tag: &str) -> Result<Vec<u8>> {
         match self.object {
