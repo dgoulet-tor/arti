@@ -35,7 +35,7 @@ use crate::parse::{Section, SectionRules};
 use crate::policy::*;
 use crate::tokenize::{ItemResult, NetDocReader};
 use crate::version::TorVersion;
-use crate::{Error, Result};
+use crate::{AllowAnnotations, Error, Result};
 
 use lazy_static::lazy_static;
 use std::{net, time};
@@ -43,6 +43,21 @@ use tor_llcrypto as ll;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
 use digest::Digest;
+
+/// A router descriptor, with possible annotations.
+#[allow(dead_code)]
+pub struct AnnotatedRouterDesc {
+    ann: RouterAnnotation,
+    router: RouterDesc,
+}
+
+/// Annotations about a router descriptor, as stored on disc.
+#[allow(dead_code)] // don't warn about fields not getting read.
+pub struct RouterAnnotation {
+    source: Option<String>,
+    downloaded: Option<time::SystemTime>,
+    purpose: Option<String>,
+}
 
 /// Information about a relay, parsed from a router descriptor.
 ///
@@ -113,8 +128,9 @@ decl_keyword! {
     /// RouterKW is an instance of Keyword, used to denote the different
     /// Items that are recognized as appearing in a router descriptor.
     RouterKW {
-        annotation "@source" => A_SOURCE,
-        annotation "@downloaded-at" => A_DOWNLOADED_AT,
+        annotation "@source" => ANN_SOURCE,
+        annotation "@downloaded-at" => ANN_DOWNLOADED_AT,
+        annotation "@purpose" => ANN_PURPOSE,
         "accept" | "reject" => POLICY,
         "bandwidth" => BANDWIDTH,
         "bridge-distribution-request" => BRIDGE_DISTRIBUTION_REQUEST,
@@ -149,6 +165,17 @@ decl_keyword! {
 }
 
 lazy_static! {
+    /// Rules for parsing a set of router annotations.
+    static ref ROUTER_ANNOTATIONS : SectionRules<RouterKW> = {
+        use RouterKW::*;
+
+        let mut rules = SectionRules::new();
+        rules.add(ANN_SOURCE.rule());
+        rules.add(ANN_DOWNLOADED_AT.rule().args(1..));
+        rules.add(ANN_PURPOSE.rule().args(1..));
+        rules.add(ANN_UNRECOGNIZED.rule().may_repeat().obj_optional());
+        rules
+    };
     /// Rules for tokens that are allowed in the first part of a
     /// router descriptor.
     static ref ROUTER_HEADER_RULES : SectionRules<RouterKW> = {
@@ -211,6 +238,37 @@ lazy_static! {
     };
 }
 
+impl Default for RouterAnnotation {
+    fn default() -> Self {
+        RouterAnnotation {
+            source: None,
+            downloaded: None,
+            purpose: None,
+        }
+    }
+}
+
+impl RouterAnnotation {
+    fn take_from_reader(reader: &mut NetDocReader<'_, RouterKW>) -> Result<RouterAnnotation> {
+        use RouterKW::*;
+        let mut items = reader.pause_at(|item| item.is_ok_with_non_annotation());
+
+        let body = ROUTER_ANNOTATIONS.parse(&mut items)?;
+
+        let source = body.maybe(ANN_SOURCE).args_as_str().map(String::from);
+        let purpose = body.maybe(ANN_PURPOSE).args_as_str().map(String::from);
+        let downloaded = body
+            .maybe(ANN_DOWNLOADED_AT)
+            .parse_args_as_str::<ISO8601TimeSp>()?
+            .map(|t| t.into());
+        Ok(RouterAnnotation {
+            source,
+            purpose,
+            downloaded,
+        })
+    }
+}
+
 impl RouterDesc {
     /// Return true iff this router descriptor is expired.
     ///
@@ -241,7 +299,8 @@ impl RouterDesc {
         let body = ROUTER_BODY_RULES.parse(&mut reader)?;
 
         // Parse the signature.
-        let mut reader = reader.remaining();
+        let mut reader =
+            reader.new_pred(|item| item.is_ok_with_annotation() || item.is_ok_with_kwd(ROUTER));
         let sig = ROUTER_SIG_RULES.parse(&mut reader)?;
 
         Ok((header, body, sig))
@@ -262,7 +321,9 @@ impl RouterDesc {
     /// future work for now, partially because of limitations in the
     /// ed25519 API.
     pub fn parse(s: &str) -> Result<RouterDesc> {
-        Self::parse_internal(s).map_err(|e| e.within(s))
+        let mut reader = crate::tokenize::NetDocReader::new(s);
+        Self::parse_internal(&mut reader).map_err(|e| e.within(s))
+        // TODO: must enforce that there are no more tokens in the reader.
     }
 
     /// Helper: parse a router descriptor from `s`.
@@ -270,13 +331,13 @@ impl RouterDesc {
     /// This function does the same as parse(), but returns errors based on
     /// byte-wise positions.  The parse() function converts such errors
     /// into line-and-byte positions.
-    fn parse_internal(s: &str) -> Result<RouterDesc> {
+    fn parse_internal(r: &mut NetDocReader<'_, RouterKW>) -> Result<RouterDesc> {
         // TODO: This function is too long!  The little "paragraphs" here
         // that parse one item at a time should be made into sub-functions.
         use RouterKW::*;
 
-        let mut r = NetDocReader::new(s);
-        let (header, body, sig) = RouterDesc::parse_sections(&mut r)?;
+        let s = r.str();
+        let (header, body, sig) = RouterDesc::parse_sections(r)?;
 
         let start_offset = header.get_required(ROUTER)?.offset_in(s).unwrap();
 
@@ -519,6 +580,83 @@ impl RouterDesc {
             ipv4_policy,
             ipv6_policy,
         })
+    }
+}
+
+/// An iterator that parses one or more (possibly annotated
+/// router descriptors from a string.
+//
+// TODO: This is largely copy-pasted from MicrodescReader. Can/should they
+// be merged?
+pub struct RouterReader<'a> {
+    annotated: bool,
+    reader: NetDocReader<'a, RouterKW>,
+}
+
+fn advance_to_next_routerdesc(reader: &mut NetDocReader<'_, RouterKW>, annotated: bool) {
+    use RouterKW::*;
+    let iter = reader.iter();
+    loop {
+        let item = iter.peek();
+        match item {
+            Some(Ok(t)) => {
+                let kwd = t.get_kwd();
+                if (annotated && kwd.is_annotation()) || kwd == ROUTER {
+                    return;
+                }
+            }
+            Some(Err(_)) => {
+                // Skip over broken tokens.
+            }
+            None => {
+                return;
+            }
+        }
+        let _ = iter.next();
+    }
+}
+
+impl<'a> RouterReader<'a> {
+    /// Construct a RouterReader to take router descriptors from a string.
+    pub fn new(s: &'a str, allow: AllowAnnotations) -> Self {
+        let reader = NetDocReader::new(s);
+        let annotated = allow == AllowAnnotations::AnnotationsAllowed;
+        RouterReader { annotated, reader }
+    }
+
+    fn take_annotation(&mut self) -> Result<RouterAnnotation> {
+        if self.annotated {
+            RouterAnnotation::take_from_reader(&mut self.reader)
+        } else {
+            Ok(RouterAnnotation::default())
+        }
+    }
+
+    fn take_annotated_routerdesc_raw(&mut self) -> Result<AnnotatedRouterDesc> {
+        let ann = self.take_annotation()?;
+        let router = RouterDesc::parse_internal(&mut self.reader)?;
+        Ok(AnnotatedRouterDesc { router, ann })
+    }
+
+    fn take_annotated_routerdesc(&mut self) -> Result<AnnotatedRouterDesc> {
+        let result = self.take_annotated_routerdesc_raw();
+        if result.is_err() {
+            advance_to_next_routerdesc(&mut self.reader, self.annotated);
+        }
+        result
+    }
+}
+
+impl<'a> Iterator for RouterReader<'a> {
+    type Item = Result<AnnotatedRouterDesc>;
+    fn next(&mut self) -> Option<Self::Item> {
+        // Is there a next token? If not, we're done.
+        self.reader.iter().peek()?;
+
+        Some(
+            self.take_annotated_routerdesc()
+                .map_err(|e| e.within(self.reader.str())),
+        )
     }
 }
 

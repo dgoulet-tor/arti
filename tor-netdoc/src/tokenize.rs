@@ -490,6 +490,10 @@ impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
 }
 
 pub trait ItemResult<K: Keyword> {
+    /// Return true if this is an ok result with an annotation.
+    fn is_ok_with_annotation(&self) -> bool;
+    /// Return true if this is an ok result with a non-annotation.
+    fn is_ok_with_non_annotation(&self) -> bool;
     /// Return true if this is an ok result with the keyword 'k'
     fn is_ok_with_kwd(&self, k: K) -> bool {
         self.is_ok_with_kwd_in(&[k])
@@ -501,6 +505,18 @@ pub trait ItemResult<K: Keyword> {
 }
 
 impl<'a, K: Keyword> ItemResult<K> for Result<Item<'a, K>> {
+    fn is_ok_with_annotation(&self) -> bool {
+        match self {
+            Ok(item) => item.get_kwd().is_annotation(),
+            Err(_) => false,
+        }
+    }
+    fn is_ok_with_non_annotation(&self) -> bool {
+        match self {
+            Ok(item) => !item.get_kwd().is_annotation(),
+            Err(_) => false,
+        }
+    }
     fn is_ok_with_kwd_in(&self, ks: &[K]) -> bool {
         match self {
             Ok(item) => item.has_kwd_in(ks),

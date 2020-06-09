@@ -13,9 +13,9 @@ use crate::family::RelayFamily;
 use crate::keyword::Keyword;
 use crate::parse::SectionRules;
 use crate::policy::PortPolicy;
-use crate::tokenize::NetDocReader;
+use crate::tokenize::{ItemResult, NetDocReader};
 use crate::util;
-use crate::{Error, Result};
+use crate::{AllowAnnotations, Error, Result};
 use tor_llcrypto::d;
 use tor_llcrypto::pk::{curve25519, ed25519, rsa};
 
@@ -106,10 +106,7 @@ impl MicrodescAnnotation {
     ) -> Result<MicrodescAnnotation> {
         use MicrodescKW::*;
 
-        let mut items = reader.pause_at(|item| match item {
-            Err(_) => false,
-            Ok(item) => !item.get_kwd().is_annotation(),
-        });
+        let mut items = reader.pause_at(|item| item.is_ok_with_non_annotation());
 
         let body = MICRODESC_ANNOTATIONS.parse(&mut items)?;
 
@@ -127,6 +124,7 @@ impl Microdesc {
     pub fn parse(s: &str) -> Result<Microdesc> {
         let mut items = crate::tokenize::NetDocReader::new(s);
         Self::parse_from_reader(&mut items).map_err(|e| e.within(s))
+        // TODO: must enforce that there are no more tokens in the reader.
     }
 
     /// Extract a single microdescriptor from a NetDocReader.
@@ -263,22 +261,6 @@ fn advance_to_next_microdesc(reader: &mut NetDocReader<'_, MicrodescKW>, annotat
 pub struct MicrodescReader<'a> {
     annotated: bool,
     reader: NetDocReader<'a, MicrodescKW>,
-}
-
-/// Indicates whether we should parse an annotated list of votes or a
-/// non-annotated list.
-///
-/// TODO: Move this.
-#[derive(PartialEq, Debug)]
-pub enum AllowAnnotations {
-    /// Parsing a document where items might be annotated.
-    ///
-    /// Annotations are a list of zero or more items with keywords
-    /// beginning with @ that precede the items that are actually part
-    /// of the document.
-    AnnotationsAllowed,
-    /// Parsing a document where annotations are not allowed.
-    AnnotationsNotAllowed,
 }
 
 impl<'a> MicrodescReader<'a> {

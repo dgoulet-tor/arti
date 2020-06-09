@@ -34,6 +34,7 @@ impl<'a, I: Iterator, F: FnMut(&I::Item) -> bool> PauseAt<'a, I, F> {
     {
         PauseAt::from_peekable(self.peek, pred)
     }
+    #[allow(unused)]
     pub fn remaining(self) -> &'a mut Peekable<I> {
         self.peek
     }

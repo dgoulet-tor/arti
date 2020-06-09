@@ -40,5 +40,20 @@ pub mod routerdesc;
 pub mod version;
 
 pub use err::{Error, Pos};
+
 /// Alias for the Result type returned by most objects in this module.
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Indicates whether we should parse an annotated list of objects or a
+/// non-annotated list.
+#[derive(PartialEq, Debug)]
+pub enum AllowAnnotations {
+    /// Parsing a document where items might be annotated.
+    ///
+    /// Annotations are a list of zero or more items with keywords
+    /// beginning with @ that precede the items that are actually part
+    /// of the document.
+    AnnotationsAllowed,
+    /// Parsing a document where annotations are not allowed.
+    AnnotationsNotAllowed,
+}
