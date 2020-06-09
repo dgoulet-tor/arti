@@ -132,7 +132,6 @@ impl<'a, T: Keyword> Section<'a, T> {
     }
     /// Return the first item that was accepted for this section, or None
     /// if no items were accepted for this section.
-    #[allow(dead_code)]
     pub fn first_item(&self) -> Option<&Item<'a, T>> {
         match self.first {
             None => None,
@@ -141,7 +140,6 @@ impl<'a, T: Keyword> Section<'a, T> {
     }
     /// Return the last item that was accepted for this section, or None
     /// if no items were accepted for this section.
-    #[allow(dead_code)]
     pub fn last_item(&self) -> Option<&Item<'a, T>> {
         match self.last {
             None => None,

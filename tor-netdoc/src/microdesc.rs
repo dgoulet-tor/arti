@@ -150,20 +150,20 @@ impl Microdesc {
             }
         });
 
+        let body = MICRODESC_RULES.parse(&mut items)?;
+
         // We have to start with onion-key
         let start_pos = {
-            let first = items.peek();
-            let kwd = match first {
-                Some(Ok(tok)) => tok.get_kwd_str(),
-                _ => return Err(Error::MissingToken("onion-key")),
-            };
-            if kwd != "onion-key" {
+            // unwrap here is safe because parsing would have failed
+            // had there not been at least one item.
+            let first = body.first_item().unwrap();
+            if first.get_kwd() != ONION_KEY {
                 return Err(Error::MissingToken("onion-key"));
             }
-            util::str_offset(s, kwd).unwrap()
+            // Unwrap is safe here because we are parsing these strings from s
+            util::str_offset(s, first.get_kwd_str()).unwrap()
         };
 
-        let body = MICRODESC_RULES.parse(&mut items)?;
         // Legacy (tap) onion key
         let tap_onion_key: rsa::PublicKey = body
             .get_required(ONION_KEY)?
@@ -206,9 +206,19 @@ impl Microdesc {
             }
         };
 
-        // TODO: This is the whole string! It just isn't the
-        // microdescriptor.
-        let sha256 = d::Sha256::digest(&s[start_pos..].as_bytes()).into();
+        let end_pos = {
+            // unwrap here is safe because parsing would have failed
+            // had there not been at least one item.
+            let args = body.last_item().unwrap().args_as_str();
+            // unwrap is safe because we are parsing these items from s.
+            let args_pos = util::str_offset(s, args).unwrap();
+            // unwrap is safe because we do not accept a line that doesn't
+            // end with a newline.
+            let nl_offset = &s[args_pos..].find('\n').unwrap();
+            args_pos + nl_offset + 1
+        };
+
+        let sha256 = d::Sha256::digest(&s[start_pos..end_pos].as_bytes()).into();
 
         Ok(Microdesc {
             sha256,
