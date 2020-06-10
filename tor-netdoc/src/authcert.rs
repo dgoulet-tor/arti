@@ -164,8 +164,8 @@ impl AuthCert {
             let start_offset = body.first_item().unwrap().offset_in(s).unwrap();
             let end_offset = body.last_item().unwrap().offset_in(s).unwrap();
             let end_offset = end_offset + "dir-key-certification\n".len();
-            sha1.input(&s[start_offset..end_offset]);
-            let sha1 = sha1.result();
+            sha1.update(&s[start_offset..end_offset]);
+            let sha1 = sha1.finalize();
             // TODO: we need to accept prefixes here. COMPAT BLOCKER.
             let verified = identity_key.verify(&sha1, &sig);
             if verified.is_err() {

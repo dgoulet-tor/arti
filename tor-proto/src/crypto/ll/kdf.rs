@@ -15,7 +15,7 @@
 //! It is based on SHAKE-256.
 
 use crate::{Error, Result, SecretBytes};
-use digest::{Digest, ExtendableOutput};
+use digest::{ExtendableOutput, Update, XofReader};
 use tor_llcrypto::d::{Sha1, Sha256, Shake256};
 
 use zeroize::Zeroizing;
@@ -46,6 +46,8 @@ impl LegacyKDF {
 }
 impl KDF for LegacyKDF {
     fn derive(&self, seed: &[u8], n_bytes: usize) -> Result<SecretBytes> {
+        use digest::Digest;
+
         let mut result = Zeroizing::new(Vec::with_capacity(n_bytes + Sha1::output_size()));
         let mut k = 0u8;
         if n_bytes > Sha1::output_size() * 256 {
@@ -54,9 +56,9 @@ impl KDF for LegacyKDF {
 
         while result.len() < n_bytes {
             let mut d = Sha1::new();
-            d.input(seed);
-            d.input(&[k]);
-            result.extend(d.result());
+            Digest::update(&mut d, seed);
+            Digest::update(&mut d, &[k]);
+            result.extend(d.finalize());
             k += 1;
         }
 
@@ -93,9 +95,10 @@ impl ShakeKDF {
 impl KDF for ShakeKDF {
     fn derive(&self, seed: &[u8], n_bytes: usize) -> Result<SecretBytes> {
         // XXX mark as zero-on-free?
-        use digest::Input;
         let mut xof = Shake256::default();
-        xof.input(seed);
-        Ok(Zeroizing::new(xof.vec_result(n_bytes)))
+        xof.update(seed);
+        let mut result = Zeroizing::new(vec![0; n_bytes]);
+        xof.finalize_xof().read(&mut result);
+        Ok(result)
     }
 }

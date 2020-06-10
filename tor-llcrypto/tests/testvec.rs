@@ -194,9 +194,9 @@ fn tv_sha1() {
     fn run_test(inp: &[u8], repeatcount: usize, expect: &[u8]) {
         let mut d = Sha1::new();
         for _ in 0..repeatcount {
-            d.input(inp);
+            d.update(inp);
         }
-        let res = d.result();
+        let res = d.finalize();
         assert_eq!(&res[..], &expect[..]);
     }
 

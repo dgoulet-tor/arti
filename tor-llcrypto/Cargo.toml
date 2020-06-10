@@ -11,7 +11,8 @@ arrayref = "*"
 digest = "*"
 typenum = "*"
 # XXXX why did I have to downgrade?
-generic-array = "0.12"
+#generic-array = "0.12"
+generic-array = "*"
 aes-ctr = "*"
 zeroize = "*"
 rsa = "*"
@@ -33,10 +34,10 @@ version = "1.0.0-pre.3"
 version = "*"
 
 [dependencies.sha2]
-version = "0.8.1"
+version = "*"
 
 [dependencies.sha3]
-version = "0.8.2"
+version = "*"
 
 [dev-dependencies]
 hex-literal = "*"

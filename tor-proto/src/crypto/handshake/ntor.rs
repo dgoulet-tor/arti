@@ -15,7 +15,7 @@ use tor_bytes::{Reader, Writer};
 use tor_llcrypto::pk::curve25519::*;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
-use crypto_mac::MacResult;
+use crypto_mac::{self, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroizing;
 
@@ -70,7 +70,7 @@ impl KeyGenerator for NtorHKDFKeyGenerator {
     }
 }
 
-type Authcode = MacResult<typenum::U32>;
+type Authcode = crypto_mac::Output<hmac::Hmac<sha2::Sha256>>;
 
 /// Perform a client handshake, generating an onionskin and a state object
 pub fn client_handshake_ntor_v1<R>(
@@ -159,12 +159,12 @@ fn ntor_derive(
     secret_input.write(y); // Y
     secret_input.write(ntor1_protoid); // PROTOID
 
-    use hmac::{Hmac, Mac};
+    use hmac::Hmac;
     use tor_llcrypto::d::Sha256;
     let verify = {
         let mut m = Hmac::<Sha256>::new_varkey(ntor1_verify).expect("Hmac allows keys of any size");
-        m.input(&secret_input[..]);
-        m.result_reset()
+        m.update(&secret_input[..]);
+        m.finalize()
     };
     let mut auth_input: SecretBytes = Zeroizing::new(Vec::new());
     auth_input.write_and_consume(verify); // verify
@@ -177,8 +177,8 @@ fn ntor_derive(
 
     let auth_mac = {
         let mut m = Hmac::<Sha256>::new_varkey(ntor1_mac).expect("Hmac allows keys of any size");
-        m.input(&auth_input[..]);
-        m.result_reset()
+        m.update(&auth_input[..]);
+        m.finalize()
     };
 
     let keygen = NtorHKDFKeyGenerator::new(secret_input);

@@ -176,8 +176,8 @@ mod tor1 {
             self.0[7] = 0;
             self.0[8] = 0;
 
-            d.input(&self.0[..]);
-            let r = d.clone().result(); // XXX can I avoid this clone?
+            d.update(&self.0[..]);
+            let r = d.clone().finalize(); // XXX can I avoid this clone?
             self.0[5..9].copy_from_slice(&r[0..4]);
         }
         /// Check a cell to see whether its recognized field is set.
@@ -201,15 +201,15 @@ mod tor1 {
 
             let r = {
                 let mut dtmp = d.clone();
-                dtmp.input(&self.0[..]);
-                dtmp.result()
+                dtmp.update(&self.0[..]);
+                dtmp.finalize()
             };
 
             if ct::bytes_eq(&dval[..], &r[0..4]) {
                 // This is for us. We need to process the data again,
                 // apparently, since digesting is destructive
                 // according to the digest api.
-                d.input(&self.0[..]);
+                d.update(&self.0[..]);
                 return true;
             }
 

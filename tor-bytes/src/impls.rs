@@ -218,21 +218,20 @@ mod rsa_impls {
     }
 }
 
-/// Implement readable and writeable for the MacResult type.
+/// Implement readable and writeable for the crypto_mac::Output type.
 mod mac_impls {
     use super::*;
-    use crypto_mac::MacResult;
-    use generic_array::*;
-    impl<N: ArrayLength<u8>> WriteableOnce for MacResult<N> {
+    use crypto_mac::{Mac, Output};
+    impl<M: Mac> WriteableOnce for Output<M> {
         fn write_into<B: Writer + ?Sized>(self, b: &mut B) {
-            let code = self.code();
+            let code = self.into_bytes();
             b.write(&code[..])
         }
     }
-    impl<N: ArrayLength<u8>> Readable for MacResult<N> {
+    impl<M: Mac> Readable for Output<M> {
         fn take_from(b: &mut Reader<'_>) -> Result<Self> {
             let array = GenericArray::take_from(b)?;
-            Ok(MacResult::new(array))
+            Ok(Output::new(array))
         }
     }
 }

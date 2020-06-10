@@ -388,10 +388,10 @@ impl RouterDesc {
             let mut d = ll::d::Sha256::new();
             // XXXX spec is ambiguous whether this prefix goes on
             // before or after taking the hash.
-            d.input(&b"Tor router descriptor signature v1"[..]);
+            d.update(&b"Tor router descriptor signature v1"[..]);
             let signed_end = ed_sig_pos + b"router-sig-ed25519 ".len();
-            d.input(&s[start_offset..signed_end]);
-            let d = d.result();
+            d.update(&s[start_offset..signed_end]);
+            let d = d.finalize();
             let sig: B64 = ed_sig.parse_arg(0)?;
             let sig = ll::pk::ed25519::Signature::from_bytes(sig.as_bytes())
                 .map_err(|_| Error::BadSignature(ed_sig.pos()))?;
@@ -407,8 +407,8 @@ impl RouterDesc {
         {
             let mut d = ll::d::Sha1::new();
             let signed_end = rsa_sig_pos + b"router-signature\n".len();
-            d.input(&s[start_offset..signed_end]);
-            let d = d.result();
+            d.update(&s[start_offset..signed_end]);
+            let d = d.finalize();
             let sig = rsa_sig.get_obj("SIGNATURE")?;
             // TODO: we need to accept prefixes here. COMPAT BLOCKER.
             let verified = rsa_identity.verify(&d, &sig);

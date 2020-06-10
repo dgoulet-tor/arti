@@ -10,8 +10,7 @@ publish = false
 tor-llcrypto = { path="../tor-llcrypto" }
 
 arrayref = "*"
-# XXXX why did I have to downgrade?
-generic-array = "0.12"
+generic-array = "*"
 crypto-mac = "*"
 thiserror = "*"
 

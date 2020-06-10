@@ -20,10 +20,11 @@ generic-array = "0.12"
 rand_core = "*"
 crypto-mac = "*"
 hmac = "*"
-hkdf = "*"
+hkdf = "0.9.0-alpha.0"
 zeroize = "*"
 subtle = "*"
 stream-cipher = "*"
+sha2 = "*"
 
 [dev-dependencies]
 hex-literal = "*"
