@@ -1,7 +1,15 @@
+//! Parsing implementation for Tor authority certificates
+//!
+//! An "authority certificate" is a short signed document that binds a
+//! directory authority's permanent "identity key" to its medium-term
+//! "signing key".  Using separate keys here enables the authorities
+//! to keep their identity keys securely offline, while using the
+//! signing keys to sign votes and consensuses.
+
 use crate::argtype::{ISO8601TimeSp, RSAPublic};
 use crate::err::Pos;
 use crate::keyword::Keyword;
-use crate::parse::{Section, SectionRules};
+use crate::parse::SectionRules;
 use crate::tokenize::{ItemResult, NetDocReader};
 use crate::{Error, Result};
 
@@ -52,6 +60,8 @@ lazy_static! {
     };
 }
 
+/// A single authority certificate
+#[allow(dead_code)]
 pub struct AuthCert {
     address: Option<net::SocketAddrV4>,
     identity_key: rsa::PublicKey,
@@ -61,6 +71,10 @@ pub struct AuthCert {
 }
 
 impl AuthCert {
+    /// Parse an authority certificate from a string.
+    ///
+    /// This function verifies the certificate's signatures, but doesn't
+    /// check its expiration dates.
     pub fn parse(s: &str) -> Result<AuthCert> {
         let mut reader = NetDocReader::new(s);
         let result = AuthCert::take_from_reader(&mut reader).map_err(|e| e.within(s));
@@ -68,6 +82,13 @@ impl AuthCert {
         result
     }
 
+    /// Return true if this certificate is expired at a given time, or
+    /// not yet valid at that time.
+    pub fn is_expired_at(&self, when: time::SystemTime) -> bool {
+        when < self.published || when > self.expires
+    }
+
+    /// Parse an authority certificate from a reader.
     fn take_from_reader(reader: &mut NetDocReader<'_, AuthCertKW>) -> Result<AuthCert> {
         use AuthCertKW::*;
 
