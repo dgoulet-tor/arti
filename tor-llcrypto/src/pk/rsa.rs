@@ -82,12 +82,12 @@ impl PublicKey {
     /// Return true iff the exponent for this key is the same
     /// number as 'e'.
     pub fn exponent_is(&self, e: u32) -> bool {
-        use rsa::PublicKey;
+        use rsa::PublicKeyParts;
         *self.0.e() == rsa::BigUint::new(vec![e])
     }
     /// Return the number of bits in the modulus for this key.
     pub fn bits(&self) -> usize {
-        use rsa::PublicKey;
+        use rsa::PublicKeyParts;
         self.0.n().bits()
     }
     /// Try to check a signature (as used in Tor.)  The signed hash
@@ -99,11 +99,11 @@ impl PublicKey {
     /// ## Issues
     ///
     /// XXXX We probably shouldn't be exposing rsa::errors::Result().
-    ///  
+    ///
     pub fn verify(&self, hashed: &[u8], sig: &[u8]) -> rsa::errors::Result<()> {
         use rsa::PublicKey;
-        self.0
-            .verify::<rsa::hash::Hashes>(rsa::PaddingScheme::PKCS1v15, None, hashed, sig)
+        let padding = rsa::PaddingScheme::new_pkcs1v15_sign(None);
+        self.0.verify(padding, hashed, sig)
     }
     /// Decode an alleged DER byte string into a PublicKey.
     ///
@@ -150,15 +150,15 @@ impl PublicKey {
     ///
     /// The result is an RSAPublicKey, not a PublicKeyInfo.
     pub fn to_der(&self) -> Vec<u8> {
-        use simple_asn1::ASN1Block;
-        // XXX do I really need both of these crates? rsa uses
-        // bigint_dig, and simple_asn1 uses bigint.
-        use num_bigint::{BigInt, Sign};
-        use rsa::BigUint; // not the same as the one in num_bigint.
-        use rsa::PublicKey;
+        // There seem to be version issues with these two versions of
+        // bigint. XXXX
+        use rsa::BigUint; // not the same as the one in simple_asn1.
+        use rsa::PublicKeyParts;
+        use simple_asn1::{ASN1Block, BigInt};
         fn to_asn1_int(x: &BigUint) -> ASN1Block {
-            let bytes = x.to_bytes_be();
-            let bigint = BigInt::from_bytes_be(Sign::Plus, &bytes);
+            let mut bytes = vec![0];
+            bytes.extend(x.to_bytes_be());
+            let bigint = BigInt::from_signed_bytes_be(&bytes);
             ASN1Block::Integer(0, bigint)
         }
 
