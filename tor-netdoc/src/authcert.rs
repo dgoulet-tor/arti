@@ -211,7 +211,7 @@ mod test {
 
     #[test]
     fn parse_one() -> Result<()> {
-        let rd = AuthCert::parse(TESTDATA)?;
+        let _rd = AuthCert::parse(TESTDATA)?;
 
         Ok(())
     }
