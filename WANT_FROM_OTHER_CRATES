@@ -1,7 +1,7 @@
 rust itself:
  * specialization for u8.
  * generic arrays via associated consts or whatever it's called.
- * when an enum is c-like, implement try_into for numbers.  (but see num_enum and many similar crates.) 
+ * when an enum is c-like, implement try_into for numbers.  (but see num_enum and many similar crates.)
  * stabilize traling_one()
 
 curve25519-dalek:
@@ -20,21 +20,10 @@ base64:
 phf:
 * much cheaper hash function
 
-rsa-der:
-* Support for RSA key without OID
-
-pem:
-* should use multiline support or at least not copy when decoding
-  base64 multiline.
-* should be stricter?
-
 rsa:
 * oaep
 * if not oaep, raw?
 * get raw signed data to allow multiple signed formats.
-
-ring:
-* static curve25519
 
 crypto:
 * key agreement trait
@@ -42,10 +31,21 @@ crypto:
 ed25519 trait:
 * batch support.
 
-sha1:
-* implement digest trait.
+
+
+Not actually using these crates:
 
 bitvec
 * more efficient bitwise operations.
 
+ring:
+* static curve25519
+
+pem:
+* should use multiline support or at least not copy when decoding
+  base64 multiline.
+* should be stricter?
+
+rsa-der:
+* Support for RSA key without OID
 
