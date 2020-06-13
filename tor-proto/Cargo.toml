@@ -11,21 +11,21 @@ caret = { path="../caret" }
 tor-llcrypto = { path="../tor-llcrypto" }
 tor-bytes = { path="../tor-bytes" }
 
-arrayref = "*"
-digest = "*"
-rand = "*"
-typenum = "*"
+arrayref = "0.3.6"
+digest = "0.9.0"
+rand = "0.7.3"
+typenum = "1.12.0"
 # XXXX why did I have to downgrade?
-generic-array = "0.12"
-rand_core = "*"
-crypto-mac = "*"
-hmac = "*"
+generic-array = "0.14.2"
+rand_core = "0.5.1"
+crypto-mac = "0.8.0"
+hmac = "0.8.0"
 hkdf = "0.9.0-alpha.0"
-zeroize = "*"
-subtle = "*"
-stream-cipher = "*"
-sha2 = "*"
+zeroize = "1.1.0"
+subtle = "2.2.3"
+stream-cipher = "0.4.1"
+sha2 = "0.9.0"
 
 [dev-dependencies]
-hex-literal = "*"
+hex-literal = "0.2.1"
 

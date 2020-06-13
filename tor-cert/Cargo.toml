@@ -12,4 +12,4 @@ tor-llcrypto = { path="../tor-llcrypto" }
 tor-bytes = { path="../tor-bytes" }
 
 [dev-dependencies]
-base64 = "*"
+base64 = "0.12.1"

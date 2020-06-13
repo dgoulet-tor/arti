@@ -7,45 +7,34 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-arrayref = "*"
-digest = "*"
-typenum = "*"
+arrayref = "0.3.6"
+digest = "0.9.0"
+typenum = "1.12.0"
 # XXXX why did I have to downgrade?
 #generic-array = "0.12"
-generic-array = "*"
-aes-ctr = "*"
-zeroize = "*"
-rsa = "*"
-simple_asn1= "*"
-subtle = "*"
-stream-cipher = "*"
-num-traits = "*"
-num-bigint = "*"
-curve25519-dalek = "*"
-
-[dependencies.x25519-dalek]
-version = "*"
-
-[dependencies.ed25519-dalek]
-# Why do I have to use this one?
-version = "1.0.0-pre.3"
-
-[dependencies.sha-1]
-version = "*"
-
-[dependencies.sha2]
-version = "*"
-
-[dependencies.sha3]
-version = "*"
+generic-array = "0.14.2"
+aes-ctr = "0.4.0"
+zeroize = "1.1.0"
+rsa = "0.3.0"
+simple_asn1= "0.4.0"
+subtle = "2.2.3"
+stream-cipher = "0.4.1"
+num-traits = "0.2.12"
+num-bigint = "0.3.0"
+curve25519-dalek = "2.1.0"
+x25519-dalek = "0.6.0"
+ed25519-dalek = "1.0.0-pre.3"
+sha-1 = "0.9.0"
+sha2 = "0.9.0"
+sha3 = "0.9.0"
 
 [dev-dependencies]
-hex-literal = "*"
+hex-literal = "0.2.1"
 
 # This is a magic crate that runs the tests and checks the format
 # before it lets you commit or push.  It installs git hooks for this whenever
 # you say "cargo test".
 [dev-dependencies.cargo-husky]
-version = "1"
+version = "1.5.0"
 features = ["precommit-hook", "run-cargo-test",
             "run-cargo-fmt", "run-for-all" ]
