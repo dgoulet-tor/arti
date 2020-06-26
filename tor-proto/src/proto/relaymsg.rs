@@ -31,7 +31,7 @@ impl RelayCell {
         *(array_mut_ref![w, len_pos, 2]) = (payload_len as u16).to_be_bytes();
         w
     }
-    fn decode_from_reader(r: &mut Reader) -> Result<Self> {
+    fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let cmd = r.take_u8()?.into();
         r.advance(2)?; // "recognized"
         let streamid = StreamID(r.take_u16()?);

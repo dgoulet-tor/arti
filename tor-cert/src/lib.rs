@@ -157,7 +157,7 @@ impl CertifiedKey {
     }
     /// Try to extract a CertifiedKey from a Reader, given that we have
     /// already read its type as `key_type`.
-    fn from_reader(key_type: KeyType, r: &mut Reader) -> Result<Self> {
+    fn from_reader(key_type: KeyType, r: &mut Reader<'_>) -> Result<Self> {
         Ok(match key_type {
             KeyType::ED25519_KEY => CertifiedKey::Ed25519(r.extract()?),
             KeyType::SHA256_OF_RSA => CertifiedKey::RSASha256Digest(r.extract()?),
