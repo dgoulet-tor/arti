@@ -22,6 +22,7 @@ use crate::{Error, Result};
 ///
 /// The rules are represented as a mapping from token index to
 /// rules::TokenFmt.
+#[derive(Clone)]
 pub struct SectionRules<T: Keyword> {
     rules: Vec<Option<TokenFmt<T>>>,
 }
