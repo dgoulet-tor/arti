@@ -111,7 +111,7 @@ pub struct Protocols {
 
 impl Protocols {
     /// Return a new empty set of protocol versions.
-    fn new() -> Self {
+    pub fn new() -> Self {
         Protocols {
             recognized: [0u64; N_RECOGNIZED],
             unrecognized: Vec::new(),
