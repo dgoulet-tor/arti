@@ -5,6 +5,7 @@
 //!
 //! These types shouldn't be exposed outside of the netdoc crate.
 
+pub use b16impl::*;
 pub use b64impl::*;
 pub use curve25519impl::*;
 pub use ed25519impl::*;
@@ -42,6 +43,34 @@ mod b64impl {
 
     impl From<B64> for Vec<u8> {
         fn from(w: B64) -> Vec<u8> {
+            w.0
+        }
+    }
+}
+
+// ============================================================
+
+mod b16impl {
+    use crate::{Error, Pos, Result};
+
+    pub struct B16(Vec<u8>);
+
+    impl std::str::FromStr for B16 {
+        type Err = Error;
+        fn from_str(s: &str) -> Result<Self> {
+            let bytes = hex::decode(s)
+                .map_err(|_| Error::BadArgument(Pos::at(s), "invalid hexadecimal".to_string()))?;
+            Ok(B16(bytes))
+        }
+    }
+
+    impl B16 {
+        pub fn as_bytes(&self) -> &[u8] {
+            &self.0[..]
+        }
+    }
+    impl From<B16> for Vec<u8> {
+        fn from(w: B16) -> Vec<u8> {
             w.0
         }
     }
