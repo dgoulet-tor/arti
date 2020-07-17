@@ -233,10 +233,13 @@ mod fingerprint {
     use crate::{Error, Pos, Result};
     use tor_llcrypto::pk::rsa::RSAIdentity;
 
-    // A hex-encoded fingerprint with spaces in it.
+    /// A hex-encoded fingerprint with spaces in it.
     pub struct SpFingerprint(RSAIdentity);
 
-    // A "long identity" in the format used for Family members.
+    /// A hex-encoded fingerprint with no spaces.
+    pub struct Fingerprint(RSAIdentity);
+
+    /// A "long identity" in the format used for Family members.
     pub struct LongIdent(RSAIdentity);
 
     impl From<SpFingerprint> for RSAIdentity {
@@ -251,9 +254,16 @@ mod fingerprint {
         }
     }
 
+    impl From<Fingerprint> for RSAIdentity {
+        fn from(f: Fingerprint) -> RSAIdentity {
+            f.0
+        }
+    }
+
     fn parse_hex_ident(s: &str) -> Result<RSAIdentity> {
-        let bytes = hex::decode(s)
-            .map_err(|_| Error::BadArgument(Pos::at(s), "invalid hexadecimal in family".into()))?;
+        let bytes = hex::decode(s).map_err(|_| {
+            Error::BadArgument(Pos::at(s), "invalid hexadecimal in fingerprint".into())
+        })?;
         RSAIdentity::from_bytes(&bytes)
             .ok_or_else(|| Error::BadArgument(Pos::at(s), "wrong length on fingerprint".into()))
     }
@@ -263,6 +273,14 @@ mod fingerprint {
         fn from_str(s: &str) -> Result<SpFingerprint> {
             let ident = parse_hex_ident(&s.replace(' ', "")).map_err(|e| e.at_pos(Pos::at(s)))?;
             Ok(SpFingerprint(ident))
+        }
+    }
+
+    impl std::str::FromStr for Fingerprint {
+        type Err = Error;
+        fn from_str(s: &str) -> Result<Fingerprint> {
+            let ident = parse_hex_ident(s).map_err(|e| e.at_pos(Pos::at(s)))?;
+            Ok(Fingerprint(ident))
         }
     }
 
