@@ -43,6 +43,7 @@ use tor_llcrypto as ll;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
 use digest::Digest;
+use signature::{Signature, Verifier};
 
 /// A router descriptor, with possible annotations.
 #[allow(dead_code)]

@@ -149,26 +149,27 @@ mod net_impls {
 /// Implement Readable and Writeable for Ed25519 types.
 mod ed25519_impls {
     use super::*;
-    use tor_llcrypto::pk::ed25519::{PublicKey, Signature};
+    use signature::Signature;
+    use tor_llcrypto::pk::ed25519;
 
-    impl Writeable for PublicKey {
+    impl Writeable for ed25519::PublicKey {
         fn write_onto<B: Writer + ?Sized>(&self, b: &mut B) {
             b.write_all(self.as_bytes())
         }
     }
-    impl Readable for PublicKey {
+    impl Readable for ed25519::PublicKey {
         fn take_from(b: &mut Reader<'_>) -> Result<Self> {
             let bytes = b.take(32)?;
             Self::from_bytes(array_ref![bytes, 0, 32])
                 .map_err(|_| Error::BadMessage("Couldn't decode Ed25519 public key"))
         }
     }
-    impl Writeable for Signature {
+    impl Writeable for ed25519::Signature {
         fn write_onto<B: Writer + ?Sized>(&self, b: &mut B) {
             b.write_all(&self.to_bytes()[..])
         }
     }
-    impl Readable for Signature {
+    impl Readable for ed25519::Signature {
         fn take_from(b: &mut Reader<'_>) -> Result<Self> {
             let bytes = b.take(64)?;
             Self::from_bytes(array_ref![bytes, 0, 64])

@@ -1,6 +1,6 @@
 use digest::Digest;
 use hex_literal::hex;
-use stream_cipher::{NewStreamCipher, StreamCipher};
+use stream_cipher::*;
 use tor_llcrypto as ll;
 
 #[test]
@@ -48,6 +48,7 @@ fn tv_curve25519() {
 #[test]
 fn tv_ed25519() {
     use ll::pk::ed25519::*;
+    use signature::{Signer, Verifier};
     // Test vectors from RFC 8032.
 
     // TEST 1

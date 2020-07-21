@@ -29,6 +29,7 @@
 #![deny(missing_docs)]
 
 use caret::caret_int;
+use signature::{Signer, Verifier};
 use tor_bytes::{Error, Result};
 use tor_bytes::{Readable, Reader, Writeable, Writer};
 use tor_llcrypto::pk::*;

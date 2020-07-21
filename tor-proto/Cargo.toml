@@ -16,16 +16,16 @@ digest = "0.9.0"
 rand = "0.7.3"
 typenum = "1.12.0"
 # XXXX why did I have to downgrade?
-generic-array = "0.14.2"
+generic-array = "0.14.3"
 rand_core = "0.5.1"
 crypto-mac = "0.8.0"
-hmac = "0.8.0"
-hkdf = "0.9.0-alpha.0"
+hmac = "0.8.1"
+hkdf = "0.9.0"
 zeroize = "1.1.0"
 subtle = "2.2.3"
-stream-cipher = "0.4.1"
-sha2 = "0.9.0"
+stream-cipher = "0.6.0"
+sha2 = "0.9.1"
 
 [dev-dependencies]
-hex-literal = "0.2.1"
+hex-literal = "0.3.0"
 
