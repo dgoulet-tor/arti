@@ -23,6 +23,7 @@ pub trait FromBytes: Sized {
 
 mod b64impl {
     use crate::{Error, Pos, Result};
+    use std::ops::RangeBounds;
 
     pub struct B64(Vec<u8>);
 
@@ -38,6 +39,16 @@ mod b64impl {
     impl B64 {
         pub fn as_bytes(&self) -> &[u8] {
             &self.0[..]
+        }
+        pub fn check_len<B: RangeBounds<usize>>(self, bounds: B) -> Result<Self> {
+            if bounds.contains(&self.0.len()) {
+                Ok(self)
+            } else {
+                Err(Error::BadObjectVal(
+                    Pos::Unknown,
+                    "Invalid length on base64 data".to_string(),
+                ))
+            }
         }
     }
 
