@@ -582,6 +582,11 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
         self.pause_at(|_| false)
     }
 
+    /// Return true if there are no more items in this NetDocReader.
+    pub fn is_exhausted(&mut self) -> bool {
+        self.iter().peek().is_none()
+    }
+
     /// Give an error if there are remaining tokens in this NetDocReader.
     pub fn should_be_exhausted(&mut self) -> Result<()> {
         match self.iter().peek() {

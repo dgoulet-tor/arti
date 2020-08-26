@@ -82,6 +82,11 @@ impl AuthCert {
         result
     }
 
+    /// Return an iterator yielding authority certificates from a string.
+    pub fn parse_multiple(s: &str) -> impl Iterator<Item = Result<AuthCert>> + '_ {
+        AuthCertIterator(NetDocReader::new(s))
+    }
+
     /// Return true if this certificate is expired at a given time, or
     /// not yet valid at that time.
     pub fn is_expired_at(&self, when: time::SystemTime) -> bool {
@@ -201,6 +206,38 @@ impl AuthCert {
             published,
             expires,
         })
+    }
+
+    /// Skip tokens from the reader until the next token (if any) is
+    /// the start of cert.
+    fn advance_reader_to_next(reader: &mut NetDocReader<'_, AuthCertKW>) {
+        use AuthCertKW::*;
+        let iter = reader.iter();
+        while let Some(Ok(item)) = iter.peek() {
+            if item.get_kwd() == DIR_KEY_CERTIFICATE_VERSION {
+                return;
+            }
+            iter.next();
+        }
+    }
+}
+
+struct AuthCertIterator<'a>(NetDocReader<'a, AuthCertKW>);
+
+impl<'a> Iterator for AuthCertIterator<'a> {
+    type Item = Result<AuthCert>;
+    fn next(&mut self) -> Option<Result<AuthCert>> {
+        if self.0.is_exhausted() {
+            return None;
+        }
+
+        let result = AuthCert::take_from_reader(&mut self.0);
+        if result.is_err() {
+            // XXXX Verify that at least one item was consumed from the
+            // XXXX reader!
+            AuthCert::advance_reader_to_next(&mut self.0);
+        }
+        Some(result.map_err(|e| e.within(self.0.str())))
     }
 }
 
