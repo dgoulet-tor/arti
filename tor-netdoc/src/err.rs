@@ -210,6 +210,12 @@ pub enum Error {
     /// There was an ipv4 or ipv6 policy entry that we couldn't parse.
     #[error("invalid policy entry{0}: {1}")]
     BadPolicy(Pos, #[source] PolicyError),
+    /// Versioned document with an unrecognized version.
+    #[error("unrecognied document version {0}")]
+    BadDocumentVersion(u32),
+    /// Unexpected document type
+    #[error("unexpected document type")]
+    BadDocumentType,
 }
 
 impl Error {
@@ -240,6 +246,8 @@ impl Error {
             BadSignature(p) => Some(p),
             BadVersion(p) => Some(p),
             BadPolicy(p, _) => Some(p),
+            BadDocumentVersion(_) => None,
+            BadDocumentType => None,
         }
     }
 

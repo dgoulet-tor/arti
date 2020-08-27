@@ -63,11 +63,16 @@ lazy_static! {
 /// A single authority certificate
 #[allow(dead_code)]
 pub struct AuthCert {
+    // These fields are taken right from the certificate.
     address: Option<net::SocketAddrV4>,
     identity_key: rsa::PublicKey,
     signing_key: rsa::PublicKey,
     published: time::SystemTime,
     expires: time::SystemTime,
+
+    // These fields are derived.
+    id_fingerprint: rsa::RSAIdentity,
+    sk_fingerprint: rsa::RSAIdentity,
 }
 
 impl AuthCert {
@@ -91,6 +96,21 @@ impl AuthCert {
     /// not yet valid at that time.
     pub fn is_expired_at(&self, when: time::SystemTime) -> bool {
         when < self.published || when > self.expires
+    }
+
+    /// Return the signing key certified by this certificate.
+    pub fn get_signing_key(&self) -> &rsa::PublicKey {
+        &self.signing_key
+    }
+
+    /// Return an RSAIdentity for this certificate's identity key.
+    pub fn get_id_fingerprint(&self) -> &rsa::RSAIdentity {
+        &self.id_fingerprint
+    }
+
+    /// Return an RSAIdentity for this certificate's signing key.
+    pub fn get_sk_fingerprint(&self) -> &rsa::RSAIdentity {
+        &self.sk_fingerprint
     }
 
     /// Parse an authority certificate from a reader.
@@ -199,12 +219,17 @@ impl AuthCert {
             }
         }
 
+        let id_fingerprint = identity_key.to_rsa_identity();
+        let sk_fingerprint = signing_key.to_rsa_identity();
+
         Ok(AuthCert {
             address,
             identity_key,
             signing_key,
             published,
             expires,
+            id_fingerprint,
+            sk_fingerprint,
         })
     }
 

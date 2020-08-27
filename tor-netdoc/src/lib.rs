@@ -36,6 +36,7 @@ mod macros;
 pub mod authcert;
 pub mod family;
 pub mod microdesc;
+pub mod netstatus;
 pub mod policy;
 pub mod routerdesc;
 pub mod version;

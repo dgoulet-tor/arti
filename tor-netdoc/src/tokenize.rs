@@ -330,6 +330,11 @@ impl<'a, K: Keyword> Item<'a, K> {
     pub fn get_arg(&self, idx: usize) -> Option<&'a str> {
         self.args_as_vec().get(idx).copied()
     }
+    /// Return the nth argument of this item, or an error if it isn't there.
+    pub fn required_arg(&self, idx: usize) -> Result<&'a str> {
+        self.get_arg(idx)
+            .ok_or_else(|| Error::MissingArgument(Pos::at(self.args)))
+    }
     /// Try to parse the nth argument (if it exists) into some type
     /// that supports FromStr.
     ///
