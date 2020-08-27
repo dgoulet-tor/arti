@@ -19,7 +19,7 @@ pub const RSA_ID_LEN: usize = 20;
 
 /// An identifier for a Tor relay, based on its legacy RSA
 /// identity key.  These are used all over the Tor protocol.
-#[derive(Clone, Zeroize, Debug)]
+#[derive(Clone, Zeroize, Debug, Hash)]
 pub struct RSAIdentity {
     id: [u8; RSA_ID_LEN],
 }
