@@ -1,4 +1,4 @@
-use digest::Digest;
+use digest::{self, Digest, ExtendableOutput};
 use hex_literal::hex;
 use stream_cipher::*;
 use tor_llcrypto as ll;
@@ -280,5 +280,151 @@ fn tv_sha512() {
              7299AEAD B6889018 501D289E 4900F7E4 331B99DE C4B5433A
              C7D329EE B6DD2654 5E96E55B 874BE909"
         )[..]
+    );
+}
+
+#[test]
+fn tv_sha3_256() {
+    // From https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Algorithm-Validation-Program/documents/sha3/sha-3bytetestvectors.zip
+
+    let d = ll::d::Sha3_256::digest(b"");
+    assert_eq!(
+        &d[..],
+        &hex!("a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a")
+    );
+
+    let d = ll::d::Sha3_256::digest(&hex!("e9"));
+    assert_eq!(
+        &d[..],
+        &hex!("f0d04dd1e6cfc29a4460d521796852f25d9ef8d28b44ee91ff5b759d72c1e6d6")
+    );
+
+    let d = ll::d::Sha3_256::digest(&hex!("d16d978dfbaecf2c8a04090f6eebdb421a5a711137a6"));
+    assert_eq!(
+        &d[..],
+        &hex!("7f497913318defdc60c924b3704b65ada7ca3ba203f23fb918c6fb03d4b0c0da")
+    );
+
+    let d = ll::d::Sha3_256::digest(&hex!(
+        "3341ca020d4835838b0d6c8f93aaaebb7af60730d208c85283f6369f1ee27fd96d38f2674f
+316ef9c29c1b6b42dd59ec5236f65f5845a401adceaa4cf5bbd91cac61c21102052634e99faedd6c
+dddcd4426b42b6a372f29a5a5f35f51ce580bb1845a3c7cfcd447d269e8caeb9b320bb731f53fe5c
+969a65b12f40603a685afed86bfe53"
+    ));
+    assert_eq!(
+        &d[..],
+        &hex!("6c3e93f2b49f493344cc3eb1e9454f79363032beee2f7ea65b3d994b5cae438f")
+    );
+}
+
+fn xof_helper<X: ExtendableOutput + digest::Update>(mut x: X, input: &[u8], output: &[u8]) {
+    use digest::XofReader;
+    x.update(input);
+    let mut r = x.finalize_xof();
+    let mut buf = vec![0; output.len()];
+    r.read(&mut buf);
+    assert_eq!(&buf[..], &output[..]);
+}
+
+#[test]
+fn tv_shake128() {
+    // From https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Algorithm-Validation-Program/documents/sha3/shakebytetestvectors.zip
+
+    xof_helper(
+        ll::d::Shake128::default(),
+        &hex!("ca12721a7a44544d9518aa0d4e407529"),
+        &hex!("25904657e9903ce960b56bcc42a4e9ff7b33"),
+    );
+
+    xof_helper(
+        ll::d::Shake128::default(),
+        &hex!("981f4788c57eb8d064805357024d3128"),
+        &hex!("4c206447e85a2cbd4fab891ef3140806a32a89"),
+    );
+
+    xof_helper(
+        ll::d::Shake128::default(),
+        &hex!("e118cecce029b40f7883805eb19d1c09"),
+        &hex!(
+            "6e8f5de5c92a474a1f96bf89798a11c96637c05e6f1d21940c07
+                      783b2d5da11c8f592446c12189eabfc9be2561855fa7c7c1b7fe"
+        ),
+    );
+
+    xof_helper(
+        ll::d::Shake128::default(),
+        &hex!("c60a221c975e14bf835827c1103a2906"),
+        &hex!(
+            "0db7f7196eee8dd6994a16ded19cb09f05f89ccd2464333df2c0
+                      17c6ca041fa0d54a4832a74ce86ce9b41d8e523e66ce6ef9df7c
+                      20aa70e0ac00f54eb072a472ef46cf2a933df0d5f9fafab6388a
+                      206f6bd1df50b0836500c758c557c8ac965733fdaaa59f5ed661
+                      a1bda61e2952886a60f9568157e3d72e49b6e061fc08f3f1caf1
+                      59e8eff77ea5221565d2"
+        ),
+    );
+
+    xof_helper(
+        ll::d::Shake128::default(),
+        &hex!(
+            "c521710a951c7f1fda05ddf7b78366976ce6f8ee7abbbf0c089d
+                      b690854e6a5f8f06029c130a7cd4b68139787483bc918774af"
+        ),
+        &hex!("65fa398b3a99fa2c9a122f46a4ac4896"),
+    );
+}
+
+#[test]
+fn tv_shake256() {
+    // From https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Algorithm-Validation-Program/documents/sha3/shakebytetestvectors.zip
+
+    xof_helper(
+        ll::d::Shake256::default(),
+        &hex!(
+            "c61a9188812ae73994bc0d6d4021e31bf124dc72669749111232da
+                      7ac29e61c4"
+        ),
+        &hex!("23ce"),
+    );
+
+    xof_helper(
+        ll::d::Shake256::default(),
+        &hex!(
+            "76891a7bcc6c04490035b743152f64a8dd2ea18ab472b8d36ecf45
+                      858d0b0046"
+        ),
+        &hex!(
+            "e8447df87d01beeb724c9a2a38ab00fcc24e9bd17860e673b02122
+                      2d621a7810e5d3"
+        ),
+    );
+
+    xof_helper(
+        ll::d::Shake256::default(),
+        &hex!(
+            "7d9312ffe94845ac51056c63eb3bff4a94626aafb7470ff86fa88f
+                      d8f0fe45c9"
+        ),
+        &hex!(
+            "de489392796fd3b530c506e482936afcfe6b72dcf7e9def0549538
+                      42ff19076908c8a1d6a4e7639e0fdbfa1b5201095051aac3e39977
+                      79e588377eac979313e39c3721dc9f912cf7fdf1a9038cbaba8e9f
+                      3d95951a5d819bffd0b080319fcd12da0516baf54b779e79e437d3
+                      ec565c64eb5752825f54050f93"
+        ),
+    );
+
+    xof_helper(
+        ll::d::Shake256::default(),
+        &hex!(
+            "1b6facbbeb3206ff68214b3ad5c0fcbcd37ae9e2d84347dfde7c02
+                      bc5817559e6afb974859aa58e04121acf60600c7c28ceacaad2b2f
+                      dd145da87e48bae318d92780d8144adbbcca41eced53936b4ed366
+                      3755bcf3f81a943803adf9ec7fade2b8c61627a40e5b44d0"
+        ),
+        &hex!(
+            "1d8599e06e505fea435eb7699b1effdc3fe76864abce4ea446824f
+                      ff7869ad26"
+        ),
     );
 }
