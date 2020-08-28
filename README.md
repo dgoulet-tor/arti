@@ -25,11 +25,12 @@ So far the code has untested or under-tested implementations of:
        ones).  [cruddy version]
   * parsing and validating ed25519 certificates
   * parsing and validating router descriptors
+  * parsing and validating microdescriptors
+  * parsing and validating microdesc consensuses
 
 Before I share it, I think it needs more work on:
 
-  * parsing the other kinds of network documents
-  * link authentication
+  * link authentication (client->server type)
   * refactoring everywhere
   * lots of tests
   * a sensible api for cell types
