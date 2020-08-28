@@ -19,7 +19,7 @@ pub const RSA_ID_LEN: usize = 20;
 
 /// An identifier for a Tor relay, based on its legacy RSA
 /// identity key.  These are used all over the Tor protocol.
-#[derive(Clone, Zeroize, Debug, Hash)]
+#[derive(Clone, Zeroize, Debug)]
 pub struct RSAIdentity {
     id: [u8; RSA_ID_LEN],
 }
@@ -27,6 +27,12 @@ pub struct RSAIdentity {
 impl PartialEq<RSAIdentity> for RSAIdentity {
     fn eq(&self, rhs: &RSAIdentity) -> bool {
         self.id.ct_eq(&rhs.id).unwrap_u8() == 1
+    }
+}
+
+impl std::hash::Hash for RSAIdentity {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }
 
