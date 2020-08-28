@@ -10,7 +10,7 @@ publish = false
 caret = { path="../caret" }
 tor-llcrypto = { path="../tor-llcrypto" }
 tor-bytes = { path="../tor-bytes" }
-signature = "1.1.0"
+signature = "1.2.2"
 
 [dev-dependencies]
 base64 = "0.12.3"
