@@ -51,10 +51,11 @@ use crate::tokenize::{Item, ItemResult, NetDocReader};
 use crate::{Error, Pos, Result};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
-use std::{net, time};
+use std::{net, result, time};
 use tor_protover::Protocols;
 
 use digest::Digest;
+use tor_checkable::{timed::TimerangeBound, ExternallySigned};
 use tor_llcrypto as ll;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
@@ -66,6 +67,7 @@ use lazy_static::lazy_static;
 /// be used.  In a vote, this type describes the proposed lifetime for a
 /// consensus.
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Lifetime {
     valid_after: time::SystemTime,
     fresh_until: time::SystemTime,
@@ -900,9 +902,14 @@ impl Signature {
     }
 }
 
+/// A MDConsensus object that has been parsed, but not checked for signatures
+/// and time.
+pub type UncheckedMDConsensus =
+    TimerangeBound<UnvalidatedMDConsensus, std::ops::Range<time::SystemTime>>;
+
 impl MDConsensus {
     /// Try to parse a single networkstatus document from a string.
-    pub fn parse(s: &str) -> Result<(MDConsensus, SignatureGroup)> {
+    pub fn parse(s: &str) -> Result<UncheckedMDConsensus> {
         let mut reader = NetDocReader::new(s);
         Self::parse_from_reader(&mut reader).map_err(|e| e.within(s))
     }
@@ -976,9 +983,7 @@ impl MDConsensus {
         Ok(Some(rs))
     }
 
-    fn parse_from_reader(
-        r: &mut NetDocReader<'_, NetstatusKW>,
-    ) -> Result<(MDConsensus, SignatureGroup)> {
+    fn parse_from_reader(r: &mut NetDocReader<'_, NetstatusKW>) -> Result<UncheckedMDConsensus> {
         use NetstatusKW::*;
         let (header, start_pos) = {
             let mut h = r.pause_at(|i| i.is_ok_with_kwd_in(&[DIR_SOURCE]));
@@ -1038,21 +1043,94 @@ impl MDConsensus {
         let sha256 = ll::d::Sha256::digest(signed_str.as_bytes()).into();
         let siggroup = SignatureGroup { sha256, signatures };
 
-        Ok((consensus, siggroup))
+        let unval = UnvalidatedMDConsensus {
+            consensus,
+            siggroup,
+            n_authorities: None,
+        };
+        let lifetime = unval.consensus.header.hdr.lifetime.clone();
+        let timebound = TimerangeBound::new(unval, lifetime.valid_after..lifetime.valid_until);
+        Ok(timebound)
+    }
+}
+
+/// A Microdesc consensus whose signatures have not yet been checked.
+pub struct UnvalidatedMDConsensus {
+    consensus: MDConsensus,
+    siggroup: SignatureGroup,
+    n_authorities: Option<u16>,
+}
+
+impl UnvalidatedMDConsensus {
+    /// Tell the unvalidated consensus how many authorities we believe in.
+    ///
+    /// Without knowing this number, we can't validate the signature.
+    pub fn set_n_authorities(self, n_authorities: u16) -> Self {
+        UnvalidatedMDConsensus {
+            n_authorities: Some(n_authorities),
+            ..self
+        }
+    }
+}
+
+impl ExternallySigned<MDConsensus> for UnvalidatedMDConsensus {
+    type Key = Vec<AuthCert>;
+    type KeyHint = Vec<(RSAIdentity, RSAIdentity)>;
+    type Error = Error;
+
+    fn key_is_correct(&self, k: &Self::Key) -> result::Result<(), Self::KeyHint> {
+        let (n_ok, missing) = self.siggroup.list_missing(&k[..]);
+        match self.n_authorities {
+            Some(n) if n_ok > (n / 2) as usize => Ok(()),
+            _ => Err(missing
+                .iter()
+                .map(|cert| (cert.id_fingerprint.clone(), cert.sk_fingerprint.clone()))
+                .collect()),
+        }
+    }
+    fn is_well_signed(&self, k: &Self::Key) -> result::Result<(), Self::Error> {
+        if self.n_authorities.is_none() {
+            return Err(Error::Internal(Pos::None));
+        }
+        if self.siggroup.validate(self.n_authorities.unwrap(), &k[..]) {
+            Ok(())
+        } else {
+            Err(Error::BadSignature(Pos::None))
+        }
+    }
+    fn dangerously_assume_wellsigned(self) -> MDConsensus {
+        self.consensus
     }
 }
 
 impl SignatureGroup {
+    /// Helper: Return a pair of the number of possible authorities
+    /// signatures in this object for which we _could_ find certs, and
+    /// a list of the signatures we couldn't find certificates for.
+    fn list_missing(&self, certs: &[AuthCert]) -> (usize, Vec<&Signature>) {
+        let mut ok: HashSet<RSAIdentity> = HashSet::new();
+        let mut missing = Vec::new();
+        for sig in self.signatures.iter() {
+            if ok.contains(&sig.id_fingerprint) {
+                continue;
+            }
+            if sig.find_cert(certs).is_some() {
+                ok.insert(sig.id_fingerprint.clone());
+                continue;
+            }
+
+            missing.push(sig);
+        }
+        (ok.len(), missing)
+    }
+
     /// Return true if the signature group defines a valid signature.
     ///
     /// A signature is valid if it signed by more than half of the
     /// authorities.  This API requires that `n_authorities` is the number of
     /// authorities we believe in, and that every cert in `certs` belongs
     /// to a real authority.
-    ///
-    /// TODO: This is not a final API; we'll need to fix it up as we
-    /// advance.  In particular, we'll want to say which certs are missing.
-    pub fn validate(&self, n_authorities: u16, certs: &[AuthCert]) -> bool {
+    fn validate(&self, n_authorities: u16, certs: &[AuthCert]) -> bool {
         let mut ok: HashSet<RSAIdentity> = HashSet::new();
 
         for sig in self.signatures.iter() {
@@ -1098,10 +1176,10 @@ mod test {
 
         assert_eq!(certs.len(), 3);
 
-        let (_consensus, sigs) = MDConsensus::parse(CONSENSUS)?;
-
-        assert_eq!(sigs.validate(3, &[]), false);
-        assert_eq!(sigs.validate(3, &certs), true);
+        let _consensus = MDConsensus::parse(CONSENSUS)?
+            .dangerously_assume_timely()
+            .set_n_authorities(3)
+            .check_signature(&certs)?;
 
         Ok(())
     }
