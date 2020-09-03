@@ -26,10 +26,10 @@ ed25519-dalek = "1.0.0"
 sha-1 = "0.9.1"
 sha2 = "0.9.1"
 sha3 = "0.9.1"
+signature = "1.2.2"
 
 [dev-dependencies]
 hex-literal = "0.3.1"
-signature = "1.2.2"
 
 # This is a magic crate that runs the tests and checks the format
 # before it lets you commit or push.  It installs git hooks for this whenever

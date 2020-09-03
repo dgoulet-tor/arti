@@ -73,6 +73,7 @@ impl RSAIdentity {
 ///
 /// This implementation is a simple wrapper so that we can define new
 /// methods and traits on the type.
+#[derive(Clone)]
 pub struct PublicKey(rsa::RSAPublicKey);
 /// An RSA private key.
 pub struct PrivateKey(rsa::RSAPrivateKey);
@@ -178,5 +179,31 @@ impl PublicKey {
         use digest::Digest;
         let id = Sha1::digest(&self.to_der()).into();
         RSAIdentity { id }
+    }
+}
+
+/// blah blah
+pub struct ValidatableRSASignature {
+    key: PublicKey,
+    sig: Vec<u8>,
+    expected_hash: Vec<u8>,
+}
+
+impl ValidatableRSASignature {
+    /// klasjdkljsd
+    pub fn new(key: &PublicKey, sig: &[u8], expected_hash: &[u8]) -> Self {
+        ValidatableRSASignature {
+            key: key.clone(),
+            sig: sig.into(),
+            expected_hash: expected_hash.into(),
+        }
+    }
+}
+
+impl super::ValidatableSignature for ValidatableRSASignature {
+    fn is_valid(&self) -> bool {
+        self.key
+            .verify(&self.expected_hash[..], &self.sig[..])
+            .is_ok()
     }
 }
