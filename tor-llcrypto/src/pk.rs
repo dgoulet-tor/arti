@@ -24,7 +24,7 @@ pub mod ed25519 {
 
     /// An ed25519 signature, plus the document that it signs and its
     /// public key.
-    pub struct ValidatableEd25159Signature {
+    pub struct ValidatableEd25519Signature {
         key: PublicKey,
         sig: Signature,
         // TODO: It's not so good to have this included here; it would
@@ -32,19 +32,18 @@ pub mod ed25519 {
         entire_text_of_signed_thing: Vec<u8>,
     }
 
-    impl ValidatableEd25159Signature {
+    impl ValidatableEd25519Signature {
         /// Create a new ValidatableEd25519Signature
-        pub fn new(key: PublicKey, sig: &[u8], text: &[u8]) -> Result<Self, signature::Error> {
-            use std::convert::TryInto;
-            Ok(ValidatableEd25159Signature {
+        pub fn new(key: PublicKey, sig: Signature, text: &[u8]) -> Self {
+            ValidatableEd25519Signature {
                 key,
-                sig: sig.try_into()?,
+                sig,
                 entire_text_of_signed_thing: text.into(),
-            })
+            }
         }
     }
 
-    impl super::ValidatableSignature for ValidatableEd25159Signature {
+    impl super::ValidatableSignature for ValidatableEd25519Signature {
         fn is_valid(&self) -> bool {
             use signature::Verifier;
             self.key

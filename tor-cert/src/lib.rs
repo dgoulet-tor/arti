@@ -11,6 +11,7 @@
 //! ```
 //! use base64::decode;
 //! use tor_cert::*;
+//! use tor_checkable::*;
 //! // Taken from a random relay on the Tor network.
 //! let cert_base64 =
 //!  "AQQABrntAThPWJ4nFH1L77Ar+emd4GPXZTPUYzIwmR2H6Zod5TvXAQAgBAC+vzqh
@@ -22,7 +23,10 @@
 //! let cert_bin = base64::decode(cert_base64).unwrap();
 //!
 //! // Decode the cert and check its signature.
-//! let cert = Ed25519Cert::decode_and_check(&cert_bin, None).unwrap();
+//! let cert = Ed25519Cert::decode(&cert_bin).unwrap()
+//!     .check_key(&None).unwrap()
+//!     .check_signature().unwrap()
+//!     .dangerously_assume_timely();
 //! let signed_key = cert.get_subject_key();
 //! ```
 
@@ -34,9 +38,7 @@ use tor_bytes::{Error, Result};
 use tor_bytes::{Readable, Reader, Writeable, Writer};
 use tor_llcrypto::pk::*;
 
-// TODO: There should be a layer between "decoded" and "signatures
-// checked" to help with bulk Ed25519 checks.  It should be a
-// generic trait.
+use std::time;
 
 caret_int! {
     /// Recognized values for Tor's certificate type field.
@@ -104,7 +106,10 @@ pub struct Ed25519Cert {
     /// A list of extensions.
     extensions: Vec<CertExt>,
     /// The key that signed this cert.
-    signed_with: ed25519::PublicKey,
+    ///
+    /// Once the cert has been unwrapped from an KeyUnknownCert, this
+    /// field will be set.
+    signed_with: Option<ed25519::PublicKey>,
 }
 
 /// One of the data types that can be certified by an Ed25519Cert.
@@ -308,15 +313,7 @@ impl Ed25519Cert {
     ///
     /// This function returns an error if the byte slice is not
     /// completely exhausted.
-    ///
-    /// If the public key is provided as an argument, then any public
-    /// signing key listed in the certificate must match it, or else
-    /// this function returns an error.
-    ///
-    /// If no public signing key is found as an argument or in the
-    /// certificate, then the certificate cannot be validated, and so
-    /// this function returns an error.
-    pub fn decode_and_check(cert: &[u8], pkey: Option<&ed25519::PublicKey>) -> Result<Self> {
+    pub fn decode(cert: &[u8]) -> Result<KeyUnknownCert> {
         let mut r = Reader::from_slice(cert);
         let v = r.take_u8()?;
         if v != 1 {
@@ -344,34 +341,23 @@ impl Ed25519Cert {
             .find(|e| e.get_ext_id() == ExtType::SIGNED_WITH_ED25519_KEY);
 
         let included_pkey = match keyext {
-            Some(CertExt::SignedWithEd25519(s)) => Some(&s.pk),
+            Some(CertExt::SignedWithEd25519(s)) => Some(s.pk),
             _ => None,
         };
 
-        let pubkey = match (pkey, included_pkey) {
-            (Some(a), Some(b)) if a == b => a,
-            (Some(_), Some(_)) => {
-                return Err(Error::BadMessage("Inconsistent signing key listed"));
-            }
-            (Some(a), None) => a,
-            (None, Some(b)) => b,
-            (None, None) => {
-                return Err(Error::BadMessage("Couldn't find certificate public key"));
-            }
-        };
-        let verified = pubkey.verify(&cert[0..sig_offset], &signature);
-        if verified.is_err() {
-            return Err(Error::BadMessage("Invalid certificate signature"));
-        }
+        Ok(KeyUnknownCert {
+            cert: UncheckedCert {
+                cert: Ed25519Cert {
+                    exp_hours,
+                    cert_type,
+                    cert_key,
+                    extensions,
 
-        let signed_with = *pubkey;
-
-        Ok(Ed25519Cert {
-            exp_hours,
-            cert_type,
-            cert_key,
-            extensions,
-            signed_with,
+                    signed_with: included_pkey,
+                },
+                text: cert[0..sig_offset].into(),
+                signature,
+            },
         })
     }
 
@@ -393,12 +379,124 @@ impl Ed25519Cert {
     }
 
     /// Return the ed25519 key that signed this certificate.
-    pub fn get_signing_key(&self) -> &ed25519::PublicKey {
-        &self.signed_with
+    pub fn get_signing_key(&self) -> Option<&ed25519::PublicKey> {
+        self.signed_with.as_ref()
     }
 
     /// Return the type of this certificate.
     pub fn get_cert_type(&self) -> CertType {
         self.cert_type
+    }
+}
+
+/// A parsed Ed25519 certificate. Maybe it includes its signing key;
+/// maybe it doesn't.
+pub struct KeyUnknownCert {
+    cert: UncheckedCert,
+}
+
+impl KeyUnknownCert {
+    /// Return the certificate type of the underling cert.
+    pub fn peek_cert_type(&self) -> CertType {
+        self.cert.cert.cert_type
+    }
+    /// Return subject key of the underlying cert.
+    pub fn peek_subject_key(&self) -> &CertifiedKey {
+        &self.cert.cert.cert_key
+    }
+
+    /// Check whether a given pkey is (or might be) a key that has correctly
+    /// signed this certificate.
+    ///
+    /// On success, we can check whether the certificate is well-signed;
+    /// otherwise, we can't check the certificate.
+    pub fn check_key(self, pkey: &Option<ed25519::PublicKey>) -> Result<UncheckedCert> {
+        let real_key = match (pkey, self.cert.cert.signed_with) {
+            (Some(a), Some(b)) if a == &b => b,
+            (Some(_), Some(_)) => return Err(Error::BadMessage("Mismatched public key on cert")),
+            (Some(a), None) => *a,
+            (None, Some(b)) => b,
+            (None, None) => return Err(Error::BadMessage("Missing public key on cert")),
+        };
+        Ok(UncheckedCert {
+            cert: Ed25519Cert {
+                signed_with: Some(real_key),
+                ..self.cert.cert
+            },
+            ..self.cert
+        })
+    }
+}
+
+/// A certificate that has been parsed, but whose signature and
+/// timeliness have not been checked.
+pub struct UncheckedCert {
+    cert: Ed25519Cert,
+
+    text: Vec<u8>, // XXXX It would be better to store a hash here.
+    signature: ed25519::Signature,
+}
+
+/// A certificate that has been parsed and signature-checked, but whose
+/// timeliness has not been checked.
+pub struct SigCheckedCert {
+    cert: Ed25519Cert,
+}
+
+impl UncheckedCert {
+    /// Split this unchecked cert into a component that assumes it has
+    /// been checked, and a signature to validate.
+    pub fn dangerously_split(
+        self,
+    ) -> Result<(SigCheckedCert, ed25519::ValidatableEd25519Signature)> {
+        use tor_checkable::SelfSigned;
+        let signature = ed25519::ValidatableEd25519Signature::new(
+            self.cert.signed_with.unwrap(),
+            self.signature,
+            &self.text[..],
+        );
+        Ok((self.dangerously_assume_wellsigned(), signature))
+    }
+
+    /// Return subject key of the underlying cert.
+    pub fn peek_subject_key(&self) -> &CertifiedKey {
+        &self.cert.cert_key
+    }
+    /// Return signing key of the underlying cert.
+    pub fn peek_signing_key(&self) -> &ed25519::PublicKey {
+        self.cert.signed_with.as_ref().unwrap()
+    }
+}
+
+impl tor_checkable::SelfSigned<SigCheckedCert> for UncheckedCert {
+    type Error = Error;
+
+    fn is_well_signed(&self) -> Result<()> {
+        let pubkey = &self.cert.signed_with.unwrap();
+        pubkey
+            .verify(&self.text[..], &self.signature)
+            .map_err(|_| Error::BadMessage("Invalid certificate signature"))?;
+
+        Ok(())
+    }
+
+    fn dangerously_assume_wellsigned(self) -> SigCheckedCert {
+        SigCheckedCert { cert: self.cert }
+    }
+}
+
+impl tor_checkable::Timebound<Ed25519Cert> for SigCheckedCert {
+    type Error = tor_checkable::TimeValidityError;
+    fn is_valid_at(&self, t: &time::SystemTime) -> std::result::Result<(), Self::Error> {
+        let expiry = self.cert.get_expiry();
+        if t >= &expiry {
+            Err(Self::Error::Expired(t.duration_since(expiry).unwrap()))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn dangerously_assume_timely(self) -> Ed25519Cert {
+        self.cert
     }
 }

@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 /// Error type for decoding Tor objects from bytes.
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 pub enum Error {
     /// Tried to read something, but we didn't find enough bytes.

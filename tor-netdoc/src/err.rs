@@ -210,6 +210,12 @@ pub enum Error {
     /// There was an ipv4 or ipv6 policy entry that we couldn't parse.
     #[error("invalid policy entry{0}: {1}")]
     BadPolicy(Pos, #[source] PolicyError),
+    /// An object was expired or not yet valid.
+    #[error("untimely object{0}: {1}")]
+    Untimely(Pos, #[source] tor_checkable::TimeValidityError),
+    /// An underlying byte sequence couldn't be decoded.
+    #[error("decoding error{0}: {1}")]
+    Undecodable(Pos, #[source] tor_bytes::Error),
     /// Versioned document with an unrecognized version.
     #[error("unrecognied document version {0}")]
     BadDocumentVersion(u32),
@@ -246,6 +252,8 @@ impl Error {
             BadSignature(p) => Some(p),
             BadVersion(p) => Some(p),
             BadPolicy(p, _) => Some(p),
+            Untimely(p, _) => Some(p),
+            Undecodable(p, _) => Some(p),
             BadDocumentVersion(_) => None,
             BadDocumentType => None,
         }
@@ -296,5 +304,17 @@ derive_from_err! {std::net::AddrParseError}
 impl From<crate::policy::PolicyError> for Error {
     fn from(e: crate::policy::PolicyError) -> Error {
         Error::BadPolicy(Pos::None, e)
+    }
+}
+
+impl From<tor_bytes::Error> for Error {
+    fn from(e: tor_bytes::Error) -> Error {
+        Error::Undecodable(Pos::None, e)
+    }
+}
+
+impl From<tor_checkable::TimeValidityError> for Error {
+    fn from(e: tor_checkable::TimeValidityError) -> Error {
+        Error::Untimely(Pos::None, e)
     }
 }

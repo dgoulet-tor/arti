@@ -214,45 +214,33 @@ mod rsa {
 
 mod edcert {
     use crate::{Error, Pos, Result};
-    use tor_cert::{CertType, Ed25519Cert};
+    use tor_cert::{CertType, Ed25519Cert, KeyUnknownCert};
     use tor_llcrypto::pk::ed25519;
 
     /// An ed25519 certificate as parsed from a directory object, with
     /// signature not validated.
-    pub struct UnvalidatedEdCert(Vec<u8>, Pos);
+    pub struct UnvalidatedEdCert(KeyUnknownCert, Pos);
 
-    /// An ed25519 certificate as parsed from a directory object, with
-    /// checked signature.
-    pub struct ValidatedEdCert(Ed25519Cert, Pos);
-    impl From<ValidatedEdCert> for Ed25519Cert {
-        fn from(c: ValidatedEdCert) -> Self {
-            c.0
-        }
-    }
     impl super::FromBytes for UnvalidatedEdCert {
         fn from_bytes(b: &[u8], p: Pos) -> Result<Self> {
-            Self::from_vec(b.into(), p)
+            let cert = Ed25519Cert::decode(b).map_err(|e| {
+                Error::BadObjectVal(p, format!("Bad certificate: {}", e.to_string()))
+            })?;
+            Ok(Self(cert, p))
         }
         fn from_vec(v: Vec<u8>, p: Pos) -> Result<Self> {
-            Ok(Self(v, p))
+            Self::from_bytes(&v[..], p)
         }
     }
     impl UnvalidatedEdCert {
-        pub fn validate(self, signing_key: Option<&ed25519::PublicKey>) -> Result<ValidatedEdCert> {
-            let cert = Ed25519Cert::decode_and_check(&self.0, signing_key)
-                .map_err(|e| Error::BadObjectVal(self.1, e.to_string()))?;
-            Ok(ValidatedEdCert(cert, self.1))
-        }
-    }
-    impl ValidatedEdCert {
         /// Give an error if this certificate's type is not `desired_type`.
         pub fn check_cert_type(self, desired_type: CertType) -> Result<Self> {
-            if self.0.get_cert_type() != desired_type {
+            if self.0.peek_cert_type() != desired_type {
                 return Err(Error::BadObjectVal(
                     self.1,
                     format!(
                         "bad certificate type {} (wanted {})",
-                        self.0.get_cert_type(),
+                        self.0.peek_cert_type(),
                         desired_type
                     ),
                 ));
@@ -261,10 +249,13 @@ mod edcert {
         }
         /// Give an error if this certificate's subject_key is not `pk`
         pub fn check_subject_key_is(self, pk: &ed25519::PublicKey) -> Result<Self> {
-            if self.0.get_subject_key().as_ed25519() != Some(pk) {
+            if self.0.peek_subject_key().as_ed25519() != Some(pk) {
                 return Err(Error::BadObjectVal(self.1, "incorrect subject key".into()));
             }
             Ok(self)
+        }
+        pub fn into_unchecked(self) -> KeyUnknownCert {
+            self.0
         }
     }
 }

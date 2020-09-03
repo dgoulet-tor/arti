@@ -39,17 +39,18 @@ use crate::{AllowAnnotations, Error, Result};
 
 use lazy_static::lazy_static;
 use std::{net, time};
+use tor_checkable::{signed, timed, Timebound};
 use tor_llcrypto as ll;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
 use digest::Digest;
-use signature::{Signature, Verifier};
+use signature::Signature;
 
 /// A router descriptor, with possible annotations.
 #[allow(dead_code)]
 pub struct AnnotatedRouterDesc {
     ann: RouterAnnotation,
-    router: RouterDesc,
+    router: UncheckedRouterDesc,
 }
 
 /// Annotations about a router descriptor, as stored on disc.
@@ -86,7 +87,6 @@ pub struct RouterDesc {
     rsa_identity: ll::pk::rsa::PublicKey,
     ntor_onion_key: ll::pk::curve25519::PublicKey,
     tap_onion_key: ll::pk::rsa::PublicKey,
-    expiry: std::time::SystemTime,
     proto: tor_protover::Protocols,
     is_dircache: bool,
     is_hsdir: bool,
@@ -270,15 +270,18 @@ impl RouterAnnotation {
     }
 }
 
-impl RouterDesc {
-    /// Return true iff this router descriptor is expired.
-    ///
-    /// The check is performed under the assumption that the current
-    /// time is `when`.
-    pub fn is_expired_at(&self, when: time::SystemTime) -> bool {
-        self.expiry <= when
-    }
+/// A parsed router descriptor whose signatures and/or validity times
+/// may or may not be invalid.
+pub type UncheckedRouterDesc =
+    signed::SignatureGated<timed::TimerangeBound<RouterDesc, std::ops::Range<time::SystemTime>>>;
 
+// XXXX use the correct value.  Is it specified?
+const ROUTER_EXPIRY_SECONDS: u64 = 30 * 86400;
+
+// XXXX use the correct value.  Is it specified?
+const ROUTER_PRE_VALIDITY_SECONDS: u64 = 7 * 86400;
+
+impl RouterDesc {
     /// Helper: tokenize `s`, and divide it into three validated sections.
     fn parse_sections<'a>(
         reader: &mut NetDocReader<'a, RouterKW>,
@@ -321,7 +324,7 @@ impl RouterDesc {
     /// after the signatures and expiration were checked.  But that's
     /// future work for now, partially because of limitations in the
     /// ed25519 API.
-    pub fn parse(s: &str) -> Result<RouterDesc> {
+    pub fn parse(s: &str) -> Result<UncheckedRouterDesc> {
         let mut reader = crate::tokenize::NetDocReader::new(s);
         let result = Self::parse_internal(&mut reader).map_err(|e| e.within(s));
         reader.should_be_exhausted()?;
@@ -333,7 +336,7 @@ impl RouterDesc {
     /// This function does the same as parse(), but returns errors based on
     /// byte-wise positions.  The parse() function converts such errors
     /// into line-and-byte positions.
-    fn parse_internal(r: &mut NetDocReader<'_, RouterKW>) -> Result<RouterDesc> {
+    fn parse_internal(r: &mut NetDocReader<'_, RouterKW>) -> Result<UncheckedRouterDesc> {
         // TODO: This function is too long!  The little "paragraphs" here
         // that parse one item at a time should be made into sub-functions.
         use RouterKW::*;
@@ -349,20 +352,17 @@ impl RouterDesc {
             if cert_tok.offset_in(s).unwrap() < start_offset {
                 return Err(Error::MisplacedToken("identity-ed25519", cert_tok.pos()));
             }
-            let cert: tor_cert::Ed25519Cert = cert_tok
+            let cert: tor_cert::UncheckedCert = cert_tok
                 .parse_obj::<UnvalidatedEdCert>("ED25519 CERT")?
-                .validate(None)?
                 .check_cert_type(tor_cert::CertType::IDENTITY_V_SIGNING)?
-                .into();
-            let sk = cert.get_subject_key().as_ed25519().ok_or_else(|| {
+                .into_unchecked()
+                .check_key(&None)?;
+            let sk = cert.peek_subject_key().as_ed25519().ok_or_else(|| {
                 Error::BadObjectVal(cert_tok.pos(), "no ed25519 signing key".to_string())
             })?;
             let sk = *sk;
             (cert, sk)
         };
-
-        // start computing expiry time.
-        let mut expiry = identity_cert.get_expiry();
 
         // Legacy RSA identity
         let rsa_identity: ll::pk::rsa::PublicKey = body
@@ -384,8 +384,8 @@ impl RouterDesc {
             ));
         }
 
-        //  Check ed25519 signature.
-        {
+        // Extract ed25519 signature.
+        let ed_signature: ll::pk::ed25519::ValidatableEd25519Signature = {
             let mut d = ll::d::Sha256::new();
             // XXXX spec is ambiguous whether this prefix goes on
             // before or after taking the hash.
@@ -397,31 +397,20 @@ impl RouterDesc {
             let sig = ll::pk::ed25519::Signature::from_bytes(sig.as_bytes())
                 .map_err(|_| Error::BadSignature(ed_sig.pos()))?;
 
-            let verified = ed25519_signing_key.verify(&d, &sig);
-            assert!(verified.is_ok());
-            if verified.is_err() {
-                return Err(Error::BadSignature(ed_sig.pos()));
-            }
-        }
+            ll::pk::ed25519::ValidatableEd25519Signature::new(ed25519_signing_key, sig, &d)
+        };
 
-        // Check legacy RSA signature.
-        {
+        // Extract legacy RSA signature.
+        let rsa_signature: ll::pk::rsa::ValidatableRSASignature = {
             let mut d = ll::d::Sha1::new();
             let signed_end = rsa_sig_pos + b"router-signature\n".len();
             d.update(&s[start_offset..signed_end]);
             let d = d.finalize();
             let sig = rsa_sig.get_obj("SIGNATURE")?;
             // TODO: we need to accept prefixes here. COMPAT BLOCKER.
-            let verified = rsa_identity.verify(&d, &sig);
-            if verified.is_err() {
-                return Err(Error::BadSignature(rsa_sig.pos()));
-            }
-        }
 
-        //
-        // Okay, if we reach this point we've checked the signatures on the
-        // document.  Let's move forward and parse the rest.
-        //
+            ll::pk::rsa::ValidatableRSASignature::new(&rsa_identity, &sig, &d)
+        };
 
         // router nickname ipv4addr orport socksport dirport
         let (nickname, ipv4addr, orport, dirport) = {
@@ -450,7 +439,7 @@ impl RouterDesc {
         let ntor_onion_key: Curve25519Public = body.get_required(NTOR_ONION_KEY)?.parse_arg(0)?;
         let ntor_onion_key: ll::pk::curve25519::PublicKey = ntor_onion_key.into();
         // ntor crosscert
-        {
+        let crosscert_cert: tor_cert::UncheckedCert = {
             // Technically required? XXXX
             let cc = body.get_required(NTOR_ONION_KEY_CROSSCERT)?;
             let sign: u8 = cc.parse_arg(0)?;
@@ -460,14 +449,13 @@ impl RouterDesc {
             let ntor_as_ed =
                 ll::pk::keymanip::convert_curve25519_to_ed25519_public(&ntor_onion_key, sign)
                     .ok_or_else(|| Error::Internal(cc.pos()))?; // XXX not really 'internal'
-            let crosscert: tor_cert::Ed25519Cert = cc
-                .parse_obj::<UnvalidatedEdCert>("ED25519 CERT")?
-                .validate(Some(&ntor_as_ed))?
+
+            cc.parse_obj::<UnvalidatedEdCert>("ED25519 CERT")?
                 .check_cert_type(tor_cert::CertType::NTOR_CC_IDENTITY)?
-                .check_subject_key_is(identity_cert.get_signing_key())?
-                .into();
-            expiry = std::cmp::min(expiry, crosscert.get_expiry());
-        }
+                .check_subject_key_is(identity_cert.peek_signing_key())?
+                .into_unchecked()
+                .check_key(&Some(ntor_as_ed))?
+        };
 
         // TAP key
         let tap_onion_key: ll::pk::rsa::PublicKey = body
@@ -478,18 +466,15 @@ impl RouterDesc {
             .into();
 
         // TAP crosscert
-        {
+        let tap_crosscert_sig = {
             // not offically required yet xxxx
             let cc_tok = body.get_required(ONION_KEY_CROSSCERT)?;
             let cc_val = cc_tok.get_obj("CROSSCERT")?;
             let mut signed = Vec::new();
             signed.extend(rsa_identity.to_rsa_identity().as_bytes());
-            signed.extend(identity_cert.get_signing_key().as_bytes());
-            let verified = tap_onion_key.verify(&signed[..], &cc_val[..]);
-            if verified.is_err() {
-                return Err(Error::BadSignature(cc_tok.pos()));
-            }
-        }
+            signed.extend(identity_cert.peek_signing_key().as_bytes());
+            ll::pk::rsa::ValidatableRSASignature::new(&tap_onion_key, &cc_val, &signed)
+        };
 
         // Protocols: treat these as required. (XXXX)
         let proto = {
@@ -561,7 +546,27 @@ impl RouterDesc {
             None => "reject 1-65535".parse::<PortPolicy>().unwrap(),
         };
 
-        Ok(RouterDesc {
+        // Now we're going to collect signatures and expiration times.
+        let (identity_cert, identity_sig) = identity_cert.dangerously_split()?;
+        let (crosscert_cert, cc_sig) = crosscert_cert.dangerously_split()?;
+        let mut signatures: Vec<Box<dyn ll::pk::ValidatableSignature>> = Vec::new();
+        signatures.push(Box::new(rsa_signature));
+        signatures.push(Box::new(ed_signature));
+        signatures.push(Box::new(identity_sig));
+        signatures.push(Box::new(cc_sig));
+        signatures.push(Box::new(tap_crosscert_sig));
+        let identity_cert = identity_cert.dangerously_assume_timely();
+        let crosscert_cert = crosscert_cert.dangerously_assume_timely();
+        let expirations = &[
+            published + time::Duration::new(ROUTER_EXPIRY_SECONDS, 0),
+            identity_cert.get_expiry(),
+            crosscert_cert.get_expiry(),
+        ];
+        let expiry = *expirations.iter().max().unwrap();
+
+        let start_time = published - time::Duration::new(ROUTER_PRE_VALIDITY_SECONDS, 0);
+
+        let desc = RouterDesc {
             nickname,
             ipv4addr,
             orport,
@@ -573,7 +578,6 @@ impl RouterDesc {
             rsa_identity,
             ntor_onion_key,
             tap_onion_key,
-            expiry,
             proto,
             is_dircache,
             is_hsdir,
@@ -582,7 +586,12 @@ impl RouterDesc {
             platform,
             ipv4_policy,
             ipv6_policy,
-        })
+        };
+
+        let time_gated = timed::TimerangeBound::new(desc, start_time..expiry);
+        let sig_gated = signed::SignatureGated::new(time_gated, signatures);
+
+        Ok(sig_gated)
     }
 }
 
@@ -670,7 +679,11 @@ mod test {
 
     #[test]
     fn parse_arbitrary() -> Result<()> {
-        let rd = RouterDesc::parse(TESTDATA)?;
+        use tor_checkable::{SelfSigned, Timebound};
+        let rd = RouterDesc::parse(TESTDATA)?
+            .check_signature()
+            .unwrap()
+            .dangerously_assume_timely();
 
         assert_eq!(rd.nickname, "idun2");
         assert_eq!(rd.orport, 9001);

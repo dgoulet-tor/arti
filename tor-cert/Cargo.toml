@@ -10,6 +10,7 @@ publish = false
 caret = { path="../caret" }
 tor-llcrypto = { path="../tor-llcrypto" }
 tor-bytes = { path="../tor-bytes" }
+tor-checkable = { path="../tor-checkable" }
 signature = "1.2.2"
 
 [dev-dependencies]

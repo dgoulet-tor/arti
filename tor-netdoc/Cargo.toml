@@ -8,8 +8,10 @@ publish = false
 
 [dependencies]
 tor-llcrypto = { path="../tor-llcrypto", version="*" }
+tor-bytes = { path="../tor-bytes", version="*" }
 tor-cert = { path="../tor-cert", version="*" }
 tor-protover = { path="../tor-protover", version= "*" }
+tor-checkable = { path="../tor-checkable", version= "*" }
 
 digest = "0.9.0"
 phf = { version = "0.8.0", features = ["macros"] }
