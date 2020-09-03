@@ -318,3 +318,9 @@ impl From<tor_checkable::TimeValidityError> for Error {
         Error::Untimely(Pos::None, e)
     }
 }
+
+impl From<signature::Error> for Error {
+    fn from(_e: signature::Error) -> Error {
+        Error::BadSignature(Pos::None)
+    }
+}

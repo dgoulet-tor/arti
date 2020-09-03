@@ -1089,8 +1089,12 @@ mod test {
 
     #[test]
     fn parse_and_validate() -> Result<()> {
-        let certs: Result<Vec<AuthCert>> = AuthCert::parse_multiple(CERTS).collect();
-        let certs = certs?;
+        use tor_checkable::{SelfSigned, Timebound};
+        let mut certs = Vec::new();
+        for cert in AuthCert::parse_multiple(CERTS) {
+            let cert = cert?.check_signature()?.dangerously_assume_timely();
+            certs.push(cert);
+        }
 
         assert_eq!(certs.len(), 3);
 

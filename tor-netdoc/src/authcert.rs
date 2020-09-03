@@ -13,8 +13,9 @@ use crate::parse::SectionRules;
 use crate::tokenize::{ItemResult, NetDocReader};
 use crate::{Error, Result};
 
-use tor_llcrypto::d;
+use tor_checkable::{signed, timed};
 use tor_llcrypto::pk::rsa;
+use tor_llcrypto::{d, pk};
 
 use lazy_static::lazy_static;
 
@@ -75,12 +76,17 @@ pub struct AuthCert {
     sk_fingerprint: rsa::RSAIdentity,
 }
 
+/// An authority certificate whose signature and validity time we
+/// haven't checked.
+pub type UncheckedAuthCert =
+    signed::SignatureGated<timed::TimerangeBound<AuthCert, std::ops::Range<time::SystemTime>>>;
+
 impl AuthCert {
     /// Parse an authority certificate from a string.
     ///
     /// This function verifies the certificate's signatures, but doesn't
     /// check its expiration dates.
-    pub fn parse(s: &str) -> Result<AuthCert> {
+    pub fn parse(s: &str) -> Result<UncheckedAuthCert> {
         let mut reader = NetDocReader::new(s);
         let result = AuthCert::take_from_reader(&mut reader).map_err(|e| e.within(s));
         reader.should_be_exhausted()?;
@@ -88,16 +94,16 @@ impl AuthCert {
     }
 
     /// Return an iterator yielding authority certificates from a string.
-    pub fn parse_multiple(s: &str) -> impl Iterator<Item = Result<AuthCert>> + '_ {
+    pub fn parse_multiple(s: &str) -> impl Iterator<Item = Result<UncheckedAuthCert>> + '_ {
         AuthCertIterator(NetDocReader::new(s))
     }
-
-    /// Return true if this certificate is expired at a given time, or
-    /// not yet valid at that time.
-    pub fn is_expired_at(&self, when: time::SystemTime) -> bool {
-        when < self.published || when > self.expires
-    }
-
+    /*
+        /// Return true if this certificate is expired at a given time, or
+        /// not yet valid at that time.
+        pub fn is_expired_at(&self, when: time::SystemTime) -> bool {
+            when < self.published || when > self.expires
+        }
+    */
     /// Return the signing key certified by this certificate.
     pub fn get_signing_key(&self) -> &rsa::PublicKey {
         &self.signing_key
@@ -114,7 +120,7 @@ impl AuthCert {
     }
 
     /// Parse an authority certificate from a reader.
-    fn take_from_reader(reader: &mut NetDocReader<'_, AuthCertKW>) -> Result<AuthCert> {
+    fn take_from_reader(reader: &mut NetDocReader<'_, AuthCertKW>) -> Result<UncheckedAuthCert> {
         use AuthCertKW::*;
 
         let mut start_found = false;
@@ -183,7 +189,7 @@ impl AuthCert {
             .parse_args_as_str::<net::SocketAddrV4>()?;
 
         // check crosscert
-        {
+        let v_crosscert = {
             let crosscert = body.get_required(DIR_KEY_CROSSCERT)?;
             let mut tag = crosscert.get_obj_tag().unwrap();
             // we are required to support both.
@@ -194,14 +200,12 @@ impl AuthCert {
 
             let signed = identity_key.to_rsa_identity();
             // TODO: we need to accept prefixes here. COMPAT BLOCKER.
-            let verified = signing_key.verify(signed.as_bytes(), &sig);
-            if verified.is_err() {
-                return Err(Error::BadSignature(crosscert.pos()));
-            }
-        }
+
+            rsa::ValidatableRSASignature::new(&signing_key, &sig, signed.as_bytes())
+        };
 
         // check the signature
-        {
+        let v_sig = {
             let signature = body.get_required(DIR_KEY_CERTIFICATION)?;
             let sig = signature.get_obj("SIGNATURE")?;
 
@@ -213,16 +217,18 @@ impl AuthCert {
             sha1.update(&s[start_offset..end_offset]);
             let sha1 = sha1.finalize();
             // TODO: we need to accept prefixes here. COMPAT BLOCKER.
+
             let verified = identity_key.verify(&sha1, &sig);
             if verified.is_err() {
                 return Err(Error::BadSignature(signature.pos()));
             }
-        }
+            rsa::ValidatableRSASignature::new(&identity_key, &sig, &sha1)
+        };
 
         let id_fingerprint = identity_key.to_rsa_identity();
         let sk_fingerprint = signing_key.to_rsa_identity();
 
-        Ok(AuthCert {
+        let authcert = AuthCert {
             address,
             identity_key,
             signing_key,
@@ -230,7 +236,15 @@ impl AuthCert {
             expires,
             id_fingerprint,
             sk_fingerprint,
-        })
+        };
+
+        let mut signatures: Vec<Box<dyn pk::ValidatableSignature>> = Vec::new();
+        signatures.push(Box::new(v_crosscert));
+        signatures.push(Box::new(v_sig));
+
+        let timed = timed::TimerangeBound::new(authcert, published..expires);
+        let signed = signed::SignatureGated::new(timed, signatures);
+        Ok(signed)
     }
 
     /// Skip tokens from the reader until the next token (if any) is
@@ -250,8 +264,8 @@ impl AuthCert {
 struct AuthCertIterator<'a>(NetDocReader<'a, AuthCertKW>);
 
 impl<'a> Iterator for AuthCertIterator<'a> {
-    type Item = Result<AuthCert>;
-    fn next(&mut self) -> Option<Result<AuthCert>> {
+    type Item = Result<UncheckedAuthCert>;
+    fn next(&mut self) -> Option<Result<UncheckedAuthCert>> {
         if self.0.is_exhausted() {
             return None;
         }
@@ -273,7 +287,11 @@ mod test {
 
     #[test]
     fn parse_one() -> Result<()> {
-        let _rd = AuthCert::parse(TESTDATA)?;
+        use tor_checkable::{SelfSigned, Timebound};
+        let _rd = AuthCert::parse(TESTDATA)?
+            .check_signature()
+            .unwrap()
+            .dangerously_assume_timely();
 
         Ok(())
     }

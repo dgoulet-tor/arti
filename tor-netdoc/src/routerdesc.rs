@@ -681,8 +681,7 @@ mod test {
     fn parse_arbitrary() -> Result<()> {
         use tor_checkable::{SelfSigned, Timebound};
         let rd = RouterDesc::parse(TESTDATA)?
-            .check_signature()
-            .unwrap()
+            .check_signature()?
             .dangerously_assume_timely();
 
         assert_eq!(rd.nickname, "idun2");
