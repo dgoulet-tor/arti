@@ -17,6 +17,7 @@
 use std::time;
 use thiserror::Error;
 
+pub mod signed;
 pub mod timed;
 
 /// An error that can occur when checking whether a Timebound object is
