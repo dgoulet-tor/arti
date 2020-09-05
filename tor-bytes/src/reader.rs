@@ -1,5 +1,6 @@
 use crate::{Error, Readable, Result};
 use arrayref::array_ref;
+use bytes;
 
 /// A type for reading messages from a slice of bytes.
 ///
@@ -53,6 +54,14 @@ impl<'a> Reader<'a> {
     /// Construct a new Reader from a slice of bytes.
     pub fn from_slice(slice: &'a [u8]) -> Self {
         Reader { b: slice, off: 0 }
+    }
+    /// Construct a new Reader from a 'Bytes' object.
+    pub fn from_bytes(b: &'a bytes::Bytes) -> Self {
+        Self::from_slice(b.as_ref())
+    }
+    /// Construct a new Reader from a 'BytesMut' object
+    pub fn from_bytes_mut(b: &'a bytes::BytesMut) -> Self {
+        Self::from_slice(b.as_ref())
     }
     /// Return the total length of the slice in this reader, including
     /// consumed bytes and remaining bytes.

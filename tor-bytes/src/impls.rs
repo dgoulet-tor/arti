@@ -5,6 +5,7 @@
 //! this is where I'm putting them.
 
 use super::*;
+use bytes;
 use generic_array::GenericArray;
 
 // ----------------------------------------------------------------------
@@ -22,6 +23,12 @@ impl Writer for Vec<u8> {
         // specialize for performance
         let new_len = self.len() + n;
         self.resize(new_len, 0);
+    }
+}
+
+impl Writer for bytes::BytesMut {
+    fn write_all(&mut self, bytes: &[u8]) {
+        self.extend_from_slice(bytes);
     }
 }
 
