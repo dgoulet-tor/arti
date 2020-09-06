@@ -23,6 +23,7 @@
 #![allow(dead_code)]
 #![deny(missing_docs)]
 
+pub mod chancell;
 mod crypto;
 pub mod proto;
 mod util;

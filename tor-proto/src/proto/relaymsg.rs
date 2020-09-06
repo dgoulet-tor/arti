@@ -1,6 +1,6 @@
-use super::cellmsg::{TAP_C_HANDSHAKE_LEN, TAP_S_HANDSHAKE_LEN};
 use super::StreamCmd;
 use super::StreamID;
+use crate::chancell::msg::{TAP_C_HANDSHAKE_LEN, TAP_S_HANDSHAKE_LEN};
 use std::net::{IpAddr, Ipv4Addr};
 use tor_bytes::{Error, Result};
 use tor_bytes::{Readable, Reader, Writeable, Writer};
