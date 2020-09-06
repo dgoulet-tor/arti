@@ -11,7 +11,6 @@
 
 pub mod codec;
 pub mod msg;
-use bytes;
 use caret::caret_int;
 
 /// The amount of data sent in a fixed-length cell.
@@ -137,27 +136,26 @@ impl ChanCmd {
             _ => true,
         }
     }
+    pub fn accepts_circid_val(self, id: CircID) -> bool {
+        if self.is_recognized() {
+            self.allows_circid() == (id == 0.into())
+        } else {
+            true
+        }
+    }
 }
 
-/// A single cell extracted from, or encodeable onto, a channel.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ChanCell {
-    circ: CircID,
-    cmd: ChanCmd,
-    body: bytes::Bytes,
+    circid: CircID,
+    msg: msg::ChannelMessage,
 }
 
 impl ChanCell {
-    /// Return the cell's circuit ID.
     pub fn get_circid(&self) -> CircID {
-        self.circ
+        self.circid
     }
-    /// Return the cell's channel ID
-    pub fn get_cmd(&self) -> ChanCmd {
-        self.cmd
-    }
-    /// Return the body of this cell.
-    pub fn get_body(&self) -> &bytes::Bytes {
-        &self.body
+    pub fn get_msg(&self) -> &msg::ChannelMessage {
+        &self.msg
     }
 }

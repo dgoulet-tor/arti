@@ -1,7 +1,4 @@
-use crate::chancell::{
-    msg::{ChanMsg, ChannelMessage},
-    ChanCmd, CircID,
-};
+use crate::chancell::{msg::ChanMsg, ChanCell, ChanCmd, CircID};
 use crate::crypto::cell::CELL_BODY_LEN;
 use arrayref::{array_mut_ref, array_ref};
 use bytes;
@@ -34,11 +31,12 @@ pub struct ChannelCodec {
 }
 
 impl futures_codec::Encoder for ChannelCodec {
-    type Item = (CircID, ChannelMessage);
+    type Item = ChanCell;
     type Error = Error;
 
     fn encode(&mut self, item: Self::Item, dst: &mut bytes::BytesMut) -> Result<(), Self::Error> {
-        let (circid, msg) = item;
+        let circid = item.get_circid();
+        let msg = item.get_msg();
         let cmd = msg.get_cmd();
         dst.write_u32(circid.into());
         dst.write_u8(cmd.into());
@@ -69,7 +67,7 @@ impl futures_codec::Encoder for ChannelCodec {
 }
 
 impl futures_codec::Decoder for ChannelCodec {
-    type Item = (CircID, ChannelMessage);
+    type Item = ChanCell;
     type Error = Error;
 
     fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -91,9 +89,13 @@ impl futures_codec::Decoder for ChannelCodec {
 
         let cell = src.split_to(cell_len).freeze();
         let mut r = Reader::from_bytes(&cell);
-        let circid = r.take_u32()?.into();
+        let circid: CircID = r.take_u32()?.into();
         r.advance(if varcell { 1 } else { 3 })?;
         let msg = r.extract()?;
-        Ok(Some((circid, msg)))
+
+        if !cmd.accepts_circid_val(circid) {
+            return Err(Error::Misc());
+        }
+        Ok(Some(ChanCell { circid, msg }))
     }
 }
