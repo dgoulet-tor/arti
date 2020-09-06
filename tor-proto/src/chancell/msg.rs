@@ -1,6 +1,6 @@
 /// A channel message is a decoded channel cell.
 use crate::crypto::cell::{RawCellBody, CELL_BODY_LEN};
-use tor_bytes::{Error, Readable, Reader, Result, Writer};
+use tor_bytes::{self, Error, Readable, Reader, Result, Writer};
 
 use super::ChanCmd;
 
@@ -149,7 +149,7 @@ impl ChanMsg for VPadding {
 impl Readable for VPadding {
     fn take_from(r: &mut Reader<'_>) -> Result<Self> {
         if r.remaining() > std::u16::MAX as usize {
-            return Err(Error::BadMessage("XX"));
+            return Err(Error::BadMessage("Too many bytes in VPADDING cell".into()));
         }
         Ok(VPadding {
             len: r.remaining() as u16,
@@ -319,8 +319,8 @@ fn take_one_netinfo_addr(r: &mut Reader<'_>) -> Result<Option<IpAddr>> {
             (&mut bytes[..]).copy_from_slice(abody);
             Ok(Some(IpAddr::V6(bytes.into())))
         }
-        (0x04, _) => Err(Error::BadMessage("XX")),
-        (0x06, _) => Err(Error::BadMessage("XX")),
+        (0x04, _) => Ok(None), // ignore
+        (0x06, _) => Ok(None), // ignore
         (_, _) => Ok(None),
     }
 }
@@ -401,7 +401,9 @@ impl Readable for PaddingNegotiate {
     fn take_from(r: &mut Reader<'_>) -> Result<Self> {
         let v = r.take_u8()?;
         if v != 0 {
-            return Err(Error::BadMessage("XX"));
+            return Err(Error::BadMessage(
+                "Unrecognized padding negotiation version",
+            ));
         }
         let command = r.take_u8()?;
         let ito_low_ms = r.take_u16()?;

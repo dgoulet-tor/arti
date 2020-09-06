@@ -1,32 +1,43 @@
 //! Define an error type for the tor-proto crate.
-use std::fmt;
+use thiserror::Error;
 
 /// An error type for the tor-proto crate.
 ///
 /// This type should probably be split into several.  There's more
 /// than one kind of error that can occur while doing something with
 /// the Tor protocol.
-///
-/// TODO: convert this to use thiserror.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum Error {
     /// An error that occurred in the tor_bytes crate while decoding an
     /// object.
-    BytesErr(tor_bytes::Error),
+    #[error("parsing error: {0}")]
+    BytesErr(#[source] tor_bytes::Error),
+    /// An error that occurred from the io system.
+    #[error("io error: {0}")]
+    IoErr(#[source] std::io::Error),
     /// Somebody asked for a key that we didn't have.
+    #[error("specified key was missing")]
     MissingKey,
     /// We tried to produce too much output for some function.
+    #[error("couldn't produce that much output")]
     InvalidOutputLength,
     /// We tried to encrypt a message to a hop that wasn't there.
+    #[error("tried to encrypt to nonexistent hop")]
     NoSuchHop,
     /// There was a programming error somewhere in the code.
-    InternalError,
+    #[error("Internal programming error: {0}")]
+    InternalError(String),
     /// The authentication information on this cell was completely wrong,
     /// or the cell was corrupted.
+    #[error("bad relay cell authentication")]
     BadCellAuth,
     /// A circuit-extension handshake failed.
+    #[error("handshake failed")]
     BadHandshake,
+    /// Protocol violation at the channel level
+    #[error("channel protocol violation")]
+    ChanProto(String),
 }
 
 impl From<tor_bytes::Error> for Error {
@@ -35,22 +46,8 @@ impl From<tor_bytes::Error> for Error {
     }
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use Error::*;
-        match self {
-            BytesErr(e) => {
-                return e.fmt(f);
-            }
-            MissingKey => "Request that would need a key I don't have",
-            InvalidOutputLength => "Tried to extract too much data from a KDF",
-            InternalError => "Ran into an internal programming error",
-            NoSuchHop => "Tried to send a cell to a hop that wasn't there",
-            BadCellAuth => "Cell wasn't for me, or hash was bad",
-            BadHandshake => "Incorrect handshake.",
-        }
-        .fmt(f)
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::IoErr(e)
     }
 }
-
-impl std::error::Error for Error {}

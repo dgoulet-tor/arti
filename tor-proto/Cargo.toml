@@ -27,6 +27,7 @@ stream-cipher = "0.7.1"
 sha2 = "0.9.1"
 futures_codec = "*"
 bytes = "*"
+thiserror = "*"
 
 [dev-dependencies]
 hex-literal = "0.3.1"

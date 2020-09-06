@@ -1,27 +1,10 @@
 use crate::chancell::{msg::ChanMsg, ChanCell, ChanCmd, CircID};
 use crate::crypto::cell::CELL_BODY_LEN;
+use crate::Error;
 use arrayref::{array_mut_ref, array_ref};
 use bytes;
 use futures_codec;
 use tor_bytes::{self, Reader, Writer};
-
-// XXXX make a crate-level error type
-pub enum Error {
-    Io(std::io::Error),
-    Bytes(tor_bytes::Error),
-    Misc(),
-}
-
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Error {
-        Error::Io(e)
-    }
-}
-impl From<tor_bytes::Error> for Error {
-    fn from(e: tor_bytes::Error) -> Error {
-        Error::Bytes(e)
-    }
-}
 
 // Note: only link versions 3 and higher are supported.  Versions cell
 // is not supported via coder/decoder ,since it always uses a two-byte
@@ -47,7 +30,7 @@ impl futures_codec::Encoder for ChannelCodec {
             msg.write_body_onto(dst);
             let len = dst.len() - pos - 2;
             if len > std::u16::MAX as usize {
-                return Err(Error::Misc());
+                return Err(Error::InternalError("ran out of space for varcell".into()));
             }
             // go back and set the length.
             *(array_mut_ref![&mut dst[pos..pos + 2], 0, 2]) = (len as u16).to_be_bytes();
@@ -56,7 +39,7 @@ impl futures_codec::Encoder for ChannelCodec {
             msg.write_body_onto(dst);
             let len = dst.len() - pos;
             if len > CELL_BODY_LEN {
-                return Err(Error::Misc());
+                return Err(Error::InternalError("ran out of space for cell".into()));
             }
             // pad to end of fixed-length cell
             dst.write_zeros(CELL_BODY_LEN - len);
@@ -93,7 +76,9 @@ impl futures_codec::Decoder for ChannelCodec {
         let msg = r.extract()?;
 
         if !cmd.accepts_circid_val(circid) {
-            return Err(Error::Misc());
+            return Err(Error::ChanProto(
+                "Invalid circuit ID for cell command".into(),
+            ));
         }
         Ok(Some(ChanCell { circid, msg }))
     }

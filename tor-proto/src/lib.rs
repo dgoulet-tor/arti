@@ -27,6 +27,7 @@ pub mod chancell;
 mod crypto;
 pub mod proto;
 mod util;
+
 pub use util::err::Error;
 
 use zeroize::Zeroizing;
