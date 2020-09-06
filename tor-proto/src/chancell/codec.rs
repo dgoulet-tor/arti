@@ -35,8 +35,7 @@ impl futures_codec::Encoder for ChannelCodec {
     type Error = Error;
 
     fn encode(&mut self, item: Self::Item, dst: &mut bytes::BytesMut) -> Result<(), Self::Error> {
-        let circid = item.get_circid();
-        let msg = item.get_msg();
+        let ChanCell { circid, msg } = item;
         let cmd = msg.get_cmd();
         dst.write_u32(circid.into());
         dst.write_u8(cmd.into());

@@ -8,7 +8,7 @@ use std::net::{IpAddr, Ipv4Addr};
 
 pub trait ChanMsg: Readable {
     fn as_message(self) -> ChannelMessage;
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W);
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W);
 }
 
 #[non_exhaustive]
@@ -66,7 +66,7 @@ impl ChanMsg for ChannelMessage {
     fn as_message(self) -> Self {
         self
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         use ChannelMessage::*;
         match self {
             Padding(b) => b.write_body_onto(w),
@@ -126,7 +126,7 @@ impl ChanMsg for Padding {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::Padding(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, _w: &mut W) {}
+    fn write_body_onto<W: Writer + ?Sized>(self, _w: &mut W) {}
 }
 impl Readable for Padding {
     fn take_from(_r: &mut Reader<'_>) -> Result<Self> {
@@ -142,7 +142,7 @@ impl ChanMsg for VPadding {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::VPadding(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_zeros(self.len as usize);
     }
 }
@@ -169,7 +169,7 @@ macro_rules! fixed_len {
             fn as_message(self) -> ChannelMessage {
                 ChannelMessage::$name(self)
             }
-            fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+            fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
                 w.write_all(&self.handshake[..])
             }
         }
@@ -204,7 +204,7 @@ impl ChanMsg for Create2 {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::Create2(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u16(self.handshake_type);
         assert!(self.handshake.len() <= std::u16::MAX as usize);
         w.write_u16(self.handshake.len() as u16);
@@ -231,7 +231,7 @@ impl ChanMsg for Created2 {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::Created2(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         assert!(self.handshake.len() <= std::u16::MAX as usize);
         w.write_u16(self.handshake.len() as u16);
         w.write_all(&self.handshake[..]);
@@ -258,7 +258,7 @@ impl ChanMsg for Relay {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::Relay(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_all(&self.body[..])
     }
 }
@@ -276,7 +276,7 @@ impl ChanMsg for Destroy {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::Destroy(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, _w: &mut W) {}
+    fn write_body_onto<W: Writer + ?Sized>(self, _w: &mut W) {}
 }
 impl Readable for Destroy {
     fn take_from(_r: &mut Reader<'_>) -> Result<Self> {
@@ -328,7 +328,7 @@ impl ChanMsg for Netinfo {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::Netinfo(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u32(self.timestamp);
         enc_one_netinfo_addr(w, &self.their_addr);
         w.write_u8(self.my_addr.len() as u8); // XXXX overflow?
@@ -364,7 +364,7 @@ impl ChanMsg for Versions {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::Versions(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         for v in self.versions.iter() {
             w.write_u16(*v);
         }
@@ -390,7 +390,7 @@ impl ChanMsg for PaddingNegotiate {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::PaddingNegotiate(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u8(0); // version
         w.write_u8(self.command);
         w.write_u16(self.ito_low_ms);
@@ -441,7 +441,7 @@ impl ChanMsg for Certs {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::Certs(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u8(self.certs.len() as u8); //XXXXX overflow?
         for c in self.certs.iter() {
             enc_one_tor_cert(w, &c)
@@ -469,7 +469,7 @@ impl ChanMsg for AuthChallenge {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::AuthChallenge(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_all(&self.challenge[..]);
         w.write_u16(self.methods.len() as u16); // XXXXX overflow
         for m in self.methods.iter() {
@@ -498,7 +498,7 @@ impl ChanMsg for Authenticate {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::Authenticate(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u16(self.authtype);
         w.write_u16(self.auth.len() as u16); // XXXX overflow
         w.write_all(&self.auth[..]);
@@ -521,7 +521,7 @@ impl ChanMsg for Authorize {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::Authorize(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_all(&self.content[..])
     }
 }
@@ -552,7 +552,7 @@ impl ChanMsg for Unrecognized {
     fn as_message(self) -> ChannelMessage {
         ChannelMessage::Unrecognized(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(&self, w: &mut W) {
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_all(&self.content[..])
     }
 }
