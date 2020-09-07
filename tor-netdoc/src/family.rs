@@ -12,6 +12,9 @@ use tor_llcrypto::pk::rsa::RSAIdentity;
 /// belong to the same family if and only if each one lists the other
 /// as belonging to its family.
 ///
+/// NOTE: when parsing, this type always discards incorrectly-formatted
+/// entries, including entries that are only nicknames.
+///
 /// TODO: This type probably belongs in a different crate.
 pub struct RelayFamily(Vec<RSAIdentity>);
 
@@ -34,6 +37,7 @@ impl std::str::FromStr for RelayFamily {
         let v: Result<Vec<RSAIdentity>> = s
             .split(crate::tokenize::is_sp)
             .map(|e| e.parse::<LongIdent>().map(|v| v.into()))
+            .filter(Result::is_ok)
             .collect();
         Ok(RelayFamily(v?))
     }
