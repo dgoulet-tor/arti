@@ -94,8 +94,7 @@ pub enum RelayMsg {
     BeginDir,
 
     /// An unrecognized command.
-    // TODO: refactor
-    Unrecognized(StreamCmd, Unrecognized),
+    Unrecognized(Unrecognized),
     // No hs for now.
 }
 
@@ -129,7 +128,7 @@ impl RelayMsg {
             Resolve(_) => StreamCmd::RESOLVE,
             Resolved(_) => StreamCmd::RESOLVED,
             BeginDir => StreamCmd::BEGIN_DIR,
-            Unrecognized(cmd, _) => *cmd,
+            Unrecognized(u) => u.get_cmd(),
         }
     }
     /// Extract the body of this message from `r`
@@ -151,7 +150,7 @@ impl RelayMsg {
             StreamCmd::RESOLVED => RelayMsg::Resolved(Resolved::decode_from_reader(r)?),
             StreamCmd::BEGIN_DIR => RelayMsg::BeginDir,
 
-            _ => RelayMsg::Unrecognized(c, Unrecognized::decode_from_reader(r)?),
+            _ => RelayMsg::Unrecognized(Unrecognized::decode_with_cmd(c, r)?),
         })
     }
     /// Encode the body of this message, not including command or length
@@ -173,7 +172,7 @@ impl RelayMsg {
             Resolve(b) => b.encode_onto(w),
             Resolved(b) => b.encode_onto(w),
             BeginDir => (),
-            Unrecognized(_, b) => b.encode_onto(w),
+            Unrecognized(b) => b.encode_onto(w),
         }
     }
 }
@@ -686,14 +685,29 @@ impl Body for Resolved {
     }
 }
 
-/// A relay message that we didnt' recognize
+/// A relay message that we didn't recognize
 pub struct Unrecognized {
+    cmd: StreamCmd,
     body: Vec<u8>,
+}
+
+impl Unrecognized {
+    /// Return the command associated with this message
+    pub fn get_cmd(&self) -> StreamCmd {
+        self.cmd
+    }
+    /// Decode this message, using a provided command.
+    pub fn decode_with_cmd(cmd: StreamCmd, r: &mut Reader<'_>) -> Result<Self> {
+        let mut r = Unrecognized::decode_from_reader(r)?;
+        r.cmd = cmd;
+        Ok(r)
+    }
 }
 
 impl Body for Unrecognized {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         Ok(Unrecognized {
+            cmd: 0.into(),
             body: r.take(r.remaining())?.into(),
         })
     }
