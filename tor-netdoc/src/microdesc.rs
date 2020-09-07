@@ -69,7 +69,7 @@ pub struct AnnotatedMicrodesc {
 
 impl AnnotatedMicrodesc {
     /// Consume this annotated microdesc and discard its annotations.
-    pub fn to_microdesc(self) -> Microdesc {
+    pub fn into_microdesc(self) -> Microdesc {
         self.md
     }
 }

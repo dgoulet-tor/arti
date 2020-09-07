@@ -5,7 +5,6 @@
 //! this is where I'm putting them.
 
 use super::*;
-use bytes;
 use generic_array::GenericArray;
 
 // ----------------------------------------------------------------------

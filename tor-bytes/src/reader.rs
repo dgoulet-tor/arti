@@ -1,6 +1,5 @@
 use crate::{Error, Readable, Result};
 use arrayref::array_ref;
-use bytes;
 
 /// A type for reading messages from a slice of bytes.
 ///

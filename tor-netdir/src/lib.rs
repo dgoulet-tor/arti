@@ -27,7 +27,11 @@ pub struct NetDirConfig {
     cache_path: Option<PathBuf>,
 }
 
-pub struct NetDir {}
+#[allow(unused)]
+pub struct NetDir {
+    consensus: MDConsensus,
+    mds: HashMap<MDDigest, Microdesc>,
+}
 
 impl NetDirConfig {
     pub fn new() -> Self {
@@ -79,7 +83,7 @@ impl NetDirConfig {
         let text = fs::read_to_string(path)?;
         for cert in AuthCert::parse_multiple(&text) {
             let r = (|| {
-                let cert = cert?.check_signature()?.check_valid_now()?; // warn instead.
+                let cert = cert?.check_signature()?.check_valid_now()?;
 
                 let found = self
                     .authorities
@@ -95,7 +99,7 @@ impl NetDirConfig {
                 Err(e) => warn!("unwanted certificate: {}", e),
                 Ok(cert) => {
                     info!(
-                        "adding cert for {:?} {:?}",
+                        "adding cert for {} (SK={})",
                         cert.get_id_fingerprint(),
                         cert.get_sk_fingerprint()
                     );
@@ -108,7 +112,7 @@ impl NetDirConfig {
         Ok(res)
     }
 
-    pub fn load_consensus(&self, path: &Path, certs: &Vec<AuthCert>) -> Result<MDConsensus> {
+    pub fn load_consensus(&self, path: &Path, certs: &[AuthCert]) -> Result<MDConsensus> {
         let text = fs::read_to_string(path)?;
         let consensus = MDConsensus::parse(&text)?
             .check_valid_now()?
@@ -123,11 +127,11 @@ impl NetDirConfig {
         for annotated in
             microdesc::MicrodescReader::new(&text, AllowAnnotations::AnnotationsAllowed)
         {
-            let r = annotated.map(microdesc::AnnotatedMicrodesc::to_microdesc);
+            let r = annotated.map(microdesc::AnnotatedMicrodesc::into_microdesc);
             match r {
                 Err(e) => warn!("bad microdesc: {}", e),
                 Ok(md) => {
-                    res.insert(md.get_digest().clone(), md);
+                    res.insert(*md.get_digest(), md);
                 }
             }
         }
@@ -149,7 +153,8 @@ impl NetDirConfig {
         let md2path = mdpath.with_extension(".new");
 
         let certs = self.load_certs(&certspath)?;
-        let _consensus = self.load_consensus(&conspath, &certs)?;
+        let consensus = self.load_consensus(&conspath, &certs)?;
+        info!("Loaded consensus");
         let mut mds = HashMap::new();
         if mdpath.exists() {
             self.load_mds(&mdpath, &mut mds)?;
@@ -159,6 +164,12 @@ impl NetDirConfig {
         }
         info!("Loaded {} microdescriptors", mds.len());
 
-        Ok(NetDir {})
+        Ok(NetDir { consensus, mds })
+    }
+}
+
+impl Default for NetDirConfig {
+    fn default() -> Self {
+        NetDirConfig::new()
     }
 }

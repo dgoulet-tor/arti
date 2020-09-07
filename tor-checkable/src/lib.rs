@@ -94,7 +94,7 @@ pub trait ExternallySigned<T>: Sized {
     ///
     /// You can use a tuple or a vector here if the object is signed
     /// with multiple keys.
-    type Key;
+    type Key: ?Sized;
 
     /// A type that describes what keys are missing for this object.
     type KeyHint;

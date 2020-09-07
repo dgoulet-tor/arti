@@ -9,10 +9,9 @@
 //!
 //! Currently missing is signing and RSA-OEAP.
 use arrayref::array_ref;
+use std::fmt;
 use subtle::*;
 use zeroize::Zeroize;
-use std::fmt;
-use hex;
 
 /// How many bytes are in an "RSA ID"?  (This is a legacy tor
 /// concept, and refers to identifying a relay by a SHA1 digest
