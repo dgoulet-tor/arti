@@ -23,7 +23,8 @@ pub struct RelayCell {
 impl RelayCell {
     /// Consume a relay cell and return its contents, encoded for use
     /// in a RELAY or RELAY_EARLY cell
-    // TODO: not the best interface
+    ///
+    /// TODO: not the best interface, as this requires copying into a cell.
     fn encode(self) -> Vec<u8> {
         let mut w = Vec::new();
         w.write_u8(self.body.get_cmd().into());
@@ -36,7 +37,7 @@ impl RelayCell {
         self.body.encode_onto(&mut w);
         assert!(w.len() >= body_pos); // nothing was removed
         let payload_len = w.len() - body_pos;
-        assert!(payload_len <= std::u16::MAX as usize); // XXXX overflow?
+        assert!(payload_len <= std::u16::MAX as usize);
         *(array_mut_ref![w, len_pos, 2]) = (payload_len as u16).to_be_bytes();
         w
     }
@@ -44,7 +45,6 @@ impl RelayCell {
     ///
     /// Requires that the cryptographic checks on the message have already been
     /// performed
-    // TODO: not the best interface
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let cmd = r.take_u8()?.into();
         r.advance(2)?; // "recognized"
@@ -52,7 +52,7 @@ impl RelayCell {
         r.advance(4)?; // digest
         let len = r.take_u16()? as usize;
         if r.remaining() < len {
-            return Err(Error::BadMessage("XX"));
+            return Err(Error::BadMessage("Insufficient data in relay cell"));
         }
         r.truncate(len);
         let body = RelayMsg::decode_from_reader(cmd, r)?;
@@ -191,12 +191,14 @@ impl Body for Begin {
         let flags = if r.remaining() >= 4 { r.take_u32()? } else { 0 };
 
         if !addr.is_ascii() {
-            return Err(Error::BadMessage("XX"));
+            return Err(Error::BadMessage("target address in begin cell not ascii"));
         }
 
-        let port = std::str::from_utf8(port).map_err(|_| Error::BadMessage("XX"))?;
+        let port = std::str::from_utf8(port)
+            .map_err(|_| Error::BadMessage("port in begin cell not utf8"))?;
 
-        let port = u16::from_str_radix(port, 10).map_err(|_| Error::BadMessage("XX"))?;
+        let port = u16::from_str_radix(port, 10)
+            .map_err(|_| Error::BadMessage("port in begin cell not a valid port"))?;
 
         Ok(Begin {
             addr: addr.into(),
@@ -250,13 +252,11 @@ impl Body for End {
         let reason = r.take_u8()?;
         if reason == REASON_EXITPOLICY {
             let addr = match r.remaining() {
-                0 => {
-                    return Ok(End { reason, addr: None });
-                }
                 8 => IpAddr::V4(r.extract()?),
                 20 => IpAddr::V6(r.extract()?),
                 _ => {
-                    return Err(Error::BadMessage("XX"));
+                    // Ignores other message lengths
+                    return Ok(End { reason, addr: None });
                 }
             };
             let ttl = r.take_u32()?;
@@ -378,7 +378,7 @@ impl Readable for LinkSpec {
         let lslen = r.take_u8()? as usize;
         if let Some(wantlen) = lstype_len(lstype) {
             if wantlen != lslen {
-                return Err(Error::BadMessage("XX"));
+                return Err(Error::BadMessage("Wrong length for link specifier"));
             }
         }
         Ok(match lstype {
@@ -424,7 +424,8 @@ impl Writeable for LinkSpec {
             }
             Unrecognized(tp, vec) => {
                 w.write_u8(*tp);
-                w.write_u8(vec.len() as u8); // XXX overflow
+                assert!(vec.len() < std::u8::MAX as usize);
+                w.write_u8(vec.len() as u8);
                 w.write_all(&vec[..]);
             }
         }
@@ -496,7 +497,8 @@ impl Body for Extend2 {
         })
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
-        w.write_u8(self.ls.len() as u8); // overflow XXX
+        assert!(self.ls.len() <= std::u8::MAX as usize);
+        w.write_u8(self.ls.len() as u8);
         for ls in self.ls.iter() {
             w.write(ls);
         }
@@ -519,7 +521,8 @@ impl Body for Extended2 {
         })
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
-        w.write_u16(self.handshake.len() as u16); // XXXX overflow
+        assert!(self.handshake.len() <= std::u16::MAX as usize);
+        w.write_u16(self.handshake.len() as u16);
         w.write_all(&self.handshake[..]);
     }
 }
@@ -605,7 +608,7 @@ impl Readable for ResolvedVal {
         let len = r.take_u8()? as usize;
         if let Some(expected_len) = res_len(tp) {
             if len != expected_len {
-                return Err(Error::BadMessage("XX"));
+                return Err(Error::BadMessage("Wrong length for RESOLVED answer"));
             }
         }
         use ResolvedVal::*;
@@ -632,7 +635,8 @@ impl Writeable for ResolvedVal {
         match self {
             Hostname(h) => {
                 w.write_u8(RES_HOSTNAME);
-                w.write_u8(h.len() as u8); // XXXX overflow
+                assert!(h.len() <= std::u8::MAX as usize);
+                w.write_u8(h.len() as u8);
                 w.write_all(&h[..]);
             }
             Ip(IpAddr::V4(a)) => {
@@ -655,7 +659,8 @@ impl Writeable for ResolvedVal {
             }
             Unrecognized(tp, v) => {
                 w.write_u8(*tp);
-                w.write_u8(v.len() as u8); // XXXX overflow
+                assert!(v.len() <= std::u8::MAX as usize);
+                w.write_u8(v.len() as u8);
                 w.write_all(&v[..]);
             }
         }
