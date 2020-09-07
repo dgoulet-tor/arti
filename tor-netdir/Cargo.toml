@@ -1,0 +1,19 @@
+[package]
+name = "tor-netdir"
+version = "0.0.0"
+authors = ["Nick Mathewson <nickm@torproject.org>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+tor-checkable = { path="../tor-checkable", version= "*" }
+tor-netdoc = { path="../tor-netdoc", version= "*" }
+thiserror = "*"
+signature = "*"
+tor-llcrypto = { path="../tor-llcrypto", version= "*" }
+hex = "0.4.2"
+log = "*"
+
+[dev-dependencies]
+simple-logging = "*"

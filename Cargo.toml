@@ -11,4 +11,5 @@ members = [
     "tor-cert",
     "tor-proto",
     "tor-netdoc",
+    "tor-netdir",
     ]

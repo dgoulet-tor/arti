@@ -31,12 +31,15 @@ pub struct MicrodescAnnotation {
     last_listed: Option<time::SystemTime>,
 }
 
+/// The digest of a microdescriptor as used in microdesc consensuses
+pub type MDDigest = [u8; 32];
+
 /// A single microdescriptor.
 #[allow(dead_code)]
 pub struct Microdesc {
     // TODO: maybe this belongs somewhere else. Once it's used to store
     // correlate the microdesc to a consensus, it's never used again.
-    sha256: [u8; 32],
+    sha256: MDDigest,
     tap_onion_key: rsa::PublicKey,
     ntor_onion_key: curve25519::PublicKey,
     family: RelayFamily,
@@ -48,6 +51,13 @@ pub struct Microdesc {
     // pr is obsolete and doesn't go here any more.
 }
 
+impl Microdesc {
+    /// Return the sha256 digest of this microdesc.
+    pub fn get_digest(&self) -> &MDDigest {
+        &self.sha256
+    }
+}
+
 /// A microdescriptor annotated with additional data
 ///
 /// TODO: rename this.
@@ -55,6 +65,13 @@ pub struct Microdesc {
 pub struct AnnotatedMicrodesc {
     md: Microdesc,
     ann: MicrodescAnnotation,
+}
+
+impl AnnotatedMicrodesc {
+    /// Consume this annotated microdesc and discard its annotations.
+    pub fn to_microdesc(self) -> Microdesc {
+        self.md
+    }
 }
 
 decl_keyword! {

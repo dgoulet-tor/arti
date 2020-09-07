@@ -1074,7 +1074,7 @@ impl UnvalidatedMDConsensus {
 }
 
 impl ExternallySigned<MDConsensus> for UnvalidatedMDConsensus {
-    type Key = Vec<AuthCert>;
+    type Key = Vec<AuthCert>; // XXXX I'd rather have this be a slice.
     type KeyHint = Vec<(RSAIdentity, RSAIdentity)>;
     type Error = Error;
 
