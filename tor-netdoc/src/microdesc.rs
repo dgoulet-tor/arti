@@ -56,6 +56,22 @@ impl Microdesc {
     pub fn get_digest(&self) -> &MDDigest {
         &self.sha256
     }
+    /// Return the ntor onion key for this microdesc
+    pub fn get_ntor_key(&self) -> &curve25519::PublicKey {
+        &self.ntor_onion_key
+    }
+    /// Return the ipv4 exit policy for this microdesc
+    pub fn get_ipv4_policy(&self) -> &PortPolicy {
+        &self.ipv4_policy
+    }
+    /// Return the ipv6 exit policy for this microdesc
+    pub fn get_ipv6_policy(&self) -> &PortPolicy {
+        &self.ipv6_policy
+    }
+    /// Return the ed25519 identity for this microdesc (if any)
+    pub fn get_opt_ed25519_id(&self) -> &Option<ed25519::PublicKey> {
+        &self.ed25519_id
+    }
 }
 
 /// A microdescriptor annotated with additional data

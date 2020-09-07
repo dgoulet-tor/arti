@@ -178,18 +178,35 @@ enum RouterWeight {
 
 /// A single relay's status as represented in a microdesc consensus.
 #[allow(dead_code)]
-struct MDConsensusRouterStatus {
+pub struct MDConsensusRouterStatus {
     nickname: String,
     identity: RSAIdentity,
     published: time::SystemTime,
     addrs: Vec<net::SocketAddr>,
     or_port: u16,
     dir_port: u16,
-    md_digest: [u8; 32],
+    md_digest: crate::microdesc::MDDigest,
     flags: RouterFlags,
     version: Option<String>,
     protos: Option<Protocols>,
     weight: RouterWeight,
+}
+
+// TODO: These methods should probably become, in whole or in part,
+// methods on a RouterStatus trait.
+impl MDConsensusRouterStatus {
+    /// Return the expected microdescriptor digest for this routerstatus
+    pub fn get_md_digest(&self) -> &crate::microdesc::MDDigest {
+        &self.md_digest
+    }
+    /// Return the expected microdescriptor digest for this routerstatus
+    pub fn get_rsa_identity(&self) -> &RSAIdentity {
+        &self.identity
+    }
+    /// Return an iterator of ORPort addresses for this routerstatus
+    pub fn orport_addrs(&self) -> impl Iterator<Item=&net::SocketAddr> {
+        self.addrs.iter()
+    }
 }
 
 /// All information about a single authority, as represented in a consensus
@@ -216,6 +233,13 @@ pub struct MDConsensus {
     voters: Vec<ConsensusVoterInfo>,
     routers: Vec<MDConsensusRouterStatus>,
     footer: Footer,
+}
+
+impl MDConsensus {
+    /// Return a slice of all the routerstatus entries in this consensus.
+    pub fn get_routers(&self) -> &[MDConsensusRouterStatus] {
+        &self.routers[..]
+    }
 }
 
 decl_keyword! {
