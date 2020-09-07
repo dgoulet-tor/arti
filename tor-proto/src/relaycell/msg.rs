@@ -1,3 +1,8 @@
+//! Encoding and decoding for relay messages
+//!
+//! Relay messages are sent along circuits, inside RELAY or RELAY_EARLY
+//! cells.
+
 use super::StreamCmd;
 use super::StreamID;
 use crate::chancell::msg::{TAP_C_HANDSHAKE_LEN, TAP_S_HANDSHAKE_LEN};
@@ -9,12 +14,16 @@ use tor_llcrypto::pk::rsa::RSAIdentity;
 
 use arrayref::array_mut_ref;
 
+/// A parsed relay cell.
 pub struct RelayCell {
     streamid: StreamID,
-    body: RelayCellBody,
+    body: RelayMsg,
 }
 
 impl RelayCell {
+    /// Consume a relay cell and return its contents, encoded for use
+    /// in a RELAY or RELAY_EARLY cell
+    // TODO: not the best interface
     fn encode(self) -> Vec<u8> {
         let mut w = Vec::new();
         w.write_u8(self.body.get_cmd().into());
@@ -31,6 +40,11 @@ impl RelayCell {
         *(array_mut_ref![w, len_pos, 2]) = (payload_len as u16).to_be_bytes();
         w
     }
+    /// Parse a RELAY or RELAY_EARLY cell body into a RelayCell.
+    ///
+    /// Requires that the cryptographic checks on the message have already been
+    /// performed
+    // TODO: not the best interface
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let cmd = r.take_u8()?.into();
         r.advance(2)?; // "recognized"
@@ -41,32 +55,51 @@ impl RelayCell {
             return Err(Error::BadMessage("XX"));
         }
         r.truncate(len);
-        let body = RelayCellBody::decode_from_reader(cmd, r)?;
+        let body = RelayMsg::decode_from_reader(cmd, r)?;
         Ok(RelayCell { streamid, body })
     }
 }
 
-pub enum RelayCellBody {
-    Begin(BeginCellBody),
-    Data(DataCellBody),
-    End(EndCellBody),
-    Connected(ConnectedCellBody),
-    Sendme(SendmeCellBody),
-    Extend(ExtendCellBody),
-    Extended(ExtendedCellBody),
-    Extend2(Extend2CellBody),
-    Extended2(Extended2CellBody),
-    Truncate(TruncateCellBody),
-    Truncated(TruncatedCellBody),
+/// A single parsed relay message, sent or received along a circuit
+pub enum RelayMsg {
+    /// Create a stream
+    Begin(Begin),
+    /// Send data on a stream
+    Data(Data),
+    /// Close a stream
+    End(End),
+    /// Successful response to a Begin message
+    Connected(Connected),
+    /// For flow control
+    Sendme(Sendme),
+    /// Extend a circuit to a new hop (deprecated)
+    Extend(Extend),
+    /// Successful response to an Extend message (deprecated)
+    Extended(Extended),
+    /// Extend a circuit to a new hop
+    Extend2(Extend2),
+    /// Successful response to an Extend2 message
+    Extended2(Extended2),
+    /// Partially close a circuit
+    Truncate(Truncate),
+    /// Tell the client the a circuit has been partially closed
+    Truncated(Truncated),
+    /// Used for padding
     Drop,
-    Resolve(ResolveCellBody),
-    Resolved(ResolvedCellBody),
+    /// Launch a DNS request
+    Resolve(Resolve),
+    /// Response to a Resolve message
+    Resolved(Resolved),
+    /// Start a directory stream
     BeginDir,
 
-    Unrecognized(StreamCmd, UnrecognizedCellBody),
+    /// An unrecognized command.
+    // TODO: refactor
+    Unrecognized(StreamCmd, Unrecognized),
     // No hs for now.
 }
 
+/// Internal: traits in common different cell bodies.
 trait Body: Sized {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self>;
     fn decode(body: Vec<u8>) -> Result<Self> {
@@ -76,9 +109,10 @@ trait Body: Sized {
     fn encode_onto(self, w: &mut Vec<u8>);
 }
 
-impl RelayCellBody {
+impl RelayMsg {
+    /// Return the stream command associated with this message.
     pub fn get_cmd(&self) -> StreamCmd {
-        use RelayCellBody::*;
+        use RelayMsg::*;
         match self {
             Begin(_) => StreamCmd::BEGIN,
             Data(_) => StreamCmd::DATA,
@@ -98,30 +132,31 @@ impl RelayCellBody {
             Unrecognized(cmd, _) => *cmd,
         }
     }
+    /// Extract the body of this message from `r`
     pub fn decode_from_reader(c: StreamCmd, r: &mut Reader<'_>) -> Result<Self> {
-        use RelayCellBody::*;
         Ok(match c {
-            StreamCmd::BEGIN => Begin(BeginCellBody::decode_from_reader(r)?),
-            StreamCmd::DATA => Data(DataCellBody::decode_from_reader(r)?),
-            StreamCmd::END => End(EndCellBody::decode_from_reader(r)?),
-            StreamCmd::CONNECTED => Connected(ConnectedCellBody::decode_from_reader(r)?),
-            StreamCmd::SENDME => Sendme(SendmeCellBody::decode_from_reader(r)?),
-            StreamCmd::EXTEND => Extend(ExtendCellBody::decode_from_reader(r)?),
-            StreamCmd::EXTENDED => Extended(ExtendedCellBody::decode_from_reader(r)?),
-            StreamCmd::EXTEND2 => Extend2(Extend2CellBody::decode_from_reader(r)?),
-            StreamCmd::EXTENDED2 => Extended2(Extended2CellBody::decode_from_reader(r)?),
-            StreamCmd::TRUNCATE => Truncate(TruncateCellBody::decode_from_reader(r)?),
-            StreamCmd::TRUNCATED => Truncated(TruncatedCellBody::decode_from_reader(r)?),
-            StreamCmd::DROP => Drop,
-            StreamCmd::RESOLVE => Resolve(ResolveCellBody::decode_from_reader(r)?),
-            StreamCmd::RESOLVED => Resolved(ResolvedCellBody::decode_from_reader(r)?),
-            StreamCmd::BEGIN_DIR => BeginDir,
+            StreamCmd::BEGIN => RelayMsg::Begin(Begin::decode_from_reader(r)?),
+            StreamCmd::DATA => RelayMsg::Data(Data::decode_from_reader(r)?),
+            StreamCmd::END => RelayMsg::End(End::decode_from_reader(r)?),
+            StreamCmd::CONNECTED => RelayMsg::Connected(Connected::decode_from_reader(r)?),
+            StreamCmd::SENDME => RelayMsg::Sendme(Sendme::decode_from_reader(r)?),
+            StreamCmd::EXTEND => RelayMsg::Extend(Extend::decode_from_reader(r)?),
+            StreamCmd::EXTENDED => RelayMsg::Extended(Extended::decode_from_reader(r)?),
+            StreamCmd::EXTEND2 => RelayMsg::Extend2(Extend2::decode_from_reader(r)?),
+            StreamCmd::EXTENDED2 => RelayMsg::Extended2(Extended2::decode_from_reader(r)?),
+            StreamCmd::TRUNCATE => RelayMsg::Truncate(Truncate::decode_from_reader(r)?),
+            StreamCmd::TRUNCATED => RelayMsg::Truncated(Truncated::decode_from_reader(r)?),
+            StreamCmd::DROP => RelayMsg::Drop,
+            StreamCmd::RESOLVE => RelayMsg::Resolve(Resolve::decode_from_reader(r)?),
+            StreamCmd::RESOLVED => RelayMsg::Resolved(Resolved::decode_from_reader(r)?),
+            StreamCmd::BEGIN_DIR => RelayMsg::BeginDir,
 
-            _ => Unrecognized(c, UnrecognizedCellBody::decode_from_reader(r)?),
+            _ => RelayMsg::Unrecognized(c, Unrecognized::decode_from_reader(r)?),
         })
     }
+    /// Encode the body of this message, not including command or length
     pub fn encode_onto(self, w: &mut Vec<u8>) {
-        use RelayCellBody::*;
+        use RelayMsg::*;
         match self {
             Begin(b) => b.encode_onto(w),
             Data(b) => b.encode_onto(w),
@@ -143,13 +178,14 @@ impl RelayCellBody {
     }
 }
 
-pub struct BeginCellBody {
+/// Message to create a enw stream
+pub struct Begin {
     addr: Vec<u8>,
     port: u16,
     flags: u32,
 }
 
-impl Body for BeginCellBody {
+impl Body for Begin {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let addr = r.take_until(b':')?;
         let port = r.take_until(0)?;
@@ -163,7 +199,7 @@ impl Body for BeginCellBody {
 
         let port = u16::from_str_radix(port, 10).map_err(|_| Error::BadMessage("XX"))?;
 
-        Ok(BeginCellBody {
+        Ok(Begin {
             addr: addr.into(),
             port,
             flags,
@@ -178,34 +214,36 @@ impl Body for BeginCellBody {
     }
 }
 
-pub struct DataCellBody {
+/// Data on a stream
+pub struct Data {
     body: Vec<u8>,
 }
 
-impl Body for DataCellBody {
+impl Body for Data {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
-        Ok(DataCellBody {
+        Ok(Data {
             body: r.take(r.remaining())?.into(),
         })
     }
     fn decode(body: Vec<u8>) -> Result<Self> {
-        Ok(DataCellBody { body })
+        Ok(Data { body })
     }
     fn encode_onto(mut self, w: &mut Vec<u8>) {
         w.append(&mut self.body);
     }
 }
 
-pub struct EndCellBody {
+/// Closing a stream
+pub struct End {
     reason: u8,
     addr: Option<(IpAddr, u32)>,
 }
 const REASON_MISC: u8 = 1;
 const REASON_EXITPOLICY: u8 = 4;
-impl Body for EndCellBody {
+impl Body for End {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         if r.remaining() == 0 {
-            return Ok(EndCellBody {
+            return Ok(End {
                 reason: REASON_MISC,
                 addr: None,
             });
@@ -214,7 +252,7 @@ impl Body for EndCellBody {
         if reason == REASON_EXITPOLICY {
             let addr = match r.remaining() {
                 0 => {
-                    return Ok(EndCellBody { reason, addr: None });
+                    return Ok(End { reason, addr: None });
                 }
                 8 => IpAddr::V4(r.extract()?),
                 20 => IpAddr::V6(r.extract()?),
@@ -223,12 +261,12 @@ impl Body for EndCellBody {
                 }
             };
             let ttl = r.take_u32()?;
-            Ok(EndCellBody {
+            Ok(End {
                 reason,
                 addr: Some((addr, ttl)),
             })
         } else {
-            Ok(EndCellBody { reason, addr: None })
+            Ok(End { reason, addr: None })
         }
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
@@ -244,18 +282,19 @@ impl Body for EndCellBody {
     }
 }
 
-pub struct ConnectedCellBody {
+/// Successful response to a Begin message
+pub struct Connected {
     addr: Option<(IpAddr, u32)>,
 }
-impl Body for ConnectedCellBody {
+impl Body for Connected {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         if r.remaining() == 0 {
-            return Ok(ConnectedCellBody { addr: None });
+            return Ok(Connected { addr: None });
         }
         let ipv4 = r.take_u32()?;
         let addr = if ipv4 == 0 {
             if r.take_u8()? != 6 {
-                return Ok(ConnectedCellBody { addr: None });
+                return Ok(Connected { addr: None });
             }
             IpAddr::V6(r.extract()?)
         } else {
@@ -263,7 +302,7 @@ impl Body for ConnectedCellBody {
         };
         let ttl = r.take_u32()?;
 
-        Ok(ConnectedCellBody {
+        Ok(Connected {
             addr: Some((addr, ttl)),
         })
     }
@@ -282,13 +321,14 @@ impl Body for ConnectedCellBody {
     }
 }
 
-pub struct SendmeCellBody {
+/// Used for flow control to increase flow control window
+pub struct Sendme {
     digest: Option<Vec<u8>>,
 }
 
-impl Body for SendmeCellBody {
+impl Body for Sendme {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
-        Ok(SendmeCellBody {
+        Ok(Sendme {
             digest: Some(r.take(r.remaining())?.into()),
         })
     }
@@ -300,17 +340,28 @@ impl Body for SendmeCellBody {
     }
 }
 
+/// A piece of information about a relay and how to connect to it.
+///
+/// TODO: move this. It's used in a bunch of other places.
 #[non_exhaustive]
 pub enum LinkSpec {
+    /// The TCP address of an OR Port for a relay
     OrPort(IpAddr, u16),
+    /// The RSA identity fingerprint of the relay
     RSAId(RSAIdentity),
+    /// The Ed25519 identity of the relay
     Ed25519Id(ed25519::PublicKey),
+    /// A link specifier that we didn't recognize
     Unrecognized(u8, Vec<u8>),
 }
 
+/// Indicates an IPv4 ORPORT link specifier.
 const LSTYPE_ORPORT_V4: u8 = 0;
+/// Indicates an IPv6 ORPORT link specifier.
 const LSTYPE_ORPORT_V6: u8 = 1;
+/// Indicates an RSA ID fingerprint link specifier
 const LSTYPE_RSAID: u8 = 2;
+/// Indicates an Ed25519 link specifier
 const LSTYPE_ED25519ID: u8 = 3;
 
 impl Readable for LinkSpec {
@@ -381,20 +432,21 @@ impl Writeable for LinkSpec {
     }
 }
 
-pub struct ExtendCellBody {
+/// Obsolete circuit extension message
+pub struct Extend {
     addr: Ipv4Addr,
     port: u16,
     handshake: Vec<u8>,
     rsaid: RSAIdentity,
 }
 
-impl Body for ExtendCellBody {
+impl Body for Extend {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let addr = r.extract()?;
         let port = r.take_u16()?;
         let handshake = r.take(TAP_C_HANDSHAKE_LEN)?.into();
         let rsaid = r.extract()?;
-        Ok(ExtendCellBody {
+        Ok(Extend {
             addr,
             port,
             handshake,
@@ -409,34 +461,36 @@ impl Body for ExtendCellBody {
     }
 }
 
-pub struct ExtendedCellBody {
+/// Obsolete circuit extension message (reply)
+pub struct Extended {
     handshake: Vec<u8>,
 }
 
-impl Body for ExtendedCellBody {
+impl Body for Extended {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let handshake = r.take(TAP_S_HANDSHAKE_LEN)?.into();
-        Ok(ExtendedCellBody { handshake })
+        Ok(Extended { handshake })
     }
     fn encode_onto(mut self, w: &mut Vec<u8>) {
         w.append(&mut self.handshake)
     }
 }
 
-pub struct Extend2CellBody {
+/// Extend the circuit to a new hop
+pub struct Extend2 {
     ls: Vec<LinkSpec>,
     handshake_type: u16,
     handshake: Vec<u8>,
 }
 
-impl Body for Extend2CellBody {
+impl Body for Extend2 {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let n = r.take_u8()?;
         let ls = r.extract_n(n as usize)?;
         let handshake_type = r.take_u16()?;
         let hlen = r.take_u16()?;
         let handshake = r.take(hlen as usize)?.into();
-        Ok(Extend2CellBody {
+        Ok(Extend2 {
             ls,
             handshake_type,
             handshake,
@@ -452,15 +506,16 @@ impl Body for Extend2CellBody {
     }
 }
 
-pub struct Extended2CellBody {
+/// Successful reply to an Extend2
+pub struct Extended2 {
     handshake: Vec<u8>,
 }
 
-impl Body for Extended2CellBody {
+impl Body for Extended2 {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let hlen = r.take_u16()?;
         let handshake = r.take(hlen as usize)?;
-        Ok(Extended2CellBody {
+        Ok(Extended2 {
             handshake: handshake.into(),
         })
     }
@@ -470,22 +525,24 @@ impl Body for Extended2CellBody {
     }
 }
 
-pub struct TruncateCellBody {}
+/// End the circuit after this hop
+pub struct Truncate {}
 
-impl Body for TruncateCellBody {
+impl Body for Truncate {
     fn decode_from_reader(_r: &mut Reader<'_>) -> Result<Self> {
-        Ok(TruncateCellBody {})
+        Ok(Truncate {})
     }
     fn encode_onto(self, _w: &mut Vec<u8>) {}
 }
 
-pub struct TruncatedCellBody {
+/// The remaining hops of this circuit have gone away
+pub struct Truncated {
     reason: u8,
 }
 
-impl Body for TruncatedCellBody {
+impl Body for Truncated {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
-        Ok(TruncatedCellBody {
+        Ok(Truncated {
             reason: r.take_u8()?,
         })
     }
@@ -494,14 +551,15 @@ impl Body for TruncatedCellBody {
     }
 }
 
-pub struct ResolveCellBody {
+/// Launch a DNS lookup
+pub struct Resolve {
     query: Vec<u8>,
 }
 
-impl Body for ResolveCellBody {
+impl Body for Resolve {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let query = r.take_until(0)?;
-        Ok(ResolveCellBody {
+        Ok(Resolve {
             query: query.into(),
         })
     }
@@ -511,17 +569,28 @@ impl Body for ResolveCellBody {
     }
 }
 
+/// Possible response to a DNS lookup
 pub enum ResolvedVal {
+    /// We found an IP address
     Ip(IpAddr),
+    /// We found a hostname
     Hostname(Vec<u8>),
+    /// Error; try again
     TransientError,
+    /// Error; don't try again
     NontransientError,
+    /// A DNS lookup response that we didn't recognize
     Unrecognized(u8, Vec<u8>),
 }
+/// Indicates a hostname response
 const RES_HOSTNAME: u8 = 0;
+/// Indicates an IPv4 response
 const RES_IPV4: u8 = 4;
+/// Indicates an IPv6 response
 const RES_IPV6: u8 = 6;
+/// Transient error (okay to try again)
 const RES_ERR_TRANSIENT: u8 = 0xF0;
+/// Non-transient error (don't try again)
 const RES_ERR_NONTRANSIENT: u8 = 0xF1;
 
 impl Readable for ResolvedVal {
@@ -594,11 +663,12 @@ impl Writeable for ResolvedVal {
     }
 }
 
-pub struct ResolvedCellBody {
+/// Response to a Resolve message
+pub struct Resolved {
     answers: Vec<(ResolvedVal, u32)>,
 }
 
-impl Body for ResolvedCellBody {
+impl Body for Resolved {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let mut answers = Vec::new();
         while r.remaining() > 0 {
@@ -606,7 +676,7 @@ impl Body for ResolvedCellBody {
             let ttl = r.take_u32()?;
             answers.push((rv, ttl));
         }
-        Ok(ResolvedCellBody { answers })
+        Ok(Resolved { answers })
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
         for (rv, ttl) in self.answers.iter() {
@@ -616,13 +686,14 @@ impl Body for ResolvedCellBody {
     }
 }
 
-pub struct UnrecognizedCellBody {
+/// A relay message that we didnt' recognize
+pub struct Unrecognized {
     body: Vec<u8>,
 }
 
-impl Body for UnrecognizedCellBody {
+impl Body for Unrecognized {
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
-        Ok(UnrecognizedCellBody {
+        Ok(Unrecognized {
             body: r.take(r.remaining())?.into(),
         })
     }
