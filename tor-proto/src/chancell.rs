@@ -152,7 +152,7 @@ impl ChanCmd {
 #[derive(Debug)]
 pub struct ChanCell {
     circid: CircID,
-    msg: msg::ChannelMessage,
+    msg: msg::ChanMsg,
 }
 
 impl ChanCell {
@@ -161,7 +161,7 @@ impl ChanCell {
         self.circid
     }
     /// Return a reference to the underlying message of this cell.
-    pub fn get_msg(&self) -> &msg::ChannelMessage {
+    pub fn get_msg(&self) -> &msg::ChanMsg {
         &self.msg
     }
 }

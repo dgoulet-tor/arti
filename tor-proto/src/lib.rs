@@ -25,7 +25,7 @@
 
 pub mod chancell;
 mod crypto;
-pub mod proto;
+pub mod relaycell;
 mod util;
 
 pub use util::err::Error;

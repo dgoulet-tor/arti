@@ -6,9 +6,9 @@ use std::net::{IpAddr, Ipv4Addr};
 use tor_bytes::{self, Error, Readable, Reader, Result, Writer};
 
 /// Trait for the 'bodies' of channel messages.
-pub trait ChanMsg: Readable {
-    /// Convert this type into a ChannelMessage, wrapped as appropriate.
-    fn as_message(self) -> ChannelMessage;
+pub trait Body: Readable {
+    /// Convert this type into a ChanMsg, wrapped as appropriate.
+    fn as_message(self) -> ChanMsg;
     /// Consume this message and encode its body onto `w`.
     ///
     /// Does not encode anything _but_ the cell body, and does not pad
@@ -18,12 +18,12 @@ pub trait ChanMsg: Readable {
 
 /// Decoded message from a channel.
 ///
-/// A ChannelMessage is an item received on a channel -- a message
+/// A ChanMsg is an item received on a channel -- a message
 /// from another Tor node that we are connected to directly over a TLS
 /// connection.
 #[non_exhaustive]
 #[derive(Clone, Debug)]
-pub enum ChannelMessage {
+pub enum ChanMsg {
     /// A Padding message
     Padding(Padding),
     /// Variable-length padding message
@@ -68,10 +68,10 @@ pub enum ChannelMessage {
     Unrecognized(Unrecognized),
 }
 
-impl ChannelMessage {
+impl ChanMsg {
     /// Return the ChanCmd for this message.
     pub fn get_cmd(&self) -> ChanCmd {
-        use ChannelMessage::*;
+        use ChanMsg::*;
         match self {
             Padding(_) => ChanCmd::PADDING,
             VPadding(_) => ChanCmd::VPADDING,
@@ -96,12 +96,12 @@ impl ChannelMessage {
     }
 }
 
-impl ChanMsg for ChannelMessage {
+impl Body for ChanMsg {
     fn as_message(self) -> Self {
         self
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
-        use ChannelMessage::*;
+        use ChanMsg::*;
         match self {
             Padding(b) => b.write_body_onto(w),
             VPadding(b) => b.write_body_onto(w),
@@ -126,10 +126,10 @@ impl ChanMsg for ChannelMessage {
     }
 }
 
-impl Readable for ChannelMessage {
+impl Readable for ChanMsg {
     fn take_from(r: &mut Reader<'_>) -> Result<Self> {
         let cmd = r.take_u8()?.into();
-        use ChannelMessage::*;
+        use ChanMsg::*;
         Ok(match cmd {
             ChanCmd::PADDING => Padding(r.extract()?),
             ChanCmd::VPADDING => VPadding(r.extract()?),
@@ -163,9 +163,9 @@ impl Readable for ChannelMessage {
 /// The correct response to a padding cell is to drop it and do nothing.
 #[derive(Clone, Debug)]
 pub struct Padding {}
-impl ChanMsg for Padding {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::Padding(self)
+impl Body for Padding {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::Padding(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, _w: &mut W) {}
 }
@@ -182,9 +182,9 @@ impl Readable for Padding {
 pub struct VPadding {
     len: u16,
 }
-impl ChanMsg for VPadding {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::VPadding(self)
+impl Body for VPadding {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::VPadding(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_zeros(self.len as usize);
@@ -213,9 +213,9 @@ macro_rules! fixed_len {
         pub struct $name {
             handshake: Vec<u8>
         }
-        impl ChanMsg for $name {
-            fn as_message(self) -> ChannelMessage {
-                ChannelMessage::$name(self)
+        impl Body for $name {
+            fn as_message(self) -> ChanMsg {
+                ChanMsg::$name(self)
             }
             fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
                 w.write_all(&self.handshake[..])
@@ -276,9 +276,9 @@ pub struct Create2 {
     handshake_type: u16,
     handshake: Vec<u8>,
 }
-impl ChanMsg for Create2 {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::Create2(self)
+impl Body for Create2 {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::Create2(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u16(self.handshake_type);
@@ -304,9 +304,9 @@ impl Readable for Create2 {
 pub struct Created2 {
     handshake: Vec<u8>,
 }
-impl ChanMsg for Created2 {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::Created2(self)
+impl Body for Created2 {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::Created2(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         assert!(self.handshake.len() <= std::u16::MAX as usize);
@@ -341,9 +341,9 @@ impl std::fmt::Debug for Relay {
         f.debug_struct("Relay").finish()
     }
 }
-impl ChanMsg for Relay {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::Relay(self)
+impl Body for Relay {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::Relay(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_all(&self.body[..])
@@ -364,9 +364,9 @@ impl Readable for Relay {
 /// down the circuit to later/earlier nodes on the circuit (if any).
 #[derive(Clone, Debug)]
 pub struct Destroy {}
-impl ChanMsg for Destroy {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::Destroy(self)
+impl Body for Destroy {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::Destroy(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, _w: &mut W) {}
 }
@@ -425,9 +425,9 @@ fn take_one_netinfo_addr(r: &mut Reader<'_>) -> Result<Option<IpAddr>> {
         (_, _) => Ok(None),
     }
 }
-impl ChanMsg for Netinfo {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::Netinfo(self)
+impl Body for Netinfo {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::Netinfo(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u32(self.timestamp);
@@ -470,9 +470,9 @@ impl Readable for Netinfo {
 pub struct Versions {
     versions: Vec<u16>,
 }
-impl ChanMsg for Versions {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::Versions(self)
+impl Body for Versions {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::Versions(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         for v in self.versions.iter() {
@@ -497,9 +497,9 @@ pub struct PaddingNegotiate {
     ito_low_ms: u16,
     ito_high_ms: u16,
 }
-impl ChanMsg for PaddingNegotiate {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::PaddingNegotiate(self)
+impl Body for PaddingNegotiate {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::PaddingNegotiate(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u8(0); // version
@@ -562,9 +562,9 @@ fn take_one_tor_cert(r: &mut Reader<'_>) -> Result<TorCert> {
 pub struct Certs {
     certs: Vec<TorCert>,
 }
-impl ChanMsg for Certs {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::Certs(self)
+impl Body for Certs {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::Certs(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u8(self.certs.len() as u8); //XXXXX overflow?
@@ -597,9 +597,9 @@ pub struct AuthChallenge {
     methods: Vec<u16>,
 }
 const CHALLENGE_LEN: usize = 32;
-impl ChanMsg for AuthChallenge {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::AuthChallenge(self)
+impl Body for AuthChallenge {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::AuthChallenge(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_all(&self.challenge[..]);
@@ -633,9 +633,9 @@ pub struct Authenticate {
     authtype: u16,
     auth: Vec<u8>,
 }
-impl ChanMsg for Authenticate {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::Authenticate(self)
+impl Body for Authenticate {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::Authenticate(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u16(self.authtype);
@@ -658,9 +658,9 @@ impl Readable for Authenticate {
 pub struct Authorize {
     content: Vec<u8>,
 }
-impl ChanMsg for Authorize {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::Authorize(self)
+impl Body for Authorize {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::Authorize(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_all(&self.content[..])
@@ -693,9 +693,9 @@ impl Unrecognized {
         self.cmd
     }
 }
-impl ChanMsg for Unrecognized {
-    fn as_message(self) -> ChannelMessage {
-        ChannelMessage::Unrecognized(self)
+impl Body for Unrecognized {
+    fn as_message(self) -> ChanMsg {
+        ChanMsg::Unrecognized(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_all(&self.content[..])

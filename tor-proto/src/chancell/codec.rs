@@ -1,6 +1,6 @@
 //! Implementation for asynchronus encoding and decoding of ChanCells.
 
-use crate::chancell::{msg::ChanMsg, ChanCell, ChanCmd, CircID};
+use crate::chancell::{msg::Body, ChanCell, ChanCmd, CircID};
 use crate::crypto::cell::CELL_BODY_LEN;
 use crate::Error;
 use arrayref::{array_mut_ref, array_ref};

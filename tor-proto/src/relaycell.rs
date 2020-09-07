@@ -12,7 +12,7 @@
 
 use caret::caret_int;
 
-pub mod relaymsg;
+pub mod msg;
 
 caret_int! {
     pub struct StreamCmd(u8) {
