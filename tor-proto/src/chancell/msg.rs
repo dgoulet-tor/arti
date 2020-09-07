@@ -1,41 +1,75 @@
-/// A channel message is a decoded channel cell.
-use crate::crypto::cell::{RawCellBody, CELL_BODY_LEN};
-use tor_bytes::{self, Error, Readable, Reader, Result, Writer};
+//! Different kinds of messages that can be encoded in channel cells.
 
 use super::ChanCmd;
-
+use crate::crypto::cell::{RawCellBody, CELL_BODY_LEN};
 use std::net::{IpAddr, Ipv4Addr};
+use tor_bytes::{self, Error, Readable, Reader, Result, Writer};
 
+/// Trait for the 'bodies' of channel messages.
 pub trait ChanMsg: Readable {
+    /// Convert this type into a ChannelMessage, wrapped as appropriate.
     fn as_message(self) -> ChannelMessage;
+    /// Consume this message and encode its body onto `w`.
+    ///
+    /// Does not encode anything _but_ the cell body, and does not pad
+    /// to the cell length.
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W);
 }
 
+/// Decoded message from a channel.
+///
+/// A ChannelMessage is an item received on a channel -- a message
+/// from another Tor node that we are connected to directly over a TLS
+/// connection.
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub enum ChannelMessage {
+    /// A Padding message
     Padding(Padding),
+    /// Variable-length padding message
     VPadding(VPadding),
+    /// (Deprecated) TAP-based cell to create a new circuit.
     Create(Create),
+    /// (Mostly deprecated) HMAC-based cell to create a new circuit.
     CreateFast(CreateFast),
+    /// Cell to create a new circuit
     Create2(Create2),
+    /// (Deprecated) Answer to a Create cell
     Created(Created),
+    /// (Mostly Deprecated) Answer to a CreateFast cell
     CreatedFast(CreatedFast),
+    /// Answer to a Create2 cell
     Created2(Created2),
+    /// A message sent along a circuit, likely to a more-distant relay.
     Relay(Relay),
+    /// A message sent along a circuit (limited supply)
     RelayEarly(Relay),
+    /// Tear down a circuit
     Destroy(Destroy),
+    /// Part of channel negotiation: describes our position on the network
     Netinfo(Netinfo),
+    /// Part of channel negotiation: describes what link protocol versions
+    /// we support
     Versions(Versions),
+    /// Negotiates what kind of channel padding to send
     PaddingNegotiate(PaddingNegotiate),
+    /// Part of channel negotiation: additional certificates not in the
+    /// TLS handshake
     Certs(Certs),
+    /// Part of channel negotiation: additional random material to be used
+    /// as part of authentication
     AuthChallenge(AuthChallenge),
+    /// Part of channel negotiation: used to authenticate relays when they
+    /// initiate connection
     Authenticate(Authenticate),
+    /// Not yet used
     Authorize(Authorize),
+    /// Any cell whose command we don't recognize
     Unrecognized(Unrecognized),
 }
 
 impl ChannelMessage {
+    /// Return the ChanCmd for this message.
     pub fn get_cmd(&self) -> ChanCmd {
         use ChannelMessage::*;
         match self {
@@ -120,6 +154,13 @@ impl Readable for ChannelMessage {
     }
 }
 
+/// A Padding message is a fixed-length message on a channel that is
+/// ignored.
+///
+/// Padding message can be used to disguise the true amount of data on a
+/// channel, or as a "keep-alive".
+///
+/// The correct response to a padding cell is to drop it and do nothing.
 #[derive(Clone, Debug)]
 pub struct Padding {}
 impl ChanMsg for Padding {
@@ -134,6 +175,9 @@ impl Readable for Padding {
     }
 }
 
+/// A VPadding message is a variable-length padding message.
+///
+/// The correct response to a padding cell is to drop it and do nothing.
 #[derive(Clone, Debug)]
 pub struct VPadding {
     len: u16,
@@ -149,7 +193,7 @@ impl ChanMsg for VPadding {
 impl Readable for VPadding {
     fn take_from(r: &mut Reader<'_>) -> Result<Self> {
         if r.remaining() > std::u16::MAX as usize {
-            return Err(Error::BadMessage("Too many bytes in VPADDING cell".into()));
+            return Err(Error::BadMessage("Too many bytes in VPADDING cell"));
         }
         Ok(VPadding {
             len: r.remaining() as u16,
@@ -157,10 +201,14 @@ impl Readable for VPadding {
     }
 }
 
+/// helper -- declare a fixed-width cell where a fixed number of bytes
+/// matter and the rest are ignored
 macro_rules! fixed_len {
     {
+        $(#[$meta:meta])*
         $name:ident , $cmd:ident, $len:ident
     } => {
+        $(#[$meta])*
         #[derive(Clone,Debug)]
         pub struct $name {
             handshake: Vec<u8>
@@ -184,17 +232,45 @@ macro_rules! fixed_len {
 }
 
 // XXXX MOVE THESE
+/// Number of bytes used for a TAP handshake by the initiator.
 pub const TAP_C_HANDSHAKE_LEN: usize = 128 * 2 + 42;
+/// Number of bytes used for a TAP handshake response
 pub const TAP_S_HANDSHAKE_LEN: usize = 128 + 20;
 
+/// Number of bytes used for a "CREATE_FAST" handshake by the initiator.
 const FAST_C_HANDSHAKE_LEN: usize = 20;
+/// Number of bytes used for a "CREATE_FAST" handshake by the responder
 const FAST_S_HANDSHAKE_LEN: usize = 20 * 2;
 
-fixed_len! { Create, CREATE, TAP_C_HANDSHAKE_LEN }
-fixed_len! { Created, CREATED, TAP_S_HANDSHAKE_LEN }
-fixed_len! { CreateFast, CREATE_FAST, FAST_C_HANDSHAKE_LEN }
-fixed_len! { CreatedFast, CREATED_FAST, FAST_S_HANDSHAKE_LEN }
+fixed_len! {
+    /// A Create cell creates a circuit, using the TAP handshake
+    ///
+    /// TAP is an obsolete handshake based on RSA-1024.
+    Create, CREATE, TAP_C_HANDSHAKE_LEN
+}
+fixed_len! {
+    /// A Creatd cell responds to a Create cell, using the TAP handshake
+    ///
+    /// TAP is an obsolete handshake based on RSA-1024.
+    Created, CREATED, TAP_S_HANDSHAKE_LEN
+}
+fixed_len! {
+    /// A CreateFast cell creates a circuit using no public-key crypto.
+    ///
+    /// This handshake was originally used for the first hop of every
+    /// circuit.  Nowadays it is used for creating one-hop circuits in
+    /// the case where we don't know any onion key for the first hop.
+    CreateFast, CREATE_FAST, FAST_C_HANDSHAKE_LEN
+}
+fixed_len! {
+    /// A CreatedFast cell responds to a CreateFast cell
+    CreatedFast, CREATED_FAST, FAST_S_HANDSHAKE_LEN
+}
 
+/// Create a circuit on the current channel.
+///
+/// To create a circuit, the client sends a Create2 cell containing a
+/// handshake of a given type; the relay responds with a Created2 cell.
 #[derive(Clone, Debug)]
 pub struct Create2 {
     handshake_type: u16,
@@ -223,6 +299,7 @@ impl Readable for Create2 {
     }
 }
 
+/// Response to a Create2 cell
 #[derive(Clone, Debug)]
 pub struct Created2 {
     handshake: Vec<u8>,
@@ -245,6 +322,16 @@ impl Readable for Created2 {
     }
 }
 
+/// A Relay cell-- that is, one transmitted over a circuit.
+///
+/// Once a circuit has been established, relay cells can be sent over
+/// it.  Clients can send relay cells to any relay on the circuit. Any
+/// relay on the circuit can send relay cells to the client, either
+/// directly (if it is the first hop), or indirectly through the
+/// intermediate hops.
+///
+/// A different protocol is defined over the relay cells; it is implemented
+/// XXXX.
 #[derive(Clone)]
 pub struct Relay {
     body: Box<RawCellBody>,
@@ -270,6 +357,11 @@ impl Readable for Relay {
     }
 }
 
+/// Tear down a circuit
+///
+/// On receiving a Destroy message, a Tor implementation should
+/// tear down the associated circuit, and relay the destroy message
+/// down the circuit to later/earlier nodes on the circuit (if any).
 #[derive(Clone, Debug)]
 pub struct Destroy {}
 impl ChanMsg for Destroy {
@@ -284,12 +376,20 @@ impl Readable for Destroy {
     }
 }
 
+/// The netinfo message ends channel negotiation.
+///
+/// It tells the other party on the channel our view of the current time,
+/// our own list of public addresses, and our view of its address.
+///
+/// When we get a netinfo cell, we can start creating circuits on a
+/// channel and sending data.
 #[derive(Clone, Debug)]
 pub struct Netinfo {
     timestamp: u32,
     their_addr: IpAddr,
     my_addr: Vec<IpAddr>,
 }
+/// helper: encode a single address in the form that netinfo messages expect
 fn enc_one_netinfo_addr<W: Writer + ?Sized>(w: &mut W, addr: &IpAddr) {
     match addr {
         IpAddr::V4(ipv4) => {
@@ -304,6 +404,7 @@ fn enc_one_netinfo_addr<W: Writer + ?Sized>(w: &mut W, addr: &IpAddr) {
         }
     }
 }
+/// helper: take an address as encoded in a netinfo message
 fn take_one_netinfo_addr(r: &mut Reader<'_>) -> Result<Option<IpAddr>> {
     let atype = r.take_u8()?;
     let alen = r.take_u8()?;
@@ -319,8 +420,8 @@ fn take_one_netinfo_addr(r: &mut Reader<'_>) -> Result<Option<IpAddr>> {
             (&mut bytes[..]).copy_from_slice(abody);
             Ok(Some(IpAddr::V6(bytes.into())))
         }
-        (0x04, _) => Ok(None), // ignore
-        (0x06, _) => Ok(None), // ignore
+        (0x04, _) => Ok(None), // ignore this? Or call it an error?
+        (0x06, _) => Ok(None), // ignore this, or call it an error?
         (_, _) => Ok(None),
     }
 }
@@ -356,6 +457,15 @@ impl Readable for Netinfo {
     }
 }
 
+/// A Versions cell begins channel negotiation.
+///
+/// Every channel must begin by sending a Versions message.  This message
+/// lists the link protocol versions that this Tor implementation supports.
+///
+/// Note that we should never actually send Versions cells using the
+/// usual channel encoding: Versions cells use two-byte circuit IDs,
+/// whereas all the other cell types use four-byte circuit IDs
+/// [assuming a non-obsolete version is negotiated].
 #[derive(Clone, Debug)]
 pub struct Versions {
     versions: Vec<u16>,
@@ -380,6 +490,7 @@ impl Readable for Versions {
     }
 }
 
+/// Used to negotiate channel padding
 #[derive(Clone, Debug)]
 pub struct PaddingNegotiate {
     command: u8,
@@ -416,6 +527,10 @@ impl Readable for PaddingNegotiate {
     }
 }
 
+/// A single certificate in a Certs cell.
+///
+/// The formats used here are implemented in tor-cert. Ed25519Cert is the
+/// most common.
 #[derive(Clone, Debug)]
 struct TorCert {
     certtype: u8,
@@ -435,6 +550,14 @@ fn take_one_tor_cert(r: &mut Reader<'_>) -> Result<TorCert> {
         cert: cert.into(),
     })
 }
+/// Used as part of the channel handshake to send additioinal certificates
+///
+/// These certificates are not presented as part of the TLS handshake.
+/// Originally this was meant to make Tor TLS handshakes look "normal", but
+/// nowadays it serves less purpose, especially now that we have TLS 1.3.
+///
+/// Every relay sends these cells as part of negotiation; clients do not
+/// send them.
 #[derive(Clone, Debug)]
 pub struct Certs {
     certs: Vec<TorCert>,
@@ -461,6 +584,13 @@ impl Readable for Certs {
     }
 }
 
+/// Part of negotiation: sent by responders to initiators.
+///
+/// The AuthChallenge cell is used to ensure that some unpredictable material
+/// has been sent on the channel, and to tell the initiator what
+/// authentication methods will be extended.
+///
+/// Clients can safely ignore this message: they don't need to authenticate.
 #[derive(Clone, Debug)]
 pub struct AuthChallenge {
     challenge: Vec<u8>,
@@ -473,7 +603,8 @@ impl ChanMsg for AuthChallenge {
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_all(&self.challenge[..]);
-        w.write_u16(self.methods.len() as u16); // XXXXX overflow
+        assert!(self.methods.len() <= std::u16::MAX as usize);
+        w.write_u16(self.methods.len() as u16);
         for m in self.methods.iter() {
             w.write_u16(*m);
         }
@@ -491,6 +622,12 @@ impl Readable for AuthChallenge {
     }
 }
 
+/// Part of negotiation: sent by initiators to responders.
+///
+/// The Authenticate cell proves the initiator's identity to the
+/// responder, even if TLS client authentication was not used.
+///
+/// Clients do not use this.
 #[derive(Clone, Debug)]
 pub struct Authenticate {
     authtype: u16,
@@ -502,7 +639,8 @@ impl ChanMsg for Authenticate {
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u16(self.authtype);
-        w.write_u16(self.auth.len() as u16); // XXXX overflow
+        assert!(self.auth.len() <= std::u16::MAX as usize);
+        w.write_u16(self.auth.len() as u16);
         w.write_all(&self.auth[..]);
     }
 }
@@ -515,6 +653,7 @@ impl Readable for Authenticate {
     }
 }
 
+/// The Authorize cell type is not yet used.
 #[derive(Clone, Debug)]
 pub struct Authorize {
     content: Vec<u8>,
@@ -535,6 +674,10 @@ impl Readable for Authorize {
     }
 }
 
+/// Holds any cell whose command we don't recognize.
+///
+/// Well-behaved Tor implementations are required to ignore commands
+/// like this.
 #[derive(Clone, Debug)]
 pub struct Unrecognized {
     cmd: ChanCmd,

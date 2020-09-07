@@ -7,8 +7,6 @@
 //! data sent over a channel.  It also encodes and decodes various
 //! channel messages, which are the types of data conveyed over a
 //! channel.
-#![allow(missing_docs)]
-
 pub mod codec;
 pub mod msg;
 use caret::caret_int;
@@ -85,13 +83,15 @@ caret_int! {
 }
 
 impl ChanCmd {
-    /// Return true if this cell uses the variable-length format.
+    /// Return true if this command is for a cell using the the
+    /// variable-length format.
     pub fn is_var_cell(self) -> bool {
         // Version 1 of the channel protocol had no variable-length
         // cells, but that's obsolete.  In version 2, only the VERSIONS
         // cell was variable-length.
         self == ChanCmd::VERSIONS || self.0 >= 128u8
     }
+    /// Return true if this command is one that we recognize.
     pub fn is_recognized(self) -> bool {
         match self {
             ChanCmd::PADDING
@@ -114,6 +114,7 @@ impl ChanCmd {
             _ => false,
         }
     }
+    /// Return true if this command is one that expects a nonzero circid.
     pub fn allows_circid(self) -> bool {
         match self {
             ChanCmd::PADDING
@@ -136,6 +137,8 @@ impl ChanCmd {
             _ => true,
         }
     }
+    /// Return true if this command is one that accepts the particular
+    /// circuit ID `id`.
     pub fn accepts_circid_val(self, id: CircID) -> bool {
         if self.is_recognized() {
             self.allows_circid() == (id == 0.into())
@@ -145,6 +148,7 @@ impl ChanCmd {
     }
 }
 
+/// A decoded channel cell, to be sent or received on a channel.
 #[derive(Debug)]
 pub struct ChanCell {
     circid: CircID,
@@ -152,9 +156,11 @@ pub struct ChanCell {
 }
 
 impl ChanCell {
+    /// Return the circuit ID for this cell.
     pub fn get_circid(&self) -> CircID {
         self.circid
     }
+    /// Return a reference to the underlying message of this cell.
     pub fn get_msg(&self) -> &msg::ChannelMessage {
         &self.msg
     }

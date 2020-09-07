@@ -1,16 +1,42 @@
+//! Implementation for asynchronus encoding and decoding of ChanCells.
+
 use crate::chancell::{msg::ChanMsg, ChanCell, ChanCmd, CircID};
 use crate::crypto::cell::CELL_BODY_LEN;
 use crate::Error;
 use arrayref::{array_mut_ref, array_ref};
-use bytes;
-use futures_codec;
 use tor_bytes::{self, Reader, Writer};
 
-// Note: only link versions 3 and higher are supported.  Versions cell
-// is not supported via coder/decoder ,since it always uses a two-byte
-// circuit-ID.
+/// This Codec object can be used with the `futures_codec` crate to
+/// turn an asynchronous byte stream into an asynchronous Stream/Sink pair
+/// of ChannelCell.
+///
+/// NOTE: only link protocol versions 3 and higher are supported.
+/// VERSIONS cells are not supported via the encoder/decoder, since it
+/// VERSIONS always uses a two-byte circuit-ID.
+///
+/// The implemented format is one of the following:
+///
+/// ```ignore
+///     u32 circid;
+///     u8 command;
+///     u16 len;
+///     u8 body[len];
+/// ```
+///
+/// ```ignore
+///     u32 circid;
+///     u8 command;
+///     u8 body[509];
+/// ```
 pub struct ChannelCodec {
     link_version: u16,
+}
+
+impl ChannelCodec {
+    /// Create a new ChannelCodec with a given link protocol version
+    pub fn new(link_version: u16) -> Self {
+        ChannelCodec { link_version }
+    }
 }
 
 impl futures_codec::Encoder for ChannelCodec {
