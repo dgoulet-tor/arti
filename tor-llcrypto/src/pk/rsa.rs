@@ -11,6 +11,8 @@
 use arrayref::array_ref;
 use subtle::*;
 use zeroize::Zeroize;
+use std::fmt;
+use hex;
 
 /// How many bytes are in an "RSA ID"?  (This is a legacy tor
 /// concept, and refers to identifying a relay by a SHA1 digest
@@ -19,7 +21,7 @@ pub const RSA_ID_LEN: usize = 20;
 
 /// An identifier for a Tor relay, based on its legacy RSA
 /// identity key.  These are used all over the Tor protocol.
-#[derive(Clone, Zeroize, Debug)]
+#[derive(Clone, Zeroize)]
 pub struct RSAIdentity {
     id: [u8; RSA_ID_LEN],
 }
@@ -37,6 +39,17 @@ impl std::hash::Hash for RSAIdentity {
 }
 
 impl Eq for RSAIdentity {}
+
+impl fmt::Display for RSAIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "${}", hex::encode(&self.id[..]))
+    }
+}
+impl fmt::Debug for RSAIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "RSAIdentity {{ ${} }}", hex::encode(&self.id[..]))
+    }
+}
 
 impl RSAIdentity {
     /// Expose and RSAIdentity as a slice of bytes.

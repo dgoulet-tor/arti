@@ -27,6 +27,7 @@ sha-1 = "0.9.1"
 sha2 = "0.9.1"
 sha3 = "0.9.1"
 signature = "1.2.2"
+hex = "*"
 
 [dev-dependencies]
 hex-literal = "0.3.1"
