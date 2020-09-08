@@ -32,9 +32,9 @@ pub struct NetDirConfig {
 
 #[derive(Copy, Clone)]
 enum WeightFn {
-    NoBandwidths,
-    NoMeasuredBandwidths,
-    MeasuredBandwidths,
+    Uniform,
+    IncludeUnmeasured,
+    MeasuredOnly,
 }
 
 #[allow(unused)]
@@ -237,11 +237,11 @@ impl NetDir {
         let has_measured = self.relays().any(|r| r.rs.get_weight().is_measured());
         let has_nonzero = self.relays().any(|r| r.rs.get_weight().is_nonzero());
         if !has_nonzero {
-            self.weight_fn.set(Some(WeightFn::NoBandwidths));
+            self.weight_fn.set(Some(WeightFn::Uniform));
         } else if !has_measured {
-            self.weight_fn.set(Some(WeightFn::NoMeasuredBandwidths));
+            self.weight_fn.set(Some(WeightFn::IncludeUnmeasured));
         } else {
-            self.weight_fn.set(Some(WeightFn::MeasuredBandwidths));
+            self.weight_fn.set(Some(WeightFn::MeasuredOnly));
         }
     }
     fn get_weight_fn(&self) -> WeightFn {
@@ -277,11 +277,11 @@ impl<'a> Relay<'a> {
         use netstatus::RouterWeight::*;
         use WeightFn::*;
         match (wf, self.rs.get_weight()) {
-            (NoBandwidths, _) => 1,
-            (NoMeasuredBandwidths, Unmeasured(u)) => *u,
-            (NoMeasuredBandwidths, Measured(u)) => *u,
-            (MeasuredBandwidths, Unmeasured(_)) => 0,
-            (MeasuredBandwidths, Measured(u)) => *u,
+            (Uniform, _) => 1,
+            (IncludeUnmeasured, Unmeasured(u)) => *u,
+            (IncludeUnmeasured, Measured(u)) => *u,
+            (MeasuredOnly, Unmeasured(_)) => 0,
+            (MeasuredOnly, Measured(u)) => *u,
         }
     }
 }
