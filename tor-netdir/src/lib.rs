@@ -11,6 +11,7 @@ use log::{info, warn};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time;
 use tor_llcrypto as ll;
 
 pub use err::Error;
@@ -123,6 +124,7 @@ impl NetDirConfig {
     pub fn load_consensus(&self, path: &Path, certs: &[AuthCert]) -> Result<MDConsensus> {
         let text = fs::read_to_string(path)?;
         let consensus = MDConsensus::parse(&text)?
+            .extend_tolerance(time::Duration::new(86400, 0))
             .check_valid_now()?
             .set_n_authorities(self.authorities.len() as u16)
             .check_signature(certs)?;
