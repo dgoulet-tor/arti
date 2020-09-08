@@ -83,6 +83,27 @@ impl NetDirConfig {
             .unwrap();
     }
 
+    pub fn add_authorities_from_chutney(&mut self, path: &Path) -> Result<()> {
+        use std::io::{self, BufRead};
+        let pb = path.join("torrc");
+        let f = fs::File::open(pb)?;
+        for line in io::BufReader::new(f).lines() {
+            let line = line?;
+            let line = line.trim();
+            if !line.starts_with("DirAuthority") {
+                continue;
+            }
+            let elts: Vec<_> = line.split_ascii_whitespace().collect();
+            let name = elts[1];
+            let v3ident = elts[4];
+            if !v3ident.starts_with("v3ident=") {
+                warn!("Chutney torrc not in expected format.");
+            }
+            self.add_authority(name, &v3ident[8..])?;
+        }
+        Ok(())
+    }
+
     pub fn set_cache_path(&mut self, path: &Path) {
         self.cache_path = Some(path.to_path_buf());
     }
