@@ -1,6 +1,6 @@
 //! Convenience implementation of a TimeBound object.
 
-use std::ops::RangeBounds;
+use std::ops::{Bound, RangeBounds};
 use std::time;
 
 /// A TimeBound object that is valid for a specified range of time.
@@ -26,60 +26,54 @@ use std::time;
 ///            Err(TimeValidityError::Expired(one_hour)));
 ///
 /// ```
-pub struct TimerangeBound<T, U>
-where
-    U: RangeBounds<time::SystemTime>,
-{
+pub struct TimerangeBound<T> {
     obj: T,
-    range: U,
+    start: Option<time::SystemTime>,
+    end: Option<time::SystemTime>,
 }
 
-impl<T, U> TimerangeBound<T, U>
-where
-    U: RangeBounds<time::SystemTime>,
-{
-    /// Construct a new TimerangeBound object from a given object and range.
-    pub fn new(obj: T, range: U) -> Self {
-        Self { obj, range }
+fn unwrap_bound(b: Bound<&'_ time::SystemTime>) -> Option<time::SystemTime> {
+    match b {
+        Bound::Included(x) => Some(*x),
+        Bound::Excluded(x) => Some(*x),
+        _ => None,
     }
 }
 
-impl<T, U> crate::Timebound<T> for TimerangeBound<T, U>
-where
-    U: RangeBounds<time::SystemTime>,
-{
+impl<T> TimerangeBound<T> {
+    /// Construct a new TimerangeBound object from a given object and range.
+    ///
+    /// Note that we do not distinguish between inclusive and
+    /// exclusive bounds: `x..y` and `x..=y` are treated the same
+    /// here.
+    pub fn new<U>(obj: T, range: U) -> Self
+    where
+        U: RangeBounds<time::SystemTime>,
+    {
+        let start = unwrap_bound(range.start_bound());
+        let end = unwrap_bound(range.end_bound());
+        Self { obj, start, end }
+    }
+}
+
+impl<T> crate::Timebound<T> for TimerangeBound<T> {
     type Error = crate::TimeValidityError;
 
     fn is_valid_at(&self, t: &time::SystemTime) -> Result<(), Self::Error> {
         use crate::TimeValidityError;
-        use std::ops::Bound::{self, *};
-
-        fn unwrap_bound<'a, 'b>(
-            b: &'a Bound<&'b time::SystemTime>,
-        ) -> Option<&'b time::SystemTime> {
-            match b {
-                Included(x) => Some(x),
-                Excluded(x) => Some(x),
-                _ => None,
-            }
-        }
-
-        if self.range.contains(t) {
-            return Ok(());
-        }
-
-        if let Some(end) = unwrap_bound(&self.range.end_bound()) {
-            if let Ok(d) = t.duration_since(*end) {
-                return Err(TimeValidityError::Expired(d));
-            }
-        }
-        if let Some(start) = unwrap_bound(&self.range.start_bound()) {
+        if let Some(start) = self.start {
             if let Ok(d) = start.duration_since(*t) {
                 return Err(TimeValidityError::NotYetValid(d));
             }
         }
 
-        Err(TimeValidityError::Unspecified)
+        if let Some(end) = self.end {
+            if let Ok(d) = t.duration_since(end) {
+                return Err(TimeValidityError::Expired(d));
+            }
+        }
+
+        Ok(())
     }
 
     fn dangerously_assume_timely(self) -> T {

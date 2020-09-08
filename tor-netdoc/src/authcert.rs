@@ -78,8 +78,7 @@ pub struct AuthCert {
 
 /// An authority certificate whose signature and validity time we
 /// haven't checked.
-pub type UncheckedAuthCert =
-    signed::SignatureGated<timed::TimerangeBound<AuthCert, std::ops::Range<time::SystemTime>>>;
+pub type UncheckedAuthCert = signed::SignatureGated<timed::TimerangeBound<AuthCert>>;
 
 impl AuthCert {
     /// Parse an authority certificate from a string.

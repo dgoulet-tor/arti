@@ -272,8 +272,7 @@ impl RouterAnnotation {
 
 /// A parsed router descriptor whose signatures and/or validity times
 /// may or may not be invalid.
-pub type UncheckedRouterDesc =
-    signed::SignatureGated<timed::TimerangeBound<RouterDesc, std::ops::Range<time::SystemTime>>>;
+pub type UncheckedRouterDesc = signed::SignatureGated<timed::TimerangeBound<RouterDesc>>;
 
 // XXXX use the correct value.  Is it specified?
 const ROUTER_EXPIRY_SECONDS: u64 = 30 * 86400;

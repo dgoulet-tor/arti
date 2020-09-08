@@ -928,8 +928,7 @@ impl Signature {
 
 /// A MDConsensus object that has been parsed, but not checked for signatures
 /// and time.
-pub type UncheckedMDConsensus =
-    TimerangeBound<UnvalidatedMDConsensus, std::ops::Range<time::SystemTime>>;
+pub type UncheckedMDConsensus = TimerangeBound<UnvalidatedMDConsensus>;
 
 impl MDConsensus {
     /// Try to parse a single networkstatus document from a string.
