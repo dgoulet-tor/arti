@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 mod err;
 
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
@@ -8,6 +10,7 @@ use tor_netdoc::AllowAnnotations;
 
 use ll::pk::rsa::RSAIdentity;
 use log::{info, warn};
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,10 +31,18 @@ pub struct NetDirConfig {
     cache_path: Option<PathBuf>,
 }
 
+#[derive(Copy, Clone)]
+enum WeightFn {
+    NoBandwidths,
+    NoMeasuredBandwidths,
+    MeasuredBandwidths,
+}
+
 #[allow(unused)]
 pub struct NetDir {
     consensus: MDConsensus,
     mds: HashMap<MDDigest, Microdesc>,
+    weight_fn: Cell<Option<WeightFn>>,
 }
 
 // TODO: This should probably be a more specific struct, with a trait
@@ -195,7 +206,11 @@ impl NetDirConfig {
         }
         info!("Loaded {} microdescriptors", mds.len());
 
-        Ok(NetDir { consensus, mds })
+        Ok(NetDir {
+            consensus,
+            mds,
+            weight_fn: Cell::new(None),
+        })
     }
 }
 
@@ -219,6 +234,23 @@ impl NetDir {
     pub fn relays(&self) -> impl Iterator<Item = Relay<'_>> {
         self.all_relays().filter(Relay::is_usable)
     }
+    fn pick_weight_fn(&self) {
+        let has_measured = self.relays().any(|r| r.rs.get_weight().is_measured());
+        let has_nonzero = self.relays().any(|r| r.rs.get_weight().is_nonzero());
+        if !has_nonzero {
+            self.weight_fn.set(Some(WeightFn::NoBandwidths));
+        } else if !has_measured {
+            self.weight_fn.set(Some(WeightFn::NoMeasuredBandwidths));
+        } else {
+            self.weight_fn.set(Some(WeightFn::MeasuredBandwidths));
+        }
+    }
+    fn get_weight_fn(&self) -> WeightFn {
+        if self.weight_fn.get().is_none() {
+            self.pick_weight_fn();
+        }
+        self.weight_fn.get().unwrap()
+    }
 }
 
 impl<'a> Relay<'a> {
@@ -230,5 +262,17 @@ impl<'a> Relay<'a> {
     }
     pub fn get_rsa_id(&self) -> &RSAIdentity {
         self.rs.get_rsa_identity()
+    }
+
+    fn get_weight(&self, wf: WeightFn) -> u32 {
+        use netstatus::RouterWeight::*;
+        use WeightFn::*;
+        match (wf, self.rs.get_weight()) {
+            (NoBandwidths, _) => 1,
+            (NoMeasuredBandwidths, Unmeasured(u)) => *u,
+            (NoMeasuredBandwidths, Measured(u)) => *u,
+            (MeasuredBandwidths, Unmeasured(_)) => 0,
+            (MeasuredBandwidths, Measured(u)) => *u,
+        }
     }
 }

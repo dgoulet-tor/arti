@@ -170,10 +170,30 @@ struct RouterFlags {
 
 /// Recognized weight fields on a single relay in a consensus
 #[allow(dead_code)]
-enum RouterWeight {
+pub enum RouterWeight {
     // TODO SPEC: Document that these are u32 in dir-spec.txt
+    /// An unmeasured weight for a router.
     Unmeasured(u32),
+    /// An measured weight for a router.
     Measured(u32),
+}
+
+impl RouterWeight {
+    /// Return true if this weight is the result of a successful measurement
+    pub fn is_measured(&self) -> bool {
+        match self {
+            RouterWeight::Measured(x) if x > &0 => true,
+            _ => false,
+        }
+    }
+    /// Return true if this weight is nonzero
+    pub fn is_nonzero(&self) -> bool {
+        match self {
+            RouterWeight::Unmeasured(0) => false,
+            RouterWeight::Measured(0) => false,
+            _ => true,
+        }
+    }
 }
 
 /// A single relay's status as represented in a microdesc consensus.
@@ -206,6 +226,10 @@ impl MDConsensusRouterStatus {
     /// Return an iterator of ORPort addresses for this routerstatus
     pub fn orport_addrs(&self) -> impl Iterator<Item = &net::SocketAddr> {
         self.addrs.iter()
+    }
+    /// Return the declared weight of this routerstatus in the directory.
+    pub fn get_weight(&self) -> &RouterWeight {
+        &self.weight
     }
 }
 
