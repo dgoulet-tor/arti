@@ -54,6 +54,19 @@ impl<T> TimerangeBound<T> {
         let end = unwrap_bound(range.end_bound());
         Self { obj, start, end }
     }
+
+    /// Adjust this time-range bound to tolerate an expiration time farther
+    /// in the future.
+    pub fn extend_tolerance(self, d: time::Duration) -> Self {
+        let end = self.end.map(|t| t + d);
+        Self { end, ..self }
+    }
+    /// Adjust this time-range bound to tolerate an initial validity
+    /// time farther in the past.
+    pub fn extend_pre_tolerance(self, d: time::Duration) -> Self {
+        let start = self.start.map(|t| t - d);
+        Self { start, ..self }
+    }
 }
 
 impl<T> crate::Timebound<T> for TimerangeBound<T> {
