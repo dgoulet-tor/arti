@@ -232,10 +232,10 @@ impl Microdesc {
             let id_tok = body
                 .get_slice(ID)
                 .iter()
-                .find(|item| item.get_arg(1) == Some("ed25519"));
+                .find(|item| item.get_arg(0) == Some("ed25519"));
             match id_tok {
                 None => None,
-                Some(tok) => Some(tok.parse_arg::<Ed25519Public>(0)?.into()),
+                Some(tok) => Some(tok.parse_arg::<Ed25519Public>(1)?.into()),
             }
         };
 

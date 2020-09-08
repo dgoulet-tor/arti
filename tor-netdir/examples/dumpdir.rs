@@ -8,7 +8,7 @@ fn main() -> Result<()> {
     let dir = cfg.load()?;
 
     for r in dir.relays() {
-        println!("{:?}", r.get_id().unwrap())
+        println!("{}", r.get_rsa_id())
     }
 
     Ok(())
