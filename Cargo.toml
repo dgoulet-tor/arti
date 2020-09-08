@@ -12,4 +12,5 @@ members = [
     "tor-proto",
     "tor-netdoc",
     "tor-netdir",
+    "client-demo",
     ]

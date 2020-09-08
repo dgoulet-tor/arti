@@ -1,0 +1,20 @@
+[package]
+name = "client-demo"
+version = "0.0.0"
+authors = ["Nick Mathewson <nickm@torproject.org>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+tor-netdir = { path="../tor-netdir", version= "*" }
+tor-netdoc = { path="../tor-netdoc", version= "*" }
+tor-proto = { path="../tor-proto", version= "*" }
+log = "*"
+async-std = "*"
+futures = "*"
+futures_codec = "*"
+native-tls = "*"
+async-native-tls = "*"
+thiserror = "*"
+
