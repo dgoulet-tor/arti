@@ -1,6 +1,5 @@
-#![allow(unused)]
-
 mod err;
+mod pick;
 
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
 use tor_netdoc::authcert::AuthCert;
@@ -250,6 +249,16 @@ impl NetDir {
             self.pick_weight_fn();
         }
         self.weight_fn.get().unwrap()
+    }
+    pub fn pick_relay<'a, R, F>(&'a self, rng: &mut R, reweight: F) -> Option<Relay<'a>>
+    where
+        R: rand::Rng,
+        F: Fn(&Relay<'a>, u32) -> u32,
+    {
+        let weight_fn = self.get_weight_fn();
+        pick::pick_weighted(rng, self.relays(), |r| {
+            reweight(r, r.get_weight(weight_fn)) as u64
+        })
     }
 }
 

@@ -14,6 +14,7 @@ signature = "*"
 tor-llcrypto = { path="../tor-llcrypto", version= "*" }
 hex = "0.4.2"
 log = "*"
+rand = "*"
 
 [dev-dependencies]
 simple-logging = "*"
