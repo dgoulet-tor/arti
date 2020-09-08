@@ -3,7 +3,7 @@ mod err;
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
 use tor_netdoc::authcert::AuthCert;
 use tor_netdoc::microdesc::{self, MDDigest, Microdesc};
-use tor_netdoc::netstatus::MDConsensus;
+use tor_netdoc::netstatus::{self, MDConsensus};
 use tor_netdoc::AllowAnnotations;
 
 use ll::pk::rsa::RSAIdentity;
@@ -31,6 +31,14 @@ pub struct NetDirConfig {
 pub struct NetDir {
     consensus: MDConsensus,
     mds: HashMap<MDDigest, Microdesc>,
+}
+
+// TODO: This should probably be a more specific struct, with a trait
+// that implements it.
+#[allow(unused)]
+pub struct Relay<'a> {
+    rs: &'a netstatus::MDConsensusRouterStatus,
+    md: Option<&'a Microdesc>,
 }
 
 impl NetDirConfig {
@@ -171,5 +179,33 @@ impl NetDirConfig {
 impl Default for NetDirConfig {
     fn default() -> Self {
         NetDirConfig::new()
+    }
+}
+
+impl NetDir {
+    pub fn relay_from_rs<'a>(&'a self, rs: &'a netstatus::MDConsensusRouterStatus) -> Relay<'a> {
+        let md = self.mds.get(rs.get_md_digest());
+        Relay { rs, md }
+    }
+    fn all_relays(&self) -> impl Iterator<Item = Relay<'_>> {
+        self.consensus
+            .get_routers()
+            .iter()
+            .map(move |rs| self.relay_from_rs(rs))
+    }
+    pub fn relays(&self) -> impl Iterator<Item = Relay<'_>> {
+        self.all_relays().filter(Relay::is_usable)
+    }
+}
+
+impl<'a> Relay<'a> {
+    pub fn is_usable(&self) -> bool {
+        self.md.is_some() && self.md.unwrap().get_opt_ed25519_id().is_some()
+    }
+    pub fn get_id(&self) -> Option<&ll::pk::ed25519::PublicKey> {
+        self.md?.get_opt_ed25519_id().as_ref()
+    }
+    pub fn get_rsa_id(&self) -> &RSAIdentity {
+        self.rs.get_rsa_identity()
     }
 }

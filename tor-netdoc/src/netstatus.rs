@@ -204,7 +204,7 @@ impl MDConsensusRouterStatus {
         &self.identity
     }
     /// Return an iterator of ORPort addresses for this routerstatus
-    pub fn orport_addrs(&self) -> impl Iterator<Item=&net::SocketAddr> {
+    pub fn orport_addrs(&self) -> impl Iterator<Item = &net::SocketAddr> {
         self.addrs.iter()
     }
 }
