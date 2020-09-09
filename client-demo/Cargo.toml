@@ -11,13 +11,12 @@ tor-netdir = { path="../tor-netdir", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
-rand = "0.7.3"
-log = "0.4.11"
+
+async-native-tls = "0.3.3"
 async-std = "1.6.3"
 futures = "0.3.5"
-futures_codec = "0.4.1"
+log = "0.4.11"
 native-tls = "0.2.4"
-async-native-tls = "0.3.3"
-thiserror = "1.0.20"
-
+rand = "0.7.3"
 simple-logging = "2.0.2"
+thiserror = "1.0.20"

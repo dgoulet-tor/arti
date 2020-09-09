@@ -7,30 +7,28 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-arrayref = "0.3.6"
-digest = "0.9.0"
-typenum = "1.12.0"
-generic-array = "0.14.4"
 aes-ctr = "0.4.0"
-zeroize = "1.1.0"
-rsa = "0.3.0"
-simple_asn1= "0.4.1"
-subtle = "2.3.0"
-# This is paused for now because of aes-ctr.
-stream-cipher = "0.4.0"
-num-traits = "0.2.12"
-num-bigint = "0.3.0"
+arrayref = "0.3.6"
 curve25519-dalek = "3.0.0"
-x25519-dalek = "1.1.0"
+digest = "0.9.0"
 ed25519-dalek = "1.0.0"
+hex = "0.4.2"
+num-bigint = "0.3.0"
+num-traits = "0.2.12"
+rsa = "0.3.0"
 sha-1 = "0.9.1"
 sha2 = "0.9.1"
 sha3 = "0.9.1"
 signature = "1.2.2"
-hex = "0.4.2"
+simple_asn1 = "0.4.1"
+subtle = "2.3.0"
+x25519-dalek = "1.1.0"
+zeroize = "1.1.0"
 
 [dev-dependencies]
 hex-literal = "0.3.1"
+# This is paused for now because of aes-ctr.
+stream-cipher = "0.4.0"
 
 # This is a magic crate that runs the tests and checks the format
 # before it lets you commit or push.  It installs git hooks for this whenever

@@ -10,11 +10,11 @@ publish = false
 tor-llcrypto = { path="../tor-llcrypto" }
 
 arrayref = "0.3.6"
-generic-array = "0.14.4"
-crypto-mac = "0.9.1"
-thiserror = "1.0.20"
-signature = "1.2.2"
 bytes = "0.5.6"
+crypto-mac = "0.9.1"
+generic-array = "0.14.4"
+signature = "1.2.2"
+thiserror = "1.0.20"
 
 [dev-dependencies]
 hex-literal = "0.3.1"

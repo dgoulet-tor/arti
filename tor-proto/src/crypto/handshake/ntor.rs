@@ -12,6 +12,7 @@ use super::KeyGenerator;
 use crate::util::ct;
 use crate::{Error, Result, SecretBytes};
 use tor_bytes::{Reader, Writer};
+use tor_llcrypto::d;
 use tor_llcrypto::pk::curve25519::*;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
@@ -70,7 +71,7 @@ impl KeyGenerator for NtorHKDFKeyGenerator {
     }
 }
 
-type Authcode = crypto_mac::Output<hmac::Hmac<sha2::Sha256>>;
+type Authcode = crypto_mac::Output<hmac::Hmac<d::Sha256>>;
 
 /// Perform a client handshake, generating an onionskin and a state object
 pub fn client_handshake_ntor_v1<R>(

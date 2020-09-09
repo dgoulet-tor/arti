@@ -10,13 +10,14 @@ publish = false
 tor-checkable = { path="../tor-checkable", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
-thiserror = "1.0.20"
-signature = "1.2.2"
 tor-llcrypto = { path="../tor-llcrypto", version= "*" }
 tor-protover = { path="../tor-protover", version= "*" }
+
 hex = "0.4.2"
 log = "0.4.11"
 rand = "0.7.3"
+signature = "1.2.2"
+thiserror = "1.0.20"
 
 [dev-dependencies]
 simple-logging = "2.0.2"

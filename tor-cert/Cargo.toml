@@ -11,8 +11,9 @@ caret = { path="../caret" }
 tor-llcrypto = { path="../tor-llcrypto" }
 tor-bytes = { path="../tor-bytes" }
 tor-checkable = { path="../tor-checkable" }
-signature = "1.2.2"
+
 digest = "0.9.0"
+signature = "1.2.2"
 
 [dev-dependencies]
 base64 = "0.12.3"
