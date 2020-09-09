@@ -191,7 +191,7 @@ impl NetDirConfig {
         let certspath = cachedir.join("cached-certs");
         let conspath = cachedir.join("cached-microdesc-consensus");
         let mdpath = cachedir.join("cached-microdescs");
-        let md2path = mdpath.with_extension(".new");
+        let md2path = mdpath.with_extension("new");
 
         let certs = self.load_certs(&certspath)?;
         let consensus = self.load_consensus(&conspath, &certs)?;
