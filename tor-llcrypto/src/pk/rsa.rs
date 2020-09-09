@@ -194,7 +194,7 @@ impl PublicKey {
     }
 }
 
-/// blah blah
+/// An RSA signature plus all the information needed to validate it.
 pub struct ValidatableRSASignature {
     key: PublicKey,
     sig: Vec<u8>,
@@ -202,7 +202,7 @@ pub struct ValidatableRSASignature {
 }
 
 impl ValidatableRSASignature {
-    /// klasjdkljsd
+    /// Construct a new ValidatableRSASignature.
     pub fn new(key: &PublicKey, sig: &[u8], expected_hash: &[u8]) -> Self {
         ValidatableRSASignature {
             key: key.clone(),
