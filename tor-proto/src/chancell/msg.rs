@@ -752,3 +752,27 @@ impl Readable for Unrecognized {
         })
     }
 }
+
+// Helper: declare an Into implementation for cells that don't take a circid.
+macro_rules! msg_into_cell {
+    ($body:ident) => {
+        impl Into<super::ChanCell> for $body {
+            fn into(self) -> super::ChanCell {
+                super::ChanCell {
+                    circid: 0.into(),
+                    msg: self.as_message(),
+                }
+            }
+        }
+    };
+}
+
+msg_into_cell!(Padding);
+msg_into_cell!(VPadding);
+msg_into_cell!(Netinfo);
+msg_into_cell!(Versions);
+msg_into_cell!(PaddingNegotiate);
+msg_into_cell!(Certs);
+msg_into_cell!(AuthChallenge);
+msg_into_cell!(Authenticate);
+msg_into_cell!(Authorize);

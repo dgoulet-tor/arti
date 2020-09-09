@@ -7,7 +7,7 @@ use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 
-use crate::chancell::{codec, msg, ChanCell, ChanCmd};
+use crate::chancell::{codec, msg, ChanCmd};
 use crate::{Error, Result};
 
 use std::net;
@@ -143,10 +143,8 @@ impl<T: AsyncRead + AsyncWrite + Unpin> UnverifiedChannel<T> {
 
 impl<T: AsyncRead + AsyncWrite + Unpin> VerifiedChannel<T> {
     pub async fn finish(mut self, peer_addr: &net::IpAddr) -> Result<Channel<T>> {
-        use msg::Body;
         let netinfo = msg::Netinfo::for_client(*peer_addr);
-        let cell = ChanCell::new(0.into(), netinfo.as_message());
-        self.tls.send(cell).await?;
+        self.tls.send(netinfo.into()).await?;
 
         Ok(Channel {
             link_protocol: self.link_protocol,
