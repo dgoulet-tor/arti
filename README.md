@@ -22,15 +22,15 @@ So far the code has untested or under-tested implementations of:
   * the ntor protocol
   * the relay crypto algorithm [cruddy vesion]
   * parsing and encoding all the cell types (except for hs-related
-       ones).  [cruddy version]
+       ones)
   * parsing and validating ed25519 certificates
   * parsing and validating router descriptors
   * parsing and validating microdescriptors
   * parsing and validating microdesc consensuses
+  * link authentication (client->server type)
 
 Before I share it, I think it needs more work on:
 
-  * link authentication (client->server type)
   * refactoring everywhere
   * lots of tests
   * a sensible api for cell types
@@ -123,7 +123,7 @@ implementations
 
 `tor-llcrypto`: Wrappers and re-imports of cryptographic code that Tor needs in
 various ways.  Other crates should use this crate, and not actually
-use any crypto crates directly
+use any crypto crates directly.
 
 `tor-bytes`: Byte-by-byte encoder and decoder functions and traits.  We use
 this to safely parse cells, certs, and other byte-oriented things.
@@ -134,12 +134,23 @@ this to safely parse cells, certs, and other byte-oriented things.
 system.  Less complete than the one in Tor's current src/rust, but more
 simple.
 
-`tor-netdoc`: Parsing for Tor's network documents. Currently only handles
-routerdescs.  Underdocumented and too big.  needs splitting.
+`tor-netdoc`: Parsing for Tor's network documents.  Underdocumented and too
+big.
+
+`tor-linkspec`: Traits and types for connecting and extending to Tor relays.
 
 `tor-proto`: Functions to work with cell types, handshakes, and other aspects
-of the Tor protocol.  Underdocumented, too big, needs
-refactoring.
+of the Tor protocol.  This crate is NOT ALLOWED to have any dependencies on
+specific TLS libraries or async environments; those have to happen at a
+higher level.
+
+`tor-netdir`: Wraps tor-netdoc to expose a "tor network directory" interface.
+Doesn't touch the network itself.  Right now it only handles microdesc-based
+directories, and reads all its information from disk.
+
+`client-demo`: A simple tor client program.  Right now it requires that you
+already have a datadir full of directory information.  It does a client->relay
+handshake, then stops.
 
 ## Intended architecture
 

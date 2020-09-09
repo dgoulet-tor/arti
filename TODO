@@ -27,13 +27,14 @@ X Won't do.
 
 - Primitive crypto
   - Wrap x25519 in a trait
-  - Use signature trait for ed25519.
+  - Use signature trait for ed25519?
+  - Ed25519 needs to have an "identity" non-parsed version, maybe.
   o Add RSA-pkcs1 signature support
   o Add RSA-pem encode/decode support
   - RSA-oaep, if supported.
   o test vectors for sha1
-  - test vectors for sha2
-  - test vectors for sha3/shake
+  o test vectors for sha2
+  o test vectors for sha3/shake
   - RSA test vectors as needed
 
 - Higher level crypto
@@ -54,9 +55,7 @@ X Won't do.
       one rustls has? Like "untrusted"?
     - Consider using a writer trait that's agnostic about whether it's
       writing into an expanding Vec or a fixed slice.
-  - Good API for "make this cell and encrypt it and write it"
-  - Good API for "take a cell out of a Reader" and stuff that comes after.
-  - Async variant of that API?
+    - Use "bytes" crate more natively in tor-bytes trait.
   - Tests
     - For all cell types
     - for all relay cell types
@@ -70,20 +69,8 @@ X Won't do.
 
 - Directory parsing stuff
   . Parsing backend
-    o Get tokens
     - Match tor's actual token behavior?
-    o Remove extraneous hoohaw.
-    o Get a "parse into a vector of maybe-tokens" thing.
-    o Get a "validate that every must-token is there" thing.
-    o Macro for making a Keyword type.
-  - Parse descriptors
-    o Parse into a reasonable routerdesc object.
-    - Parse a pile of them.
-    o Check ed signatures on router descriptors
-    o Check rsa signatures on descriptors
-    o Check additional invariants?
   - Parse consensus directories, both variants.
-  - Parse microdescs
   - Apply consensus diffs
 
 - Directory encoding stuff
@@ -110,7 +97,7 @@ X Not currently planning to do:
   X Link protocol v2 (renegotiation)
 
 - Unsure if planning to do:
-  - Link protocol v3 (short circuit IDs, PK comparison)
+  X Link protocol v3 (short circuit IDs, PK comparison)
   - Linkauth 1 (RSA-SHA256-TLSSecret)
   - Parsing votes
   - HSv2 directory support
