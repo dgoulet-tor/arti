@@ -8,7 +8,7 @@ use tor_netdoc::netstatus::{self, MDConsensus};
 use tor_netdoc::AllowAnnotations;
 
 use ll::pk::rsa::RSAIdentity;
-use log::{info, warn};
+use log::{debug, info, warn};
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::fs;
@@ -138,7 +138,7 @@ impl NetDirConfig {
             match r {
                 Err(e) => warn!("unwanted certificate: {}", e),
                 Ok(cert) => {
-                    info!(
+                    debug!(
                         "adding cert for {} (SK={})",
                         cert.get_id_fingerprint(),
                         cert.get_sk_fingerprint()
