@@ -10,6 +10,7 @@ publish = false
 caret = { path="../caret" }
 tor-llcrypto = { path="../tor-llcrypto" }
 tor-bytes = { path="../tor-bytes" }
+tor-linkspec = { path="../tor-linkspec" }
 
 arrayref = "0.3.6"
 digest = "0.9.0"

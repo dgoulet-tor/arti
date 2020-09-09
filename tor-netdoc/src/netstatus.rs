@@ -231,6 +231,14 @@ impl MDConsensusRouterStatus {
     pub fn get_weight(&self) -> &RouterWeight {
         &self.weight
     }
+    /// Return the ORPort addresses of this routerstatus
+    pub fn get_addrs(&self) -> &[net::SocketAddr] {
+        &self.addrs[..]
+    }
+    /// Return the protovers that this routerstatus says it implements.
+    pub fn get_protovers(&self) -> &Option<Protocols> {
+        &self.protos
+    }
 }
 
 /// All information about a single authority, as represented in a consensus

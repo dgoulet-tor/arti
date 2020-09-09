@@ -9,9 +9,11 @@ publish = false
 [dependencies]
 tor-checkable = { path="../tor-checkable", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
+tor-linkspec = { path="../tor-linkspec", version= "*" }
 thiserror = "*"
 signature = "*"
 tor-llcrypto = { path="../tor-llcrypto", version= "*" }
+tor-protover = { path="../tor-protover", version= "*" }
 hex = "0.4.2"
 log = "*"
 rand = "*"

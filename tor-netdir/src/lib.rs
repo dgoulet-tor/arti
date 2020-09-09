@@ -285,3 +285,27 @@ impl<'a> Relay<'a> {
         }
     }
 }
+
+impl<'a> tor_linkspec::ChanTarget for Relay<'a> {
+    fn get_addrs(&self) -> &[std::net::SocketAddr] {
+        self.rs.get_addrs()
+    }
+    fn get_ed_identity(&self) -> &ll::pk::ed25519::PublicKey {
+        self.get_id().unwrap()
+    }
+    fn get_rsa_identity(&self) -> &RSAIdentity {
+        self.get_rsa_id()
+    }
+}
+
+impl<'a> tor_linkspec::ExtendTarget for Relay<'a> {
+    fn get_ntor_onion_key(&self) -> &ll::pk::curve25519::PublicKey {
+        // XXXX unwrap might fail if is_usable is false
+        self.md.unwrap().get_ntor_key()
+    }
+    /// Return the subprotocols implemented by this relay.
+    fn get_protovers(&self) -> &tor_protover::Protocols {
+        // XXXX unwrap might fail if is_usable is false
+        self.rs.get_protovers().as_ref().unwrap()
+    }
+}
