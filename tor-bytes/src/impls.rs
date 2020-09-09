@@ -166,8 +166,10 @@ mod ed25519_impls {
     impl Readable for ed25519::PublicKey {
         fn take_from(b: &mut Reader<'_>) -> Result<Self> {
             let bytes = b.take(32)?;
-            Self::from_bytes(array_ref![bytes, 0, 32])
-                .map_err(|_| Error::BadMessage("Couldn't decode Ed25519 public key"))
+            Self::from_bytes(array_ref![bytes, 0, 32]).map_err(|e| {
+                println!("{}", e);
+                Error::BadMessage("Couldn't decode Ed25519 public key")
+            })
         }
     }
     impl Writeable for ed25519::Signature {

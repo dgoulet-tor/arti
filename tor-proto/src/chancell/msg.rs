@@ -605,6 +605,29 @@ fn take_one_tor_cert(r: &mut Reader<'_>) -> Result<TorCert> {
 pub struct Certs {
     certs: Vec<TorCert>,
 }
+impl Certs {
+    /// Look for a certificate of type 'tp' in this cell; return it if
+    /// there is one.
+    pub fn parse_ed_cert(&self, tp: tor_cert::CertType) -> crate::Result<tor_cert::KeyUnknownCert> {
+        let cert = self
+            .certs
+            .iter()
+            .find(|c| c.certtype == tp.into())
+            .ok_or_else(|| crate::Error::ChanProto(format!("Missing {} certificate", tp)))?;
+
+        let cert = tor_cert::Ed25519Cert::decode(&cert.cert)?;
+        if cert.peek_cert_type() != tp {
+            return Err(crate::Error::ChanProto(format!(
+                "Found a {} certificate labeled as {}",
+                cert.peek_cert_type(),
+                tp
+            )));
+        }
+
+        Ok(cert)
+    }
+}
+
 impl Body for Certs {
     fn as_message(self) -> ChanMsg {
         ChanMsg::Certs(self)

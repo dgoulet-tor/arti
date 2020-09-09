@@ -323,7 +323,13 @@ impl Ed25519Cert {
         }
         let cert_type = r.take_u8()?.into();
         let exp_hours = r.take_u32()?;
-        let cert_key_type = r.take_u8()?.into();
+        let mut cert_key_type = r.take_u8()?.into();
+
+        // XXXX This is a workaround for a tor bug: the key type is wrong.
+        if cert_type == CertType::SIGNING_V_TLS_CERT && cert_key_type == KeyType::ED25519_KEY {
+            cert_key_type = KeyType::SHA256_OF_X509;
+        }
+
         let cert_key = CertifiedKey::from_reader(cert_key_type, &mut r)?;
         let n_exts = r.take_u8()?;
         let mut extensions = Vec::new();

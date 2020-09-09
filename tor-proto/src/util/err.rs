@@ -12,10 +12,10 @@ pub enum Error {
     /// An error that occurred in the tor_bytes crate while decoding an
     /// object.
     #[error("parsing error: {0}")]
-    BytesErr(#[source] tor_bytes::Error),
+    BytesErr(#[from] tor_bytes::Error),
     /// An error that occurred from the io system.
     #[error("io error: {0}")]
-    IoErr(#[source] std::io::Error),
+    IoErr(#[from] std::io::Error),
     /// Somebody asked for a key that we didn't have.
     #[error("specified key was missing")]
     MissingKey,
@@ -38,16 +38,4 @@ pub enum Error {
     /// Protocol violation at the channel level
     #[error("channel protocol violation: {0}")]
     ChanProto(String),
-}
-
-impl From<tor_bytes::Error> for Error {
-    fn from(e: tor_bytes::Error) -> Self {
-        Error::BytesErr(e)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        Error::IoErr(e)
-    }
 }

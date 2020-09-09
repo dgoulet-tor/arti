@@ -28,11 +28,15 @@ async fn connect<C: ChanTarget>(target: &C) -> Result<Channel<TlsStream<net::Tcp
     info!("Negotiating TLS with {}", addr);
     let tlscon = connector.connect("ignored", stream).await?;
     info!("TLS negotiated.");
+    let peer_cert = tlscon
+        .peer_certificate()?
+        .ok_or(Error::Misc("Somehow a TLS server didn't show a cert?"))?
+        .to_der()?;
 
     let chan = OutboundClientHandshake::new(tlscon).connect().await?;
     info!("version negotiated and cells read.");
-    let chan = chan.check(target)?;
-    info!("Certs validated (only not really)");
+    let chan = chan.check(target, &peer_cert)?;
+    info!("Certs validated (except for RSA :/)");
     let chan = chan.finish(&addr.ip()).await?;
     info!("Channel complete.");
 

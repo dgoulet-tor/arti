@@ -13,6 +13,9 @@ use crate::{Error, Result};
 use std::net;
 use tor_bytes::Reader;
 use tor_linkspec::ChanTarget;
+use tor_llcrypto as ll;
+
+use digest::Digest;
 
 // We only support version 4 for now, since we don't do padding right
 static LINK_PROTOCOLS: &[u16] = &[4];
@@ -132,8 +135,48 @@ impl<T: AsyncRead + AsyncWrite + Unpin> OutboundClientHandshake<T> {
 }
 
 impl<T: AsyncRead + AsyncWrite + Unpin> UnverifiedChannel<T> {
-    pub fn check<U: ChanTarget>(self, _peer: &U) -> Result<VerifiedChannel<T>> {
-        // XXXX need to verify certificates
+    pub fn check<U: ChanTarget>(self, peer: &U, peer_cert: &[u8]) -> Result<VerifiedChannel<T>> {
+        use tor_cert::CertType;
+        use tor_checkable::*;
+        let c = &self.certs_cell;
+        let id_sk = c.parse_ed_cert(CertType::IDENTITY_V_SIGNING)?;
+        let sk_tls = c.parse_ed_cert(CertType::SIGNING_V_TLS_CERT)?;
+        // XXXX need to verify RSA crosscert.
+
+        let id_sk = id_sk
+            .check_key(&None)?
+            .check_signature()
+            .map_err(|_| Error::ChanProto("Bad certificate signature".into()))?
+            .check_valid_now()
+            .map_err(|_| Error::ChanProto("Certificate expired or not yet valid".into()))?;
+
+        let identity_key = id_sk.get_signing_key().ok_or_else(|| {
+            Error::ChanProto("Missing identity key in identity->signing cert".into())
+        })?;
+
+        let signing_key = id_sk
+            .get_subject_key()
+            .as_ed25519()
+            .ok_or_else(|| Error::ChanProto("Bad key type in identity->signing cert".into()))?;
+
+        let sk_tls = sk_tls
+            .check_key(&Some(*signing_key))? // this is a bad interface XXXX
+            .check_signature()
+            .map_err(|_| Error::ChanProto("Bad certificate signature".into()))?
+            .check_valid_now()
+            .map_err(|_| Error::ChanProto("Certificate expired or not yet valid".into()))?;
+
+        let cert_sha256 = ll::d::Sha256::digest(peer_cert);
+        if &cert_sha256[..] != sk_tls.get_subject_key().as_bytes() {
+            return Err(Error::ChanProto(
+                "Peer cert did not authenticate TLS cert".into(),
+            ));
+        }
+
+        if identity_key != peer.get_ed_identity() {
+            return Err(Error::ChanProto("Peer ed25519 id not as expected".into()));
+        }
+
         Ok(VerifiedChannel {
             link_protocol: self.link_protocol,
             tls: self.tls,
