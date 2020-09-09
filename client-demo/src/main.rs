@@ -1,25 +1,38 @@
+mod err;
+
+use err::{Error, Result};
+
+use log::{info, LevelFilter};
 use std::path::PathBuf;
+use tor_linkspec::ChanTarget;
 
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("Netdir: {0}")]
-    NetDir(#[source] tor_netdir::Error),
-    #[error("Protocol: {0}")]
-    Proto(#[source] tor_proto::Error),
-}
+//use async_std::prelude::*;
+use async_native_tls::TlsConnector;
+use async_std::net;
 
-impl From<tor_netdir::Error> for Error {
-    fn from(e: tor_netdir::Error) -> Self {
-        Error::NetDir(e)
-    }
-}
-impl From<tor_proto::Error> for Error {
-    fn from(e: tor_proto::Error) -> Self {
-        Error::Proto(e)
-    }
-}
+use rand::thread_rng;
 
-type Result<T> = std::result::Result<T, Error>;
+pub struct Channel {}
+
+async fn connect<C: ChanTarget>(target: &C) -> Result<Channel> {
+    let addr = target
+        .get_addrs()
+        .get(0)
+        .ok_or(Error::Misc("No addresses for chosen relay‽"))?;
+
+    let connector = TlsConnector::new()
+        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_hostnames(true);
+
+    info!("Connecting to {}", addr);
+    let stream = net::TcpStream::connect(addr).await?;
+
+    info!("Negotiating TLS with {}", addr);
+    let _tlscon = connector.connect("ignored", stream).await?;
+    info!("TLS negotiated.");
+
+    Ok(Channel {})
+}
 
 fn get_netdir() -> Result<tor_netdir::NetDir> {
     let mut pb: PathBuf = std::env::var_os("HOME").unwrap().into();
@@ -36,7 +49,17 @@ fn get_netdir() -> Result<tor_netdir::NetDir> {
 }
 
 fn main() -> Result<()> {
-    let _dir = get_netdir()?;
+    simple_logging::log_to_stderr(LevelFilter::Info);
 
-    Ok(())
+    let dir = get_netdir()?;
+
+    let g = dir
+        .pick_relay(&mut thread_rng(), |_, u| u)
+        .ok_or(Error::Misc("no usable relays"))?;
+
+    async_std::task::block_on(async {
+        let _con = connect(&g).await?;
+
+        Ok(())
+    })
 }

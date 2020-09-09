@@ -10,6 +10,8 @@ publish = false
 tor-netdir = { path="../tor-netdir", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
+tor-linkspec = { path="../tor-linkspec", version= "*" }
+rand = "*"
 log = "*"
 async-std = "*"
 futures = "*"
@@ -18,3 +20,4 @@ native-tls = "*"
 async-native-tls = "*"
 thiserror = "*"
 
+simple-logging = "*"
