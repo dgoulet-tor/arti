@@ -36,7 +36,7 @@ async fn connect<C: ChanTarget>(target: &C) -> Result<Channel<TlsStream<net::Tcp
     let chan = OutboundClientHandshake::new(tlscon).connect().await?;
     info!("version negotiated and cells read.");
     let chan = chan.check(target, &peer_cert)?;
-    info!("Certs validated (except for RSA :/)");
+    info!("Certs validated");
     let chan = chan.finish(&addr.ip()).await?;
     info!("Channel complete.");
 

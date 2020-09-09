@@ -32,6 +32,8 @@
 
 #![deny(missing_docs)]
 
+pub mod rsa;
+
 use caret::caret_int;
 use signature::{Signer, Verifier};
 use tor_bytes::{Error, Result};

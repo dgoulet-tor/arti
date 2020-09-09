@@ -606,16 +606,22 @@ pub struct Certs {
     certs: Vec<TorCert>,
 }
 impl Certs {
+    /// Return the body of the certificate tagged with 'tp', if any.
+    pub fn get_cert_body(&self, tp: tor_cert::CertType) -> Option<&[u8]> {
+        self.certs
+            .iter()
+            .find(|c| c.certtype == tp.into())
+            .map(|c| &c.cert[..])
+    }
+
     /// Look for a certificate of type 'tp' in this cell; return it if
     /// there is one.
     pub fn parse_ed_cert(&self, tp: tor_cert::CertType) -> crate::Result<tor_cert::KeyUnknownCert> {
-        let cert = self
-            .certs
-            .iter()
-            .find(|c| c.certtype == tp.into())
+        let body = self
+            .get_cert_body(tp)
             .ok_or_else(|| crate::Error::ChanProto(format!("Missing {} certificate", tp)))?;
 
-        let cert = tor_cert::Ed25519Cert::decode(&cert.cert)?;
+        let cert = tor_cert::Ed25519Cert::decode(body)?;
         if cert.peek_cert_type() != tp {
             return Err(crate::Error::ChanProto(format!(
                 "Found a {} certificate labeled as {}",

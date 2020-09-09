@@ -141,7 +141,6 @@ impl<T: AsyncRead + AsyncWrite + Unpin> UnverifiedChannel<T> {
         let c = &self.certs_cell;
         let id_sk = c.parse_ed_cert(CertType::IDENTITY_V_SIGNING)?;
         let sk_tls = c.parse_ed_cert(CertType::SIGNING_V_TLS_CERT)?;
-        // XXXX need to verify RSA crosscert.
 
         let id_sk = id_sk
             .check_key(&None)?
@@ -173,8 +172,33 @@ impl<T: AsyncRead + AsyncWrite + Unpin> UnverifiedChannel<T> {
             ));
         }
 
+        let pkrsa = c
+            .get_cert_body(2.into()) // XXX use a constant.
+            .map(ll::util::x509_extract_rsa_subject_kludge)
+            .flatten()
+            .ok_or_else(|| Error::ChanProto("Couldn't find RSA identity key".into()))?;
+
+        let rsa_cert = c
+            .get_cert_body(7.into()) // XXXX use a constant
+            .ok_or_else(|| Error::ChanProto("No RSA->Ed crosscert".into()))?;
+        let rsa_cert = tor_cert::rsa::RSACrosscert::decode(rsa_cert)?
+            .check_signature(&pkrsa)
+            .map_err(|_| Error::ChanProto("Bad RSA->Ed crosscert signature".into()))?
+            .check_valid_now()
+            .map_err(|_| Error::ChanProto("RSA->Ed crosscert expired or invalid".into()))?;
+
+        if !rsa_cert.subject_key_matches(identity_key) {
+            return Err(Error::ChanProto(
+                "RSA->Ed crosscert certifies incorrect key".into(),
+            ));
+        }
+
         if identity_key != peer.get_ed_identity() {
             return Err(Error::ChanProto("Peer ed25519 id not as expected".into()));
+        }
+
+        if &pkrsa.to_rsa_identity() != peer.get_rsa_identity() {
+            return Err(Error::ChanProto("Peer RSA id not as expected".into()));
         }
 
         Ok(VerifiedChannel {
