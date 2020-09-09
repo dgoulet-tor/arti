@@ -104,6 +104,9 @@ pub trait ExternallySigned<T>: Sized {
 
     /// Check whether k is the right key for this object.  If not, return
     /// an error describing what key would be right.
+    ///
+    /// This function is allowed to return 'true' for a bad key, but never
+    /// 'false' for a good key.
     fn key_is_correct(&self, k: &Self::Key) -> Result<(), Self::KeyHint>;
 
     /// Check the signature on this object
