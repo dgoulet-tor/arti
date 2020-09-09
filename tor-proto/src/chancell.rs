@@ -35,6 +35,11 @@ impl Into<u32> for CircID {
         self.0
     }
 }
+impl std::fmt::Display for CircID {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        self.0.fmt(f)
+    }
+}
 
 caret_int! {
     /// A ChanCmd is the type of a channel cell.  The value of the ChanCmd
@@ -141,7 +146,7 @@ impl ChanCmd {
     /// circuit ID `id`.
     pub fn accepts_circid_val(self, id: CircID) -> bool {
         if self.is_recognized() {
-            self.allows_circid() == (id == 0.into())
+            self.allows_circid() != (id == 0.into())
         } else {
             true
         }
@@ -156,6 +161,10 @@ pub struct ChanCell {
 }
 
 impl ChanCell {
+    /// Construct a new channel cell.
+    pub fn new(circid: CircID, msg: msg::ChanMsg) -> Self {
+        ChanCell { circid, msg }
+    }
     /// Return the circuit ID for this cell.
     pub fn get_circid(&self) -> CircID {
         self.circid
@@ -163,5 +172,9 @@ impl ChanCell {
     /// Return a reference to the underlying message of this cell.
     pub fn get_msg(&self) -> &msg::ChanMsg {
         &self.msg
+    }
+    /// Consume this cell and return its components.
+    pub fn into_circid_and_msg(self) -> (CircID, msg::ChanMsg) {
+        (self.circid, self.msg)
     }
 }

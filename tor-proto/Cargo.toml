@@ -29,6 +29,7 @@ sha2 = "0.9.1"
 futures_codec = "*"
 bytes = "*"
 thiserror = "*"
+futures = "*"
 
 [dev-dependencies]
 hex-literal = "0.3.1"

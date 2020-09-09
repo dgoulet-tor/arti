@@ -24,6 +24,7 @@
 #![deny(missing_docs)]
 
 pub mod chancell;
+pub mod channel;
 mod crypto;
 pub mod relaycell;
 mod util;

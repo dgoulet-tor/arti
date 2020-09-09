@@ -36,7 +36,7 @@ pub enum Error {
     #[error("handshake failed")]
     BadHandshake,
     /// Protocol violation at the channel level
-    #[error("channel protocol violation")]
+    #[error("channel protocol violation: {0}")]
     ChanProto(String),
 }
 

@@ -94,13 +94,9 @@ impl ChanMsg {
             Unrecognized(c) => c.get_cmd(),
         }
     }
-}
 
-impl Body for ChanMsg {
-    fn as_message(self) -> Self {
-        self
-    }
-    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
+    /// Write the body of this message (not including length or command).
+    pub fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         use ChanMsg::*;
         match self {
             Padding(b) => b.write_body_onto(w),
@@ -124,11 +120,11 @@ impl Body for ChanMsg {
             Unrecognized(b) => b.write_body_onto(w),
         }
     }
-}
 
-impl Readable for ChanMsg {
-    fn take_from(r: &mut Reader<'_>) -> Result<Self> {
-        let cmd = r.take_u8()?.into();
+    /// Decode this message from a given reader, according to a specified
+    /// command value. The reader must be truncated to the exact length
+    /// of the body.
+    pub fn take(r: &mut Reader<'_>, cmd: ChanCmd) -> Result<Self> {
         use ChanMsg::*;
         Ok(match cmd {
             ChanCmd::PADDING => Padding(r.extract()?),
@@ -425,6 +421,16 @@ fn take_one_netinfo_addr(r: &mut Reader<'_>) -> Result<Option<IpAddr>> {
         (_, _) => Ok(None),
     }
 }
+impl Netinfo {
+    /// Construct a new Netinfo to be sent by a client.
+    pub fn for_client(their_addr: IpAddr) -> Self {
+        Netinfo {
+            timestamp: 0, // clients don't report their timestamps.
+            their_addr,
+            my_addr: Vec::new(), // clients don't report their addrs.
+        }
+    }
+}
 impl Body for Netinfo {
     fn as_message(self) -> ChanMsg {
         ChanMsg::Netinfo(self)
@@ -469,6 +475,43 @@ impl Readable for Netinfo {
 #[derive(Clone, Debug)]
 pub struct Versions {
     versions: Vec<u16>,
+}
+impl Versions {
+    /// Construct a new Versions message using a provided list of link
+    /// protocols
+    pub fn new(vs: &[u16]) -> Self {
+        let versions = vs.into();
+        assert!(vs.len() < (std::u16::MAX / 2) as usize);
+        Self { versions }
+    }
+    /// Encode this VERSIONS cell in the manner expected for a handshake.
+    ///
+    /// (That's different from a standard cell encoding, since we
+    /// have not negotiated versions yet, and so our circuit-ID length
+    /// is an obsolete 2 bytes).
+    pub fn encode_for_handshake(self) -> Vec<u8> {
+        let mut v = Vec::new();
+        v.write_u16(0); // obsolete circuit ID length.
+        v.write_u8(ChanCmd::VERSIONS.into());
+        v.write_u16((self.versions.len() * 2) as u16); // message length.
+        self.write_body_onto(&mut v);
+        v
+    }
+    /// Return the best (numerically highest) link protocol that is
+    /// shared by this versions cell and my_protos.
+    pub fn best_shared_link_protocol(&self, my_protos: &[u16]) -> Option<u16> {
+        // NOTE: this implementation is quadratic, but it shouldn't matter
+        // much so long as my_protos is small.
+        let p = my_protos
+            .iter()
+            .filter(|p| self.versions.contains(p))
+            .fold(0u16, |a, b| u16::max(a, *b));
+        if p == 0 {
+            None
+        } else {
+            Some(p)
+        }
+    }
 }
 impl Body for Versions {
     fn as_message(self) -> ChanMsg {

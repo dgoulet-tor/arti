@@ -1,10 +1,11 @@
 //! Implementation for asynchronus encoding and decoding of ChanCells.
 
-use crate::chancell::{msg::Body, ChanCell, ChanCmd, CircID};
+use crate::chancell::{msg, ChanCell, ChanCmd, CircID};
 use crate::crypto::cell::CELL_BODY_LEN;
 use crate::Error;
 use arrayref::{array_mut_ref, array_ref};
 use tor_bytes::{self, Reader, Writer};
+//use log::trace;
 
 /// This Codec object can be used with the `futures_codec` crate to
 /// turn an asynchronous byte stream into an asynchronous Stream/Sink pair
@@ -96,15 +97,17 @@ impl futures_codec::Decoder for ChannelCodec {
         }
 
         let cell = src.split_to(cell_len).freeze();
+        //trace!("{:?} cell body ({}) is {:?}", cmd, cell.len(), &cell[..]);
         let mut r = Reader::from_bytes(&cell);
         let circid: CircID = r.take_u32()?.into();
-        r.advance(if varcell { 1 } else { 3 })?;
-        let msg = r.extract()?;
+        r.advance(if varcell { 3 } else { 1 })?;
+        let msg = msg::ChanMsg::take(&mut r, cmd)?;
 
         if !cmd.accepts_circid_val(circid) {
-            return Err(Error::ChanProto(
-                "Invalid circuit ID for cell command".into(),
-            ));
+            return Err(Error::ChanProto(format!(
+                "Invalid circuit ID {} for cell command {}",
+                circid, cmd
+            )));
         }
         Ok(Some(ChanCell { circid, msg }))
     }

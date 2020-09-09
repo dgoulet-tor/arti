@@ -1,20 +1,18 @@
 mod err;
 
-use err::{Error, Result};
-
 use log::{info, LevelFilter};
 use std::path::PathBuf;
 use tor_linkspec::ChanTarget;
+use tor_proto::channel::{Channel, OutboundClientHandshake};
 
 //use async_std::prelude::*;
-use async_native_tls::TlsConnector;
+use async_native_tls::{TlsConnector, TlsStream};
 use async_std::net;
+use err::{Error, Result};
 
 use rand::thread_rng;
 
-pub struct Channel {}
-
-async fn connect<C: ChanTarget>(target: &C) -> Result<Channel> {
+async fn connect<C: ChanTarget>(target: &C) -> Result<Channel<TlsStream<net::TcpStream>>> {
     let addr = target
         .get_addrs()
         .get(0)
@@ -28,10 +26,17 @@ async fn connect<C: ChanTarget>(target: &C) -> Result<Channel> {
     let stream = net::TcpStream::connect(addr).await?;
 
     info!("Negotiating TLS with {}", addr);
-    let _tlscon = connector.connect("ignored", stream).await?;
+    let tlscon = connector.connect("ignored", stream).await?;
     info!("TLS negotiated.");
 
-    Ok(Channel {})
+    let chan = OutboundClientHandshake::new(tlscon).connect().await?;
+    info!("version negotiated and cells read.");
+    let chan = chan.check(target)?;
+    info!("Certs validated (only not really)");
+    let chan = chan.finish(&addr.ip()).await?;
+    info!("Channel complete.");
+
+    Ok(chan)
 }
 
 fn get_netdir() -> Result<tor_netdir::NetDir> {
@@ -52,13 +57,15 @@ fn main() -> Result<()> {
     simple_logging::log_to_stderr(LevelFilter::Info);
 
     let dir = get_netdir()?;
+    // TODO CONFORMANCE: we should stop now if there are required
+    // protovers we don't support.
 
     let g = dir
         .pick_relay(&mut thread_rng(), |_, u| u)
         .ok_or(Error::Misc("no usable relays"))?;
 
     async_std::task::block_on(async {
-        let _con = connect(&g).await?;
+        let _chan = connect(&g).await?;
 
         Ok(())
     })
