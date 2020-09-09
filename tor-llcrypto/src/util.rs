@@ -16,17 +16,17 @@ pub fn x509_extract_rsa_subject_kludge(der: &[u8]) -> Option<crate::pk::rsa::Pub
     let blocks = simple_asn1::from_der(der).ok()?;
     let block = Asn1(blocks.get(0)?);
     // TBSCertificate
-    let tbs_cert: Asn1 = block.into_seq()?.get(0)?.into();
+    let tbs_cert: Asn1<'_> = block.into_seq()?.get(0)?.into();
     // SubjectPublicKeyInfo
-    let spki: Asn1 = tbs_cert.into_seq()?.get(6)?.into();
+    let spki: Asn1<'_> = tbs_cert.into_seq()?.get(6)?.into();
     let spki_members = spki.into_seq()?;
     // Is it an RSA key?
-    let algid: Asn1 = spki_members.get(0)?.into();
-    let oid: Asn1 = algid.into_seq()?.get(0)?.into();
+    let algid: Asn1<'_> = spki_members.get(0)?.into();
+    let oid: Asn1<'_> = algid.into_seq()?.get(0)?.into();
     oid.must_be_rsa_oid()?;
 
     // try to get the RSA key.
-    let key: Asn1 = spki_members.get(1)?.into();
+    let key: Asn1<'_> = spki_members.get(1)?.into();
     crate::pk::rsa::PublicKey::from_der(key.to_bitstr()?)
 }
 

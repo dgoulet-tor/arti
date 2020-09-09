@@ -36,7 +36,7 @@ impl Into<u32> for CircID {
     }
 }
 impl std::fmt::Display for CircID {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.0.fmt(f)
     }
 }
