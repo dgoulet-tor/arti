@@ -14,7 +14,7 @@ mod err;
 use log::{info, LevelFilter};
 use std::path::PathBuf;
 use tor_linkspec::ChanTarget;
-use tor_proto::channel::{Channel, OutboundClientHandshake};
+use tor_proto::channel::{self, Channel};
 
 //use async_std::prelude::*;
 use async_native_tls::{TlsConnector, TlsStream};
@@ -49,7 +49,7 @@ async fn connect<C: ChanTarget>(target: &C) -> Result<Channel<TlsStream<net::Tcp
         .ok_or(Error::Misc("Somehow a TLS server didn't show a cert?"))?
         .to_der()?;
 
-    let chan = OutboundClientHandshake::new(tlscon).connect().await?;
+    let chan = channel::start_client_handshake(tlscon).connect().await?;
     info!("Version negotiated and cells read.");
 
     let chan = chan.check(target, &peer_cert)?;
