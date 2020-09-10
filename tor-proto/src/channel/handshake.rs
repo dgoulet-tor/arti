@@ -252,9 +252,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin> VerifiedChannel<T> {
         let netinfo = msg::Netinfo::for_client(*peer_addr);
         self.tls.send(netinfo.into()).await?;
 
-        Ok(super::Channel {
-            link_protocol: self.link_protocol,
-            tls: self.tls,
-        })
+        let inner = super::ChannelImpl::new(self.link_protocol, self.tls);
+        Ok(super::Channel::from_inner(inner))
     }
 }

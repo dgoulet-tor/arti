@@ -9,13 +9,21 @@ mod handshake;
 use crate::chancell::codec;
 use futures::io::{AsyncRead, AsyncWrite};
 
+use futures::lock::Mutex;
+use std::sync::Arc;
+
 // reexport
 pub use handshake::{OutboundClientHandshake, UnverifiedChannel, VerifiedChannel};
 
 type CellFrame<T> = futures_codec::Framed<T, codec::ChannelCodec>;
 
 /// An open client channel, ready to send and receive tor cells.
+#[derive(Clone)]
 pub struct Channel<T: AsyncRead + AsyncWrite + Unpin> {
+    inner: Arc<Mutex<ChannelImpl<T>>>,
+}
+
+struct ChannelImpl<T: AsyncRead + AsyncWrite + Unpin> {
     link_protocol: u16,
     tls: CellFrame<T>,
 }
@@ -26,4 +34,24 @@ where
     T: AsyncRead + AsyncWrite + Unpin,
 {
     handshake::OutboundClientHandshake::new(tls)
+}
+
+impl<T> ChannelImpl<T>
+where
+    T: AsyncRead + AsyncWrite + Unpin,
+{
+    fn new(link_protocol: u16, tls: CellFrame<T>) -> Self {
+        ChannelImpl { link_protocol, tls }
+    }
+}
+
+impl<T> Channel<T>
+where
+    T: AsyncRead + AsyncWrite + Unpin,
+{
+    fn from_inner(inner: ChannelImpl<T>) -> Self {
+        Channel {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
 }
