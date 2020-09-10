@@ -23,6 +23,7 @@ futures_codec = "0.4.1"
 generic-array = "0.14.4"
 hkdf = "0.9.0"
 hmac = "0.9.0"
+log = "0.4.11"
 rand = "0.7.3"
 rand_core = "0.5.1"
 # This is paused for now because of aes-ctr.

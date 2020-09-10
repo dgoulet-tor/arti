@@ -22,7 +22,7 @@ pub const CELL_DATA_LEN: usize = 509;
 ///
 /// A circuit ID can be 2 or 4 bytes long; on modern versions of the Tor
 /// protocol, it's 4 bytes long.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct CircID(u32);
 
 impl From<u32> for CircID {

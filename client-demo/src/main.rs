@@ -55,8 +55,10 @@ async fn connect<C: ChanTarget>(target: &C) -> Result<Channel<TlsStream<net::Tcp
     let chan = chan.check(target, &peer_cert)?;
     info!("Certificates validated; peer authenticated.");
 
-    let chan = chan.finish(&addr.ip()).await?;
+    let (chan, reactor) = chan.finish(&addr.ip()).await?;
     info!("Channel complete.");
+
+    async_std::task::spawn(async { reactor.run().await });
 
     Ok(chan)
 }

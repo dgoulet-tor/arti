@@ -247,12 +247,18 @@ impl<T: AsyncRead + AsyncWrite + Unpin> UnverifiedChannel<T> {
 
 impl<T: AsyncRead + AsyncWrite + Unpin> VerifiedChannel<T> {
     /// Send a 'Netinfo' message to the relay to finish the handshake,
-    /// and create an open channel.
-    pub async fn finish(mut self, peer_addr: &net::IpAddr) -> Result<super::Channel<T>> {
+    /// and create an open channel and reactor.
+    ///
+    /// The channel is used to send cells, and to create outgoing circuits.
+    /// The reactor is used to route incoming messages to their appropriate
+    /// circuit.
+    pub async fn finish(
+        mut self,
+        peer_addr: &net::IpAddr,
+    ) -> Result<(super::Channel<T>, super::reactor::Reactor<T>)> {
         let netinfo = msg::Netinfo::for_client(*peer_addr);
         self.tls.send(netinfo.into()).await?;
 
-        let inner = super::ChannelImpl::new(self.link_protocol, self.tls);
-        Ok(super::Channel::from_inner(inner))
+        Ok(super::Channel::new(self.link_protocol, self.tls))
     }
 }
