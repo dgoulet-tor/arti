@@ -5,8 +5,6 @@ use crate::crypto::cell::{RawCellBody, CELL_BODY_LEN};
 use std::net::{IpAddr, Ipv4Addr};
 use tor_bytes::{self, Error, Readable, Reader, Result, Writer};
 
-use rand::{CryptoRng, Rng};
-
 /// Trait for the 'bodies' of channel messages.
 pub trait Body: Readable {
     /// Convert this type into a ChanMsg, wrapped as appropriate.
@@ -235,10 +233,7 @@ pub const TAP_C_HANDSHAKE_LEN: usize = 128 * 2 + 42;
 /// Number of bytes used for a TAP handshake response
 pub const TAP_S_HANDSHAKE_LEN: usize = 128 + 20;
 
-/// Number of bytes used for a "CREATE_FAST" handshake by the initiator.
-const FAST_C_HANDSHAKE_LEN: usize = 20;
-/// Number of bytes used for a "CREATE_FAST" handshake by the responder
-const FAST_S_HANDSHAKE_LEN: usize = 20 * 2;
+use crate::crypto::handshake::fast::{FAST_C_HANDSHAKE_LEN, FAST_S_HANDSHAKE_LEN};
 
 fixed_len! {
     /// A Create cell creates a circuit, using the TAP handshake
@@ -261,16 +256,24 @@ fixed_len! {
     CreateFast, CREATE_FAST, FAST_C_HANDSHAKE_LEN
 }
 impl CreateFast {
-    /// Create a new random CreateFast handshake.
-    pub fn new<R: Rng + CryptoRng>(r: &mut R) -> Self {
-        let mut handshake = vec![0; FAST_C_HANDSHAKE_LEN];
-        r.fill_bytes(&mut handshake[..]);
+    /// Create a new CreateFast handshake.
+    pub fn new(handshake: Vec<u8>) -> Self {
         CreateFast { handshake }
+    }
+    /// Return the content of this handshake
+    pub fn get_body(&self) -> &[u8] {
+        &self.handshake
     }
 }
 fixed_len! {
     /// A CreatedFast cell responds to a CreateFast cell
     CreatedFast, CREATED_FAST, FAST_S_HANDSHAKE_LEN
+}
+impl CreatedFast {
+    /// Return the content of this handshake
+    pub fn get_body(&self) -> &[u8] {
+        &self.handshake
+    }
 }
 
 /// Create a circuit on the current channel.

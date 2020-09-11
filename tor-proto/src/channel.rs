@@ -127,6 +127,9 @@ where
 
     /// Return a newly allocated ClientCirc object. A circuit ID is
     /// allocated, but no handshaking is done.
+    // XXXX TODO: make this hidden, and wrap it in another function that
+    // does the handshake. That way we only need to handle RELAY
+    // and destroy.
     pub async fn new_circ<R: Rng>(&self, rng: &mut R) -> Result<circuit::ClientCirc<T>> {
         // TODO: blocking is risky, but so is unbounded.
         let (sender, receiver) = mpsc::channel(128);

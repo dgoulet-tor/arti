@@ -27,7 +27,10 @@ pub trait KDF {
 }
 
 /// A legacy KDF, for use with TAP.
-pub struct LegacyKDF();
+pub struct LegacyKDF {
+    // Starting idx.  should always be 1.
+    idx: u8,
+}
 
 /// A parameterized KDF, for use with ntor.
 pub struct Ntor1KDF<'a, 'b> {
@@ -40,8 +43,8 @@ pub struct ShakeKDF();
 
 impl LegacyKDF {
     /// Instantiate a LegacyKDF.
-    pub fn new() -> Self {
-        LegacyKDF()
+    pub fn new(idx: u8) -> Self {
+        LegacyKDF { idx }
     }
 }
 impl KDF for LegacyKDF {
@@ -49,8 +52,8 @@ impl KDF for LegacyKDF {
         use digest::Digest;
 
         let mut result = Zeroizing::new(Vec::with_capacity(n_bytes + Sha1::output_size()));
-        let mut k = 0u8;
-        if n_bytes > Sha1::output_size() * 256 {
+        let mut k = self.idx;
+        if n_bytes > Sha1::output_size() * (256 - (k as usize)) {
             return Err(Error::InvalidOutputLength);
         }
 

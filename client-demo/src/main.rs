@@ -14,7 +14,6 @@ mod err;
 use log::{info, LevelFilter};
 use std::path::PathBuf;
 use tor_linkspec::ChanTarget;
-use tor_proto::chancell::msg;
 use tor_proto::channel::{self, Channel};
 
 //use async_std::prelude::*;
@@ -95,10 +94,8 @@ fn main() -> Result<()> {
         let chan = connect(&g).await?;
 
         let mut circ = chan.new_circ(&mut rng).await?;
-
-        circ.send_msg(msg::CreateFast::new(&mut rng).into()).await?;
-        let msg = circ.read_msg().await;
-        println!("{:?}", msg);
+        circ.create_firsthop_fast(&mut rng).await?;
+        info!("CREATE_FAST was successful.");
 
         Ok(())
     })

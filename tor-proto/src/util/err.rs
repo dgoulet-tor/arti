@@ -44,4 +44,7 @@ pub enum Error {
     /// Can't allocate any more circuit IDs on a channel.
     #[error("too many circuits on channel: can't allocate circuit ID")]
     CircIDRangeFull,
+    /// Couldn't extend a circuit.
+    #[error("circuit extension handshake error: {0}")]
+    CircExtend(&'static str),
 }

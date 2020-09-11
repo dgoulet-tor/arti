@@ -10,6 +10,7 @@
 //!
 //! Currently, this module implements only the "ntor" handshake used
 //! for circuits on today's Tor.
+pub mod fast;
 pub mod ntor;
 
 use crate::{Result, SecretBytes};
@@ -47,9 +48,10 @@ pub trait ServerHandshake {
     type KeyType;
     /// The returned key generator type.
     type KeyGen;
-    fn server<R: RngCore + CryptoRng>(
+    fn server<R: RngCore + CryptoRng, T: AsRef<[u8]>>(
         rng: &mut R,
         key: &[Self::KeyType],
+        msg: T,
     ) -> Result<(Self::KeyGen, Vec<u8>)>;
 }
 
@@ -79,7 +81,7 @@ impl TAPKeyGenerator {
 impl KeyGenerator for TAPKeyGenerator {
     fn expand(self, keylen: usize) -> Result<SecretBytes> {
         use crate::crypto::ll::kdf::{LegacyKDF, KDF};
-        LegacyKDF::new().derive(&self.seed[..], keylen)
+        LegacyKDF::new(1).derive(&self.seed[..], keylen)
     }
 }
 

@@ -21,7 +21,7 @@ pub struct CellBody(pub RawCellBody);
 
 /// Represents the ability for a circuit crypto state to be initialized
 /// from a given seed.
-pub trait CryptInit {
+pub trait CryptInit: Sized {
     /// Return the number of bytes that this state will require.
     fn seed_len() -> usize;
     /// Construct this state from a seed of the appropriate length.
@@ -29,6 +29,11 @@ pub trait CryptInit {
     /// TODO: maybe this should return a Result rather than just
     /// asserting that the length is correct.
     fn initialize(seed: &[u8]) -> Self;
+    /// Initialize this object from a key generator.
+    fn construct<K: super::handshake::KeyGenerator>(keygen: K) -> Result<Self> {
+        let seed = keygen.expand(Self::seed_len())?;
+        Ok(Self::initialize(&seed))
+    }
 }
 
 /// Represents a relay's view of the crypto state on a given circuit.
@@ -65,6 +70,10 @@ pub struct ClientCrypt {
 }
 
 impl ClientCrypt {
+    /// Return a new (empty) ClientCrypt.
+    pub fn new() -> Self {
+        ClientCrypt { layers: Vec::new() }
+    }
     /// Prepare a cell body to sent away from the client.
     ///
     /// The cell is prepared for the `hop`th hop, and then encrypted with
@@ -97,10 +106,19 @@ impl ClientCrypt {
         assert!(self.layers.len() < HopNum::max_value() as usize);
         self.layers.push(layer);
     }
+
+    /// Return the number of layers configured on this ClientCrypt.
+    pub fn n_layers(&self) -> usize {
+        self.layers.len()
+    }
 }
 
+/// Standard Tor relay crypto, as instantiated for RELAY cells.
+pub type Tor1RelayCrypto =
+    tor1::CryptState<tor_llcrypto::cipher::aes::Aes128Ctr, tor_llcrypto::d::Sha1>;
+
 /// Incomplete untested implementation of Tor's current cell crypto.
-mod tor1 {
+pub mod tor1 {
     use super::*;
     use digest::Digest;
     use std::convert::TryInto;
