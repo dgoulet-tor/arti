@@ -4,9 +4,6 @@
 //!
 //! These functions should be extensible to work with the ntor variant
 //! used in v3 hidden services; but right now they aren't.
-//!
-//! TODO: this code should implement ClientHandshake and
-//! ServerHandshake, but right now it doesn't.
 
 use super::KeyGenerator;
 use crate::util::ct;
@@ -20,9 +17,44 @@ use crypto_mac::{self, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroizing;
 
+/// Client side of the Ntor handshake.
+pub struct NtorClient;
+
+impl super::ClientHandshake for NtorClient {
+    type KeyType = NtorPublicKey;
+    type StateType = NtorHandshakeState;
+    type KeyGen = NtorHKDFKeyGenerator;
+
+    fn client1<R: RngCore + CryptoRng>(
+        rng: &mut R,
+        key: &Self::KeyType,
+    ) -> Result<(Self::StateType, Vec<u8>)> {
+        Ok(client_handshake_ntor_v1(rng, key))
+    }
+
+    fn client2<T: AsRef<[u8]>>(state: Self::StateType, msg: T) -> Result<Self::KeyGen> {
+        client_handshake2_ntor_v1(msg, state)
+    }
+}
+
+/// Server side of the ntor handshake.
+pub struct NtorServer;
+
+impl super::ServerHandshake for NtorServer {
+    type KeyType = NtorSecretKey;
+    type KeyGen = NtorHKDFKeyGenerator;
+
+    fn server<R: RngCore + CryptoRng, T: AsRef<[u8]>>(
+        rng: &mut R,
+        key: &[Self::KeyType],
+        msg: T,
+    ) -> Result<(Self::KeyGen, Vec<u8>)> {
+        server_handshake_ntor_v1(rng, msg, key)
+    }
+}
+
 /// A set of public keys used by a client to initiate an ntor handshake.
 #[derive(Clone)]
-
 pub struct NtorPublicKey {
     id: RSAIdentity,
     pk: PublicKey,
@@ -74,7 +106,7 @@ impl KeyGenerator for NtorHKDFKeyGenerator {
 type Authcode = crypto_mac::Output<hmac::Hmac<d::Sha256>>;
 
 /// Perform a client handshake, generating an onionskin and a state object
-pub fn client_handshake_ntor_v1<R>(
+fn client_handshake_ntor_v1<R>(
     rng: &mut R,
     relay_public: &NtorPublicKey,
 ) -> (NtorHandshakeState, Vec<u8>)
@@ -111,10 +143,7 @@ fn client_handshake_ntor_v1_no_keygen(
 }
 
 /// Complete a client handshake, returning a key generator on success.
-pub fn client_handshake2_ntor_v1<T>(
-    msg: T,
-    state: NtorHandshakeState,
-) -> Result<NtorHKDFKeyGenerator>
+fn client_handshake2_ntor_v1<T>(msg: T, state: NtorHandshakeState) -> Result<NtorHKDFKeyGenerator>
 where
     T: AsRef<[u8]>,
 {
@@ -189,7 +218,7 @@ fn ntor_derive(
 /// Perform a server-side ntor handshake.
 ///
 /// On success returns a key generator and a server onionskin.
-pub fn server_handshake_ntor_v1<R, T>(
+fn server_handshake_ntor_v1<R, T>(
     rng: &mut R,
     msg: T,
     keys: &[NtorSecretKey],
