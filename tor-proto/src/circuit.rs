@@ -5,6 +5,8 @@ use crate::chancell::{
     ChanCell, CircID,
 };
 use crate::channel::Channel;
+use crate::crypto::cell::{ClientLayer, CryptInit};
+use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
 use crate::{Error, Result};
 
 use futures::channel::mpsc;
@@ -63,6 +65,43 @@ where
         self.input.next().await.ok_or(Error::CircuitClosed)
     }
 
+    /// Helper: create the first hop of a circuit.
+    ///
+    /// This is parameterized not just on the RNG, but a wrapper object to
+    /// build the right kind of create cell, a handshake object to perform
+    /// the cryptographic cryptographic handshake, and a layer type to
+    /// handle relay crypto after this hop is built.
+    async fn create_impl<R, L, H, W>(
+        &mut self,
+        rng: &mut R,
+        wrap: &W,
+        key: &H::KeyType,
+    ) -> Result<()>
+    where
+        R: Rng + CryptoRng,
+        L: CryptInit + ClientLayer + 'static,
+        H: ClientHandshake,
+        W: CreateHandshakeWrap,
+        H::KeyGen: KeyGenerator,
+    {
+        if self.crypto.n_layers() != 0 {
+            return Err(Error::CircExtend("Circuit already extended."));
+        }
+
+        let (state, msg) = H::client1(rng, &key)?;
+        let create_cell = wrap.to_chanmsg(msg);
+        self.send_msg(create_cell).await?;
+        let reply = self.read_msg().await?;
+
+        let server_handshake = wrap.from_chanmsg(reply)?;
+        let keygen = H::client2(state, server_handshake)?;
+
+        let layer = L::construct(keygen)?;
+
+        self.crypto.add_layer(Box::new(layer));
+        Ok(())
+    }
+
     /// Use the (questionable!) CREATE_FAST handshake to connect to the
     /// first hop of this circuit.
     ///
@@ -73,39 +112,25 @@ where
     where
         R: Rng + CryptoRng,
     {
-        use crate::crypto::cell::{CryptInit, Tor1RelayCrypto};
-        use crate::crypto::handshake::{fast, ClientHandshake};
-
-        if self.crypto.n_layers() != 0 {
-            return Err(Error::CircExtend("Circuit already extended."));
-        }
-
-        let (state, msg) = fast::CreateFastClient::client1(rng, &())?;
-        let create_fast = CreateFastWrap::to_chanmsg(msg);
-        self.send_msg(create_fast).await?;
-        let reply = self.read_msg().await?;
-
-        let server_handshake = CreateFastWrap::from_chanmsg(reply)?;
-
-        let keygen = fast::CreateFastClient::client2(state, server_handshake)?;
-
-        let state = Tor1RelayCrypto::construct(keygen)?;
-        self.crypto.add_layer(Box::new(state));
-        Ok(())
+        use crate::crypto::cell::Tor1RelayCrypto;
+        use crate::crypto::handshake::fast::CreateFastClient;
+        let wrap = CreateFastWrap;
+        self.create_impl::<R, Tor1RelayCrypto, CreateFastClient, _>(rng, &wrap, &())
+            .await
     }
 }
 
 trait CreateHandshakeWrap {
-    fn to_chanmsg(bytes: Vec<u8>) -> ChanMsg;
-    fn from_chanmsg(msg: ChanMsg) -> Result<Vec<u8>>;
+    fn to_chanmsg(&self, bytes: Vec<u8>) -> ChanMsg;
+    fn from_chanmsg(&self, msg: ChanMsg) -> Result<Vec<u8>>;
 }
 
 struct CreateFastWrap;
 impl CreateHandshakeWrap for CreateFastWrap {
-    fn to_chanmsg(bytes: Vec<u8>) -> ChanMsg {
+    fn to_chanmsg(&self, bytes: Vec<u8>) -> ChanMsg {
         msg::CreateFast::new(bytes).into()
     }
-    fn from_chanmsg(msg: ChanMsg) -> Result<Vec<u8>> {
+    fn from_chanmsg(&self, msg: ChanMsg) -> Result<Vec<u8>> {
         match msg {
             ChanMsg::CreatedFast(m) => Ok(m.into_body()),
             ChanMsg::Destroy(_) => Err(Error::CircExtend(
