@@ -38,4 +38,10 @@ pub enum Error {
     /// Protocol violation at the channel level
     #[error("channel protocol violation: {0}")]
     ChanProto(String),
+    /// Circuit is closed.
+    #[error("circuit closed")]
+    CircuitClosed,
+    /// Can't allocate any more circuit IDs on a channel.
+    #[error("too many circuits on channel: can't allocate circuit ID")]
+    CircIDRangeFull,
 }

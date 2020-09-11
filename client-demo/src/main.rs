@@ -14,6 +14,7 @@ mod err;
 use log::{info, LevelFilter};
 use std::path::PathBuf;
 use tor_linkspec::ChanTarget;
+use tor_proto::chancell::msg;
 use tor_proto::channel::{self, Channel};
 
 //use async_std::prelude::*;
@@ -79,7 +80,7 @@ fn get_netdir() -> Result<tor_netdir::NetDir> {
 }
 
 fn main() -> Result<()> {
-    simple_logging::log_to_stderr(LevelFilter::Info);
+    simple_logging::log_to_stderr(LevelFilter::Debug);
 
     let dir = get_netdir()?;
     // TODO CONFORMANCE: we should stop now if there are required
@@ -90,7 +91,14 @@ fn main() -> Result<()> {
         .ok_or(Error::Misc("no usable relays"))?;
 
     async_std::task::block_on(async {
-        let _chan = connect(&g).await?;
+        let mut rng = thread_rng();
+        let chan = connect(&g).await?;
+
+        let mut circ = chan.new_circ(&mut rng).await?;
+
+        circ.send_msg(msg::CreateFast::new(&mut rng).into()).await?;
+        let msg = circ.read_msg().await;
+        println!("{:?}", msg);
 
         Ok(())
     })

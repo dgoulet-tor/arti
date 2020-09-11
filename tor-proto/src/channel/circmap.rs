@@ -3,6 +3,7 @@
 
 use crate::chancell::msg::ChanMsg;
 use crate::chancell::CircID;
+use crate::{Error, Result};
 
 use std::collections::HashMap;
 
@@ -14,14 +15,11 @@ use rand::Rng;
 
 /// Which group of circuit IDs are we allowed to allocate in this map?
 ///
-/// If we're a client, we can allocate any nonzero circid we want.  If
-/// we authenticated as a relay, we can allocate Low circuit IDs if we
-/// launched the channel, and High circuit IDs if we received the
-/// channal.
+/// If we initiated the channel, we use High circuit ids.  If we're the
+/// responder, we use low circuit ids.
 pub(super) enum CircIDRange {
     Low,
     High,
-    All,
 }
 
 impl CircIDRange {
@@ -38,7 +36,6 @@ impl CircIDRange {
         match self {
             CircIDRange::Low => v & 0x7fff_ffff,
             CircIDRange::High => v | 0x8000_0000,
-            CircIDRange::All => v,
         }
         .into()
     }
@@ -79,6 +76,17 @@ impl CircMap {
             }
         }
         None
+    }
+
+    pub(super) fn add_ent<R: Rng>(
+        &mut self,
+        rng: &mut R,
+        sink: mpsc::Sender<ChanMsg>,
+    ) -> Result<CircID> {
+        let id = self.gen_id(rng).ok_or(Error::CircIDRangeFull)?;
+        let ent = CircEnt::Open(sink);
+        self.m.insert(id, ent);
+        Ok(id)
     }
 
     fn get_ref(&self, id: CircID) -> Option<&CircEnt> {

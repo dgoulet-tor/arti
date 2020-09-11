@@ -5,6 +5,8 @@ use crate::crypto::cell::{RawCellBody, CELL_BODY_LEN};
 use std::net::{IpAddr, Ipv4Addr};
 use tor_bytes::{self, Error, Readable, Reader, Result, Writer};
 
+use rand::{CryptoRng, Rng};
+
 /// Trait for the 'bodies' of channel messages.
 pub trait Body: Readable {
     /// Convert this type into a ChanMsg, wrapped as appropriate.
@@ -257,6 +259,14 @@ fixed_len! {
     /// circuit.  Nowadays it is used for creating one-hop circuits in
     /// the case where we don't know any onion key for the first hop.
     CreateFast, CREATE_FAST, FAST_C_HANDSHAKE_LEN
+}
+impl CreateFast {
+    /// Create a new random CreateFast handshake.
+    pub fn new<R: Rng + CryptoRng>(r: &mut R) -> Self {
+        let mut handshake = vec![0; FAST_C_HANDSHAKE_LEN];
+        r.fill_bytes(&mut handshake[..]);
+        CreateFast { handshake }
+    }
 }
 fixed_len! {
     /// A CreatedFast cell responds to a CreateFast cell
@@ -782,6 +792,13 @@ impl Readable for Unrecognized {
     }
 }
 
+impl<B: Body> From<B> for ChanMsg {
+    fn from(body: B) -> Self {
+        body.as_message()
+    }
+}
+
+// XXXX should do From instead.
 // Helper: declare an Into implementation for cells that don't take a circid.
 macro_rules! msg_into_cell {
     ($body:ident) => {

@@ -25,6 +25,7 @@
 
 pub mod chancell;
 pub mod channel;
+pub mod circuit;
 mod crypto;
 pub mod relaycell;
 mod util;
