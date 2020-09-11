@@ -81,28 +81,39 @@ where
         }
 
         let (state, msg) = fast::CreateFastClient::client1(rng, &())?;
-        let create_fast = msg::CreateFast::new(msg);
-        self.send_msg(create_fast.into()).await?;
+        let create_fast = CreateFastWrap::to_chanmsg(msg);
+        self.send_msg(create_fast).await?;
         let reply = self.read_msg().await?;
 
-        let server_handshake = match reply {
-            ChanMsg::CreatedFast(m) => m,
-            ChanMsg::Destroy(_) => {
-                return Err(Error::CircExtend(
-                    "Relay replied to CREATE_FAST with DESTROY.",
-                ));
-            }
-            _ => {
-                return Err(Error::CircExtend(
-                    "Relay replied to CREATE_FAST with unexpected cell.",
-                ));
-            }
-        };
+        let server_handshake = CreateFastWrap::from_chanmsg(reply)?;
 
-        let keygen = fast::CreateFastClient::client2(state, server_handshake.get_body())?;
+        let keygen = fast::CreateFastClient::client2(state, server_handshake)?;
 
         let state = Tor1RelayCrypto::construct(keygen)?;
         self.crypto.add_layer(Box::new(state));
         Ok(())
+    }
+}
+
+trait CreateHandshakeWrap {
+    fn to_chanmsg(bytes: Vec<u8>) -> ChanMsg;
+    fn from_chanmsg(msg: ChanMsg) -> Result<Vec<u8>>;
+}
+
+struct CreateFastWrap;
+impl CreateHandshakeWrap for CreateFastWrap {
+    fn to_chanmsg(bytes: Vec<u8>) -> ChanMsg {
+        msg::CreateFast::new(bytes).into()
+    }
+    fn from_chanmsg(msg: ChanMsg) -> Result<Vec<u8>> {
+        match msg {
+            ChanMsg::CreatedFast(m) => Ok(m.into_body()),
+            ChanMsg::Destroy(_) => Err(Error::CircExtend(
+                "Relay replied to CREATE_FAST with DESTROY.",
+            )),
+            _ => Err(Error::CircExtend(
+                "Relay replied to CREATE_FAST with unexpected cell.",
+            )),
+        }
     }
 }

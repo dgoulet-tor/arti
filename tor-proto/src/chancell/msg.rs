@@ -270,9 +270,9 @@ fixed_len! {
     CreatedFast, CREATED_FAST, FAST_S_HANDSHAKE_LEN
 }
 impl CreatedFast {
-    /// Return the content of this handshake
-    pub fn get_body(&self) -> &[u8] {
-        &self.handshake
+    /// Consume this message and return the content of this handshake
+    pub fn into_body(self) -> Vec<u8> {
+        self.handshake
     }
 }
 
