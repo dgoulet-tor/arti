@@ -6,6 +6,7 @@ pub mod msg;
 
 caret_int! {
     /// A command that identifies the type of a relay cell
+    // XXXX maybe rename to CircCmd.
     pub struct StreamCmd(u8) {
         /// Start a new stream
         BEGIN = 1,
@@ -74,5 +75,11 @@ impl From<u16> for StreamID {
 impl Into<u16> for StreamID {
     fn into(self: StreamID) -> u16 {
         self.0
+    }
+}
+
+impl std::fmt::Display for StreamID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        self.0.fmt(f)
     }
 }

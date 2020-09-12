@@ -38,6 +38,9 @@ pub enum Error {
     /// Protocol violation at the channel level
     #[error("channel protocol violation: {0}")]
     ChanProto(String),
+    /// Protocol violation at the circuit level
+    #[error("circuit protocol violation: {0}")]
+    CircProto(String),
     /// Circuit is closed.
     #[error("circuit closed")]
     CircuitClosed,

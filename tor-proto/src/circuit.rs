@@ -8,8 +8,10 @@ use crate::chancell::{
 use crate::channel::Channel;
 use crate::crypto::cell::{ClientLayer, CryptInit};
 use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
-use crate::relaycell::msg::RelayCell;
+use crate::relaycell::{msg::RelayCell, msg::RelayMsg, StreamCmd};
 use crate::{Error, Result};
+
+use tor_linkspec::LinkSpec;
 
 use futures::channel::mpsc;
 use futures::io::{AsyncRead, AsyncWrite};
@@ -145,6 +147,74 @@ where
         let server_handshake = wrap.from_chanmsg(reply)?;
         let keygen = H::client2(state, server_handshake)?;
 
+        let layer = L::construct(keygen)?;
+
+        self.crypto.add_layer(Box::new(layer));
+        Ok(())
+    }
+
+    /// Helper: extend the circuit.
+    async fn extend_impl<R, L, H>(
+        &mut self,
+        rng: &mut R,
+        handshake_id: u16,
+        key: &H::KeyType,
+        linkspecs: Vec<LinkSpec>,
+    ) -> Result<()>
+    where
+        R: Rng + CryptoRng,
+        L: CryptInit + ClientLayer + 'static,
+        H: ClientHandshake,
+        H::KeyGen: KeyGenerator,
+    {
+        use crate::relaycell::msg::{Body, Extend2};
+        if self.crypto.n_layers() == 0 {
+            return Err(Error::CircExtend("Circuit not yet created"));
+        }
+        let hop = (self.crypto.n_layers() - 1) as u8;
+
+        let (state, msg) = H::client1(rng, &key)?;
+        // XXXX sort the linkspecs into canonical order
+        let extend_msg = Extend2::new(linkspecs, handshake_id, msg);
+        let cell = RelayCell::new(0.into(), extend_msg.as_message());
+
+        // Send the message to the last hop...
+        self.send_relay_cell(
+            hop, true, // early
+            cell,
+        )
+        .await?;
+
+        // and wait for a response.
+        // XXXX This is no good for production use.  We shouldn't wait
+        // XXXX for the _NEXT_ relay cell, but instead for the next
+        // XXXX EXTENDED/EXTENDED2 cell.  Other relay cells should go
+        // XXXX elsewhere.
+        let (from_hop, cell) = self.recv_relay_cell().await?;
+
+        // Did we get the right response?
+        if from_hop != hop || cell.get_cmd() != StreamCmd::EXTENDED2 {
+            return Err(Error::CircProto(format!(
+                "wanted EXTENDED2 from {}; got {} from {}",
+                hop,
+                cell.get_cmd(),
+                from_hop
+            )));
+        }
+        let (streamid, msg) = cell.into_streamid_and_msg();
+        if streamid != 0.into() {
+            return Err(Error::CircProto(format!(
+                "got nonzero stream ID {} on EXTENDED2",
+                streamid
+            )));
+        }
+        let msg = match msg {
+            RelayMsg::Extended2(e) => e,
+            _ => return Err(Error::InternalError("body didn't match cmd".into())),
+        };
+        let server_handshake = msg.into_body();
+
+        let keygen = H::client2(state, server_handshake)?;
         let layer = L::construct(keygen)?;
 
         self.crypto.add_layer(Box::new(layer));

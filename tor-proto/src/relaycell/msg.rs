@@ -20,10 +20,25 @@ use rand::{CryptoRng, Rng};
 /// A parsed relay cell.
 pub struct RelayCell {
     streamid: StreamID,
-    body: RelayMsg,
+    body: RelayMsg, // XXX rename to msg.
 }
 
 impl RelayCell {
+    /// Construct a new relay cell.
+    pub fn new(streamid: StreamID, msg: RelayMsg) -> Self {
+        RelayCell {
+            streamid,
+            body: msg,
+        }
+    }
+    /// Consume this cell and return its components.
+    pub fn into_streamid_and_msg(self) -> (StreamID, RelayMsg) {
+        (self.streamid, self.body)
+    }
+    /// Return the command for this cell.
+    pub fn get_cmd(&self) -> StreamCmd {
+        self.body.get_cmd()
+    }
     /// Consume this relay message and encode it as a 509-byte padded cell
     /// body.
     pub fn encode<R: Rng + CryptoRng>(self, rng: &mut R) -> crate::Result<RelayCellBody> {
@@ -135,12 +150,12 @@ pub enum RelayMsg {
 }
 
 /// Internal: traits in common different cell bodies.
-trait Body: Sized {
+pub trait Body: Sized {
+    /// Convert this type into a RelayMsg, wrapped appropriate.
+    fn as_message(self) -> RelayMsg;
+    /// Decode a relay cell body from a provided reader.
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self>;
-    fn decode(body: Vec<u8>) -> Result<Self> {
-        let mut reader = Reader::from_slice(&body[..]);
-        Self::decode_from_reader(&mut reader)
-    }
+    /// Encode the body of this cell into the end of a vec.
     fn encode_onto(self, w: &mut Vec<u8>);
 }
 
@@ -221,6 +236,9 @@ pub struct Begin {
 }
 
 impl Body for Begin {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Begin(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let addr = r.take_until(b':')?;
         let port = r.take_until(0)?;
@@ -257,13 +275,13 @@ pub struct Data {
 }
 
 impl Body for Data {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Data(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         Ok(Data {
             body: r.take(r.remaining())?.into(),
         })
-    }
-    fn decode(body: Vec<u8>) -> Result<Self> {
-        Ok(Data { body })
     }
     fn encode_onto(mut self, w: &mut Vec<u8>) {
         w.append(&mut self.body);
@@ -278,6 +296,9 @@ pub struct End {
 const REASON_MISC: u8 = 1;
 const REASON_EXITPOLICY: u8 = 4;
 impl Body for End {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::End(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         if r.remaining() == 0 {
             return Ok(End {
@@ -322,6 +343,9 @@ pub struct Connected {
     addr: Option<(IpAddr, u32)>,
 }
 impl Body for Connected {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Connected(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         if r.remaining() == 0 {
             return Ok(Connected { addr: None });
@@ -362,6 +386,9 @@ pub struct Sendme {
 }
 
 impl Body for Sendme {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Sendme(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         Ok(Sendme {
             digest: Some(r.take(r.remaining())?.into()),
@@ -384,6 +411,9 @@ pub struct Extend {
 }
 
 impl Body for Extend {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Extend(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let addr = r.extract()?;
         let port = r.take_u16()?;
@@ -410,6 +440,9 @@ pub struct Extended {
 }
 
 impl Body for Extended {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Extended(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let handshake = r.take(TAP_S_HANDSHAKE_LEN)?.into();
         Ok(Extended { handshake })
@@ -421,28 +454,41 @@ impl Body for Extended {
 
 /// Extend the circuit to a new hop
 pub struct Extend2 {
-    ls: Vec<LinkSpec>,
+    linkspec: Vec<LinkSpec>,
     handshake_type: u16,
     handshake: Vec<u8>,
 }
+impl Extend2 {
+    /// Create a new Extend2 cell.
+    pub fn new(linkspec: Vec<LinkSpec>, handshake_type: u16, handshake: Vec<u8>) -> Self {
+        Extend2 {
+            linkspec,
+            handshake_type,
+            handshake,
+        }
+    }
+}
 
 impl Body for Extend2 {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Extend2(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let n = r.take_u8()?;
-        let ls = r.extract_n(n as usize)?;
+        let linkspec = r.extract_n(n as usize)?;
         let handshake_type = r.take_u16()?;
         let hlen = r.take_u16()?;
         let handshake = r.take(hlen as usize)?.into();
         Ok(Extend2 {
-            ls,
+            linkspec,
             handshake_type,
             handshake,
         })
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
-        assert!(self.ls.len() <= std::u8::MAX as usize);
-        w.write_u8(self.ls.len() as u8);
-        for ls in self.ls.iter() {
+        assert!(self.linkspec.len() <= std::u8::MAX as usize);
+        w.write_u8(self.linkspec.len() as u8);
+        for ls in self.linkspec.iter() {
             w.write(ls);
         }
         w.write_u16(self.handshake_type);
@@ -454,8 +500,16 @@ impl Body for Extend2 {
 pub struct Extended2 {
     handshake: Vec<u8>,
 }
-
+impl Extended2 {
+    /// Consume this extended2 cell and return its body.
+    pub fn into_body(self) -> Vec<u8> {
+        self.handshake
+    }
+}
 impl Body for Extended2 {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Extended2(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let hlen = r.take_u16()?;
         let handshake = r.take(hlen as usize)?;
@@ -474,6 +528,9 @@ impl Body for Extended2 {
 pub struct Truncate {}
 
 impl Body for Truncate {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Truncate(self)
+    }
     fn decode_from_reader(_r: &mut Reader<'_>) -> Result<Self> {
         Ok(Truncate {})
     }
@@ -486,6 +543,9 @@ pub struct Truncated {
 }
 
 impl Body for Truncated {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Truncated(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         Ok(Truncated {
             reason: r.take_u8()?,
@@ -502,6 +562,9 @@ pub struct Resolve {
 }
 
 impl Body for Resolve {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Resolve(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let query = r.take_until(0)?;
         Ok(Resolve {
@@ -616,6 +679,9 @@ pub struct Resolved {
 }
 
 impl Body for Resolved {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Resolved(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let mut answers = Vec::new();
         while r.remaining() > 0 {
@@ -653,6 +719,9 @@ impl Unrecognized {
 }
 
 impl Body for Unrecognized {
+    fn as_message(self) -> RelayMsg {
+        RelayMsg::Unrecognized(self)
+    }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         Ok(Unrecognized {
             cmd: 0.into(),
