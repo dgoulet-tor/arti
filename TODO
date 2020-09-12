@@ -5,13 +5,62 @@ o complete
 X Won't do.
 
 
+MILESTONE 0: Build a circuit and use it.
+   o Read a directory from disk
+   o Pick random relays
+   o Construct a one-hop circuit with CREATE_FAST
+   o Construct a one-hop circuit with ntor
+   - Build relay cells
+   - Construct a multihop circuit.
+   - Open a stream
+   - Make a request, get a response (no sendmes yet)
 
-- Decisions
-  - Which protocols to support?
-  - How far up the stack to go?
-  - How speculative to get?
+MILESTONE 1: Refactoring on above
+   - Stop parameterizing all APIs on TLS type.
+   - Is this "reactor" business a sensible design?  Is there a better one?
+   - Combine "create circuit" and "first hop"?
+   - Improve testing and documentation
+   - More types of circent for clarity.
 
-- Specs
+MILESTONE 2: Working streams
+   - Make SENDMEs work
+   - Make authenticated sendmes work.
+   - Improve circuit API.
+   - Get a stream API together.
+
+MILESTONE 3: Clean and tidy
+   - Make a plan for what closes when
+   - Make sure everything closes when it is supposed to.
+   - Refactor XXXX and TODO code; make sure everything is tested and
+     documented.
+
+
+MILESTONE C???: Client parity (not hidden services yet, no needless junk)
+   - Correct path selection
+   - Timeouts
+      - Circuit timeout logic
+      - Connection timeout logic.
+      - What other kinds of timeouts?
+   - Downloading directory information, using compression and diffs.
+   - Connection padding (link protocol 5)
+   - Circuit padding (with padding machines)
+   - Optionally, expose a socks port
+   - Automatically build circuits
+   - Build preemptive circuits
+   - Guard nodes
+   - Rate-limiting
+   - Fairness on circuits/streams?
+   - CBT logic?
+   - Change behavior depending on network parameters
+   - Figure out which consensus method we require, and say so.
+
+
+LATER MILESTONES:
+   - Client hidden service support
+   - Be-a-hidden-service support.
+
+
+- Spec issues
   - Test vectors
     . Add test vectors for ntor
     - Add test vectors for relay crypto
@@ -26,7 +75,7 @@ X Won't do.
     - UTF-8.
 
 - Primitive crypto
-  - Wrap x25519 in a trait
+  - Wrap x25519 in a trait?
   - Use signature trait for ed25519?
   - Ed25519 needs to have an "identity" non-parsed version, maybe.
   o Add RSA-pkcs1 signature support
@@ -47,6 +96,8 @@ X Won't do.
   o encode and decode regular cell types.
   . handshakes
     o ntor
+    o fast
+    X TAP
   . relay crypto
     o implement
     - tests
@@ -60,25 +111,12 @@ X Won't do.
     - For all cell types
     - for all relay cell types
     - For all handshakes
-  - State for multiplexing circuits on a connection
+  . State for multiplexing circuits on a connection
   - State for sending sendme cells, both versions.
     - V1 sendmes
   - State for managing streams
-  - Initial protocol handshake for client/relay authentication
+  o Initial protocol handshake for client/relay authentication
   - Initial protocol handshake for relay/relay authentication
-
-- Directory parsing stuff
-  . Parsing backend
-    - Match tor's actual token behavior?
-  - Parse consensus directories, both variants.
-  - Apply consensus diffs
-
-- Directory encoding stuff
-  - Encoding/signing backend
-  - Encode descriptors
-
-- Additional small functionality, protocol level
-  - Relay padding
 
 - HS functionality
   - encode and decode hs cell types
@@ -92,19 +130,9 @@ X Won't do.
     - hsv3 variant of ntor
     - tests and vectors for the above.
 
-X Not currently planning to do:
-  X Link protocol v1 (multicert)
-  X Link protocol v2 (renegotiation)
+PROBABLY NEVER:
+   - TAP
+   - Link protocols before 4.
+   - Older consensus milestones
 
-- Unsure if planning to do:
-  X Link protocol v3 (short circuit IDs, PK comparison)
-  - Linkauth 1 (RSA-SHA256-TLSSecret)
-  - Parsing votes
-  - HSv2 directory support
-  - Supporting relays without ed25519 keys.
-  - Compute consensus diffs
 
-- Waiting on RSA-OAEP:
-  - Handshakes
-    - TAP
-  - HSv2 handshakes
