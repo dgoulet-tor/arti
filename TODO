@@ -5,7 +5,7 @@ o complete
 X Won't do.
 
 
-MILESTONE 0: Build a circuit and use it.
+MILESTONE 0: Build a circuit and use it -- minimum to share inside tor
    o Read a directory from disk
    o Pick random relays
    o Construct a one-hop circuit with CREATE_FAST
@@ -15,12 +15,14 @@ MILESTONE 0: Build a circuit and use it.
    - Open a stream
    - Make a request, get a response (no sendmes yet)
 
-MILESTONE 1: Refactoring on above
+MILESTONE 1: Refactoring on above -- minimum to share outside tor
    - Stop parameterizing all APIs on TLS type.
    - Is this "reactor" business a sensible design?  Is there a better one?
    - Combine "create circuit" and "first hop"?
-   - Improve testing and documentation
+   - Improve testing,
+   - Improve documentation
    - More types of circent for clarity.
+   - Make sure readme is right
 
 MILESTONE 2: Working streams
    - Make SENDMEs work
