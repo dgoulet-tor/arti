@@ -7,17 +7,33 @@
 //! one for "inbound" traffic.
 //!
 
+use crate::chancell::RawCellBody;
 use crate::{Error, Result};
 
-/// The number of bytes in the body of a cell.
-///
-/// TODO: This probably belongs somewhere else.
-pub const CELL_BODY_LEN: usize = 509;
-/// A cell body considerd as a raw array of bytes
-pub type RawCellBody = [u8; CELL_BODY_LEN];
-/// Type for a cell body.
+/// Type for the body of a relay cell.
 #[derive(Clone)]
-pub struct CellBody(pub RawCellBody);
+pub struct RelayCellBody(RawCellBody);
+
+impl From<RawCellBody> for RelayCellBody {
+    fn from(body: RawCellBody) -> Self {
+        RelayCellBody(body)
+    }
+}
+impl From<RelayCellBody> for RawCellBody {
+    fn from(cell: RelayCellBody) -> Self {
+        cell.0
+    }
+}
+impl AsRef<[u8]> for RelayCellBody {
+    fn as_ref(&self) -> &[u8] {
+        &self.0[..]
+    }
+}
+impl AsMut<[u8]> for RelayCellBody {
+    fn as_mut(&mut self) -> &mut [u8] {
+        &mut self.0[..]
+    }
+}
 
 /// Represents the ability for a circuit crypto state to be initialized
 /// from a given seed.
@@ -38,26 +54,26 @@ pub trait CryptInit: Sized {
 
 /// Represents a relay's view of the crypto state on a given circuit.
 pub trait RelayCrypt {
-    /// Prepare a CellBody to be sent towards the client.
-    fn originate(&mut self, cell: &mut CellBody);
-    /// Encrypt a CellBody that is moving towards the client.
-    fn encrypt_inbound(&mut self, cell: &mut CellBody);
-    /// Decrypt a CellBody that is moving towards the client.
+    /// Prepare a RelayCellBody to be sent towards the client.
+    fn originate(&mut self, cell: &mut RelayCellBody);
+    /// Encrypt a RelayCellBody that is moving towards the client.
+    fn encrypt_inbound(&mut self, cell: &mut RelayCellBody);
+    /// Decrypt a RelayCellBody that is moving towards the client.
     ///
     /// Return true if it is addressed to us.
-    fn decrypt_outbound(&mut self, cell: &mut CellBody) -> bool;
+    fn decrypt_outbound(&mut self, cell: &mut RelayCellBody) -> bool;
 }
 
 /// A client's view of the crypto state shared with a single relay.
 pub trait ClientLayer {
-    /// Prepare a CellBody to be sent to the relay at this layer.
-    fn originate_for(&mut self, cell: &mut CellBody);
-    /// Encrypt a CellBody to be decrypted by this layer.
-    fn encrypt_outbound(&mut self, cell: &mut CellBody);
+    /// Prepare a RelayCellBody to be sent to the relay at this layer.
+    fn originate_for(&mut self, cell: &mut RelayCellBody);
+    /// Encrypt a RelayCellBody to be decrypted by this layer.
+    fn encrypt_outbound(&mut self, cell: &mut RelayCellBody);
     /// Decrypt a CellBopdy that passed through this layer.
     ///
     /// Return true if this layer is the originator.
-    fn decrypt_inbound(&mut self, cell: &mut CellBody) -> bool;
+    fn decrypt_inbound(&mut self, cell: &mut RelayCellBody) -> bool;
 }
 
 /// Type to store hop indices on a circuit.
@@ -78,7 +94,7 @@ impl ClientCrypt {
     ///
     /// The cell is prepared for the `hop`th hop, and then encrypted with
     /// the appropriate keys.
-    pub fn encrypt(&mut self, cell: &mut CellBody, hop: HopNum) -> Result<()> {
+    pub fn encrypt(&mut self, cell: &mut RelayCellBody, hop: HopNum) -> Result<()> {
         let hop = hop as usize;
         if hop > self.layers.len() {
             return Err(Error::NoSuchHop);
@@ -93,7 +109,7 @@ impl ClientCrypt {
     /// Decrypt an incoming cell that is coming to the client.
     ///
     /// On success, return which hop was the originator of the cell.
-    pub fn decrypt(&mut self, cell: &mut CellBody) -> Result<HopNum> {
+    pub fn decrypt(&mut self, cell: &mut RelayCellBody) -> Result<HopNum> {
         for (hopnum, layer) in self.layers.iter_mut().enumerate() {
             if layer.decrypt_inbound(cell) {
                 return Ok(hopnum as HopNum);
@@ -159,32 +175,32 @@ pub mod tor1 {
     }
 
     impl<SC: StreamCipher, D: Digest + Clone> RelayCrypt for CryptState<SC, D> {
-        fn originate(&mut self, cell: &mut CellBody) {
+        fn originate(&mut self, cell: &mut RelayCellBody) {
             cell.set_digest(&mut self.b_d);
         }
-        fn encrypt_inbound(&mut self, cell: &mut CellBody) {
-            self.b_c.encrypt(&mut cell.0[..])
+        fn encrypt_inbound(&mut self, cell: &mut RelayCellBody) {
+            self.b_c.encrypt(cell.as_mut());
         }
-        fn decrypt_outbound(&mut self, cell: &mut CellBody) -> bool {
-            self.f_c.decrypt(&mut cell.0[..]);
+        fn decrypt_outbound(&mut self, cell: &mut RelayCellBody) -> bool {
+            self.f_c.decrypt(cell.as_mut());
             cell.recognized(&mut self.f_d)
         }
     }
 
     impl<SC: StreamCipher, D: Digest + Clone> ClientLayer for CryptState<SC, D> {
-        fn originate_for(&mut self, cell: &mut CellBody) {
+        fn originate_for(&mut self, cell: &mut RelayCellBody) {
             cell.set_digest(&mut self.f_d);
         }
-        fn encrypt_outbound(&mut self, cell: &mut CellBody) {
+        fn encrypt_outbound(&mut self, cell: &mut RelayCellBody) {
             self.f_c.encrypt(&mut cell.0[..])
         }
-        fn decrypt_inbound(&mut self, cell: &mut CellBody) -> bool {
+        fn decrypt_inbound(&mut self, cell: &mut RelayCellBody) -> bool {
             self.b_c.decrypt(&mut cell.0[..]);
             cell.recognized(&mut self.b_d)
         }
     }
 
-    impl CellBody {
+    impl RelayCellBody {
         /// Prepare a cell body by setting its digest and recognized field.
         fn set_digest<D: Digest + Clone>(&mut self, d: &mut D) {
             self.0[1] = 0;

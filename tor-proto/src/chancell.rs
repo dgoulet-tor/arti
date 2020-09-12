@@ -18,6 +18,9 @@ use caret::caret_int;
 /// circuit IDs are longer, so cells are 514 bytes.
 pub const CELL_DATA_LEN: usize = 509;
 
+/// A cell body considerd as a raw array of bytes
+pub type RawCellBody = [u8; CELL_DATA_LEN];
+
 /// Channel-local identifier for a circuit.
 ///
 /// A circuit ID can be 2 or 4 bytes long; on modern versions of the Tor

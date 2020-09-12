@@ -1,7 +1,6 @@
 //! Different kinds of messages that can be encoded in channel cells.
 
-use super::ChanCmd;
-use crate::crypto::cell::{RawCellBody, CELL_BODY_LEN};
+use super::{ChanCmd, RawCellBody, CELL_DATA_LEN};
 use std::net::{IpAddr, Ipv4Addr};
 use tor_bytes::{self, Error, Readable, Reader, Result, Writer};
 
@@ -375,8 +374,8 @@ impl Body for Relay {
 }
 impl Readable for Relay {
     fn take_from(r: &mut Reader<'_>) -> Result<Self> {
-        let mut body = Box::new([0u8; CELL_BODY_LEN]);
-        (&mut body[..]).copy_from_slice(r.take(CELL_BODY_LEN)?);
+        let mut body = Box::new([0u8; CELL_DATA_LEN]);
+        (&mut body[..]).copy_from_slice(r.take(CELL_DATA_LEN)?);
         Ok(Relay { body })
     }
 }

@@ -25,7 +25,7 @@ impl RelayCell {
     /// in a RELAY or RELAY_EARLY cell
     ///
     /// TODO: not the best interface, as this requires copying into a cell.
-    fn encode(self) -> Vec<u8> {
+    fn encode_to_vec(self) -> Vec<u8> {
         let mut w = Vec::new();
         w.write_u8(self.body.get_cmd().into());
         w.write_u16(0); // "Recognized"

@@ -65,9 +65,14 @@ caret_int! {
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct StreamID(u16);
 
-/// Contents of a relay cell, holding it body by reference
-pub struct RelayCellRef<'a> {
-    stream: StreamID,
-    cmd: StreamCmd,
-    body: &'a [u8],
+impl From<u16> for StreamID {
+    fn from(v: u16) -> StreamID {
+        StreamID(v)
+    }
+}
+
+impl Into<u16> for StreamID {
+    fn into(self: StreamID) -> u16 {
+        self.0
+    }
 }

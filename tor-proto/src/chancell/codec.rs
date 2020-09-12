@@ -1,7 +1,7 @@
 //! Implementation for asynchronus encoding and decoding of ChanCells.
 
+use super::CELL_DATA_LEN;
 use crate::chancell::{msg, ChanCell, ChanCmd, CircID};
-use crate::crypto::cell::CELL_BODY_LEN;
 use crate::Error;
 use arrayref::{array_mut_ref, array_ref};
 use tor_bytes::{self, Reader, Writer};
@@ -65,11 +65,11 @@ impl futures_codec::Encoder for ChannelCodec {
             let pos = dst.len(); // Always 5?
             msg.write_body_onto(dst);
             let len = dst.len() - pos;
-            if len > CELL_BODY_LEN {
+            if len > CELL_DATA_LEN {
                 return Err(Error::InternalError("ran out of space for cell".into()));
             }
             // pad to end of fixed-length cell
-            dst.write_zeros(CELL_BODY_LEN - len);
+            dst.write_zeros(CELL_DATA_LEN - len);
         }
         Ok(())
     }
