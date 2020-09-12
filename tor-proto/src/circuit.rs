@@ -1,19 +1,21 @@
 //! Multi-hop paths over the Tor network.
 
 use crate::chancell::{
+    self,
     msg::{self, ChanMsg},
     ChanCell, CircID,
 };
 use crate::channel::Channel;
 use crate::crypto::cell::{ClientLayer, CryptInit};
 use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
+use crate::relaycell::msg::RelayCell;
 use crate::{Error, Result};
 
 use futures::channel::mpsc;
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::stream::StreamExt;
 
-use rand::{CryptoRng, Rng};
+use rand::{thread_rng, CryptoRng, Rng};
 
 use crate::crypto::cell::ClientCrypt;
 
@@ -63,6 +65,53 @@ where
     async fn read_msg(&mut self) -> Result<ChanMsg> {
         // XXXX handle close better?
         self.input.next().await.ok_or(Error::CircuitClosed)
+    }
+
+    /// Encode the message `msg`, encrypt it, and send it to the 'hop'th hop.
+    ///
+    /// TODO: This is not a good long-term API.  It should become private
+    /// if we keep it.
+    ///
+    /// TODO: use HopNum
+    pub async fn send_relay_cell(&mut self, hop: u8, early: bool, cell: RelayCell) -> Result<()> {
+        assert!((hop as usize) < self.crypto.n_layers());
+        let mut body = cell.encode(&mut thread_rng())?;
+        self.crypto.encrypt(&mut body, hop)?;
+        let msg = chancell::msg::Relay::from_raw(body.into());
+        let msg = if early {
+            ChanMsg::RelayEarly(msg)
+        } else {
+            ChanMsg::Relay(msg)
+        };
+        self.send_msg(msg).await?;
+        Ok(())
+    }
+
+    /// Receive a message from the circuit, decrypt it, and return it as a
+    /// RelayCell.
+    ///
+    /// TODO: This is not a good long-term API.  It should become private
+    /// if we keep it.
+    ///
+    /// TODO: use HopNum
+    pub async fn recv_relay_cell(&mut self) -> Result<(u8, RelayCell)> {
+        let chanmsg = self.read_msg().await?;
+        let body = match chanmsg {
+            ChanMsg::Relay(r) => r,
+            _ => {
+                return Err(Error::ChanProto(format!(
+                    "{} cell received on circuit",
+                    chanmsg.get_cmd()
+                )))
+            }
+        };
+
+        // Decrypt, if possible.
+        let mut cell = body.into_relay_cell();
+        let hopnum = self.crypto.decrypt(&mut cell)?;
+        let msg = RelayCell::decode(cell)?;
+
+        Ok((hopnum, msg))
     }
 
     /// Helper: create the first hop of a circuit.

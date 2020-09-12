@@ -10,16 +10,17 @@ MILESTONE 0: Build a circuit and use it -- minimum to share inside tor
    o Pick random relays
    o Construct a one-hop circuit with CREATE_FAST
    o Construct a one-hop circuit with ntor
-   - Build relay cells
+   o Build relay cells
    - Construct a multihop circuit.
    - Open a stream
    - Make a request, get a response (no sendmes yet)
 
 MILESTONE 1: Refactoring on above -- minimum to share outside tor
    - Stop parameterizing all APIs on TLS type.
+   - Less copying, esp around Box<RawCellBody>.  Consider bytes crate.
    - Is this "reactor" business a sensible design?  Is there a better one?
    - Combine "create circuit" and "first hop"?
-   - Improve testing,
+   - Improve testing
    - Improve documentation
    - More types of circent for clarity.
    - Make sure readme is right

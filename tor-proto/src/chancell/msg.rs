@@ -357,7 +357,21 @@ impl Readable for Created2 {
 /// XXXX.
 #[derive(Clone)]
 pub struct Relay {
+    // XXXX either this shouldn't be boxed, or RelayCellBody should be boxed!
     body: Box<RawCellBody>,
+}
+impl Relay {
+    /// Construct a Relay message from its body.
+    pub fn from_raw(body: RawCellBody) -> Self {
+        Relay {
+            body: Box::new(body),
+        }
+    }
+    /// Consume this Relay message and return a RelayCellBody for
+    /// encryption/decryption.
+    pub fn into_relay_cell(self) -> crate::crypto::cell::RelayCellBody {
+        (*self.body).into()
+    }
 }
 impl std::fmt::Debug for Relay {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

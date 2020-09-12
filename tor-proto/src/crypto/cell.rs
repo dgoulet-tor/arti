@@ -124,6 +124,8 @@ impl ClientCrypt {
     }
 
     /// Return the number of layers configured on this ClientCrypt.
+    ///
+    /// TODO: use HopNum
     pub fn n_layers(&self) -> usize {
         self.layers.len()
     }

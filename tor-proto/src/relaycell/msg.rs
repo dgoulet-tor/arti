@@ -73,6 +73,14 @@ impl RelayCell {
     ///
     /// Requires that the cryptographic checks on the message have already been
     /// performed
+    pub fn decode(body: RelayCellBody) -> Result<Self> {
+        let mut reader = Reader::from_slice(body.as_ref());
+        RelayCell::decode_from_reader(&mut reader)
+    }
+    /// Parse a RELAY or RELAY_EARLY cell body into a RelayCell from a reader.
+    ///
+    /// Requires that the cryptographic checks on the message have already been
+    /// performed
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let cmd = r.take_u8()?.into();
         r.advance(2)?; // "recognized"
