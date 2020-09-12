@@ -6,6 +6,8 @@
 use super::StreamCmd;
 use super::StreamID;
 use crate::chancell::msg::{TAP_C_HANDSHAKE_LEN, TAP_S_HANDSHAKE_LEN};
+use crate::chancell::CELL_DATA_LEN;
+use crate::crypto::cell::RelayCellBody;
 use std::net::{IpAddr, Ipv4Addr};
 use tor_bytes::{Error, Result};
 use tor_bytes::{Readable, Reader, Writeable, Writer};
@@ -13,6 +15,7 @@ use tor_linkspec::LinkSpec;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
 use arrayref::array_mut_ref;
+use rand::{CryptoRng, Rng};
 
 /// A parsed relay cell.
 pub struct RelayCell {
@@ -21,6 +24,31 @@ pub struct RelayCell {
 }
 
 impl RelayCell {
+    /// Consume this relay message and encode it as a 509-byte padded cell
+    /// body.
+    pub fn encode<R: Rng + CryptoRng>(self, rng: &mut R) -> crate::Result<RelayCellBody> {
+        // always this many zero-values bytes before padding.
+        // XXXX We should specify this value more exactly, to avoid fingerprinting
+        const MIN_SPACE_BEFORE_PADDING: usize = 4;
+
+        // TODO: This implementation is inefficient; it copies too much.
+        let encoded = self.encode_to_vec();
+        let enc_len = encoded.len();
+        if enc_len > CELL_DATA_LEN {
+            return Err(crate::Error::InternalError(
+                "too many bytes in relay cell".into(),
+            ));
+        }
+        let mut raw = [0u8; CELL_DATA_LEN];
+        raw[0..enc_len].copy_from_slice(&encoded);
+
+        if enc_len < CELL_DATA_LEN - MIN_SPACE_BEFORE_PADDING {
+            rng.fill_bytes(&mut raw[enc_len + MIN_SPACE_BEFORE_PADDING..]);
+        }
+
+        Ok(raw.into())
+    }
+
     /// Consume a relay cell and return its contents, encoded for use
     /// in a RELAY or RELAY_EARLY cell
     ///
