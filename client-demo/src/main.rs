@@ -94,8 +94,13 @@ fn main() -> Result<()> {
         let chan = connect(&g).await?;
 
         let mut circ = chan.new_circ(&mut rng).await?;
+        /*
         circ.create_firsthop_fast(&mut rng).await?;
         info!("CREATE_FAST was successful.");
+         */
+
+        circ.create_firsthop_ntor(&mut rng, &g).await?;
+        info!("ntor handshake was successful.");
 
         Ok(())
     })

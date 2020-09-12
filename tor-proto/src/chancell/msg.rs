@@ -307,11 +307,26 @@ impl Readable for Create2 {
         })
     }
 }
+impl Create2 {
+    /// Wrap a typed handshake as a create2 cell
+    pub fn new(handshake_type: u16, handshake: Vec<u8>) -> Self {
+        Create2 {
+            handshake_type,
+            handshake,
+        }
+    }
+}
 
 /// Response to a Create2 cell
 #[derive(Clone, Debug)]
 pub struct Created2 {
     handshake: Vec<u8>,
+}
+impl Created2 {
+    /// Consume this created2 cell and return its body.
+    pub fn into_body(self) -> Vec<u8> {
+        self.handshake
+    }
 }
 impl Body for Created2 {
     fn as_message(self) -> ChanMsg {

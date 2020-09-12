@@ -56,8 +56,8 @@ impl super::ServerHandshake for NtorServer {
 /// A set of public keys used by a client to initiate an ntor handshake.
 #[derive(Clone)]
 pub struct NtorPublicKey {
-    id: RSAIdentity,
-    pk: PublicKey,
+    pub id: RSAIdentity,
+    pub pk: PublicKey,
 }
 
 /// A secret key used by a relay to answer an ntor request

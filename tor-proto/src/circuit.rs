@@ -118,6 +118,27 @@ where
         self.create_impl::<R, Tor1RelayCrypto, CreateFastClient, _>(rng, &wrap, &())
             .await
     }
+
+    /// Use the ntor handshake to connect to the first hop of this circuit.
+    ///
+    /// Note that the provided 'target' must match the channel's target.
+    pub async fn create_firsthop_ntor<R, Tg>(&mut self, rng: &mut R, target: &Tg) -> Result<()>
+    where
+        R: Rng + CryptoRng,
+        Tg: tor_linkspec::ExtendTarget,
+    {
+        use crate::crypto::cell::Tor1RelayCrypto;
+        use crate::crypto::handshake::ntor::{NtorClient, NtorPublicKey};
+        let wrap = Create2Wrap {
+            handshake_type: 0x0002, // ntor
+        };
+        let key = NtorPublicKey {
+            id: target.get_rsa_identity().clone(),
+            pk: *target.get_ntor_onion_key(),
+        };
+        self.create_impl::<R, Tor1RelayCrypto, NtorClient, _>(rng, &wrap, &key)
+            .await
+    }
 }
 
 trait CreateHandshakeWrap {
@@ -138,6 +159,24 @@ impl CreateHandshakeWrap for CreateFastWrap {
             )),
             _ => Err(Error::CircExtend(
                 "Relay replied to CREATE_FAST with unexpected cell.",
+            )),
+        }
+    }
+}
+
+struct Create2Wrap {
+    handshake_type: u16,
+}
+impl CreateHandshakeWrap for Create2Wrap {
+    fn to_chanmsg(&self, bytes: Vec<u8>) -> ChanMsg {
+        msg::Create2::new(self.handshake_type, bytes).into()
+    }
+    fn from_chanmsg(&self, msg: ChanMsg) -> Result<Vec<u8>> {
+        match msg {
+            ChanMsg::Created2(m) => Ok(m.into_body()),
+            ChanMsg::Destroy(_) => Err(Error::CircExtend("Relay replied to CREATE2 with DESTROY.")),
+            _ => Err(Error::CircExtend(
+                "Relay replied to CREATE2 with unexpected cell.",
             )),
         }
     }
