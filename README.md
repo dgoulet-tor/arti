@@ -36,20 +36,19 @@ So far the code has untested or under-tested implementations of:
   * parsing and validating microdesc consensuses
   * link authentication (client->server type)
 
-Before I share it, I think it needs more work on:
+Before I share it more broadly, I think it needs more work on:
 
   * refactoring everywhere
   * lots of tests
   * a sensible api for cell types
-  * a toy client that builds a circuit through the network
-      and uses it to exit.
+  * A real API for dealing with circuits and streams (rather than handling
+    cells one by one)
 
 There is no support yet for:
 
   * Actually connecting to the network in a reasonable way
   * choosing paths through the network in a reasonable way
   * doing anything with the network in a reasonable way
-  * actually building circuits
   * creating network documents
   * v2 onion service anything
   * v3 onion service anything
