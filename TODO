@@ -83,7 +83,7 @@ LATER MILESTONES:
   - Ed25519 needs to have an "identity" non-parsed version, maybe.
   o Add RSA-pkcs1 signature support
   o Add RSA-pem encode/decode support
-  - RSA-oaep, if supported.
+  - RSA-oaep, if supported and we actually want it.
   o test vectors for sha1
   o test vectors for sha2
   o test vectors for sha3/shake

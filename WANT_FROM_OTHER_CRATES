@@ -21,9 +21,7 @@ phf:
 * much cheaper hash function
 
 rsa:
-* oaep
-* if not oaep, raw?
-* get raw signed data to allow multiple signed formats.
+* get raw signed data, to allow multiple signed formats.
 
 crypto:
 * key agreement trait
