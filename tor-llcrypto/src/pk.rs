@@ -61,3 +61,31 @@ pub trait ValidatableSignature {
     /// Check whether this signature is a correct signature for the document.
     fn is_valid(&self) -> bool;
 }
+
+#[cfg(test)]
+mod test {
+    #[test]
+    pub fn validatable_ed_sig() {
+        use super::ed25519::{PublicKey, Signature, ValidatableEd25519Signature};
+        use super::ValidatableSignature;
+        use hex_literal::hex;
+        let pk = PublicKey::from_bytes(&hex!(
+            "fc51cd8e6218a1a38da47ed00230f058
+             0816ed13ba3303ac5deb911548908025"
+        ))
+        .unwrap();
+        let sig: Signature = hex!(
+            "6291d657deec24024827e69c3abe01a3
+             0ce548a284743a445e3680d7db5ac3ac
+             18ff9b538d16f290ae67f760984dc659
+             4a7c15e9716ed28dc027beceea1ec40a"
+        )
+        .into();
+
+        let valid = ValidatableEd25519Signature::new(pk.clone(), sig.clone(), &hex!("af82"));
+        let invalid = ValidatableEd25519Signature::new(pk, sig, &hex!("af83"));
+
+        assert!(valid.is_valid());
+        assert!(!invalid.is_valid());
+    }
+}
