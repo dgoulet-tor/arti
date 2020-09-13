@@ -15,6 +15,13 @@ Maybe if it turns out great we can turn it into something official,
 but right now nobody's working on it but me, and I'm not working on
 it seriously at all.
 
+## What the demo can do if you run it.
+
+There is a demo program that looks for a chutney directory in
+~/src/chutney/net/nodes/. If it finds one, it reads the directory info from
+disk, builds a random three hop circuit, and sends a request for
+http://www.torproject.org:80/.  Then it displays the answer.
+
 ## What's here and what isn't.
 
 So far the code has untested or under-tested implementations of:
