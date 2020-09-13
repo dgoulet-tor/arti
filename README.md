@@ -70,11 +70,15 @@ You can make documentation with `cargo doc`.  I prefer
 `cargo doc --no-deps --document-private-items`, to include documentation for
 private members but not for dependencies.
 
+You can try running the demo code in `client-demo` with `cd client-demo &&
+cargo run`.  You'll need to have a running local chutney network first; see
+the documentation for that program.
+
 ## I want to help. What _should_ I do with this?
 
 More tests would be great.
 
-Parsing more document types would be great.
+Parsing more document types would be neat.
 
 More documentation examples would be great.
 
@@ -156,7 +160,8 @@ directories, and reads all its information from disk.
 
 `client-demo`: A simple tor client program.  Right now it requires that you
 already have a datadir full of directory information.  It does a client->relay
-handshake, then stops.
+handshake, builds a three-hop circuit, fetches http://www.torproject.org:80/,
+and exits.
 
 ## Intended architecture
 
