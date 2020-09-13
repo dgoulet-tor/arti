@@ -27,6 +27,7 @@ zeroize = "1.1.0"
 
 [dev-dependencies]
 hex-literal = "0.3.1"
+rand = "0.7.3"
 # This is paused for now because of aes-ctr.
 stream-cipher = "0.4.0"
 

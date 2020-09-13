@@ -57,16 +57,42 @@ pub fn convert_curve25519_to_ed25519_private(
     bytes[32..64].clone_from_slice(&h[0..32]);
 
     let result = pk::ed25519::ExpandedSecretKey::from_bytes(&bytes[..]).ok()?;
-
-    let signbit = result.to_bytes()[31] >> 7;
+    let pubkey: pk::ed25519::PublicKey = (&result).into();
+    let signbit = pubkey.as_bytes()[31] >> 7;
 
     #[cfg(debug_assertions)]
     {
         let curve_pubkey1 = pk::curve25519::PublicKey::from(privkey);
         let ed_pubkey1 = convert_curve25519_to_ed25519_public(&curve_pubkey1, signbit).unwrap();
-        let ed_pubkey2 = (&result).into();
-        assert_eq!(ed_pubkey1, ed_pubkey2);
+        assert_eq!(ed_pubkey1, pubkey);
     }
 
     Some((result, signbit))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn curve_to_ed_compatible() {
+        use super::*;
+        use crate::pk::{curve25519, ed25519};
+        use rand::thread_rng;
+        use signature::Verifier;
+
+        let rng = thread_rng();
+
+        let curve_sk = curve25519::StaticSecret::new(rng);
+        let curve_pk = curve25519::PublicKey::from(&curve_sk);
+
+        let (ed_sk, signbit) = convert_curve25519_to_ed25519_private(&curve_sk).unwrap();
+        let ed_pk1: ed25519::PublicKey = (&ed_sk).into();
+        let ed_pk2 = convert_curve25519_to_ed25519_public(&curve_pk, signbit).unwrap();
+
+        let msg = b"tis the gift to be simple";
+        let sig1 = ed_sk.sign(&msg[..], &ed_pk1);
+        assert!(ed_pk1.verify(&msg[..], &sig1).is_ok());
+        assert!(ed_pk2.verify(&msg[..], &sig1).is_ok());
+
+        assert_eq!(ed_pk1, ed_pk2);
+    }
 }
