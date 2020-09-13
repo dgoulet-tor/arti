@@ -18,6 +18,7 @@ use arrayref::array_mut_ref;
 use rand::{CryptoRng, Rng};
 
 /// A parsed relay cell.
+#[derive(Debug)]
 pub struct RelayCell {
     streamid: StreamID,
     body: RelayMsg, // XXX rename to msg.
@@ -112,6 +113,7 @@ impl RelayCell {
 }
 
 /// A single parsed relay message, sent or received along a circuit
+#[derive(Debug)]
 pub enum RelayMsg {
     /// Create a stream
     Begin(Begin),
@@ -229,6 +231,7 @@ impl RelayMsg {
 }
 
 /// Message to create a enw stream
+#[derive(Debug)]
 pub struct Begin {
     addr: Vec<u8>,
     port: u16,
@@ -270,6 +273,7 @@ impl Body for Begin {
 }
 
 /// Data on a stream
+#[derive(Debug)]
 pub struct Data {
     body: Vec<u8>,
 }
@@ -289,6 +293,7 @@ impl Body for Data {
 }
 
 /// Closing a stream
+#[derive(Debug)]
 pub struct End {
     reason: u8,
     addr: Option<(IpAddr, u32)>,
@@ -339,6 +344,7 @@ impl Body for End {
 }
 
 /// Successful response to a Begin message
+#[derive(Debug)]
 pub struct Connected {
     addr: Option<(IpAddr, u32)>,
 }
@@ -381,6 +387,7 @@ impl Body for Connected {
 }
 
 /// Used for flow control to increase flow control window
+#[derive(Debug)]
 pub struct Sendme {
     digest: Option<Vec<u8>>,
 }
@@ -403,6 +410,7 @@ impl Body for Sendme {
 }
 
 /// Obsolete circuit extension message
+#[derive(Debug)]
 pub struct Extend {
     addr: Ipv4Addr,
     port: u16,
@@ -435,6 +443,7 @@ impl Body for Extend {
 }
 
 /// Obsolete circuit extension message (reply)
+#[derive(Debug)]
 pub struct Extended {
     handshake: Vec<u8>,
 }
@@ -453,6 +462,7 @@ impl Body for Extended {
 }
 
 /// Extend the circuit to a new hop
+#[derive(Debug)]
 pub struct Extend2 {
     linkspec: Vec<LinkSpec>,
     handshake_type: u16,
@@ -499,6 +509,7 @@ impl Body for Extend2 {
 }
 
 /// Successful reply to an Extend2
+#[derive(Debug)]
 pub struct Extended2 {
     handshake: Vec<u8>,
 }
@@ -527,6 +538,7 @@ impl Body for Extended2 {
 }
 
 /// End the circuit after this hop
+#[derive(Debug)]
 pub struct Truncate {}
 
 impl Body for Truncate {
@@ -540,6 +552,7 @@ impl Body for Truncate {
 }
 
 /// The remaining hops of this circuit have gone away
+#[derive(Debug)]
 pub struct Truncated {
     reason: u8,
 }
@@ -559,6 +572,7 @@ impl Body for Truncated {
 }
 
 /// Launch a DNS lookup
+#[derive(Debug)]
 pub struct Resolve {
     query: Vec<u8>,
 }
@@ -580,6 +594,7 @@ impl Body for Resolve {
 }
 
 /// Possible response to a DNS lookup
+#[derive(Debug)]
 pub enum ResolvedVal {
     /// We found an IP address
     Ip(IpAddr),
@@ -676,6 +691,7 @@ impl Writeable for ResolvedVal {
 }
 
 /// Response to a Resolve message
+#[derive(Debug)]
 pub struct Resolved {
     answers: Vec<(ResolvedVal, u32)>,
 }
@@ -702,6 +718,7 @@ impl Body for Resolved {
 }
 
 /// A relay message that we didn't recognize
+#[derive(Debug)]
 pub struct Unrecognized {
     cmd: StreamCmd,
     body: Vec<u8>,

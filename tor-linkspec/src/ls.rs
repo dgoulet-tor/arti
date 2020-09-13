@@ -7,6 +7,7 @@ use tor_llcrypto::pk::rsa::RSAIdentity;
 ///
 /// TODO: move this. It's used in a bunch of other places.
 #[non_exhaustive]
+#[derive(Debug)]
 pub enum LinkSpec {
     /// The TCP address of an OR Port for a relay
     OrPort(IpAddr, u16),
