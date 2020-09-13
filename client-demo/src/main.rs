@@ -85,13 +85,36 @@ fn main() -> Result<()> {
     // TODO CONFORMANCE: we should stop now if there are required
     // protovers we don't support.
 
-    let g = dir
+    let guard = dir
         .pick_relay(&mut thread_rng(), |_, u| u)
         .ok_or(Error::Misc("no usable relays"))?;
 
+    let mid = dir
+        .pick_relay(
+            &mut thread_rng(),
+            |r, u| {
+                if r.same_relay(&guard) {
+                    0
+                } else {
+                    u
+                }
+            },
+        )
+        .ok_or(Error::Misc("no usable second hop."))?;
+
+    let third = dir
+        .pick_relay(&mut thread_rng(), |r, u| {
+            if r.same_relay(&guard) || r.same_relay(&mid) {
+                0
+            } else {
+                u
+            }
+        })
+        .ok_or(Error::Misc("no usable second hop."))?;
+
     async_std::task::block_on(async {
         let mut rng = thread_rng();
-        let chan = connect(&g).await?;
+        let chan = connect(&guard).await?;
 
         let mut circ = chan.new_circ(&mut rng).await?;
         /*
@@ -99,8 +122,16 @@ fn main() -> Result<()> {
         info!("CREATE_FAST was successful.");
          */
 
-        circ.create_firsthop_ntor(&mut rng, &g).await?;
-        info!("ntor handshake was successful.");
+        circ.create_firsthop_ntor(&mut rng, &guard).await?;
+        info!("ntor handshake with first hop was successful.");
+
+        circ.extend_ntor(&mut rng, &mid).await?;
+        info!("ntor handshake with second hop was successful.");
+
+        circ.extend_ntor(&mut rng, &third).await?;
+        info!("ntor handshake with third hop was successful.");
+
+        info!("Build a three-hop circuit.");
 
         Ok(())
     })

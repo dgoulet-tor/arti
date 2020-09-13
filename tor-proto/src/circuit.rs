@@ -258,6 +258,23 @@ where
         self.create_impl::<R, Tor1RelayCrypto, NtorClient, _>(rng, &wrap, &key)
             .await
     }
+
+    /// Extend the circuit via Ntor.  Same caveats apply from extend_impl.
+    pub async fn extend_ntor<R, Tg>(&mut self, rng: &mut R, target: &Tg) -> Result<()>
+    where
+        R: Rng + CryptoRng,
+        Tg: tor_linkspec::ExtendTarget,
+    {
+        use crate::crypto::cell::Tor1RelayCrypto;
+        use crate::crypto::handshake::ntor::{NtorClient, NtorPublicKey};
+        let key = NtorPublicKey {
+            id: target.get_rsa_identity().clone(),
+            pk: *target.get_ntor_onion_key(),
+        };
+        let linkspecs = target.get_linkspecs();
+        self.extend_impl::<R, Tor1RelayCrypto, NtorClient>(rng, 0x0002, &key, linkspecs)
+            .await
+    }
 }
 
 trait CreateHandshakeWrap {

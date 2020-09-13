@@ -272,6 +272,9 @@ impl<'a> Relay<'a> {
     pub fn get_rsa_id(&self) -> &RSAIdentity {
         self.rs.get_rsa_identity()
     }
+    pub fn same_relay<'b>(&self, other: &Relay<'b>) -> bool {
+        self.get_id() == other.get_id()
+    }
 
     fn get_weight(&self, wf: WeightFn) -> u32 {
         use netstatus::RouterWeight::*;
