@@ -8,6 +8,11 @@
 //! signatures, and encoding and decoding keys from DER.
 //!
 //! Currently missing is signing and RSA-OEAP.
+//!
+//! # Limitations:
+//!
+//! XXXX This module should expose RustCrypto trait-based wrappers,
+//! but the rsa crate didn't support them as of initial writing.
 use arrayref::array_ref;
 use std::fmt;
 use subtle::*;
