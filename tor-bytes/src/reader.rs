@@ -108,7 +108,7 @@ impl<'a> Reader<'a> {
     /// Fewer than `n` bytes may remain if there were not enough bytes
     /// to begin with.
     pub fn truncate(&mut self, n: usize) {
-        self.b = &self.b[self.off..self.off + n];
+        self.b = &self.b[..self.off + n];
     }
     /// Try to return a slice of `n` bytes from this reader without
     /// consuming them.
