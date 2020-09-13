@@ -12,14 +12,14 @@ MILESTONE 0: Build a circuit and use it
    o Construct a one-hop circuit with ntor
    o Build relay cells
    o Construct a multihop circuit.
-   - Open a stream
-   - Make a request, get a response (no sendmes yet)
+   o Open a stream
+   o Make a request, get a response (no sendmes yet)
 
 MILESTONE 1: Refactoring on above
    - Stop parameterizing all APIs on TLS type.
    - Less copying, esp around Box<RawCellBody>.  Consider bytes crate.
    - Is this "reactor" business a sensible design?  Is there a better one?
-   - Combine "create circuit" and "first hop"?
+   - Combine "create circuit" and "create first hop"?
    - Improve testing
    - Improve documentation
    - More types of circent for clarity.

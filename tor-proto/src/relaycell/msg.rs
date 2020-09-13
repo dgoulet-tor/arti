@@ -40,6 +40,10 @@ impl RelayCell {
     pub fn get_cmd(&self) -> StreamCmd {
         self.body.get_cmd()
     }
+    /// Return the underlying message for this cell.
+    pub fn get_msg(&self) -> &RelayMsg {
+        &self.body
+    }
     /// Consume this relay message and encode it as a 509-byte padded cell
     /// body.
     pub fn encode<R: Rng + CryptoRng>(self, rng: &mut R) -> crate::Result<RelayCellBody> {
@@ -161,6 +165,12 @@ pub trait Body: Sized {
     fn encode_onto(self, w: &mut Vec<u8>);
 }
 
+impl<B: Body> From<B> for RelayMsg {
+    fn from(b: B) -> RelayMsg {
+        b.as_message()
+    }
+}
+
 impl RelayMsg {
     /// Return the stream command associated with this message.
     pub fn get_cmd(&self) -> StreamCmd {
@@ -237,6 +247,19 @@ pub struct Begin {
     port: u16,
     flags: u32,
 }
+impl Begin {
+    /// Construct a new Begin cell
+    pub fn new(addr: &str, port: u16, flags: u32) -> crate::Result<Self> {
+        if !addr.is_ascii() {
+            return Err(crate::Error::BadStreamAddress);
+        }
+        Ok(Begin {
+            addr: addr.as_bytes().into(),
+            port,
+            flags,
+        })
+    }
+}
 
 impl Body for Begin {
     fn as_message(self) -> RelayMsg {
@@ -276,6 +299,18 @@ impl Body for Begin {
 #[derive(Debug)]
 pub struct Data {
     body: Vec<u8>,
+}
+impl Data {
+    /// Construct a new data cell.
+    pub fn new(inp: &[u8]) -> Self {
+        // XXXX check length!
+        Data { body: inp.into() }
+    }
+}
+impl AsRef<[u8]> for Data {
+    fn as_ref(&self) -> &[u8] {
+        &self.body[..]
+    }
 }
 
 impl Body for Data {

@@ -50,4 +50,7 @@ pub enum Error {
     /// Couldn't extend a circuit.
     #[error("circuit extension handshake error: {0}")]
     CircExtend(&'static str),
+    /// Tried to make or use a stream to an invalid destination address.
+    #[error("invalid stream target address")]
+    BadStreamAddress,
 }

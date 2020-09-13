@@ -102,9 +102,9 @@ fn main() -> Result<()> {
         )
         .ok_or(Error::Misc("no usable second hop."))?;
 
-    let third = dir
+    let exit = dir
         .pick_relay(&mut thread_rng(), |r, u| {
-            if r.same_relay(&guard) || r.same_relay(&mid) {
+            if r.same_relay(&guard) || r.same_relay(&mid) || !r.supports_exit_port(80) {
                 0
             } else {
                 u
@@ -128,10 +128,35 @@ fn main() -> Result<()> {
         circ.extend_ntor(&mut rng, &mid).await?;
         info!("ntor handshake with second hop was successful.");
 
-        circ.extend_ntor(&mut rng, &third).await?;
+        circ.extend_ntor(&mut rng, &exit).await?;
         info!("ntor handshake with third hop was successful.");
 
-        info!("Build a three-hop circuit.");
+        info!("Built a three-hop circuit.");
+
+        use tor_proto::relaycell::msg;
+        let begin = msg::Begin::new("www.torproject.org", 80, 0)?;
+        let request =
+            msg::Data::new("GET / HTTP/1.0\r\nHost: www.torproject.org\r\n\r\n".as_bytes());
+        let begin = msg::RelayCell::new(99.into(), begin.into());
+        let request = msg::RelayCell::new(99.into(), request.into());
+
+        circ.send_relay_cell(2, false, begin).await?;
+        circ.send_relay_cell(2, false, request).await?;
+
+        loop {
+            let (_hopnum, cell) = circ.recv_relay_cell().await?;
+            info!("{}", cell.get_cmd());
+            match cell.get_msg() {
+                msg::RelayMsg::Data(d) => {
+                    // XXXX crash on bad utf8.
+                    println!("{}", std::str::from_utf8(d.as_ref()).unwrap());
+                }
+                msg::RelayMsg::End(_) => {
+                    break;
+                }
+                _ => (),
+            }
+        }
 
         Ok(())
     })

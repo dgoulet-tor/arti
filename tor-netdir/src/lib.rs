@@ -1,3 +1,4 @@
+#[allow(missing_docs)]
 mod err;
 mod pick;
 
@@ -274,6 +275,10 @@ impl<'a> Relay<'a> {
     }
     pub fn same_relay<'b>(&self, other: &Relay<'b>) -> bool {
         self.get_id() == other.get_id()
+    }
+    // XXXX ipv4/ipv6
+    pub fn supports_exit_port(&self, port: u16) -> bool {
+        self.md.unwrap().get_ipv4_policy().allows_port(port)
     }
 
     fn get_weight(&self, wf: WeightFn) -> u32 {
