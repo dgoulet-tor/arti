@@ -25,7 +25,8 @@ pub const RSA_ID_LEN: usize = 20;
 
 /// An identifier for a Tor relay, based on its legacy RSA
 /// identity key.  These are used all over the Tor protocol.
-#[derive(Clone, Zeroize)]
+#[derive(Clone, Hash, Zeroize)]
+#[allow(clippy::derive_hash_xor_eq)]
 pub struct RSAIdentity {
     id: [u8; RSA_ID_LEN],
 }
@@ -33,12 +34,6 @@ pub struct RSAIdentity {
 impl PartialEq<RSAIdentity> for RSAIdentity {
     fn eq(&self, rhs: &RSAIdentity) -> bool {
         self.id.ct_eq(&rhs.id).unwrap_u8() == 1
-    }
-}
-
-impl std::hash::Hash for RSAIdentity {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
     }
 }
 
@@ -100,6 +95,10 @@ impl PrivateKey {
     pub fn to_public_key(&self) -> PublicKey {
         PublicKey(self.0.to_public_key())
     }
+    /// Construct a PrivateKey from DER pkcs1 encoding.
+    pub fn from_der(der: &[u8]) -> Option<Self> {
+        Some(PrivateKey(rsa::RSAPrivateKey::from_pkcs1(der).ok()?))
+    }
     // ....
 }
 impl PublicKey {
@@ -133,39 +132,7 @@ impl PublicKey {
     /// (This function expects an RSAPublicKey, as used by Tor.  It
     /// does not expect or accept a PublicKeyInfo.)
     pub fn from_der(der: &[u8]) -> Option<Self> {
-        // We can't use the rsa-der crate, since it expects to find the
-        // key inside of a bitstring inside of another asn1 object.
-        // Also it doesn't seem to check for negative values.
-        let blocks = simple_asn1::from_der(der).ok()?;
-        if blocks.len() != 1 {
-            return None;
-        }
-        let block = &blocks[0];
-        use simple_asn1::ASN1Block::*;
-        let (n, e) = match block {
-            Sequence(_, v) => match &v[..] {
-                [Integer(_, n), Integer(_, e)] => (n, e),
-                _ => return None,
-            },
-            _ => return None,
-        };
-        use num_traits::sign::Signed;
-        if n.is_negative() || e.is_negative() {
-            return None;
-        }
-        let (_, nbytes) = n.to_bytes_be();
-        let (_, ebytes) = e.to_bytes_be();
-        let pk = PublicKey(
-            rsa::RSAPublicKey::new(
-                rsa::BigUint::from_bytes_be(&nbytes),
-                rsa::BigUint::from_bytes_be(&ebytes),
-            )
-            .ok()?,
-        );
-
-        // assert_eq!(der, &pk.to_der()[..]);
-
-        Some(pk)
+        Some(PublicKey(rsa::RSAPublicKey::from_pkcs1(der).ok()?))
     }
     /// Encode this public key into the DER format as used by Tor.
     ///
