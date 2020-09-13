@@ -119,15 +119,12 @@ impl PublicKey {
     ///
     /// Tor uses RSA-PKCSv1 signatures, with hash algorithm OIDs
     /// omitted.
-    ///
-    /// ## Issues
-    ///
-    /// XXXX We probably shouldn't be exposing rsa::errors::Result().
-    ///
-    pub fn verify(&self, hashed: &[u8], sig: &[u8]) -> rsa::errors::Result<()> {
+    pub fn verify(&self, hashed: &[u8], sig: &[u8]) -> Result<(), signature::Error> {
         use rsa::PublicKey;
         let padding = rsa::PaddingScheme::new_pkcs1v15_sign(None);
-        self.0.verify(padding, hashed, sig)
+        self.0
+            .verify(padding, hashed, sig)
+            .map_err(|_| signature::Error::new())
     }
     /// Decode an alleged DER byte string into a PublicKey.
     ///
