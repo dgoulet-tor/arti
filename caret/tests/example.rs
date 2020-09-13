@@ -37,6 +37,7 @@ fn test_str_ops() {
     let t: &str = Demo::C.into();
     assert_eq!(t, "C");
     assert_eq!(format!("Hello {}", Demo::Dee), "Hello Dee");
+    assert_eq!(format!("Hello {:?}", Demo::Dee), "Hello Dee");
 
     let t: Demo = "TheLetterB".parse().unwrap();
     assert_eq!(t, Demo::B);
