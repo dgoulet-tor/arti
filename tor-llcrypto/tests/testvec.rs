@@ -536,6 +536,13 @@ qiBHRBGbtkF/Re5pb438HC/CGyuujp43oZ3CUYosJOfY/X+sD0aVAgMBAAE=";
         public.to_rsa_identity().as_bytes()
     );
 
+    assert!(
+        rsa::RSAIdentity::from_bytes(&hex!("67f9781da8eabbf96b691175f0e701b43c602e")).is_none()
+    );
+    assert!(
+        rsa::RSAIdentity::from_bytes(&hex!("67f9781da8eabbf96b691175f0e701b43c602effff")).is_none()
+    );
+
     assert_eq!(public.to_der(), to_der(pk_pem));
     assert_eq!(public.bits(), 1024);
     assert!(public.exponent_is(65537));
