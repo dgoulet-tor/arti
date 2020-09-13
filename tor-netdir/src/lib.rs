@@ -1,4 +1,21 @@
-#[allow(missing_docs)]
+//! Represents a clients' eye view of the Tor network.
+//!
+//! The tor-netdir crate wraps objects from tor-netdoc, and combines
+//! them to provide a unified view of the relays on the network.
+//!
+//! # Limitations
+//!
+//! Right now, this code doesn't fetch network information: instead,
+//! it looks in a local Tor cache directory.
+//!
+//! Only modern consensus methods and microdescriptor consensuses are
+//! supported.
+//!
+//! TODO: Eventually, there should be the ability to download
+//! directory information and store it, but that should probably be
+//! another module.
+
+#![deny(missing_docs)]
 mod err;
 mod pick;
 
@@ -18,26 +35,42 @@ use std::time;
 use tor_llcrypto as ll;
 
 pub use err::Error;
+/// A Result using the Error type from the tor-netdir crate
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// A single authority that signs a consensus directory.
 #[derive(Debug)]
 pub struct Authority {
     name: String,
+    // TODO: It would be lovely to use a better hash for these identities.
     v3ident: RSAIdentity,
 }
 
+/// Configuration object for reading directory information from disk.
+///
+/// To read a directory, create one of these mo
 pub struct NetDirConfig {
     authorities: Vec<Authority>,
     cache_path: Option<PathBuf>,
 }
 
+/// Internal: how should we find the base weight of each relay?  This
+/// value is global over a whole directory, and depends on the bandwidth
+/// weights in the consensus.
 #[derive(Copy, Clone)]
 enum WeightFn {
+    /// There are no weights at all in the consensus: weight every
+    /// relay as 1.
     Uniform,
+    /// There are no measured weights in the consensus: count
+    /// unmeasured weights as the weights for relays.
     IncludeUnmeasured,
+    /// There are measured relays in the consensus; only use those.
     MeasuredOnly,
 }
 
+/// A view of the Tor directory, suitable for use in building
+/// circuits.
 #[allow(unused)]
 pub struct NetDir {
     consensus: MDConsensus,
@@ -45,8 +78,14 @@ pub struct NetDir {
     weight_fn: Cell<Option<WeightFn>>,
 }
 
+/// A view of a relay on the Tor network, suitable for building circuits.
 // TODO: This should probably be a more specific struct, with a trait
 // that implements it.
+//
+// XXXX: invalid instances of this object are possible.  Some Relay
+// functions will panic if it has no ed25519 key, or if its md is None.
+// We should clean that up so that we never construct invalid
+// instances of this.
 #[allow(unused)]
 pub struct Relay<'a> {
     rs: &'a netstatus::MDConsensusRouterStatus,
@@ -54,12 +93,21 @@ pub struct Relay<'a> {
 }
 
 impl NetDirConfig {
+    /// Construct a new NetDirConfig.
+    ///
+    /// To use this, call at least one method to configure directory
+    /// authorities, then call load().
     pub fn new() -> Self {
         NetDirConfig {
             authorities: Vec::new(),
             cache_path: None,
         }
     }
+
+    /// Add a single directory authority to this configuration.
+    ///
+    /// The authority's name is `name`; its identity is given as a
+    /// hex-encoded RSA identity fingrprint in `ident`.
     pub fn add_authority(&mut self, name: &str, ident: &str) -> Result<()> {
         let ident: Vec<u8> =
             hex::decode(ident).map_err(|_| Error::BadArgument("bad hex identity"))?;
@@ -73,6 +121,13 @@ impl NetDirConfig {
         Ok(())
     }
 
+    /// Add the default Tor network directory authorities to this
+    /// configuration.
+    ///
+    /// This list is added by default if you try to load() without having
+    /// configured any authorities.
+    ///
+    /// (List generated August 2020.)
     pub fn add_default_authorities(&mut self) {
         self.add_authority("moria1", "D586D18309DED4CD6D57C18FDB97EFA96D330566")
             .unwrap();
@@ -94,6 +149,13 @@ impl NetDirConfig {
             .unwrap();
     }
 
+    /// Read the authorities from a torrc file in a Chutney directory.
+    ///
+    /// # Limitations
+    ///
+    /// This function can handle the format for DirAuthority lines
+    /// that chutney generates now, but that's it.  It isn't careful
+    /// about line continuations.
     pub fn add_authorities_from_chutney(&mut self, path: &Path) -> Result<()> {
         use std::io::{self, BufRead};
         let pb = path.join("torrc");
@@ -115,10 +177,21 @@ impl NetDirConfig {
         Ok(())
     }
 
+    /// Use `path` as the directory to search for directory files.
+    ///
+    /// This path must contain `cached-certs`, `cached-microdesc-consensus`,
+    /// and at least one of `cached-microdescs` and `cached-microdescs.new`.
     pub fn set_cache_path(&mut self, path: &Path) {
         self.cache_path = Some(path.to_path_buf());
     }
 
+    /// Helper: Load the authority certificates from cached-certs.
+    ///
+    /// Only loads the certificates that match identity keys for
+    /// authorities that we believe in.
+    ///
+    /// Warn about invalid certs, but don't give an error unless there
+    /// is a complete failure.
     fn load_certs(&self, path: &Path) -> Result<Vec<AuthCert>> {
         let mut res = Vec::new();
         let text = fs::read_to_string(path)?;
@@ -153,7 +226,9 @@ impl NetDirConfig {
         Ok(res)
     }
 
-    pub fn load_consensus(&self, path: &Path, certs: &[AuthCert]) -> Result<MDConsensus> {
+    /// Read the consensus from a provided file, and check it
+    /// with a list of authcerts.
+    fn load_consensus(&self, path: &Path, certs: &[AuthCert]) -> Result<MDConsensus> {
         let text = fs::read_to_string(path)?;
         let consensus = MDConsensus::parse(&text)?
             .extend_tolerance(time::Duration::new(86400, 0))
@@ -164,7 +239,12 @@ impl NetDirConfig {
         Ok(consensus)
     }
 
-    pub fn load_mds(&self, path: &Path, res: &mut HashMap<MDDigest, Microdesc>) -> Result<()> {
+    /// Read a list of microdescriptors from a provided file, and check it
+    /// with a list of authcerts.
+    ///
+    /// Warn about invalid microdescs, but don't give an error unless there
+    /// is a complete failure.
+    fn load_mds(&self, path: &Path, res: &mut HashMap<MDDigest, Microdesc>) -> Result<()> {
         let text = fs::read_to_string(path)?;
         for annotated in
             microdesc::MicrodescReader::new(&text, AllowAnnotations::AnnotationsAllowed)
@@ -180,6 +260,7 @@ impl NetDirConfig {
         Ok(())
     }
 
+    /// Load and validate an entire network directory.
     pub fn load(&mut self) -> Result<NetDir> {
         let cachedir = match &self.cache_path {
             Some(pb) => pb.clone(),
@@ -193,6 +274,10 @@ impl NetDirConfig {
         let conspath = cachedir.join("cached-microdesc-consensus");
         let mdpath = cachedir.join("cached-microdescs");
         let md2path = mdpath.with_extension("new");
+
+        if self.authorities.is_empty() {
+            self.add_default_authorities();
+        }
 
         let certs = self.load_certs(&certspath)?;
         let consensus = self.load_consensus(&conspath, &certs)?;
@@ -221,19 +306,26 @@ impl Default for NetDirConfig {
 }
 
 impl NetDir {
-    pub fn relay_from_rs<'a>(&'a self, rs: &'a netstatus::MDConsensusRouterStatus) -> Relay<'a> {
+    /// Construct a (possibly invalid) Relay object from a routerstatus and its
+    /// microdescriptor (if any).
+    fn relay_from_rs<'a>(&'a self, rs: &'a netstatus::MDConsensusRouterStatus) -> Relay<'a> {
         let md = self.mds.get(rs.get_md_digest());
         Relay { rs, md }
     }
+    /// Return an iterator over all Relay objects, including invalid ones
+    /// that we can't use.
     fn all_relays(&self) -> impl Iterator<Item = Relay<'_>> {
         self.consensus
             .get_routers()
             .iter()
             .map(move |rs| self.relay_from_rs(rs))
     }
+    /// Return an iterator over all usable Relays.
     pub fn relays(&self) -> impl Iterator<Item = Relay<'_>> {
         self.all_relays().filter(Relay::is_usable)
     }
+    /// Heolper: Set self.weight_fn to the function we should use to find
+    /// initial relay weights.
     fn pick_weight_fn(&self) {
         let has_measured = self.relays().any(|r| r.rs.get_weight().is_measured());
         let has_nonzero = self.relays().any(|r| r.rs.get_weight().is_nonzero());
@@ -245,12 +337,22 @@ impl NetDir {
             self.weight_fn.set(Some(WeightFn::MeasuredOnly));
         }
     }
+    /// Return the value of self.weight_fn, setting itif needed.
     fn get_weight_fn(&self) -> WeightFn {
         if self.weight_fn.get().is_none() {
             self.pick_weight_fn();
         }
         self.weight_fn.get().unwrap()
     }
+    /// Chose a relay at random.
+    ///
+    /// Each relay is chosen with probability proportional to a function
+    /// `reweight` of the relay and its weight in the consensus.
+    ///
+    /// This function returns None if (and only if) there are no relays
+    /// with nonzero weight.
+    //
+    // TODO: This API is powerful but tricky; there should be wrappers.
     pub fn pick_relay<'a, R, F>(&'a self, rng: &mut R, reweight: F) -> Option<Relay<'a>>
     where
         R: rand::Rng,
@@ -264,23 +366,34 @@ impl NetDir {
 }
 
 impl<'a> Relay<'a> {
-    pub fn is_usable(&self) -> bool {
+    /// Return true if this relay is valid and usable.
+    ///
+    /// This function should return `true` for every Relay we expose
+    /// to the user.
+    fn is_usable(&self) -> bool {
         self.md.is_some() && self.md.unwrap().get_opt_ed25519_id().is_some()
     }
+    /// Return the Ed25519 ID for this relay, assuming it has one.
+    // TODO: This should always succeed.
     pub fn get_id(&self) -> Option<&ll::pk::ed25519::PublicKey> {
         self.md?.get_opt_ed25519_id().as_ref()
     }
+    /// Return the RSAIdentity for this relay.
     pub fn get_rsa_id(&self) -> &RSAIdentity {
         self.rs.get_rsa_identity()
     }
+    /// Return true if this relay and `other` seem to be the same relay.
+    ///
+    /// (Two relays are the same if they have the same identity.)
     pub fn same_relay<'b>(&self, other: &Relay<'b>) -> bool {
-        self.get_id() == other.get_id()
+        self.get_id() == other.get_id() && self.get_rsa_id() == other.get_rsa_id()
     }
+    /// Return true if this relay allows exiting to `port` on IPv4.
     // XXXX ipv4/ipv6
     pub fn supports_exit_port(&self, port: u16) -> bool {
         self.md.unwrap().get_ipv4_policy().allows_port(port)
     }
-
+    /// Return the weight of this Relay, according to `wf`.
     fn get_weight(&self, wf: WeightFn) -> u32 {
         use netstatus::RouterWeight::*;
         use WeightFn::*;

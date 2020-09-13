@@ -1,5 +1,12 @@
-// Performance note: this requires a fast RNG, but doesn't need much
-// storage.
+/// Choose a nonuniform random member of an iterator.
+///
+/// For each value `v` yielded by `i`, this function will return that
+/// value with probability proportional to `weightfn(v)`.
+///
+/// We'll return None if and only if there are no values with nonzero
+/// weight.
+// Performance note: this implementation requires a fast RNG, but
+// doesn't need much storage.
 pub fn pick_weighted<R, I, F>(rng: &mut R, i: I, weightfn: F) -> Option<I::Item>
 where
     I: Iterator,

@@ -1,41 +1,24 @@
 use thiserror::Error;
 
+/// An error returned by the network directory code
 #[derive(Error, Debug)]
 pub enum Error {
+    /// Problem reading a document from disk.
     #[error("io error: {0:?}")]
-    Io(#[source] std::io::Error),
+    Io(#[from] std::io::Error),
+    /// Incorrect signature on a document.
     #[error("bad signature")]
-    Sig(#[source] signature::Error),
+    Sig(#[from] signature::Error),
+    /// An object is expired or not yet valid.
     #[error("not currently valid: {0}")]
-    Untimely(#[source] tor_checkable::TimeValidityError),
+    Untimely(#[from] tor_checkable::TimeValidityError),
+    /// We received a document we didn't want at all.
     #[error("unwanted object: {0}")]
     Unwanted(&'static str),
+    /// A document was completely unreadable.
     #[error("bad document: {0}")]
-    BadDoc(#[source] tor_netdoc::Error),
+    BadDoc(#[from] tor_netdoc::Error),
+    /// A bad argument was provided to some configuration function.
     #[error("bad argument: {0}")]
     BadArgument(&'static str),
-}
-
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Error {
-        Error::Io(e)
-    }
-}
-
-impl From<signature::Error> for Error {
-    fn from(e: signature::Error) -> Error {
-        Error::Sig(e)
-    }
-}
-
-impl From<tor_checkable::TimeValidityError> for Error {
-    fn from(e: tor_checkable::TimeValidityError) -> Error {
-        Error::Untimely(e)
-    }
-}
-
-impl From<tor_netdoc::Error> for Error {
-    fn from(e: tor_netdoc::Error) -> Error {
-        Error::BadDoc(e)
-    }
 }
