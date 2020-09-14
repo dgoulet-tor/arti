@@ -58,10 +58,6 @@ impl<'a> Reader<'a> {
     pub fn from_bytes(b: &'a bytes::Bytes) -> Self {
         Self::from_slice(b.as_ref())
     }
-    /// Construct a new Reader from a 'BytesMut' object
-    pub fn from_bytes_mut(b: &'a bytes::BytesMut) -> Self {
-        Self::from_slice(b.as_ref())
-    }
     /// Return the total length of the slice in this reader, including
     /// consumed bytes and remaining bytes.
     pub fn total_len(&self) -> usize {
@@ -179,6 +175,9 @@ impl<'a> Reader<'a> {
     /// include the terminating byte.  Returns Err(Error::Truncated)
     /// if we do not find the terminating bytes.
     ///
+    /// Advances the reader to the point immediately after the terminating
+    /// byte.
+    ///
     /// # Example
     /// ```
     /// use tor_bytes::{Reader,Result};
@@ -284,6 +283,16 @@ mod tests {
     }
 
     #[test]
+    fn read_u128() {
+        let bytes = bytes::Bytes::from(&b"irreproducibility?"[..]); // 18 bytes
+        let mut r = Reader::from_bytes(&bytes);
+
+        assert_eq!(r.take_u8().unwrap(), b'i');
+        assert_eq!(r.take_u128().unwrap(), 0x72726570726f6475636962696c697479);
+        assert_eq!(r.remaining(), 1);
+    }
+
+    #[test]
     fn bytecursor_read_missing() {
         let bytes = b"1234567";
         let mut bc = Reader::from_slice(&bytes[..]);
@@ -320,5 +329,78 @@ mod tests {
         assert_eq!(bc.consumed(), 7);
         assert_eq!(bc.remaining(), 0);
         assert_eq!(bc.total_len(), 7);
+    }
+
+    #[test]
+    fn truncate() {
+        let bytes = b"Hello universe!!!1!";
+        let mut r = Reader::from_slice(&bytes[..]);
+
+        assert_eq!(r.take(5).unwrap(), &b"Hello"[..]);
+        assert_eq!(r.remaining(), 14);
+        assert_eq!(r.consumed(), 5);
+        r.truncate(9);
+        assert_eq!(r.remaining(), 9);
+        assert_eq!(r.consumed(), 5);
+        assert_eq!(r.take_u8().unwrap(), 0x20);
+        assert_eq!(r.into_rest(), &b"universe"[..]);
+    }
+
+    #[test]
+    fn exhaust() {
+        let r = Reader::from_slice(&b""[..]);
+        assert_eq!(r.should_be_exhausted(), Ok(()));
+
+        let mut r = Reader::from_slice(&b"outis"[..]);
+        assert_eq!(r.should_be_exhausted(), Err(Error::ExtraneousBytes));
+        r.take(4).unwrap();
+        assert_eq!(r.should_be_exhausted(), Err(Error::ExtraneousBytes));
+        r.take(1).unwrap();
+        assert_eq!(r.should_be_exhausted(), Ok(()));
+    }
+
+    #[test]
+    fn take_until() {
+        let mut r = Reader::from_slice(&b"si vales valeo"[..]);
+        assert_eq!(r.take_until(b' ').unwrap(), &b"si"[..]);
+        assert_eq!(r.take_until(b' ').unwrap(), &b"vales"[..]);
+        assert_eq!(r.take_until(b' '), Err(Error::Truncated));
+    }
+
+    #[test]
+    fn extract() {
+        // For example purposes, declare a length-then-bytes string type.
+        #[derive(Debug)]
+        struct LenEnc(Vec<u8>);
+        impl Readable for LenEnc {
+            fn take_from(b: &mut Reader) -> Result<Self> {
+                let length = b.take_u8()?;
+                let content = b.take(length as usize)?.into();
+                Ok(LenEnc(content))
+            }
+        }
+
+        let bytes = b"\x04this\x02is\x09sometimes\x01a\x06string!";
+        let mut r = Reader::from_slice(&bytes[..]);
+
+        let le: LenEnc = r.extract().unwrap();
+        assert_eq!(&le.0[..], &b"this"[..]);
+
+        let les: Vec<LenEnc> = r.extract_n(4).unwrap();
+        assert_eq!(&les[3].0[..], &b"string"[..]);
+
+        assert_eq!(r.remaining(), 1);
+
+        // Make sure that we don't advance on a failing extract().
+        let le: Result<LenEnc> = r.extract();
+        assert_eq!(le.unwrap_err(), Error::Truncated);
+        assert_eq!(r.remaining(), 1);
+
+        // Make sure that we don't advance on a failing extract_n()
+        let mut r = Reader::from_slice(&bytes[..]);
+        assert_eq!(r.remaining(), 28);
+        let les: Result<Vec<LenEnc>> = r.extract_n(10);
+        assert_eq!(les.unwrap_err(), Error::Truncated);
+        assert_eq!(r.remaining(), 28);
     }
 }
