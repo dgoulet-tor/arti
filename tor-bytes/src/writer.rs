@@ -79,3 +79,53 @@ pub trait Writer {
         e.write_into(self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn write_ints() {
+        let mut b = bytes::BytesMut::new();
+        b.write_u8(1);
+        b.write_u16(2);
+        b.write_u32(3);
+        b.write_u64(4);
+        b.write_u128(5);
+
+        assert_eq!(
+            &b[..],
+            &[
+                1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 5
+            ]
+        );
+    }
+
+    #[test]
+    fn write_slice() {
+        let mut v = Vec::new();
+        v.write_u16(0x5468);
+        v.write(&b"ey're good dogs, Bront"[..]);
+
+        assert_eq!(&v[..], &b"They're good dogs, Bront"[..]);
+    }
+
+    #[test]
+    fn writeable() {
+        struct Sequence(u8);
+        impl Writeable for Sequence {
+            fn write_onto<B: Writer + ?Sized>(&self, b: &mut B) {
+                for i in 0..self.0 {
+                    b.write_u8(i);
+                }
+            }
+        }
+
+        let mut v = Vec::new();
+        v.write(&Sequence(6));
+        assert_eq!(&v[..], &[0, 1, 2, 3, 4, 5]);
+
+        v.write_and_consume(Sequence(3));
+        assert_eq!(&v[..], &[0, 1, 2, 3, 4, 5, 0, 1, 2]);
+    }
+}

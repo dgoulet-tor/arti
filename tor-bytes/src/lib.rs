@@ -85,6 +85,12 @@ pub trait WriteableOnce {
     fn write_into<B: Writer + ?Sized>(self, b: &mut B);
 }
 
+impl<W: Writeable> WriteableOnce for W {
+    fn write_into<B: Writer + ?Sized>(self, b: &mut B) {
+        self.write_onto(b);
+    }
+}
+
 // ----------------------------------------------------------------------
 
 /// Trait for an object that can be extracted from a Reader.
