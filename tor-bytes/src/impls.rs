@@ -268,3 +268,116 @@ mod u8_array_impls {
     impl_array! {20}
     impl_array! {32}
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{Reader, Writer};
+    use hex_literal::hex;
+    macro_rules! check_encode {
+        ($e:expr, $e2:expr) => {
+            let mut w = Vec::new();
+            w.write(&$e);
+            assert_eq!(&w[..], &$e2[..]);
+        };
+    }
+    macro_rules! check_decode {
+        ($t:ty, $e:expr, $e2:expr) => {
+            let mut r = Reader::from_slice(&$e[..]);
+            let obj: $t = r.extract().unwrap();
+            assert_eq!(obj, $e2);
+            assert!(r.should_be_exhausted().is_ok());
+        };
+    }
+    macro_rules! check_roundtrip {
+        ($t:ty, $e:expr, $e2:expr) => {
+            check_encode!($e, $e2);
+            check_decode!($t, $e2, $e);
+        };
+    }
+
+    #[test]
+    fn vec_u8() {
+        let v: Vec<u8> = vec![1, 2, 3, 4];
+        check_encode!(v, b"\x01\x02\x03\x04");
+    }
+
+    #[test]
+    fn genarray() {
+        use generic_array as ga;
+        let a: ga::GenericArray<u16, ga::typenum::U7> = [4, 5, 6, 7, 8, 9, 10].into();
+        check_roundtrip!(ga::GenericArray<u16, ga::typenum::U7>,
+                         a,
+                         [0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0, 9, 0, 10]);
+    }
+
+    #[test]
+    fn roundtrip_u64() {
+        check_roundtrip!(u64, 0x4040111u64, [0, 0, 0, 0, 4, 4, 1, 17]);
+    }
+
+    #[test]
+    fn u8_array() {
+        check_roundtrip!(
+            [u8; 16],
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        );
+    }
+
+    #[test]
+    fn ipv4addr() {
+        use std::net::Ipv4Addr;
+        check_roundtrip!(Ipv4Addr, Ipv4Addr::new(192, 168, 0, 1), [192, 168, 0, 1]);
+    }
+
+    #[test]
+    fn ipv6addr() {
+        use std::net::Ipv6Addr;
+        check_roundtrip!(
+            Ipv6Addr,
+            Ipv6Addr::new(65535, 77, 1, 1, 1, 0, 0, 0),
+            [255, 255, 0, 77, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn ed25519() {
+        use signature::Signature;
+        use tor_llcrypto::pk::ed25519;
+        let b = &hex!(
+            "68a6cee11d2883661f5876f7aac748992cd140f
+             cfc36923aa957d04b5f8967ff"
+        );
+        check_roundtrip!(
+            ed25519::PublicKey,
+            ed25519::PublicKey::from_bytes(b).unwrap(),
+            b
+        );
+
+        let sig = &hex!(
+            "b8842c083a56076fc27c8af21211f9fe57d1c32d9d
+             c804f76a8fa858b9ab43622b9e8335993c422eab15
+             6ebb5a047033f35256333a47a508b02699314d22550e"
+        );
+        check_roundtrip!(
+            ed25519::Signature,
+            ed25519::Signature::from_bytes(sig).unwrap(),
+            sig
+        );
+    }
+
+    #[test]
+    fn curve25519() {
+        use tor_llcrypto::pk::curve25519;
+        let b = &hex!("5f6df7a2fe3bcf1c9323e9755250efd79b9db4ed8f3fd21c7515398b6662a365");
+        let pk: curve25519::PublicKey = (*b).into();
+        check_roundtrip!(curve25519::PublicKey, pk, b);
+    }
+
+    #[test]
+    fn rsa_id() {
+        use tor_llcrypto::pk::rsa::RSAIdentity;
+        let b = &hex!("9432D4CEA2621ED09F5A8088BE0E31E0D271435C");
+        check_roundtrip!(RSAIdentity, RSAIdentity::from_bytes(b).unwrap(), b);
+    }
+}
