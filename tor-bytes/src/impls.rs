@@ -292,7 +292,15 @@ mod tests {
             check_decode!($t, $e2, $e);
         };
     }
-
+    macro_rules! check_bad {
+        ($t:ty, $e:expr) => {
+            let mut r = Reader::from_slice(&$e[..]);
+            let len_orig = r.remaining();
+            let res: Result<$t, _> = r.extract();
+            assert!(res.is_err());
+            assert_eq!(r.remaining(), len_orig);
+        };
+    }
     #[test]
     fn vec_u8() {
         let v: Vec<u8> = vec![1, 2, 3, 4];
@@ -351,6 +359,16 @@ mod tests {
             ed25519::PublicKey::from_bytes(b).unwrap(),
             b
         );
+        let b = &hex!(
+            "68a6cee11d2883661f5876f7aac748992cd140f
+             cfc36923aa957d04b5f8967"
+        ); // too short
+        check_bad!(ed25519::PublicKey, b);
+        let b = &hex!(
+            "68a6cee11d2883661f5876f7aac748992cd140f
+             cfc36923aa957d04b5f896700"
+        ); // not a valid compressed Y
+        check_bad!(ed25519::PublicKey, b);
 
         let sig = &hex!(
             "b8842c083a56076fc27c8af21211f9fe57d1c32d9d
@@ -362,6 +380,12 @@ mod tests {
             ed25519::Signature::from_bytes(sig).unwrap(),
             sig
         );
+        let sig = &hex!(
+            "b8842c083a56076fc27c8af21211f9fe57d1c32d9d
+             c804f76a8fa858b9ab43622b9e8335993c422eab15
+             6ebb5a047033f35256333a47a508b02699314d2255ff"
+        );
+        check_bad!(ed25519::Signature, sig);
     }
 
     #[test]
