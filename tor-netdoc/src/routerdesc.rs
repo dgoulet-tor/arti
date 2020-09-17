@@ -277,7 +277,7 @@ pub type UncheckedRouterDesc = signed::SignatureGated<timed::TimerangeBound<Rout
 const ROUTER_EXPIRY_SECONDS: u64 = 5 * 86400;
 
 // XXXX use the correct value.  Is it specified?
-const ROUTER_PRE_VALIDITY_SECONDS: u64 = 1 * 86400;
+const ROUTER_PRE_VALIDITY_SECONDS: u64 = 86400;
 
 impl RouterDesc {
     /// Helper: tokenize `s`, and divide it into three validated sections.

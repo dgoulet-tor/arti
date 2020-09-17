@@ -101,6 +101,7 @@ impl ChanCmd {
     }
     /// Return true if this command is one that we recognize.
     pub fn is_recognized(self) -> bool {
+        #[allow(clippy::match_like_matches_macro)]
         match self {
             ChanCmd::PADDING
             | ChanCmd::NETINFO
@@ -124,6 +125,7 @@ impl ChanCmd {
     }
     /// Return true if this command is one that expects a nonzero circid.
     pub fn allows_circid(self) -> bool {
+        #[allow(clippy::match_like_matches_macro)]
         match self {
             ChanCmd::PADDING
             | ChanCmd::NETINFO
