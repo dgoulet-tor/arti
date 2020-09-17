@@ -101,7 +101,7 @@ impl RelayCell {
     ///
     /// Requires that the cryptographic checks on the message have already been
     /// performed
-    fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
+    pub fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let cmd = r.take_u8()?.into();
         r.advance(2)?; // "recognized"
         let streamid = StreamID(r.take_u16()?);
