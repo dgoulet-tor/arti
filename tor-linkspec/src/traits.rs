@@ -25,7 +25,6 @@ pub trait ExtendTarget: ChanTarget {
     // TODO: bad API
     fn get_linkspecs(&self) -> Vec<crate::LinkSpec> {
         let mut result = Vec::new();
-        // TODO: return these in the same order as Tor.
         result.push(self.get_ed_identity().clone().into());
         result.push(self.get_rsa_identity().clone().into());
         for addr in self.get_addrs().iter() {

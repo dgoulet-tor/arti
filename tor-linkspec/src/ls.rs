@@ -1,4 +1,6 @@
+use std::cmp::Ordering;
 use std::net::{IpAddr, SocketAddr};
+
 use tor_bytes::{Error, Readable, Reader, Result, Writeable, Writer};
 use tor_llcrypto::pk::ed25519;
 use tor_llcrypto::pk::rsa::RSAIdentity;
@@ -7,7 +9,7 @@ use tor_llcrypto::pk::rsa::RSAIdentity;
 ///
 /// TODO: move this. It's used in a bunch of other places.
 #[non_exhaustive]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum LinkSpec {
     /// The TCP address of an OR Port for a relay
     OrPort(IpAddr, u16),
@@ -110,5 +112,26 @@ impl From<RSAIdentity> for LinkSpec {
 impl From<ed25519::PublicKey> for LinkSpec {
     fn from(id: ed25519::PublicKey) -> Self {
         LinkSpec::Ed25519Id(id)
+    }
+}
+
+/// Helper for partial_cmd: return the position in the list of identifiers
+/// in which a given linkspec should occur
+impl LinkSpec {
+    fn sort_pos(&self) -> u8 {
+        use LinkSpec::*;
+        match self {
+            OrPort(IpAddr::V4(_), _) => 0,
+            RSAId(_) => 1,
+            Ed25519Id(_) => 2,
+            OrPort(IpAddr::V6(_), _) => 3,
+            Unrecognized(n, _) => *n,
+        }
+    }
+}
+
+impl PartialOrd for LinkSpec {
+    fn partial_cmp(&self, other: &LinkSpec) -> Option<Ordering> {
+        Some(self.sort_pos().cmp(&other.sort_pos()))
     }
 }

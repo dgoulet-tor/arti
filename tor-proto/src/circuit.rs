@@ -174,7 +174,6 @@ where
         let hop = (self.crypto.n_layers() - 1) as u8;
 
         let (state, msg) = H::client1(rng, &key)?;
-        // XXXX sort the linkspecs into canonical order
         let extend_msg = Extend2::new(linkspecs, handshake_id, msg);
         let cell = RelayCell::new(0.into(), extend_msg.as_message());
 
