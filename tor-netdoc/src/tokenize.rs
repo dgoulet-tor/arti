@@ -155,7 +155,8 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
         // XXXX spec should allow unicode in args.
         let args = match parts_iter.next() {
             Some(a) => a,
-            None => &"",
+            // take a zero-length slice, so it will be within the string.
+            None => &kwd[kwd.len()..],
         };
         Ok((kwd, args))
     }
