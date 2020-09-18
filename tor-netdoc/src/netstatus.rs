@@ -181,15 +181,11 @@ pub enum RouterWeight {
 impl RouterWeight {
     /// Return true if this weight is the result of a successful measurement
     pub fn is_measured(&self) -> bool {
-        #[allow(clippy::match_like_matches_macro)]
-        match self {
-            RouterWeight::Measured(x) if x > &0 => true,
-            _ => false,
-        }
+        matches!(self,
+                 RouterWeight::Measured(x) if x > &0)
     }
     /// Return true if this weight is nonzero
     pub fn is_nonzero(&self) -> bool {
-        #[allow(clippy::match_like_matches_macro)]
         match self {
             RouterWeight::Unmeasured(0) => false,
             RouterWeight::Measured(0) => false,
