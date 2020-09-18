@@ -1106,7 +1106,10 @@ impl MDConsensus {
             n_authorities: None,
         };
         let lifetime = unval.consensus.header.hdr.lifetime.clone();
-        let timebound = TimerangeBound::new(unval, lifetime.valid_after..lifetime.valid_until);
+        let delay = unval.consensus.header.hdr.voting_delay.unwrap_or((0, 0));
+        let dist_interval = time::Duration::from_secs(delay.1.into());
+        let starting_time = lifetime.valid_after - dist_interval;
+        let timebound = TimerangeBound::new(unval, starting_time..lifetime.valid_until);
         Ok(timebound)
     }
 }
