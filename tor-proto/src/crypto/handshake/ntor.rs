@@ -279,6 +279,7 @@ mod tests {
 
     #[test]
     fn simple() -> Result<()> {
+        use crate::crypto::handshake::{ClientHandshake, ServerHandshake};
         let mut rng = rand_core::OsRng;
         let relay_secret = StaticSecret::new(&mut rng);
         let relay_public = PublicKey::from(&relay_secret);
@@ -287,7 +288,7 @@ mod tests {
             id: relay_identity,
             pk: relay_public.clone(),
         };
-        let (state, cmsg) = client_handshake_ntor_v1(&mut rng, &relay_ntpk);
+        let (state, cmsg) = NtorClient::client1(&mut rng, &relay_ntpk)?;
 
         let relay_ntsk = NtorSecretKey {
             pk: relay_ntpk.clone(),
@@ -295,9 +296,9 @@ mod tests {
         };
         let relay_ntsks = [relay_ntsk];
 
-        let (skeygen, smsg) = server_handshake_ntor_v1(&mut rng, &cmsg, &relay_ntsks)?;
+        let (skeygen, smsg) = NtorServer::server(&mut rng, &relay_ntsks, &cmsg)?;
 
-        let ckeygen = client_handshake2_ntor_v1(smsg, state)?;
+        let ckeygen = NtorClient::client2(state, smsg)?;
 
         let skeys = skeygen.expand(55)?;
         let ckeys = ckeygen.expand(55)?;
