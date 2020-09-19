@@ -276,6 +276,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::testing::FakePRNG;
 
     #[test]
     fn simple() -> Result<()> {
@@ -308,32 +309,6 @@ mod tests {
         Ok(())
     }
 
-    struct FakePRNG<'a> {
-        bytes: &'a [u8],
-    }
-    impl<'a> FakePRNG<'a> {
-        fn new(bytes: &'a [u8]) -> Self {
-            Self { bytes }
-        }
-    }
-    impl<'a> RngCore for FakePRNG<'a> {
-        fn next_u32(&mut self) -> u32 {
-            rand_core::impls::next_u32_via_fill(self)
-        }
-        fn next_u64(&mut self) -> u64 {
-            rand_core::impls::next_u64_via_fill(self)
-        }
-        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> std::result::Result<(), rand_core::Error> {
-            Ok(self.fill_bytes(dest))
-        }
-        fn fill_bytes(&mut self, dest: &mut [u8]) {
-            assert!(dest.len() <= self.bytes.len());
-
-            dest.copy_from_slice(&self.bytes[0..dest.len()]);
-            self.bytes = &self.bytes[dest.len()..];
-        }
-    }
-    impl rand_core::CryptoRng for FakePRNG<'_> {}
     fn make_fake_ephem_key(bytes: &[u8]) -> EphemeralSecret {
         assert_eq!(bytes.len(), 32);
         let mut rng = FakePRNG::new(bytes);
