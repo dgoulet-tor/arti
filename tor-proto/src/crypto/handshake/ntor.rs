@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn simple() -> Result<()> {
         use crate::crypto::handshake::{ClientHandshake, ServerHandshake};
-        let mut rng = rand_core::OsRng;
+        let mut rng = rand::thread_rng();
         let relay_secret = StaticSecret::new(&mut rng);
         let relay_public = PublicKey::from(&relay_secret);
         let relay_identity = RSAIdentity::from_bytes(&[12; 20]).unwrap();
@@ -380,6 +380,56 @@ mod tests {
         let s_keys = s_keygen.expand(keys.len())?;
         assert_eq!(&c_keys[..], &keys[..]);
         assert_eq!(&s_keys[..], &keys[..]);
+
         Ok(())
+    }
+
+    #[test]
+    fn failing_handshakes() {
+        use crate::crypto::handshake::{ClientHandshake, ServerHandshake};
+        let mut rng = rand::thread_rng();
+
+        // Set up keys.
+        let relay_secret = StaticSecret::new(&mut rng);
+        let relay_public = PublicKey::from(&relay_secret);
+        let wrong_public = PublicKey::from([16u8; 32]);
+        let relay_identity = RSAIdentity::from_bytes(&[12; 20]).unwrap();
+        let wrong_identity = RSAIdentity::from_bytes(&[13; 20]).unwrap();
+        let relay_ntpk = NtorPublicKey {
+            id: relay_identity.clone(),
+            pk: relay_public.clone(),
+        };
+        let relay_ntsk = NtorSecretKey {
+            pk: relay_ntpk.clone(),
+            sk: relay_secret,
+        };
+        let relay_ntsks = &[relay_ntsk];
+        let wrong_ntpk1 = NtorPublicKey {
+            id: wrong_identity,
+            pk: relay_public.clone(),
+        };
+        let wrong_ntpk2 = NtorPublicKey {
+            id: relay_identity,
+            pk: wrong_public.clone(),
+        };
+
+        // If the client uses the wrong keys, the relay should reject the
+        // handshake.
+        let (_, handshake1) = NtorClient::client1(&mut rng, &wrong_ntpk1).unwrap();
+        let (_, handshake2) = NtorClient::client1(&mut rng, &wrong_ntpk2).unwrap();
+        let (st3, handshake3) = NtorClient::client1(&mut rng, &relay_ntpk).unwrap();
+
+        let ans1 = NtorServer::server(&mut rng, relay_ntsks, &handshake1);
+        let ans2 = NtorServer::server(&mut rng, relay_ntsks, &handshake2);
+
+        assert!(ans1.is_err());
+        assert!(ans2.is_err());
+
+        // If the relay's message is tampered with, the client will
+        // reject the handshake.
+        let (_, mut smsg) = NtorServer::server(&mut rng, relay_ntsks, &handshake3).unwrap();
+        smsg[60] ^= 7;
+        let ans3 = NtorClient::client2(st3, smsg);
+        assert!(ans3.is_err());
     }
 }
