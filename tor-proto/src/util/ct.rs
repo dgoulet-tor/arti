@@ -43,3 +43,34 @@ pub fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     let choice = a.ct_eq(b);
     choice.unwrap_u8() == 1
 }
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_bytes_eq() {
+        use super::bytes_eq;
+        assert!(bytes_eq(&b"123"[..], &b"1234"[..3]));
+        assert!(!bytes_eq(&b"123"[..], &b"1234"[..]));
+        assert!(bytes_eq(&b"45"[..], &b"45"[..]));
+        assert!(!bytes_eq(&b"hi"[..], &b"45"[..]));
+        assert!(bytes_eq(&b""[..], &b""[..]));
+    }
+
+    #[test]
+    fn test_lookup() {
+        use super::lookup;
+        use subtle::ConstantTimeEq;
+        let mut items = Vec::new();
+        items.push("One".to_string());
+        items.push("word".to_string());
+        items.push("of".to_string());
+        items.push("every".to_string());
+        items.push("length".to_string());
+        let of_word = lookup(&items[..], |i| i.len().ct_eq(&2));
+        let every_word = lookup(&items[..], |i| i.len().ct_eq(&5));
+        let no_word = lookup(&items[..], |i| i.len().ct_eq(&99));
+        assert_eq!(of_word.unwrap(), "of");
+        assert_eq!(every_word.unwrap(), "every");
+        assert_eq!(no_word, None);
+    }
+}
