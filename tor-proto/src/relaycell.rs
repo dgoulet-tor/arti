@@ -59,6 +59,55 @@ caret_int! {
     }
 }
 
+/// Possible requirements on stream IDs for a relay command.
+enum StreamIDReq {
+    WantZero,
+    WantNonZero,
+    Any,
+}
+
+impl RelayCmd {
+    fn expects_streamid(self) -> StreamIDReq {
+        match self {
+            RelayCmd::BEGIN
+            | RelayCmd::DATA
+            | RelayCmd::END
+            | RelayCmd::CONNECTED
+            | RelayCmd::RESOLVE
+            | RelayCmd::RESOLVED
+            | RelayCmd::BEGIN_DIR => StreamIDReq::WantNonZero,
+            RelayCmd::EXTEND
+            | RelayCmd::EXTENDED
+            | RelayCmd::TRUNCATE
+            | RelayCmd::TRUNCATED
+            | RelayCmd::DROP
+            | RelayCmd::EXTEND2
+            | RelayCmd::EXTENDED2
+            | RelayCmd::ESTABLISH_INTRO
+            | RelayCmd::ESTABLISH_RENDEZVOUS
+            | RelayCmd::INTRODUCE1
+            | RelayCmd::INTRODUCE2
+            | RelayCmd::RENDEZVOUS1
+            | RelayCmd::RENDEZVOUS2
+            | RelayCmd::INTRO_ESTABLISHED
+            | RelayCmd::RENDEZVOUS_ESTABLISHED
+            | RelayCmd::INTRODUCE_ACK => StreamIDReq::WantZero,
+            RelayCmd::SENDME => StreamIDReq::Any,
+            _ => StreamIDReq::Any,
+        }
+    }
+    /// Return true if this command is one that accepts the particular
+    /// stream ID `id`
+    pub fn accepts_streamid_val(self, id: StreamID) -> bool {
+        let is_zero = id == 0.into();
+        match (self.expects_streamid(), is_zero) {
+            (StreamIDReq::WantNonZero, true) => false,
+            (StreamIDReq::WantZero, false) => false,
+            (_, _) => true,
+        }
+    }
+}
+
 /// Identify a single stream on a circuit.
 ///
 /// These identifiers are local to each hop on a circuit
