@@ -16,7 +16,7 @@ MILESTONE 0: Build a circuit and use it
    o Make a request, get a response (no sendmes yet)
 
 MILESTONE 1: Refactoring on above
-   - Stop parameterizing all APIs on TLS type.
+   o Stop parameterizing all APIs on TLS type.
    - Less copying, esp around Box<RawCellBody>.  Consider bytes crate.
    - Is this "reactor" business a sensible design?  Is there a better one?
    - Combine "create circuit" and "create first hop"?

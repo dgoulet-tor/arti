@@ -14,7 +14,6 @@ use crate::{Error, Result};
 use tor_linkspec::LinkSpec;
 
 use futures::channel::mpsc;
-use futures::io::{AsyncRead, AsyncWrite};
 use futures::stream::StreamExt;
 
 use rand::{thread_rng, CryptoRng, Rng};
@@ -22,25 +21,18 @@ use rand::{thread_rng, CryptoRng, Rng};
 use crate::crypto::cell::ClientCrypt;
 
 /// A Circuit that we have constructed over the Tor network.
-// TODO: I wish this weren't parameterized.
 // TODO: need to send a destroy cell on drop
-pub struct ClientCirc<T>
-where
-    T: AsyncRead + AsyncWrite + Unpin,
-{
+pub struct ClientCirc {
     id: CircID,
-    channel: Channel<T>,
+    channel: Channel,
     // TODO: could use a SPSC channel here instead.
     input: mpsc::Receiver<ChanMsg>,
     crypto: ClientCrypt,
 }
 
-impl<T> ClientCirc<T>
-where
-    T: AsyncRead + AsyncWrite + Unpin,
-{
+impl ClientCirc {
     /// Instantiate a new circuit object.
-    pub(crate) fn new(id: CircID, channel: Channel<T>, input: mpsc::Receiver<ChanMsg>) -> Self {
+    pub(crate) fn new(id: CircID, channel: Channel, input: mpsc::Receiver<ChanMsg>) -> Self {
         let crypto = ClientCrypt::new();
         ClientCirc {
             id,

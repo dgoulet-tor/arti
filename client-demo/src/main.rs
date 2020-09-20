@@ -17,14 +17,14 @@ use tor_linkspec::ChanTarget;
 use tor_proto::channel::{self, Channel};
 
 //use async_std::prelude::*;
-use async_native_tls::{TlsConnector, TlsStream};
+use async_native_tls::TlsConnector;
 use async_std::net;
 use err::{Error, Result};
 
 use rand::thread_rng;
 
 /// Launch an authenticated channel to a relay.
-async fn connect<C: ChanTarget>(target: &C) -> Result<Channel<TlsStream<net::TcpStream>>> {
+async fn connect<C: ChanTarget>(target: &C) -> Result<Channel> {
     let addr = target
         .get_addrs()
         .get(0) // Instead we might want to try multiple addresses in parallel

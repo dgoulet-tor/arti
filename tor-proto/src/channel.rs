@@ -17,8 +17,8 @@ use crate::{Error, Result};
 use futures::channel::{mpsc, oneshot};
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::lock::Mutex;
-use futures::sink::SinkExt;
-use futures::stream::{SplitSink, StreamExt};
+use futures::sink::{Sink, SinkExt};
+use futures::stream::StreamExt;
 
 use std::sync::Arc;
 
@@ -33,17 +33,17 @@ type CellFrame<T> = futures_codec::Framed<T, codec::ChannelCodec>;
 /// An open client channel, ready to send and receive Tor cells.
 ///
 /// A channel is a direct connection to a Tor relay, implemented using TLS.
-pub struct Channel<T: AsyncRead + AsyncWrite + Unpin> {
-    inner: Arc<Mutex<ChannelImpl<T>>>,
+pub struct Channel {
+    inner: Arc<Mutex<ChannelImpl>>,
 }
 
 /// Main implementation type for a channel.
-struct ChannelImpl<T: AsyncRead + AsyncWrite + Unpin> {
+struct ChannelImpl {
     link_protocol: u16,
     // This uses a separate mutex from the circmap, since we only
     // need the circmap when we're making a new circuit, but we need
     // this _all the time_.
-    tls: SplitSink<CellFrame<T>, ChanCell>,
+    tls: Box<dyn Sink<ChanCell, Error = Error> + Unpin + 'static>,
     // TODO: I wish I didn't need a second Arc here, but I guess I do?
     // An rwlock would be better.
     circmap: Arc<Mutex<circmap::CircMap>>,
@@ -59,17 +59,17 @@ struct ChannelImpl<T: AsyncRead + AsyncWrite + Unpin> {
 /// on the result of _that_.
 pub fn start_client_handshake<T>(tls: T) -> OutboundClientHandshake<T>
 where
-    T: AsyncRead + AsyncWrite + Unpin,
+    T: AsyncRead + AsyncWrite + Unpin + 'static,
 {
     handshake::OutboundClientHandshake::new(tls)
 }
 
-impl<T> Channel<T>
-where
-    T: AsyncRead + AsyncWrite + Unpin,
-{
+impl Channel {
     /// Construct a channel and reactor.
-    fn new(link_protocol: u16, tls: CellFrame<T>) -> (Self, reactor::Reactor<T>) {
+    fn new<T>(link_protocol: u16, tls: CellFrame<T>) -> (Self, reactor::Reactor<T>)
+    where
+        T: AsyncRead + AsyncWrite + Unpin + 'static,
+    {
         use circmap::{CircIDRange, CircMap};
         let circmap = Arc::new(Mutex::new(CircMap::new(CircIDRange::High)));
 
@@ -78,7 +78,7 @@ where
         let (sendclosed, recvclosed) = oneshot::channel::<()>();
 
         let inner = ChannelImpl {
-            tls: sink,
+            tls: Box::new(sink),
             link_protocol,
             circmap: circmap.clone(),
             sendclosed,
@@ -130,7 +130,7 @@ where
     // XXXX TODO: make this hidden, and wrap it in another function that
     // does the handshake. That way we only need to handle RELAY
     // and destroy.
-    pub async fn new_circ<R: Rng>(&self, rng: &mut R) -> Result<circuit::ClientCirc<T>> {
+    pub async fn new_circ<R: Rng>(&self, rng: &mut R) -> Result<circuit::ClientCirc> {
         // TODO: blocking is risky, but so is unbounded.
         let (sender, receiver) = mpsc::channel(128);
 
@@ -144,10 +144,7 @@ where
     }
 }
 
-impl<T> Clone for Channel<T>
-where
-    T: AsyncRead + AsyncWrite + Unpin,
-{
+impl Clone for Channel {
     fn clone(&self) -> Self {
         Channel {
             inner: Arc::clone(&self.inner),
@@ -163,7 +160,7 @@ where
 
 impl<T> Drop for ChannelImpl<T>
 where
-    T: AsyncRead + AsyncWrite + Unpin,
+    T: AsyncRead + AsyncWrite + Unpin + 'static,
 {
     fn drop(&mut self) {
         self.sendclosed.send(());
