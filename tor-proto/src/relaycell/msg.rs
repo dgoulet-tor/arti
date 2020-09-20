@@ -21,28 +21,25 @@ use rand::{CryptoRng, Rng};
 #[derive(Debug)]
 pub struct RelayCell {
     streamid: StreamID,
-    body: RelayMsg, // XXX rename to msg.
+    msg: RelayMsg,
 }
 
 impl RelayCell {
     /// Construct a new relay cell.
     pub fn new(streamid: StreamID, msg: RelayMsg) -> Self {
-        RelayCell {
-            streamid,
-            body: msg,
-        }
+        RelayCell { streamid, msg }
     }
     /// Consume this cell and return its components.
     pub fn into_streamid_and_msg(self) -> (StreamID, RelayMsg) {
-        (self.streamid, self.body)
+        (self.streamid, self.msg)
     }
     /// Return the command for this cell.
     pub fn get_cmd(&self) -> StreamCmd {
-        self.body.get_cmd()
+        self.msg.get_cmd()
     }
     /// Return the underlying message for this cell.
     pub fn get_msg(&self) -> &RelayMsg {
-        &self.body
+        &self.msg
     }
     /// Consume this relay message and encode it as a 509-byte padded cell
     /// body.
@@ -75,14 +72,14 @@ impl RelayCell {
     /// TODO: not the best interface, as this requires copying into a cell.
     fn encode_to_vec(self) -> Vec<u8> {
         let mut w = Vec::new();
-        w.write_u8(self.body.get_cmd().into());
+        w.write_u8(self.msg.get_cmd().into());
         w.write_u16(0); // "Recognized"
         w.write_u16(self.streamid.0);
         w.write_u32(0); // Digest
         let len_pos = w.len();
         w.write_u16(0); // Length.
         let body_pos = w.len();
-        self.body.encode_onto(&mut w);
+        self.msg.encode_onto(&mut w);
         assert!(w.len() >= body_pos); // nothing was removed
         let payload_len = w.len() - body_pos;
         assert!(payload_len <= std::u16::MAX as usize);
@@ -111,8 +108,8 @@ impl RelayCell {
             return Err(Error::BadMessage("Insufficient data in relay cell"));
         }
         r.truncate(len);
-        let body = RelayMsg::decode_from_reader(cmd, r)?;
-        Ok(RelayCell { streamid, body })
+        let msg = RelayMsg::decode_from_reader(cmd, r)?;
+        Ok(RelayCell { streamid, msg })
     }
 }
 
