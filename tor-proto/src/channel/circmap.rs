@@ -3,12 +3,9 @@
 
 use crate::chancell::msg::ChanMsg;
 use crate::chancell::CircID;
-use crate::{Error, Result};
+use crate::util::idmap::IdMap;
+use crate::Result;
 
-use std::collections::HashMap;
-
-//use futures::sink::Sink;
-//use futures::channel::oneshot;
 use futures::channel::mpsc;
 
 use rand::Rng;
@@ -22,9 +19,9 @@ pub(super) enum CircIDRange {
     High,
 }
 
-impl CircIDRange {
+impl rand::distributions::Distribution<CircID> for CircIDRange {
     /// Return a random circuit ID in the appropriate range.
-    fn new_id<R: Rng>(&self, rng: &mut R) -> CircID {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> CircID {
         // Make sure v is nonzero.
         let v = loop {
             match rng.gen() {
@@ -50,32 +47,15 @@ pub(super) enum CircEnt {
 
 /// A map from circuit IDs to circuit entries. Each channel has one.
 pub(super) struct CircMap {
-    idrange: CircIDRange,
-    m: HashMap<CircID, CircEnt>,
+    m: IdMap<CircID, CircIDRange, CircEnt>,
 }
 
 impl CircMap {
     /// Make a new empty CircMap
     pub(super) fn new(idrange: CircIDRange) -> Self {
         CircMap {
-            idrange,
-            m: HashMap::new(),
+            m: IdMap::new(idrange),
         }
-    }
-
-    /// Construct a new CircuitID for an outbound circuit; make sure
-    /// it is unused.  This can fail if there are too many circuits on
-    /// this channel.
-    fn gen_id<R: Rng>(&self, rng: &mut R) -> Option<CircID> {
-        // How many times to we try before giving up?
-        const MAX_ATTEMPTS: usize = 16;
-        for _ in 0..MAX_ATTEMPTS {
-            let id = self.idrange.new_id(rng);
-            if !self.m.contains_key(&id) {
-                return Some(id);
-            }
-        }
-        None
     }
 
     pub(super) fn add_ent<R: Rng>(
@@ -83,19 +63,8 @@ impl CircMap {
         rng: &mut R,
         sink: mpsc::Sender<ChanMsg>,
     ) -> Result<CircID> {
-        let id = self.gen_id(rng).ok_or(Error::CircIDRangeFull)?;
         let ent = CircEnt::Open(sink);
-        self.m.insert(id, ent);
-        Ok(id)
-    }
-
-    fn get_ref(&self, id: CircID) -> Option<&CircEnt> {
-        self.m.get(&id)
-    }
-
-    /// Remove the entry for `id` on this map, if any.
-    fn remove(&mut self, id: CircID) {
-        self.m.remove(&id);
+        self.m.add_ent(rng, ent)
     }
 
     /// Return the entry for `id` in this map, if any.

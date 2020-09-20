@@ -1,5 +1,7 @@
 //! Multi-hop paths over the Tor network.
 
+mod streammap;
+
 use crate::chancell::{
     self,
     msg::{self, ChanMsg},

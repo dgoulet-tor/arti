@@ -63,7 +63,7 @@ caret_int! {
 /// Identify a single stream on a circuit.
 ///
 /// These identifiers are local to each hop on a circuit
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct StreamID(u16);
 
 impl From<u16> for StreamID {

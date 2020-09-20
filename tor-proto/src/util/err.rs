@@ -44,9 +44,9 @@ pub enum Error {
     /// Circuit is closed.
     #[error("circuit closed")]
     CircuitClosed,
-    /// Can't allocate any more circuit IDs on a channel.
-    #[error("too many circuits on channel: can't allocate circuit ID")]
-    CircIDRangeFull,
+    /// Can't allocate any more circuit or stream IDs on a channel.
+    #[error("too many entries in map: can't allocate ID")]
+    IDRangeFull,
     /// Couldn't extend a circuit.
     #[error("circuit extension handshake error: {0}")]
     CircExtend(&'static str),
