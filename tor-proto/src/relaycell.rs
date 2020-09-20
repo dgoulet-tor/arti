@@ -6,8 +6,7 @@ pub mod msg;
 
 caret_int! {
     /// A command that identifies the type of a relay cell
-    // XXXX maybe rename to CircCmd.
-    pub struct StreamCmd(u8) {
+    pub struct RelayCmd(u8) {
         /// Start a new stream
         BEGIN = 1,
         /// Data on a stream

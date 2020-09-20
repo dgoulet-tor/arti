@@ -10,7 +10,7 @@ use crate::chancell::{
 use crate::channel::Channel;
 use crate::crypto::cell::{ClientLayer, CryptInit};
 use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
-use crate::relaycell::{msg::RelayCell, msg::RelayMsg, StreamCmd};
+use crate::relaycell::{msg::RelayCell, msg::RelayMsg, RelayCmd};
 use crate::{Error, Result};
 
 use tor_linkspec::LinkSpec;
@@ -186,7 +186,7 @@ impl ClientCirc {
         let (from_hop, cell) = self.recv_relay_cell().await?;
 
         // Did we get the right response?
-        if from_hop != hop || cell.get_cmd() != StreamCmd::EXTENDED2 {
+        if from_hop != hop || cell.get_cmd() != RelayCmd::EXTENDED2 {
             return Err(Error::CircProto(format!(
                 "wanted EXTENDED2 from {}; got {} from {}",
                 hop,

@@ -3,7 +3,7 @@
 //! Relay messages are sent along circuits, inside RELAY or RELAY_EARLY
 //! cells.
 
-use super::StreamCmd;
+use super::RelayCmd;
 use super::StreamID;
 use crate::chancell::msg::{TAP_C_HANDSHAKE_LEN, TAP_S_HANDSHAKE_LEN};
 use crate::chancell::CELL_DATA_LEN;
@@ -34,7 +34,7 @@ impl RelayCell {
         (self.streamid, self.msg)
     }
     /// Return the command for this cell.
-    pub fn get_cmd(&self) -> StreamCmd {
+    pub fn get_cmd(&self) -> RelayCmd {
         self.msg.get_cmd()
     }
     /// Return the underlying message for this cell.
@@ -170,45 +170,45 @@ impl<B: Body> From<B> for RelayMsg {
 
 impl RelayMsg {
     /// Return the stream command associated with this message.
-    pub fn get_cmd(&self) -> StreamCmd {
+    pub fn get_cmd(&self) -> RelayCmd {
         use RelayMsg::*;
         match self {
-            Begin(_) => StreamCmd::BEGIN,
-            Data(_) => StreamCmd::DATA,
-            End(_) => StreamCmd::END,
-            Connected(_) => StreamCmd::CONNECTED,
-            Sendme(_) => StreamCmd::SENDME,
-            Extend(_) => StreamCmd::EXTEND,
-            Extended(_) => StreamCmd::EXTENDED,
-            Extend2(_) => StreamCmd::EXTEND2,
-            Extended2(_) => StreamCmd::EXTENDED2,
-            Truncate(_) => StreamCmd::TRUNCATE,
-            Truncated(_) => StreamCmd::TRUNCATED,
-            Drop => StreamCmd::DROP,
-            Resolve(_) => StreamCmd::RESOLVE,
-            Resolved(_) => StreamCmd::RESOLVED,
-            BeginDir => StreamCmd::BEGIN_DIR,
+            Begin(_) => RelayCmd::BEGIN,
+            Data(_) => RelayCmd::DATA,
+            End(_) => RelayCmd::END,
+            Connected(_) => RelayCmd::CONNECTED,
+            Sendme(_) => RelayCmd::SENDME,
+            Extend(_) => RelayCmd::EXTEND,
+            Extended(_) => RelayCmd::EXTENDED,
+            Extend2(_) => RelayCmd::EXTEND2,
+            Extended2(_) => RelayCmd::EXTENDED2,
+            Truncate(_) => RelayCmd::TRUNCATE,
+            Truncated(_) => RelayCmd::TRUNCATED,
+            Drop => RelayCmd::DROP,
+            Resolve(_) => RelayCmd::RESOLVE,
+            Resolved(_) => RelayCmd::RESOLVED,
+            BeginDir => RelayCmd::BEGIN_DIR,
             Unrecognized(u) => u.get_cmd(),
         }
     }
     /// Extract the body of this message from `r`
-    pub fn decode_from_reader(c: StreamCmd, r: &mut Reader<'_>) -> Result<Self> {
+    pub fn decode_from_reader(c: RelayCmd, r: &mut Reader<'_>) -> Result<Self> {
         Ok(match c {
-            StreamCmd::BEGIN => RelayMsg::Begin(Begin::decode_from_reader(r)?),
-            StreamCmd::DATA => RelayMsg::Data(Data::decode_from_reader(r)?),
-            StreamCmd::END => RelayMsg::End(End::decode_from_reader(r)?),
-            StreamCmd::CONNECTED => RelayMsg::Connected(Connected::decode_from_reader(r)?),
-            StreamCmd::SENDME => RelayMsg::Sendme(Sendme::decode_from_reader(r)?),
-            StreamCmd::EXTEND => RelayMsg::Extend(Extend::decode_from_reader(r)?),
-            StreamCmd::EXTENDED => RelayMsg::Extended(Extended::decode_from_reader(r)?),
-            StreamCmd::EXTEND2 => RelayMsg::Extend2(Extend2::decode_from_reader(r)?),
-            StreamCmd::EXTENDED2 => RelayMsg::Extended2(Extended2::decode_from_reader(r)?),
-            StreamCmd::TRUNCATE => RelayMsg::Truncate(Truncate::decode_from_reader(r)?),
-            StreamCmd::TRUNCATED => RelayMsg::Truncated(Truncated::decode_from_reader(r)?),
-            StreamCmd::DROP => RelayMsg::Drop,
-            StreamCmd::RESOLVE => RelayMsg::Resolve(Resolve::decode_from_reader(r)?),
-            StreamCmd::RESOLVED => RelayMsg::Resolved(Resolved::decode_from_reader(r)?),
-            StreamCmd::BEGIN_DIR => RelayMsg::BeginDir,
+            RelayCmd::BEGIN => RelayMsg::Begin(Begin::decode_from_reader(r)?),
+            RelayCmd::DATA => RelayMsg::Data(Data::decode_from_reader(r)?),
+            RelayCmd::END => RelayMsg::End(End::decode_from_reader(r)?),
+            RelayCmd::CONNECTED => RelayMsg::Connected(Connected::decode_from_reader(r)?),
+            RelayCmd::SENDME => RelayMsg::Sendme(Sendme::decode_from_reader(r)?),
+            RelayCmd::EXTEND => RelayMsg::Extend(Extend::decode_from_reader(r)?),
+            RelayCmd::EXTENDED => RelayMsg::Extended(Extended::decode_from_reader(r)?),
+            RelayCmd::EXTEND2 => RelayMsg::Extend2(Extend2::decode_from_reader(r)?),
+            RelayCmd::EXTENDED2 => RelayMsg::Extended2(Extended2::decode_from_reader(r)?),
+            RelayCmd::TRUNCATE => RelayMsg::Truncate(Truncate::decode_from_reader(r)?),
+            RelayCmd::TRUNCATED => RelayMsg::Truncated(Truncated::decode_from_reader(r)?),
+            RelayCmd::DROP => RelayMsg::Drop,
+            RelayCmd::RESOLVE => RelayMsg::Resolve(Resolve::decode_from_reader(r)?),
+            RelayCmd::RESOLVED => RelayMsg::Resolved(Resolved::decode_from_reader(r)?),
+            RelayCmd::BEGIN_DIR => RelayMsg::BeginDir,
 
             _ => RelayMsg::Unrecognized(Unrecognized::decode_with_cmd(c, r)?),
         })
@@ -754,17 +754,17 @@ impl Body for Resolved {
 /// A relay message that we didn't recognize
 #[derive(Debug)]
 pub struct Unrecognized {
-    cmd: StreamCmd,
+    cmd: RelayCmd,
     body: Vec<u8>,
 }
 
 impl Unrecognized {
     /// Return the command associated with this message
-    pub fn get_cmd(&self) -> StreamCmd {
+    pub fn get_cmd(&self) -> RelayCmd {
         self.cmd
     }
     /// Decode this message, using a provided command.
-    pub fn decode_with_cmd(cmd: StreamCmd, r: &mut Reader<'_>) -> Result<Self> {
+    pub fn decode_with_cmd(cmd: RelayCmd, r: &mut Reader<'_>) -> Result<Self> {
         let mut r = Unrecognized::decode_from_reader(r)?;
         r.cmd = cmd;
         Ok(r)
