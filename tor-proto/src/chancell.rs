@@ -90,6 +90,13 @@ caret_int! {
     }
 }
 
+/// Possible requirements on circuit IDs for a channel command.
+enum CircIDReq {
+    WantZero,
+    WantNonZero,
+    Any,
+}
+
 impl ChanCmd {
     /// Return true if this command is for a cell using the the
     /// variable-length format.
@@ -99,8 +106,8 @@ impl ChanCmd {
         // cell was variable-length.
         self == ChanCmd::VERSIONS || self.0 >= 128u8
     }
-    /// Return true if this command is one that expects a nonzero circid.
-    pub fn allows_circid(self) -> bool {
+    /// Return what kind of circuit ID this command expects.
+    fn allows_circid(self) -> CircIDReq {
         match self {
             ChanCmd::PADDING
             | ChanCmd::NETINFO
@@ -109,7 +116,7 @@ impl ChanCmd {
             | ChanCmd::VPADDING
             | ChanCmd::CERTS
             | ChanCmd::AUTH_CHALLENGE
-            | ChanCmd::AUTHENTICATE => false,
+            | ChanCmd::AUTHENTICATE => CircIDReq::WantZero,
             ChanCmd::CREATE
             | ChanCmd::CREATED
             | ChanCmd::RELAY
@@ -118,17 +125,18 @@ impl ChanCmd {
             | ChanCmd::CREATED_FAST
             | ChanCmd::RELAY_EARLY
             | ChanCmd::CREATE2
-            | ChanCmd::CREATED2 => true,
-            _ => true,
+            | ChanCmd::CREATED2 => CircIDReq::WantNonZero,
+            _ => CircIDReq::Any,
         }
     }
     /// Return true if this command is one that accepts the particular
     /// circuit ID `id`.
     pub fn accepts_circid_val(self, id: CircID) -> bool {
-        if self.is_recognized() {
-            self.allows_circid() != (id == 0.into())
-        } else {
-            true
+        let is_zero = id == 0.into();
+        match (self.allows_circid(), is_zero) {
+            (CircIDReq::WantNonZero, true) => false,
+            (CircIDReq::WantZero, false) => false,
+            (_, _) => true,
         }
     }
 }
