@@ -20,6 +20,7 @@ use futures::lock::Mutex;
 use futures::sink::{Sink, SinkExt};
 use futures::stream::StreamExt;
 
+use std::cell::Cell;
 use std::sync::Arc;
 
 use log::trace;
@@ -47,7 +48,7 @@ struct ChannelImpl {
     // TODO: I wish I didn't need a second Arc here, but I guess I do?
     // An rwlock would be better.
     circmap: Arc<Mutex<circmap::CircMap>>,
-    sendclosed: oneshot::Sender<()>,
+    sendclosed: Cell<Option<oneshot::Sender<()>>>,
 }
 
 /// Launch a new client handshake over a TLS stream.
@@ -81,7 +82,7 @@ impl Channel {
             tls: Box::new(sink),
             link_protocol,
             circmap: circmap.clone(),
-            sendclosed,
+            sendclosed: Cell::new(Some(sendclosed)),
         };
 
         let reactor = reactor::Reactor::new(circmap, recvclosed, stream);
@@ -152,18 +153,10 @@ impl Clone for Channel {
     }
 }
 
-/*
-    XXXX this doesn't work, since we'd have to take ownership of the
-    XXXX oneshot.
-
-    XXXX maybe I should wrap the oneshot in a cell or something?
-
-impl<T> Drop for ChannelImpl<T>
-where
-    T: AsyncRead + AsyncWrite + Unpin + 'static,
-{
+impl Drop for ChannelImpl {
     fn drop(&mut self) {
-        self.sendclosed.send(());
+        if let Some(sender) = self.sendclosed.take() {
+            let _ignore = sender.send(());
+        }
     }
 }
-*/
