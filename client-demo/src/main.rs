@@ -116,13 +116,13 @@ fn main() -> Result<()> {
         let mut rng = thread_rng();
         let chan = connect(&guard).await?;
 
-        let mut circ = chan.new_circ(&mut rng).await?;
-        /*
-        circ.create_firsthop_fast(&mut rng).await?;
-        info!("CREATE_FAST was successful.");
-         */
+        let (pendcirc, reactor) = chan.new_circ(&mut rng).await?;
+        async_std::task::spawn(async { reactor.run().await });
 
-        circ.create_firsthop_ntor(&mut rng, &guard).await?;
+        // let mut circ = pendcirc.create_firsthop_fast(&mut rng).await?;
+        // info!("fast handshake with first hop was successful.");
+
+        let mut circ = pendcirc.create_firsthop_ntor(&mut rng, &guard).await?;
         info!("ntor handshake with first hop was successful.");
 
         circ.extend_ntor(&mut rng, &mid).await?;
@@ -133,20 +133,18 @@ fn main() -> Result<()> {
 
         info!("Built a three-hop circuit.");
 
+        let mut stream = circ.begin_stream("www.torproject.org", 80).await?;
+
         use tor_proto::relaycell::msg;
-        let begin = msg::Begin::new("www.torproject.org", 80, 0)?;
         let request =
             msg::Data::new("GET / HTTP/1.0\r\nHost: www.torproject.org\r\n\r\n".as_bytes());
-        let begin = msg::RelayCell::new(99.into(), begin.into());
-        let request = msg::RelayCell::new(99.into(), request.into());
 
-        circ.send_relay_cell(2, false, begin).await?;
-        circ.send_relay_cell(2, false, request).await?;
+        stream.send(request.into()).await?;
 
         loop {
-            let (_hopnum, cell) = circ.recv_relay_cell().await?;
-            info!("{}", cell.get_cmd());
-            match cell.get_msg() {
+            let msg = stream.recv().await?;
+            info!("{}", msg.get_cmd());
+            match msg {
                 msg::RelayMsg::Data(d) => {
                     // XXXX crash on bad utf8.
                     println!("{}", std::str::from_utf8(d.as_ref()).unwrap());
@@ -157,7 +155,6 @@ fn main() -> Result<()> {
                 _ => (),
             }
         }
-
         Ok(())
     })
 }

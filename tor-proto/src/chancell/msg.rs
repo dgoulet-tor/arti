@@ -369,7 +369,7 @@ impl Relay {
     }
     /// Consume this Relay message and return a RelayCellBody for
     /// encryption/decryption.
-    pub fn into_relay_cell(self) -> crate::crypto::cell::RelayCellBody {
+    pub fn into_relay_body(self) -> crate::crypto::cell::RelayCellBody {
         (*self.body).into()
     }
 }

@@ -19,19 +19,20 @@ MILESTONE 1: Refactoring on above
    o Stop parameterizing all APIs on TLS type.
    - Less copying, esp around Box<RawCellBody>.  Consider bytes crate.
    - Is this "reactor" business a sensible design?  Is there a better one?
-   - Combine "create circuit" and "create first hop"?
+   o Combine "create circuit" and "create first hop"?
    - Improve testing
    - Improve documentation
-   - More types of circent for clarity.
+   o More types of circent for clarity.
    - Make sure readme is right
 
 MILESTONE 2: Working streams
    - Make SENDMEs work
    - Make authenticated sendmes work.
-   - Improve circuit API.
-   - Get a stream API together.
+   o Improve circuit API.
+   o Get an initial stream API together.
 
 MILESTONE 3: Clean and tidy
+   - Get a data-oriented stream API
    - Make a plan for what closes when
    - Make sure everything closes when it is supposed to.
    - Refactor XXXX and TODO code; make sure everything is tested and

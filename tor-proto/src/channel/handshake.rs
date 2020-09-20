@@ -22,14 +22,14 @@ use super::CellFrame;
 static LINK_PROTOCOLS: &[u16] = &[4];
 
 /// A raw client channel on which nothing has been done.
-pub struct OutboundClientHandshake<T: AsyncRead + AsyncWrite + Unpin + 'static> {
+pub struct OutboundClientHandshake<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     tls: T,
 }
 
 /// A client channel on which versions have been negotiated and the
 /// server's handshake has been read, but where the certs have not
 /// been checked.
-pub struct UnverifiedChannel<T: AsyncRead + AsyncWrite + Unpin + 'static> {
+pub struct UnverifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     link_protocol: u16,
     tls: CellFrame<T>,
     certs_cell: msg::Certs,
@@ -39,12 +39,12 @@ pub struct UnverifiedChannel<T: AsyncRead + AsyncWrite + Unpin + 'static> {
 /// A client channel on which versions have been negotiated,
 /// server's handshake has been read, but the client has not yet
 /// finished the handshake.
-pub struct VerifiedChannel<T: AsyncRead + AsyncWrite + Unpin + 'static> {
+pub struct VerifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     link_protocol: u16,
     tls: CellFrame<T>,
 }
 
-impl<T: AsyncRead + AsyncWrite + Unpin + 'static> OutboundClientHandshake<T> {
+impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake<T> {
     /// Construct a new OutboundClientHandshake.
     pub(crate) fn new(tls: T) -> Self {
         Self { tls }
@@ -143,7 +143,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin + 'static> OutboundClientHandshake<T> {
     }
 }
 
-impl<T: AsyncRead + AsyncWrite + Unpin + 'static> UnverifiedChannel<T> {
+impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
     /// Validate the certificates and keys in the relay's handshake.
     ///
     /// 'peer' is the peer that we want to make sure we're connecting to.
@@ -245,7 +245,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin + 'static> UnverifiedChannel<T> {
     }
 }
 
-impl<T: AsyncRead + AsyncWrite + Unpin + 'static> VerifiedChannel<T> {
+impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> VerifiedChannel<T> {
     /// Send a 'Netinfo' message to the relay to finish the handshake,
     /// and create an open channel and reactor.
     ///

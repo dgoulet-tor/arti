@@ -1,6 +1,8 @@
 // NOTE: This is a work in progress and I bet I'll refactor it a lot;
 // it needs to stay opaque!
 
+// TODO: I bet we could turn this into an extension trait.
+
 use crate::{Error, Result};
 
 use rand::distributions::Distribution;
@@ -55,13 +57,19 @@ where
         Ok(id)
     }
 
-    fn get_ref(&self, id: &ID) -> Option<&VAL> {
+    /// Replace the current entry at 'id' with 'val'.
+    pub fn put_ent(&mut self, id: ID, val: VAL) {
+        self.m.insert(id, val);
+    }
+
+    /// Return a reference to the value at 'id'
+    pub fn get(&self, id: &ID) -> Option<&VAL> {
         self.m.get(id)
     }
 
     /// Remove the entry for `id` on this map, if any.
-    fn remove(&mut self, id: &ID) {
-        self.m.remove(id);
+    pub fn remove(&mut self, id: &ID) -> Option<VAL> {
+        self.m.remove(id)
     }
 
     /// Return the entry for `id` in this map, if any.

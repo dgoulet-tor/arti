@@ -6,7 +6,7 @@ use crate::chancell::CircID;
 use crate::util::idmap::IdMap;
 use crate::Result;
 
-use futures::channel::mpsc;
+use futures::channel::{mpsc, oneshot};
 
 use rand::Rng;
 
@@ -42,6 +42,7 @@ impl rand::distributions::Distribution<CircID> for CircIDRange {
 /// way to send cells to a given circuit", but that's likely to
 /// change.
 pub(super) enum CircEnt {
+    Opening(oneshot::Sender<ChanMsg>, mpsc::Sender<ChanMsg>),
     Open(mpsc::Sender<ChanMsg>),
 }
 
@@ -61,9 +62,10 @@ impl CircMap {
     pub(super) fn add_ent<R: Rng>(
         &mut self,
         rng: &mut R,
+        createdsink: oneshot::Sender<ChanMsg>,
         sink: mpsc::Sender<ChanMsg>,
     ) -> Result<CircID> {
-        let ent = CircEnt::Open(sink);
+        let ent = CircEnt::Opening(createdsink, sink);
         self.m.add_ent(rng, ent)
     }
 
@@ -72,6 +74,28 @@ impl CircMap {
         self.m.get_mut(&id)
     }
 
+    /// See whether 'id' is an opening circuit.  If so, mark it "open" and
+    /// return a sender that is waiting for its create cell.
+    pub(super) fn advance_from_opening(&mut self, id: CircID) -> Option<oneshot::Sender<ChanMsg>> {
+        // TODO: there should be a better way to do
+        // this. hash_map::Entry seems like it could be better.
+        let ok = matches!(self.m.get(&id), Some(CircEnt::Opening(_, _)));
+        if ok {
+            if let Some(CircEnt::Opening(oneshot, sink)) = self.m.remove(&id) {
+                self.m.put_ent(id, CircEnt::Open(sink));
+                Some(oneshot)
+            } else {
+                panic!("internal error: inconsistent hash state");
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Extract the value from this map with 'id' if any
+    pub(super) fn remove(&mut self, id: CircID) -> Option<CircEnt> {
+        self.m.remove(&id)
+    }
     // TODO: Eventually if we want relay support, we'll need to support
     // circuit IDs chosen by somebody else. But for now, we don't need those.
 }

@@ -111,9 +111,11 @@ impl ReactorCore {
             Padding(_) | VPadding(_) | Unrecognized(_) => Ok(()),
 
             // These are allowed and need to be handled.
-            Relay(_) | CreatedFast(_) | Created2(_) | Destroy(_) => {
-                self.deliver_msg(circid, msg).await
-            }
+            Relay(_) => self.deliver_msg(circid, msg).await,
+
+            Destroy(_) => self.deliver_destroy(circid, msg).await,
+
+            CreatedFast(_) | Created2(_) => self.deliver_created(circid, msg).await,
         }
     }
 
@@ -128,6 +130,37 @@ impl ReactorCore {
         } else {
             // XXXX handle this case better; don't just drop the cell.
             Ok(())
+        }
+    }
+
+    async fn deliver_created(&mut self, circid: CircID, msg: ChanMsg) -> Result<()> {
+        let mut map = self.circs.lock().await;
+        if let Some(target) = map.advance_from_opening(circid) {
+            // XXXX handle errors better.
+            // XXXX should we really be holding the mutex for this?
+            target.send(msg).map_err(|_| Error::ChanProto("x".into()))
+        } else {
+            Err(Error::ChanProto(format!(
+                "Unexpected {} cell",
+                msg.get_cmd()
+            )))
+        }
+    }
+
+    async fn deliver_destroy(&mut self, circid: CircID, msg: ChanMsg) -> Result<()> {
+        let mut map = self.circs.lock().await;
+        let entry = map.remove(circid);
+        match entry {
+            Some(CircEnt::Opening(oneshot, _)) => {
+                oneshot.send(msg).map_err(|_| Error::ChanProto("x".into()))
+            }
+            Some(CircEnt::Open(mut sink)) => sink
+                .send(msg)
+                .await
+                .map_err(|_| Error::ChanProto("x".into())),
+            // DESTROY cell for a circuit we don't have.
+            // XXXX do more?
+            None => Ok(()),
         }
     }
 }

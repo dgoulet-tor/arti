@@ -28,6 +28,7 @@ pub mod channel;
 pub mod circuit;
 mod crypto;
 pub mod relaycell;
+pub mod stream;
 mod util;
 
 pub use util::err::Error;

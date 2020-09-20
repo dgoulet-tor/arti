@@ -1,14 +1,18 @@
 // NOTE: This is a work in progress and I bet I'll refactor it a lot;
 // it needs to stay opaque!
 
-use crate::relaycell::StreamID;
+use crate::relaycell::{msg::RelayMsg, StreamID};
 use crate::util::idmap::IdMap;
 use crate::Result;
 
 use rand::distributions::Distribution;
 use rand::Rng;
 
-pub(super) struct StreamEnt {}
+use futures::channel::mpsc;
+
+pub(super) enum StreamEnt {
+    Open(mpsc::Sender<RelayMsg>),
+}
 
 struct StreamIDDist;
 impl Distribution<StreamID> for StreamIDDist {
@@ -35,8 +39,12 @@ impl StreamMap {
         }
     }
 
-    pub(super) fn add_ent<R: Rng>(&mut self, rng: &mut R, _sink: ()) -> Result<StreamID> {
-        let ent = StreamEnt {};
+    pub(super) fn add_ent<R: Rng>(
+        &mut self,
+        rng: &mut R,
+        sink: mpsc::Sender<RelayMsg>,
+    ) -> Result<StreamID> {
+        let ent = StreamEnt::Open(sink);
         let id = self.m.add_ent(rng, ent)?;
         Ok(id)
     }

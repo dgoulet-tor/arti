@@ -82,7 +82,7 @@ pub type HopNum = u8;
 /// A client's view of the cryptographic state for an entire
 /// constructed circuit.
 pub struct ClientCrypt {
-    layers: Vec<Box<dyn ClientLayer>>,
+    layers: Vec<Box<dyn ClientLayer + Send>>,
 }
 
 impl ClientCrypt {
@@ -118,7 +118,7 @@ impl ClientCrypt {
         Err(Error::BadCellAuth)
     }
     /// Add a new layer to this ClientCrypt
-    pub fn add_layer(&mut self, layer: Box<dyn ClientLayer>) {
+    pub fn add_layer(&mut self, layer: Box<dyn ClientLayer + Send>) {
         assert!(self.layers.len() < HopNum::max_value() as usize);
         self.layers.push(layer);
     }

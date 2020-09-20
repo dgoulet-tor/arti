@@ -44,7 +44,7 @@ struct ChannelImpl {
     // This uses a separate mutex from the circmap, since we only
     // need the circmap when we're making a new circuit, but we need
     // this _all the time_.
-    tls: Box<dyn Sink<ChanCell, Error = Error> + Unpin + 'static>,
+    tls: Box<dyn Sink<ChanCell, Error = Error> + Send + Unpin + 'static>,
     // TODO: I wish I didn't need a second Arc here, but I guess I do?
     // An rwlock would be better.
     circmap: Arc<Mutex<circmap::CircMap>>,
@@ -60,7 +60,7 @@ struct ChannelImpl {
 /// on the result of _that_.
 pub fn start_client_handshake<T>(tls: T) -> OutboundClientHandshake<T>
 where
-    T: AsyncRead + AsyncWrite + Unpin + 'static,
+    T: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
     handshake::OutboundClientHandshake::new(tls)
 }
@@ -69,7 +69,7 @@ impl Channel {
     /// Construct a channel and reactor.
     fn new<T>(link_protocol: u16, tls: CellFrame<T>) -> (Self, reactor::Reactor<T>)
     where
-        T: AsyncRead + AsyncWrite + Unpin + 'static,
+        T: AsyncRead + AsyncWrite + Send + Unpin + 'static,
     {
         use circmap::{CircIDRange, CircMap};
         let circmap = Arc::new(Mutex::new(CircMap::new(CircIDRange::High)));
@@ -131,17 +131,26 @@ impl Channel {
     // XXXX TODO: make this hidden, and wrap it in another function that
     // does the handshake. That way we only need to handle RELAY
     // and destroy.
-    pub async fn new_circ<R: Rng>(&self, rng: &mut R) -> Result<circuit::ClientCirc> {
+    pub async fn new_circ<R: Rng>(
+        &self,
+        rng: &mut R,
+    ) -> Result<(circuit::PendingClientCirc, circuit::reactor::Reactor)> {
         // TODO: blocking is risky, but so is unbounded.
         let (sender, receiver) = mpsc::channel(128);
+        let (createdsender, createdreceiver) = oneshot::channel::<msg::ChanMsg>();
 
         let id = {
             let inner = self.inner.lock().await;
             let mut cmap = inner.circmap.lock().await;
-            cmap.add_ent(rng, sender)?
+            cmap.add_ent(rng, createdsender, sender)?
         };
 
-        Ok(circuit::ClientCirc::new(id, self.clone(), receiver))
+        Ok(circuit::PendingClientCirc::new(
+            id,
+            self.clone(),
+            createdreceiver,
+            receiver,
+        ))
     }
 }
 
