@@ -283,6 +283,11 @@ macro_rules! caret_int {
                     _ => None,
                 }
             }
+            /// Return true if this value is one that we recognize.
+            $v fn is_recognized(self) -> bool {
+                matches!(self,
+                         $( $name::$id )|*)
+            }
         }
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

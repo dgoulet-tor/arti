@@ -99,29 +99,6 @@ impl ChanCmd {
         // cell was variable-length.
         self == ChanCmd::VERSIONS || self.0 >= 128u8
     }
-    /// Return true if this command is one that we recognize.
-    pub fn is_recognized(self) -> bool {
-        matches!(
-            self,
-            ChanCmd::PADDING
-                | ChanCmd::NETINFO
-                | ChanCmd::PADDING_NEGOTIATE
-                | ChanCmd::VERSIONS
-                | ChanCmd::VPADDING
-                | ChanCmd::CERTS
-                | ChanCmd::AUTH_CHALLENGE
-                | ChanCmd::AUTHENTICATE
-                | ChanCmd::CREATE
-                | ChanCmd::CREATED
-                | ChanCmd::RELAY
-                | ChanCmd::DESTROY
-                | ChanCmd::CREATE_FAST
-                | ChanCmd::CREATED_FAST
-                | ChanCmd::RELAY_EARLY
-                | ChanCmd::CREATE2
-                | ChanCmd::CREATED2
-        )
-    }
     /// Return true if this command is one that expects a nonzero circid.
     pub fn allows_circid(self) -> bool {
         match self {

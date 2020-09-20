@@ -25,10 +25,12 @@ fn test_int_ops() {
 
     let t: Demo = 999.into();
     assert_eq!(t, Demo::DEE);
+    assert!(t.is_recognized());
 
     let t: Demo = 6.into();
     let tval: u16 = t.into();
     assert_eq!(tval, 6);
+    assert!(!t.is_recognized());
 }
 
 #[test]
