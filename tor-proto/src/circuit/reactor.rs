@@ -134,7 +134,7 @@ impl ReactorCore {
 
         // If this has a reasonable streamID value of 0, it's a meta cell,
         // not meant for a particualr stream.
-        if streamid == 0.into() {
+        if streamid.is_zero() {
             return circ.handle_meta_cell(hopnum, msg);
         }
 

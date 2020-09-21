@@ -43,6 +43,15 @@ impl std::fmt::Display for CircID {
         self.0.fmt(f)
     }
 }
+impl CircID {
+    /// Return true if this is the zero CircID.
+    ///
+    /// A zero-valid circuit ID denotes a cell that is not related to
+    /// any particular circuit, but which applies to the channel as a whole.
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0
+    }
+}
 
 caret_int! {
     /// A ChanCmd is the type of a channel cell.  The value of the ChanCmd
@@ -132,8 +141,7 @@ impl ChanCmd {
     /// Return true if this command is one that accepts the particular
     /// circuit ID `id`.
     pub fn accepts_circid_val(self, id: CircID) -> bool {
-        let is_zero = id == 0.into();
-        match (self.allows_circid(), is_zero) {
+        match (self.allows_circid(), id.is_zero()) {
             (CircIDReq::WantNonZero, true) => false,
             (CircIDReq::WantZero, false) => false,
             (_, _) => true,

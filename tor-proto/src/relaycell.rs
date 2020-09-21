@@ -99,8 +99,7 @@ impl RelayCmd {
     /// Return true if this command is one that accepts the particular
     /// stream ID `id`
     pub fn accepts_streamid_val(self, id: StreamID) -> bool {
-        let is_zero = id == 0.into();
-        match (self.expects_streamid(), is_zero) {
+        match (self.expects_streamid(), id.is_zero()) {
             (StreamIDReq::WantNonZero, true) => false,
             (StreamIDReq::WantZero, false) => false,
             (_, _) => true,
@@ -129,5 +128,15 @@ impl Into<u16> for StreamID {
 impl std::fmt::Display for StreamID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.0.fmt(f)
+    }
+}
+
+impl StreamID {
+    /// Return true if this is the zero StreamID.
+    ///
+    /// A zero-valid circuit ID denotes a relay message that is not related to
+    /// any particular stream, but which applies to the circuit as a whole.
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0
     }
 }
