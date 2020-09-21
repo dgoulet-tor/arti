@@ -26,12 +26,11 @@ hmac = "0.9.0"
 log = "0.4.11"
 rand = "0.7.3"
 rand_core = "0.5.1"
-# This is paused for now because of aes-ctr.
-stream-cipher = "0.4.0"
+stream-cipher = "0.7.1"
 subtle = "2.3.0"
 thiserror = "1.0.20"
 typenum = "1.12.0"
-zeroize = "1.1.0"
+zeroize = "1.1.1"
 
 [dev-dependencies]
 hex-literal = "0.3.1"
