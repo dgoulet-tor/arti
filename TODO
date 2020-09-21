@@ -21,7 +21,7 @@ MILESTONE 1: Refactoring on above
    o More types of circent for clarity.
    o Improve testing
    o Improve documentation
-   - Make sure readme is right
+   o Make sure readme is right
 
 MILESTONE 2: Working streams
    - Make SENDMEs work

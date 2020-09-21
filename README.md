@@ -27,7 +27,7 @@ http://www.torproject.org:80/.  Then it displays the answer.
 So far the code has untested or under-tested implementations of:
 
   * the ntor protocol
-  * the relay crypto algorithm [cruddy vesion]
+  * the relay crypto algorithm
   * parsing and encoding all the cell types (except for hs-related
        ones)
   * parsing and validating ed25519 certificates
@@ -35,14 +35,17 @@ So far the code has untested or under-tested implementations of:
   * parsing and validating microdescriptors
   * parsing and validating microdesc consensuses
   * link authentication (client->server type)
+  * building circuits from chosen hops
+  * an incomplete origin circuit abstraction
+  * an incomplete stream abstraction
 
 Before I share it more broadly, I think it needs more work on:
 
   * refactoring everywhere
   * lots of tests
-  * a sensible api for cell types
-  * A real API for dealing with circuits and streams (rather than handling
-    cells one by one)
+  * a better api for cell types
+  * A more complete API for dealing with circuits and streams (rather than
+    handling cells one by one)
 
 There is no support yet for:
 
@@ -55,6 +58,10 @@ There is no support yet for:
   * the directory protocol
   * lots of optimizations that Tor does
   * working with no_std
+  * being a relay
+  * flow-control
+  * rate limiting
+  * API stability
 
 I do not plan to implement full versions of any of those before I
 share this code for more comment, though I might do a little.  Who

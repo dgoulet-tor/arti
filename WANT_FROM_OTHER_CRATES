@@ -2,7 +2,6 @@ rust itself:
  * specialization for u8.
  * generic arrays via associated consts or whatever it's called.
  * when an enum is c-like, implement try_into for numbers.  (but see num_enum and many similar crates.)
- * stabilize trailing_ones() [DONE in 1.46]
 
 curve25519-dalek:
 * let me go from a montogmery point to a compressed edwards point.
