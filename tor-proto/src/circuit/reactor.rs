@@ -141,7 +141,9 @@ impl ReactorCore {
         if let Some(StreamEnt::Open(s)) = hop.map.get_mut(streamid) {
             // The stream for this message exists, and is open.
 
-            // XXXX handle errors better.
+            // XXXX handle errors better. Does this one mean that the
+            // the stream is closed?
+
             // XXXX should we really be holding the mutex for this?
 
             // XXXX reject cells that should never go to a client,

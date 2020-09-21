@@ -107,7 +107,7 @@ impl CircMap {
                 self.m.put_ent(id, CircEnt::Open(sink));
                 Some(oneshot)
             } else {
-                panic!("internal error: inconsistent hash state");
+                panic!("internal error: inconsistent circuit state");
             }
         } else {
             None

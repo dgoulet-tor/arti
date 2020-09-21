@@ -42,6 +42,8 @@ impl TorStream {
         self.receiver
             .next()
             .await
+            // This probably means that the other side closed the
+            // mpsc channel.
             .ok_or_else(|| Error::InternalError("XXXX".into()))
     }
 

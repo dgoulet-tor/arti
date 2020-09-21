@@ -143,7 +143,7 @@ impl ClientCirc {
         if prev.is_some() {
             circ.sendmeta.replace(prev); // put the old value back.
             return Err(Error::InternalError(
-                "Tried to register second meta-cell handler".into(),
+                "Tried to register a second meta-cell handler".into(),
             ));
         }
 
@@ -217,7 +217,7 @@ impl ClientCirc {
         }
         let msg = match msg {
             RelayMsg::Extended2(e) => e,
-            _ => return Err(Error::InternalError("body didn't match cmd".into())),
+            _ => return Err(Error::InternalError("Body didn't match cmd".into())),
         };
         let server_handshake = msg.into_body();
 
@@ -305,8 +305,10 @@ impl ClientCirc {
         if response.get_cmd() == RelayCmd::CONNECTED {
             Ok(stream)
         } else if response.get_cmd() == RelayCmd::END {
+            // XXX Handle this properly and give a reasonable error.
             Err(Error::InternalError("XXXX end cell".into()))
         } else {
+            // XXX Handle this properly and give a reasonable error.
             Err(Error::InternalError("XXXX weird cell".into()))
         }
     }
@@ -334,6 +336,7 @@ impl ClientCircImpl {
             // Somebody was waiting for a message -- maybe this message
             sender
                 .send((hopnum, msg))
+                // XXX I think this means that the channel got closed.
                 .map_err(|_| Error::InternalError("XXXX".into()))
         } else {
             // Nobody wanted this.

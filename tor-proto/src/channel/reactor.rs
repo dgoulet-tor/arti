@@ -146,7 +146,11 @@ impl ReactorCore {
             // There's an open circuit; we can give it the RELAY cell.
             // XXXX handle errors better.
             // XXXX should we really be holding the mutex for this?
-            s.send(msg).await.map_err(|_| Error::ChanProto("x".into()))
+            // XXXX I think that this one actually means the other side
+            // is closed
+            s.send(msg).await.map_err(|_| {
+                Error::InternalError("Circuit queue rejected message. Is it closing? XXX".into())
+            })
         } else {
             // XXXX handle this case better; don't just drop the cell.
             Ok(())
@@ -160,7 +164,13 @@ impl ReactorCore {
         if let Some(target) = map.advance_from_opening(circid) {
             // XXXX handle errors better.
             // XXXX should we really be holding the mutex for this?
-            target.send(msg).map_err(|_| Error::ChanProto("x".into()))
+            // XXXX I think that this one actually means the other side
+            // is closed
+            target.send(msg).map_err(|_| {
+                Error::InternalError(
+                    "Circuit queue rejected created message. Is it closing? XXX".into(),
+                )
+            })
         } else {
             Err(Error::ChanProto(format!(
                 "Unexpected {} cell",
@@ -182,13 +192,25 @@ impl ReactorCore {
             // If the circuit is waiting for CREATED, tell it that it
             // won't get one.
             Some(CircEnt::Opening(oneshot, _)) => {
-                oneshot.send(msg).map_err(|_| Error::ChanProto("x".into()))
+                oneshot
+                    .send(msg)
+                    // XXXX I think that this one actually means the other side
+                    // is closed
+                    .map_err(|_| {
+                        Error::InternalError(
+                            "pending circuit wasn't interested in Destroy cell?".into(),
+                        )
+                    })
             }
             // It's an open circuit: tell it that it got a DESTROY cell.
             Some(CircEnt::Open(mut sink)) => sink
                 .send(msg)
                 .await
-                .map_err(|_| Error::ChanProto("x".into())),
+                // XXXX I think that this one actually means the other side
+                // is closed
+                .map_err(|_| {
+                    Error::InternalError("circuit wan't interested in destroy cell?".into())
+                }),
             // Got a DESTROY cell for a circuit we don't have.
             // XXXX do more?
             None => Ok(()),
