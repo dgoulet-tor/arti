@@ -16,6 +16,8 @@
 //! another module.
 
 #![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
+
 mod err;
 mod pick;
 
@@ -41,16 +43,29 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// A single authority that signs a consensus directory.
 #[derive(Debug)]
 pub struct Authority {
+    /// A memorable nickname for this authority.
     name: String,
+    /// A SHA1 digest of the DER-encoded long-term v3 RSA identity key for
+    /// this authority.
     // TODO: It would be lovely to use a better hash for these identities.
     v3ident: RSAIdentity,
 }
 
 /// Configuration object for reading directory information from disk.
 ///
-/// To read a directory, create one of these mo
+/// To read a directory, create one of these, configure it, then call
+/// its load() function.
 pub struct NetDirConfig {
+    /// A list of authorities to trust.
+    ///
+    /// A consensus document is considered valid if it signed by more
+    /// than half of these authorities.
     authorities: Vec<Authority>,
+    /// The directory from which to read directory information.
+    ///
+    /// Right now, this has to be the directory used by a Tor instance
+    /// that downloads microdesc info, and has been running fairly
+    /// recently.
     cache_path: Option<PathBuf>,
 }
 
@@ -73,8 +88,16 @@ enum WeightFn {
 /// circuits.
 #[allow(unused)]
 pub struct NetDir {
+    /// A microdescriptor consensus that lists the members of the network,
+    /// and maps each one to a 'microdescriptor' that has more information
+    /// about it
     consensus: MDConsensus,
+    /// Map from SHA256 digest of microdescriptors to the
+    /// microdescriptors themselves.  May include microdescriptors not
+    /// used int the consensus: if so, they need to be ignored.
     mds: HashMap<MDDigest, Microdesc>,
+    /// Value describing how to find the weight to use when picking a
+    /// router by weight.
     weight_fn: Cell<Option<WeightFn>>,
 }
 
@@ -88,7 +111,9 @@ pub struct NetDir {
 // instances of this.
 #[allow(unused)]
 pub struct Relay<'a> {
+    /// A router descriptor for this relay.
     rs: &'a netstatus::MDConsensusRouterStatus,
+    /// A microdescriptor for this relay.
     md: Option<&'a Microdesc>,
 }
 

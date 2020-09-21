@@ -23,6 +23,7 @@
 //! using that as a backend instead.
 
 #![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
 
 mod err;
 mod impls;

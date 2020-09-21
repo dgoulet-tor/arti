@@ -1,3 +1,5 @@
+//! Internal: Declare the Reader type for tor-bytes
+
 use crate::{Error, Readable, Result};
 use arrayref::array_ref;
 
@@ -43,9 +45,9 @@ use arrayref::array_ref;
 /// # Result::Ok(())
 /// ```
 pub struct Reader<'a> {
-    // The underlying slice that we're reading from
+    /// The underlying slice that we're reading from
     b: &'a [u8],
-    // The next position in the slice that we intend to read from.
+    /// The next position in the slice that we intend to read from.
     off: usize,
 }
 

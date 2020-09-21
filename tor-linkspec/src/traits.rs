@@ -1,3 +1,6 @@
+//! Declare traits to be implemented by types that describe a place
+//! that Tor can connect to, directly or indirectly.
+
 use std::net::SocketAddr;
 use tor_llcrypto::pk;
 

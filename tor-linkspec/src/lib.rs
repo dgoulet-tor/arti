@@ -4,6 +4,7 @@
 //! by tor-netdir (which exposes these), and tor-proto (which consumes
 //! these).
 #![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
 
 mod ls;
 mod traits;

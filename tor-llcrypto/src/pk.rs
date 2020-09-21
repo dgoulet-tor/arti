@@ -25,10 +25,17 @@ pub mod ed25519 {
     /// An ed25519 signature, plus the document that it signs and its
     /// public key.
     pub struct ValidatableEd25519Signature {
+        /// The key that allegedly produced the signature
         key: PublicKey,
+        /// The alleged signature
         sig: Signature,
-        // TODO: It's not so good to have this included here; it would
-        // be better to have a patch to ed25519_dalek to pre-hash this.
+        /// The entire body of text that is allegedly signed here.
+        ///
+        /// TODO: It's not so good to have this included here; it
+        /// would be better to have a patch to ed25519_dalek to allow
+        /// us to pre-hash the signed thing, and just store a digest.
+        /// We can't use that with the 'prehash' variant of ed25519,
+        /// since that has different constants.
         entire_text_of_signed_thing: Vec<u8>,
     }
 

@@ -30,6 +30,7 @@ pub fn x509_extract_rsa_subject_kludge(der: &[u8]) -> Option<crate::pk::rsa::Pub
     crate::pk::rsa::PublicKey::from_der(key.to_bitstr()?)
 }
 
+/// Helper to wrap a simple_asn1::Asn1Blcok and add more methods to it.
 struct Asn1<'a>(&'a ASN1Block);
 impl<'a> From<&'a ASN1Block> for Asn1<'a> {
     fn from(b: &'a ASN1Block) -> Asn1<'a> {
@@ -37,12 +38,18 @@ impl<'a> From<&'a ASN1Block> for Asn1<'a> {
     }
 }
 impl<'a> Asn1<'a> {
+    /// If this block is a sequence, return a reference to its members.
     fn into_seq(self) -> Option<&'a [ASN1Block]> {
         match self.0 {
             ASN1Block::Sequence(_, ref s) => Some(s),
             _ => None,
         }
     }
+    /// If this block is the OID for the RSA cipher, return Some(()); else
+    /// return None.
+    ///
+    /// (It's not a great API, but it lets us use the ? operator
+    /// easily above.)
     fn must_be_rsa_oid(self) -> Option<()> {
         let oid = match self.0 {
             ASN1Block::ObjectIdentifier(_, ref oid) => Some(oid),
@@ -54,6 +61,8 @@ impl<'a> Asn1<'a> {
             None
         }
     }
+    /// If this block is a BitString, return its bitstring value as a
+    /// slice of bytes.
     fn to_bitstr(&self) -> Option<&[u8]> {
         match self.0 {
             ASN1Block::BitString(_, _, ref v) => Some(&v[..]),

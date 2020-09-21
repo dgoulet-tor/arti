@@ -13,6 +13,7 @@
 //! you can't access the underlying object without checking.
 
 #![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
 
 use std::time;
 use thiserror::Error;

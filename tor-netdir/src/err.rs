@@ -1,3 +1,5 @@
+//! Declare error type for tor-netdir
+
 use thiserror::Error;
 
 /// An error returned by the network directory code

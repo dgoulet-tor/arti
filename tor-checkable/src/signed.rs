@@ -5,7 +5,11 @@ use tor_llcrypto::pk::ValidatableSignature;
 /// A SignatureGated object is a self-signed object that's well-signed
 /// when one or more ValidatableSignature objects are correct.
 pub struct SignatureGated<T> {
+    /// The underlying object, which we only want to expose if the
+    /// signature(s) are right.
     obj: T,
+    /// A list of ValidatableSignature; these all must be valid, or the
+    /// underlying object is incorrect.
     signatures: Vec<Box<dyn ValidatableSignature>>,
 }
 

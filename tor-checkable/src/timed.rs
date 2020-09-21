@@ -27,11 +27,21 @@ use std::time;
 ///
 /// ```
 pub struct TimerangeBound<T> {
+    /// The underlying object, which we only want to expose if it is
+    /// currently timely.
     obj: T,
+    /// If present, when the object first became valid.
     start: Option<time::SystemTime>,
+    /// If present, when the object will no longer be valid.
     end: Option<time::SystemTime>,
 }
 
+/// Helper: convert a Bound to its underlying value, if any.
+///
+/// This helper discards information about whether the bound was
+/// inclusive or exclusive.  However, since SystemTime has sub-second
+/// precision, we really don't care about what happens when the
+/// nanoseconds are equal to exactly 0.
 fn unwrap_bound(b: Bound<&'_ time::SystemTime>) -> Option<time::SystemTime> {
     match b {
         Bound::Included(x) => Some(*x),

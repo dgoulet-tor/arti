@@ -13,6 +13,7 @@
 //! through 63.
 
 #![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
 
 use caret::caret_enum;
 use thiserror::Error;
@@ -61,7 +62,9 @@ const N_RECOGNIZED: usize = 12;
 /// Representation for a known or unknown protocol.
 #[derive(Eq, PartialEq)]
 enum Protocol {
+    /// A known protocol; represented by one of ProtoKind.
     Proto(ProtoKind),
+    /// An unknown protocol; represented by its name.
     Unrecognized(String),
 }
 
@@ -86,6 +89,7 @@ impl Protocol {
 ///
 /// For now, we only use this type for unrecognized protocols.
 struct SubprotocolEntry {
+    /// Which protocol's versions does this describe?
     proto: Protocol,
     /// A bit-vector defining which versions are supported.  If bit
     /// `(1<<i)` is set, then protocol version `i` is supported.
@@ -367,10 +371,7 @@ impl std::str::FromStr for Protocols {
 /// assert_eq!(dumpmask(0b11111100), "2-7");
 /// ```
 fn dumpmask(mut mask: u64) -> String {
-    // We'll be building up our result here, then joining it with
-    // commas.
-    let mut result = Vec::new();
-    // Helper: push a range (which may be a singleton) onto `v`.
+    /// Helper: push a range (which may be a singleton) onto `v`.
     fn append(v: &mut Vec<String>, lo: u32, hi: u32) {
         if lo == hi {
             v.push(lo.to_string());
@@ -378,6 +379,9 @@ fn dumpmask(mut mask: u64) -> String {
             v.push(format!("{}-{}", lo, hi));
         }
     }
+    // We'll be building up our result here, then joining it with
+    // commas.
+    let mut result = Vec::new();
     // This implementation is a little tricky, but it should be more
     // efficient than a raw search.  Basically, we're using the
     // function u64::trailing_zeros to count how large each range of

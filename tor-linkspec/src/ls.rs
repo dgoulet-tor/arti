@@ -1,3 +1,8 @@
+//! Link specifier objects
+//!
+//! (These are in a separate crate, since they get used both by
+//! directory code and protocol code.)
+
 use std::cmp::Ordering;
 use std::net::{IpAddr, SocketAddr};
 
@@ -32,6 +37,7 @@ const LSTYPE_ED25519ID: u8 = 3;
 
 impl Readable for LinkSpec {
     fn take_from(r: &mut Reader<'_>) -> Result<Self> {
+        /// Return the expected length of the links pecifier whose type is tp.
         fn lstype_len(tp: u8) -> Option<usize> {
             match tp {
                 LSTYPE_ORPORT_V4 => Some(6),
@@ -115,9 +121,9 @@ impl From<ed25519::PublicKey> for LinkSpec {
     }
 }
 
-/// Helper for partial_cmd: return the position in the list of identifiers
-/// in which a given linkspec should occur
 impl LinkSpec {
+    /// Helper for partial_cmd: return the position in the list of identifiers
+    /// in which a given linkspec should occur
     fn sort_pos(&self) -> u8 {
         use LinkSpec::*;
         match self {

@@ -31,6 +31,7 @@
 //! ```
 
 #![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
 
 pub mod rsa;
 
@@ -186,6 +187,7 @@ enum CertExt {
     Unrecognized(UnrecognizedExt),
 }
 
+/// Any unrecongized extension on a Tor certificate.
 struct UnrecognizedExt {
     /// True iff this extension must be understand in order to validate the
     /// certificate.
@@ -217,6 +219,7 @@ impl Writeable for CertExt {
 
 /// Extension indicating that a key that signed a given certificate.
 struct SignedWithEd25519Ext {
+    /// The key that signed the certificate including this extension.
     pk: ed25519::PublicKey,
 }
 
@@ -234,6 +237,8 @@ impl Writeable for SignedWithEd25519Ext {
 }
 
 impl UnrecognizedExt {
+    /// Assert that there is no problem with the internal representation
+    /// of this object.
     fn assert_rep_ok(&self) {
         assert!(self.body.len() <= std::u16::MAX as usize);
     }
@@ -400,6 +405,7 @@ impl Ed25519Cert {
 /// A parsed Ed25519 certificate. Maybe it includes its signing key;
 /// maybe it doesn't.
 pub struct KeyUnknownCert {
+    /// The certificate whose signing key might not be known.
     cert: UncheckedCert,
 }
 
@@ -439,15 +445,22 @@ impl KeyUnknownCert {
 /// A certificate that has been parsed, but whose signature and
 /// timeliness have not been checked.
 pub struct UncheckedCert {
+    /// The parsed certificate, possibly modified by inserting an externally
+    /// supplied key as its signing key.
     cert: Ed25519Cert,
 
+    /// The signed text of the certificate. (Checking ed25519 signatures
+    /// forces us to store this.
     text: Vec<u8>, // XXXX It would be better to store a hash here.
+
+    /// The alleged signature
     signature: ed25519::Signature,
 }
 
 /// A certificate that has been parsed and signature-checked, but whose
 /// timeliness has not been checked.
 pub struct SigCheckedCert {
+    /// The certificate that might or might not be timely
     cert: Ed25519Cert,
 }
 

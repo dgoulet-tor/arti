@@ -1,3 +1,5 @@
+//! Internal: Declare an Error type for tor-bytes
+
 use thiserror::Error;
 
 /// Error type for decoding Tor objects from bytes.

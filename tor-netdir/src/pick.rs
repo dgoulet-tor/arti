@@ -1,3 +1,5 @@
+//! Declare helper function for chosing from a weighted iterator
+
 /// Choose a nonuniform random member of an iterator.
 ///
 /// For each value `v` yielded by `i`, this function will return that

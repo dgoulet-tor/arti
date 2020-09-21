@@ -28,6 +28,7 @@ pub const RSA_ID_LEN: usize = 20;
 #[derive(Clone, Hash, Zeroize)]
 #[allow(clippy::derive_hash_xor_eq)]
 pub struct RSAIdentity {
+    /// SHA1 digest of a DER encoded public key.
     id: [u8; RSA_ID_LEN],
 }
 
@@ -143,9 +144,11 @@ impl PublicKey {
         use rsa::BigUint; // not the same as the one in simple_asn1.
         use rsa::PublicKeyParts;
         use simple_asn1::{ASN1Block, BigInt};
+        /// Helper: convert a BigUInt to signed asn1.
         fn to_asn1_int(x: &BigUint) -> ASN1Block {
             let mut bytes = vec![0];
             bytes.extend(x.to_bytes_be());
+            // XXXX Signed?? Really? Explain why if so.
             let bigint = BigInt::from_signed_bytes_be(&bytes);
             ASN1Block::Integer(0, bigint)
         }
@@ -165,8 +168,11 @@ impl PublicKey {
 
 /// An RSA signature plus all the information needed to validate it.
 pub struct ValidatableRSASignature {
+    /// The key that allegedly signed this signature
     key: PublicKey,
+    /// The signature in question
     sig: Vec<u8>,
+    /// The value we expect to find that the signature is a signature of.
     expected_hash: Vec<u8>,
 }
 

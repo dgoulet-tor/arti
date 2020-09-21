@@ -5,6 +5,7 @@
 //! implementation.
 
 #![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
 
 /// A macro to implement string and int conversions for c-like enums.
 ///

@@ -13,11 +13,19 @@ use digest::Digest;
 ///
 /// This kind of certificate is used in the channel handshake to prove
 /// that the Ed25519 identity key speaks on behalf of the RSA identity key.
+///
+/// (There is no coverse type for certifying Ed25519 identity keys with
+/// RSA identity keys, since the RSA identity keys are too weak to trust.)
 #[must_use]
 pub struct RSACrosscert {
+    /// The key that is being certified
     subject_key: ll::pk::ed25519::PublicKey,
+    /// The expiration time of this certificate, in hours since the
+    /// unix epoch.
     exp_hours: u32,
+    /// The digest of the signed part of the certificate (for checking)
     digest: [u8; 32],
+    /// The (alleged) signature on the certificate.
     signature: Vec<u8>,
 }
 
