@@ -373,7 +373,7 @@ mod tests {
         #[derive(Debug)]
         struct LenEnc(Vec<u8>);
         impl Readable for LenEnc {
-            fn take_from(b: &mut Reader) -> Result<Self> {
+            fn take_from(b: &mut Reader<'_>) -> Result<Self> {
                 let length = b.take_u8()?;
                 let content = b.take(length as usize)?.into();
                 Ok(LenEnc(content))
