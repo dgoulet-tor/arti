@@ -17,12 +17,10 @@ MILESTONE 0: Build a circuit and use it
 
 MILESTONE 1: Refactoring on above
    o Stop parameterizing all APIs on TLS type.
-   - Less copying, esp around Box<RawCellBody>.  Consider bytes crate.
-   - Is this "reactor" business a sensible design?  Is there a better one?
    o Combine "create circuit" and "create first hop"?
-   - Improve testing
-   - Improve documentation
    o More types of circent for clarity.
+   o Improve testing
+   o Improve documentation
    - Make sure readme is right
 
 MILESTONE 2: Working streams
@@ -30,8 +28,14 @@ MILESTONE 2: Working streams
    - Make authenticated sendmes work.
    o Improve circuit API.
    o Get an initial stream API together.
+   - Make end cells work, and get sent both ways.
+   - Improve testing
+   - Improve documentation
+   - Make sure readme is right
 
 MILESTONE 3: Clean and tidy
+   - Less copying, esp around Box<RawCellBody>.  Consider bytes crate.
+   - Is this "reactor" business a sensible design?  Is there a better one?
    - Get a data-oriented stream API
    - Make a plan for what closes when
    - Make sure everything closes when it is supposed to.
