@@ -7,8 +7,10 @@
 //!
 //! # Limitations
 //!
-//! This should eventually expose a bytes-oriented type rather than a
+//! TODO: This should eventually expose a bytes-oriented type rather than a
 //! cell-oriented type.
+//!
+//! XXXX TODO: There is no fariness, rate-limiting, or flow control.
 
 use crate::circuit::StreamTarget;
 use crate::relaycell::msg::RelayMsg;
@@ -30,6 +32,7 @@ pub struct TorStream {
 }
 
 impl TorStream {
+    /// Internal: build a new TorStream.
     pub(crate) fn new(target: StreamTarget, receiver: mpsc::Receiver<RelayMsg>) -> Self {
         TorStream { target, receiver }
     }

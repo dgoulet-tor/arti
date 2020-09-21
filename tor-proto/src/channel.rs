@@ -4,7 +4,25 @@
 //!
 //! To do so, launch a TLS connection, then call `start_client_handshake()`
 //!
-//! TODO: channel padding support.
+//! # Design
+//!
+//! For now, this code splits the channel into two pieces: a "Channel"
+//! object that can be used by circuits to write cells onto the
+//! channel, and a "Reactor" object that runs as a task in the
+//! background, to read channel cells and pass them to circuits as
+//! appropriate.
+//!
+//! I'm not at all sure that's the best way to do that, but it's what
+//! I could think of.
+//!
+//! # Limitations
+//!
+//! This is client-only, and only supports link protocol version 4.
+//!
+//! TODO: There is no channel padding.
+//!
+//! TODO: There is no flow control, rate limiting, queueing, or
+//! fairness.
 
 mod circmap;
 mod handshake;
@@ -29,6 +47,8 @@ use rand::Rng;
 // reexport
 pub use handshake::{OutboundClientHandshake, UnverifiedChannel, VerifiedChannel};
 
+// Type alias: A Sink and Stream that transforms a TLS connection into
+// a cell-based communication mechanism.
 type CellFrame<T> = futures_codec::Framed<T, codec::ChannelCodec>;
 
 /// An open client channel, ready to send and receive Tor cells.
@@ -40,14 +60,21 @@ pub struct Channel {
 
 /// Main implementation type for a channel.
 struct ChannelImpl {
+    /// What link protocol is the channel using?
     link_protocol: u16,
-    // This uses a separate mutex from the circmap, since we only
-    // need the circmap when we're making a new circuit, but we need
-    // this _all the time_.
+    /// The underlying channel, as a Sink of ChanCell.  Writing
+    /// a ChanCell onto this sink sends it over the TLS channel.
     tls: Box<dyn Sink<ChanCell, Error = Error> + Send + Unpin + 'static>,
-    // TODO: I wish I didn't need a second Arc here, but I guess I do?
-    // An rwlock would be better.
+    /// A circuit map, to translate circuit IDs into circuits.
+    ///
+    /// The ChannelImpl side of this object only needs to use this
+    /// when creating circuits; it's shared with the reactor, which uses
+    /// it for dispatch.
+    // This uses a separate mutex from the circmap, since we only need
+    // the circmap when we're making a new circuit, the reactor needs
+    // it all the time.
     circmap: Arc<Mutex<circmap::CircMap>>,
+    /// A oneshot sender used to tell the Reactor task to shut down.
     sendclosed: Cell<Option<oneshot::Sender<()>>>,
 }
 
@@ -67,6 +94,10 @@ where
 
 impl Channel {
     /// Construct a channel and reactor.
+    ///
+    /// Internal method, called to finalize the channel when we've
+    /// sent our netinfo cell, received the peer's netinfo cell, and
+    /// we're finally ready to create circuits.
     fn new<T>(link_protocol: u16, tls: CellFrame<T>) -> (Self, reactor::Reactor<T>)
     where
         T: AsyncRead + AsyncWrite + Send + Unpin + 'static,
@@ -94,6 +125,7 @@ impl Channel {
         (channel, reactor)
     }
 
+    /// Check whether a cell type is acceptable on an open client channel.
     fn check_cell(&self, cell: &ChanCell) -> Result<()> {
         use msg::ChanMsg::*;
         let msg = cell.get_msg();
@@ -126,11 +158,13 @@ impl Channel {
         Ok(())
     }
 
-    /// Return a newly allocated ClientCirc object. A circuit ID is
-    /// allocated, but no handshaking is done.
-    // XXXX TODO: make this hidden, and wrap it in another function that
-    // does the handshake. That way we only need to handle RELAY
-    // and destroy.
+    /// Return a newly allocated PendingClientCirc object with
+    /// corresponding reactor. A circuit ID is allocated, but no
+    /// handshaking is done.
+    ///
+    /// To use the results of this method, call Reactor::run() in a
+    /// new task, then use the methods of PendingClientCirc to build
+    /// the circuit.
     pub async fn new_circ<R: Rng>(
         &self,
         rng: &mut R,

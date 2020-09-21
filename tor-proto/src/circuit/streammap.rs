@@ -1,6 +1,6 @@
+/// Mapping from stream ID to streams.
 // NOTE: This is a work in progress and I bet I'll refactor it a lot;
 // it needs to stay opaque!
-
 use crate::relaycell::{msg::RelayMsg, StreamID};
 use crate::util::idmap::IdMap;
 use crate::Result;
@@ -10,10 +10,14 @@ use rand::Rng;
 
 use futures::channel::mpsc;
 
+/// The entry for a stream.
 pub(super) enum StreamEnt {
+    /// An open stream: any relay cells tagged for this stream should get
+    /// sent over the mpsc::Sender.
     Open(mpsc::Sender<RelayMsg>),
 }
 
+/// A distribution to construct (nonzero) stream IDs
 struct StreamIDDist;
 impl Distribution<StreamID> for StreamIDDist {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> StreamID {
@@ -26,19 +30,21 @@ impl Distribution<StreamID> for StreamIDDist {
     }
 }
 
-/// A map from stream IDs to stream entries. Each circuit has one.
+/// A map from stream IDs to stream entries. Each circuit has one for each
+/// hop.
 pub(super) struct StreamMap {
     m: IdMap<StreamID, StreamIDDist, StreamEnt>,
 }
 
 impl StreamMap {
-    /// Make a new empty StreamMap
+    /// Make a new empty StreamMap.
     pub(super) fn new() -> Self {
         StreamMap {
             m: IdMap::new(StreamIDDist),
         }
     }
 
+    /// Add an entry to this map; return the newly allocated StreamID.
     pub(super) fn add_ent<R: Rng>(
         &mut self,
         rng: &mut R,
@@ -53,6 +59,8 @@ impl StreamMap {
     pub(super) fn get_mut(&mut self, id: StreamID) -> Option<&mut StreamEnt> {
         self.m.get_mut(&id)
     }
+
+    // TODO: need a way to remove streams.
 
     // TODO: Eventually if we want relay support, we'll need to support
     // circuit IDs chosen by somebody else. But for now, we don't need those.

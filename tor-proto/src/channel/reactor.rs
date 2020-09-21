@@ -1,4 +1,7 @@
-//! Code to handle incoming cells on a channel
+//! Code to handle incoming cells on a channel.
+//!
+//! The role of this code is to run in a separate asynchronous task,
+//! and routes cells to the right circuits.
 //!
 //! TODO: I have zero confidence in the close-and-cleanup behavior here,
 //! or in the error handling behavior.
@@ -30,8 +33,13 @@ pub struct Reactor<T>
 where
     T: AsyncRead + Unpin,
 {
+    /// A future that will fire if we're told to shut down the
+    /// reactor.
     closeflag: Fuse<oneshot::Receiver<()>>,
+    /// A Stream from which we can read ChanCells.  This should be backed
+    /// by a TLS connection.
     input: SplitStream<CellFrame<T>>,
+    /// The reactorcore object that knows how to handle cells.
     core: ReactorCore,
 }
 
@@ -42,6 +50,7 @@ struct ReactorCore {
     // only need the circmap when dealing with circuit creation.
     // Maybe it would be better to use some kind of channel to tell
     // the reactor about new circuits?
+    /// A map from circuit ID to Sinks on which we can deliver cells.
     circs: Arc<Mutex<CircMap>>,
 }
 
@@ -50,6 +59,10 @@ where
     T: AsyncRead + Unpin,
 {
     /// Construct a new Reactor.
+    ///
+    /// Cells should be taken from input and routed according to circmap.
+    ///
+    /// When closeflag fires, the reactor should shut down.
     pub(super) fn new(
         circmap: Arc<Mutex<CircMap>>,
         closeflag: oneshot::Receiver<()>,
@@ -69,13 +82,18 @@ where
         let mut close_future = self.closeflag;
         loop {
             let mut next_future = self.input.next().fuse();
+            // Let's see what's next: maybe we got a cell, maybe the TLS
+            // connection got closed, or maybe we've been told to shut
+            // down.
             let item = select_biased! {
-                _ = close_future => return Ok(()), // we were asked to close
+                // we were asked to shut down.
+                _ = close_future => return Ok(()),
+                // we got a cell or a close.
                 item = next_future => item,
             };
             let item = match item {
-                None => return Ok(()), // the stream closed.
-                Some(r) => r?,
+                None => return Ok(()), // the TLS connection closed.
+                Some(r) => r?,         // it's a cell!
             };
 
             self.core.handle_cell(item).await?;
@@ -84,7 +102,7 @@ where
 }
 
 impl ReactorCore {
-    /// Helper: process a cell on a channel.  Most cells get ignored
+    /// Helper: process a cell on a channel.  Most cell types get ignored
     /// or rejected; a few get delivered to circuits.
     async fn handle_cell(&mut self, cell: ChanCell) -> Result<()> {
         let (circid, msg) = cell.into_circid_and_msg();
@@ -97,7 +115,8 @@ impl ReactorCore {
                 Error::ChanProto(format!("{} cell on client channel", msg.get_cmd())),
             ),
 
-            // We should never see this, since we don't use TAP.
+            // In theory this is allowed in clients, but we should never get
+            // one, since we don't use TAP.
             Created(_) => Err(Error::ChanProto(format!("{} cell received", msg.get_cmd()))),
 
             // These aren't allowed after handshaking is done.
@@ -110,8 +129,8 @@ impl ReactorCore {
             // These are always ignored.
             Padding(_) | VPadding(_) | Unrecognized(_) => Ok(()),
 
-            // These are allowed and need to be handled.
-            Relay(_) => self.deliver_msg(circid, msg).await,
+            // These are allowed, and need to be handled.
+            Relay(_) => self.deliver_relay(circid, msg).await,
 
             Destroy(_) => self.deliver_destroy(circid, msg).await,
 
@@ -119,11 +138,12 @@ impl ReactorCore {
         }
     }
 
-    /// Give `msg` to the appropriate circuid.
-    async fn deliver_msg(&mut self, circid: CircID, msg: ChanMsg) -> Result<()> {
+    /// Give the RELAY cell `msg` to the appropriate circuid.
+    async fn deliver_relay(&mut self, circid: CircID, msg: ChanMsg) -> Result<()> {
         let mut map = self.circs.lock().await;
 
         if let Some(CircEnt::Open(s)) = map.get_mut(circid) {
+            // There's an open circuit; we can give it the RELAY cell.
             // XXXX handle errors better.
             // XXXX should we really be holding the mutex for this?
             s.send(msg).await.map_err(|_| Error::ChanProto("x".into()))
@@ -133,6 +153,8 @@ impl ReactorCore {
         }
     }
 
+    /// Handle a CREATED{,_FAST,2} cell by passing it on to the appropriate
+    /// circuit, if that circuit is waiting for one.
     async fn deliver_created(&mut self, circid: CircID, msg: ChanMsg) -> Result<()> {
         let mut map = self.circs.lock().await;
         if let Some(target) = map.advance_from_opening(circid) {
@@ -147,18 +169,27 @@ impl ReactorCore {
         }
     }
 
+    /// Handle a DESTROY cell by removing the corresponding circuit
+    /// from the map, and pasing the destroy cell onward to the circuit.
     async fn deliver_destroy(&mut self, circid: CircID, msg: ChanMsg) -> Result<()> {
+        // XXXX TODO: do we need to put a dummy entry in the map until
+        // the other side of the circuit object is gone?
+
         let mut map = self.circs.lock().await;
+        // Remove the circuit from the map: nothing more can be done with it.
         let entry = map.remove(circid);
         match entry {
+            // If the circuit is waiting for CREATED, tell it that it
+            // won't get one.
             Some(CircEnt::Opening(oneshot, _)) => {
                 oneshot.send(msg).map_err(|_| Error::ChanProto("x".into()))
             }
+            // It's an open circuit: tell it that it got a DESTROY cell.
             Some(CircEnt::Open(mut sink)) => sink
                 .send(msg)
                 .await
                 .map_err(|_| Error::ChanProto("x".into())),
-            // DESTROY cell for a circuit we don't have.
+            // Got a DESTROY cell for a circuit we don't have.
             // XXXX do more?
             None => Ok(()),
         }

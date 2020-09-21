@@ -18,7 +18,7 @@ use digest::Digest;
 use super::CellFrame;
 
 /// A list of the link protocols that we support.
-// We only support version 4 for now, since we don't do padding right
+// We only support version 4 for now, since we don't do padding right.
 static LINK_PROTOCOLS: &[u16] = &[4];
 
 /// A raw client channel on which nothing has been done.
@@ -30,17 +30,27 @@ pub struct OutboundClientHandshake<T: AsyncRead + AsyncWrite + Send + Unpin + 's
 /// server's handshake has been read, but where the certs have not
 /// been checked.
 pub struct UnverifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+    /// The negotiated link protocol.  Must be a member of LINK_PROTOCOLS
     link_protocol: u16,
+    /// The Source+Sink on which we're reading and writing cells.
     tls: CellFrame<T>,
+    /// The certs cell that we got from the relay.
     certs_cell: msg::Certs,
+    /// The netinfo cell that we got from the relay.
     netinfo_cell: msg::Netinfo,
 }
 
 /// A client channel on which versions have been negotiated,
 /// server's handshake has been read, but the client has not yet
 /// finished the handshake.
+///
+/// This type is separate from UnverifiedChannel, since finishing the
+/// handshake requires a bunch of CPU, and you might want to do it as
+/// a separate task or after a yield.
 pub struct VerifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+    /// The negotiated link protocol.
     link_protocol: u16,
+    /// The Source+Sink on which we're reading and writing cells.
     tls: CellFrame<T>,
 }
 
@@ -90,6 +100,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         let mut netinfo: Option<msg::Netinfo> = None;
         let mut seen_authchallenge = false;
 
+        // Loop: reject duplicate and unexpected cells
         while let Some(m) = tls.next().await {
             use msg::ChanMsg::*;
             let (_, m) = m?.into_circid_and_msg();
@@ -174,6 +185,8 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         let sk_tls = c.parse_ed_cert(CertType::SIGNING_V_TLS_CERT)?;
 
         // Part 1: validate ed25519 stuff.
+
+        // Check the identity->signing cert
         let id_sk = id_sk
             .check_key(&None)?
             .check_signature()
@@ -181,15 +194,19 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
             .check_valid_now()
             .map_err(|_| Error::ChanProto("Certificate expired or not yet valid".into()))?;
 
+        // Take the identity key from the identity->signing cert
         let identity_key = id_sk.get_signing_key().ok_or_else(|| {
             Error::ChanProto("Missing identity key in identity->signing cert".into())
         })?;
 
+        // Take the signing key from the identity->signing cert
         let signing_key = id_sk
             .get_subject_key()
             .as_ed25519()
             .ok_or_else(|| Error::ChanProto("Bad key type in identity->signing cert".into()))?;
 
+        // Now look at the signing->TLS cert and check it against the
+        // peer certificate.
         let sk_tls = sk_tls
             .check_key(&Some(*signing_key))? // this is a bad interface XXXX
             .check_signature()
@@ -205,12 +222,23 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         }
 
         // Part 2: validate rsa stuff.
+
+        // What is the RSA identity key, according to the X.509 certificate
+        // in which it is self-signed?
+        //
+        // (We don't actually check this self-signed certificate, and we use
+        // a kludge to extract the RSA key)
         let pkrsa = c
             .get_cert_body(2.into()) // XXX use a constant.
             .map(ll::util::x509_extract_rsa_subject_kludge)
             .flatten()
             .ok_or_else(|| Error::ChanProto("Couldn't find RSA identity key".into()))?;
 
+        // Now verify the RSA identity -> Ed Identity crosscert.
+        //
+        // This proves that the RSA key vouches for the Ed key.  Note that
+        // the Ed key does not vouch for the RSA key: The RSA key is too
+        // weak.
         let rsa_cert = c
             .get_cert_body(7.into()) // XXXX use a constant
             .ok_or_else(|| Error::ChanProto("No RSA->Ed crosscert".into()))?;
@@ -226,10 +254,14 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
             ));
         }
 
-        // Now that we've done all the verification steps, we can make sure
-        // that this is the peer we actually wanted.  We do this _last_, since
-        // "this is the wrong peer" is usually a different situation than
-        // "this peer couldn't even identify itself right."
+        // Now that we've done all the verification steps on the
+        // certificates, we know who we are talking to.  It's time to
+        // make sure that the peer we are talking to is the peer we
+        // actually wanted.
+        //
+        // We do this _last_, since "this is the wrong peer" is
+        // usually a different situation than "this peer couldn't even
+        // identify itself right."
         if identity_key != peer.get_ed_identity() {
             return Err(Error::ChanProto("Peer ed25519 id not as expected".into()));
         }
