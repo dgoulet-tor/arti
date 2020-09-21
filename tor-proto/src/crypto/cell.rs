@@ -77,7 +77,34 @@ pub trait ClientLayer {
 }
 
 /// Type to store hop indices on a circuit.
-pub type HopNum = u8;
+///
+/// Hop indices are zero-based: "0" denotes the first hop on the circuit.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct HopNum(u8);
+
+impl Into<u8> for HopNum {
+    fn into(self) -> u8 {
+        self.0
+    }
+}
+
+impl From<u8> for HopNum {
+    fn from(v: u8) -> HopNum {
+        HopNum(v)
+    }
+}
+
+impl Into<usize> for HopNum {
+    fn into(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl std::fmt::Display for HopNum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        self.0.fmt(f)
+    }
+}
 
 /// A client's view of the cryptographic state for an entire
 /// constructed circuit.
@@ -95,7 +122,7 @@ impl ClientCrypt {
     /// The cell is prepared for the `hop`th hop, and then encrypted with
     /// the appropriate keys.
     pub fn encrypt(&mut self, cell: &mut RelayCellBody, hop: HopNum) -> Result<()> {
-        let hop = hop as usize;
+        let hop: usize = hop.into();
         if hop > self.layers.len() {
             return Err(Error::NoSuchHop);
         }
@@ -112,14 +139,15 @@ impl ClientCrypt {
     pub fn decrypt(&mut self, cell: &mut RelayCellBody) -> Result<HopNum> {
         for (hopnum, layer) in self.layers.iter_mut().enumerate() {
             if layer.decrypt_inbound(cell) {
-                return Ok(hopnum as HopNum);
+                assert!(hopnum <= std::u8::MAX as usize);
+                return Ok((hopnum as u8).into());
             }
         }
         Err(Error::BadCellAuth)
     }
     /// Add a new layer to this ClientCrypt
     pub fn add_layer(&mut self, layer: Box<dyn ClientLayer + Send>) {
-        assert!(self.layers.len() < HopNum::max_value() as usize);
+        assert!(self.layers.len() < std::u8::MAX as usize);
         self.layers.push(layer);
     }
 

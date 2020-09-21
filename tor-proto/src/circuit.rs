@@ -183,7 +183,7 @@ impl ClientCirc {
         // Now send the EXTEND2 cell to the the last hop...
         let hop = {
             let mut c = self.c.lock().await;
-            let hop = (c.crypto.n_layers() - 1) as u8;
+            let hop = ((c.crypto.n_layers() - 1) as u8).into();
 
             // Send the message to the last hop...
             c.send_relay_cell(
@@ -276,12 +276,13 @@ impl ClientCirc {
         let hopnum = c.hops.len() - 1;
         let id = c.hops[hopnum].map.add_ent(&mut rng, sender)?;
         let relaycell = RelayCell::new(id, begin_msg);
-        c.send_relay_cell(hopnum as u8, false, relaycell).await?;
+        let hopnum = (hopnum as u8).into();
+        c.send_relay_cell(hopnum, false, relaycell).await?;
 
         let target = StreamTarget {
             circ: self.clone(),
             stream_id: id,
-            hop: hopnum as u8,
+            hop: hopnum,
         };
 
         Ok(TorStream::new(target, receiver))
@@ -316,7 +317,7 @@ impl ClientCirc {
 
 impl ClientCircImpl {
     /// Handle a RELAY cell on this circuit with stream ID 0.
-    fn handle_meta_cell(&mut self, hopnum: u8, msg: RelayMsg) -> Result<()> {
+    fn handle_meta_cell(&mut self, hopnum: HopNum, msg: RelayMsg) -> Result<()> {
         // SENDME cells and TRUNCATED get handled internally by the circuit.
         if let RelayMsg::Sendme(s) = msg {
             return self.handle_sendme(hopnum, s);
@@ -348,7 +349,7 @@ impl ClientCircImpl {
     }
 
     /// Handle a RELAY_SENDME cell on this circuit with stream ID 0.
-    fn handle_sendme(&mut self, _hopnum: u8, _msg: Sendme) -> Result<()> {
+    fn handle_sendme(&mut self, _hopnum: HopNum, _msg: Sendme) -> Result<()> {
         // TODO: SENDME
         Ok(())
     }
@@ -369,9 +370,7 @@ impl ClientCircImpl {
     /// 'hop'th hop.
     ///
     /// Does not check whether the cell is well-formed or reasonable.
-    ///
-    /// TODO: use HopNum
-    async fn send_relay_cell(&mut self, hop: u8, early: bool, cell: RelayCell) -> Result<()> {
+    async fn send_relay_cell(&mut self, hop: HopNum, early: bool, cell: RelayCell) -> Result<()> {
         let mut body = cell.encode(&mut thread_rng())?;
         self.crypto.encrypt(&mut body, hop)?;
         let msg = chancell::msg::Relay::from_raw(body.into());

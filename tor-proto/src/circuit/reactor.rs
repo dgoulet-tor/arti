@@ -116,8 +116,8 @@ impl ReactorCore {
 
         // Decrypt the cell.  If it's recognized, then find the corresponding
         // hop.
-        let hopnum: u8 = circ.crypto.decrypt(&mut body)?;
-        let hop = &mut circ.hops[hopnum as usize];
+        let hopnum = circ.crypto.decrypt(&mut body)?;
+        let hop = &mut circ.hops[Into::<usize>::into(hopnum)];
 
         // Decode the cell.
         let msg = RelayCell::decode(body)?;
