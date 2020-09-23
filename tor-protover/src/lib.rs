@@ -217,7 +217,7 @@ impl Default for Protocols {
 }
 
 /// An error representing a failure to parse a set of protocol versions.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ParseError {
     /// A protovol version was not in the range 0..=63.
     #[error("protocol version out of range")]
@@ -242,13 +242,20 @@ pub enum ParseError {
 /// assert_eq!(bitrange(2, 5), 0b111100);
 /// assert_eq!(bitrange(2, 7), 0b11111100);
 /// ```
-pub fn bitrange(lo: u64, hi: u64) -> u64 {
+fn bitrange(lo: u64, hi: u64) -> u64 {
     assert!(lo <= hi && lo <= 63 && hi <= 63);
     let mut mask = !0;
     mask <<= 63 - hi;
     mask >>= 63 - hi + lo;
     mask <<= lo;
     mask
+}
+
+/// Helper: return true if the provided string is a valid "integer"
+/// in the form accepted by the protover spec.  This is stricter than
+/// rust's integer parsing format.
+fn is_good_number(n: &str) -> bool {
+    n.chars().all(|ch| ch.is_ascii_digit()) && !n.starts_with('0')
 }
 
 /// A single SubprotocolEntry is parsed from a string of the format
@@ -268,6 +275,15 @@ impl std::str::FromStr for SubprotocolEntry {
             Some(p) => Protocol::Proto(p),
             None => Protocol::Unrecognized(name.to_string()),
         };
+        if versions == "" {
+            // We need to handle this case specially, since otherwise
+            // it would be treated below as a single empty value, which
+            // would be rejected.
+            return Ok(SubprotocolEntry {
+                proto,
+                supported: 0,
+            });
+        }
         // Construct a bitmask based on the comma-separated versions.
         let mut supported = 0u64;
         for ent in versions.split(',') {
@@ -280,6 +296,12 @@ impl std::str::FromStr for SubprotocolEntry {
                     None => (ent, ent),
                 }
             };
+            if !is_good_number(lo_s) {
+                return Err(ParseError::Malformed);
+            }
+            if !is_good_number(hi_s) {
+                return Err(ParseError::Malformed);
+            }
             let lo: u64 = lo_s.parse().map_err(|_| ParseError::Malformed)?;
             let hi: u64 = hi_s.parse().map_err(|_| ParseError::Malformed)?;
             // Make sure that lo and hi are in-bounds and consistent.
@@ -436,5 +458,76 @@ mod test {
         assert_eq!("4-5", dumpmask(0b110000));
         assert_eq!("1,4-5", dumpmask(0b110010));
         assert_eq!("0-63", dumpmask(!0));
+    }
+
+    #[test]
+    fn test_canonical() -> Result<(), ParseError> {
+        fn t(orig: &str, canonical: &str) -> Result<(), ParseError> {
+            let protos: Protocols = orig.parse()?;
+            let enc = format!("{}", protos);
+            assert_eq!(enc, canonical);
+            Ok(())
+        }
+
+        t("", "")?;
+        t(" ", "")?;
+        t("Link=5,6,7,9 Relay=4-7,2", "Link=5-7,9 Relay=2,4-7")?;
+        t("FlowCtrl= Padding=8,7 Desc=1-5,6-8", "Desc=1-8 Padding=7-8")?;
+        t("Zelda=7 Gannon=3,6 Link=4", "Gannon=3,6 Link=4 Zelda=7")?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_invalid() {
+        fn t(s: &str) -> ParseError {
+            let protos: Result<Protocols, ParseError> = s.parse();
+            assert!(protos.is_err());
+            protos.err().unwrap()
+        }
+
+        assert_eq!(t("Link=1-100"), ParseError::OutOfRange);
+        assert_eq!(t("Zelda=100"), ParseError::OutOfRange);
+        assert_eq!(t("Link=100-200"), ParseError::OutOfRange);
+
+        assert_eq!(t("Link=1,1"), ParseError::Duplicate);
+        assert_eq!(t("Link=1 Link=1"), ParseError::Duplicate);
+        assert_eq!(t("Link=1 Link=3"), ParseError::Duplicate);
+        assert_eq!(t("Zelda=1 Zelda=3"), ParseError::Duplicate);
+
+        assert_eq!(t("Link=Zelda"), ParseError::Malformed);
+        assert_eq!(t("Link=6-2"), ParseError::Malformed);
+        assert_eq!(t("Link=6-"), ParseError::Malformed);
+        assert_eq!(t("Link=6-,2"), ParseError::Malformed);
+        assert_eq!(t("Link=1,,2"), ParseError::Malformed);
+        assert_eq!(t("Link=6-frog"), ParseError::Malformed);
+        assert_eq!(t("Link=gannon-9"), ParseError::Malformed);
+        assert_eq!(t("Link Zelda"), ParseError::Malformed);
+
+        assert_eq!(t("Link=01"), ParseError::Malformed);
+        assert_eq!(t("Link=waffle"), ParseError::Malformed);
+        assert_eq!(t("Link=1_1"), ParseError::Malformed);
+    }
+
+    #[test]
+    fn test_supports() -> Result<(), ParseError> {
+        use ProtoKind::*;
+        let p: Protocols = "Link=4,5-7 Padding=2 Lonk=1-3,5".parse()?;
+
+        assert_eq!(p.supports_known_subver(Padding, 2), true);
+        assert_eq!(p.supports_known_subver(Padding, 1), false);
+        assert_eq!(p.supports_known_subver(Link, 6), true);
+        assert_eq!(p.supports_known_subver(Link, 255), false);
+        assert_eq!(p.supports_known_subver(Cons, 1), false);
+        assert_eq!(p.supports_known_subver(Cons, 0), false);
+        assert_eq!(p.supports_subver("Link", 6), true);
+        assert_eq!(p.supports_subver("link", 6), false);
+        assert_eq!(p.supports_subver("Cons", 0), false);
+        assert_eq!(p.supports_subver("Lonk", 3), true);
+        assert_eq!(p.supports_subver("Lonk", 4), false);
+        assert_eq!(p.supports_subver("lonk", 3), false);
+        assert_eq!(p.supports_subver("Lonk", 64), false);
+
+        Ok(())
     }
 }
