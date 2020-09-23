@@ -93,3 +93,79 @@ impl<T> crate::Timebound<T> for TimerangeBound<T> {
         self.obj
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{TimeValidityError, Timebound};
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn test_bounds() {
+        let one_day = Duration::new(86400, 0);
+        let mixminion_v0_0_1 = SystemTime::UNIX_EPOCH + 12059 * one_day; //2003-01-07
+        let tor_v0_0_2pre13 = SystemTime::UNIX_EPOCH + 12344 * one_day; //2003-10-19
+        let cussed_nougat = SystemTime::UNIX_EPOCH + 14093 * one_day; //2008-08-02
+        let tor_v0_4_4_5 = SystemTime::UNIX_EPOCH + 18520 * one_day; //2020-09-15
+        let today = SystemTime::UNIX_EPOCH + 18527 * one_day; //2020-09-22
+
+        let tr = TimerangeBound::new((), ..tor_v0_4_4_5);
+        assert_eq!(tr.start, None);
+        assert_eq!(tr.end, Some(tor_v0_4_4_5));
+        assert!(tr.is_valid_at(&mixminion_v0_0_1).is_ok());
+        assert!(tr.is_valid_at(&tor_v0_0_2pre13).is_ok());
+        assert_eq!(
+            tr.is_valid_at(&today),
+            Err(TimeValidityError::Expired(7 * one_day))
+        );
+
+        let tr = TimerangeBound::new((), tor_v0_0_2pre13..=tor_v0_4_4_5);
+        assert_eq!(tr.start, Some(tor_v0_0_2pre13));
+        assert_eq!(tr.end, Some(tor_v0_4_4_5));
+        assert_eq!(
+            tr.is_valid_at(&mixminion_v0_0_1),
+            Err(TimeValidityError::NotYetValid(285 * one_day))
+        );
+        assert!(tr.is_valid_at(&cussed_nougat).is_ok());
+        assert_eq!(
+            tr.is_valid_at(&today),
+            Err(TimeValidityError::Expired(7 * one_day))
+        );
+
+        let tr = tr
+            .extend_pre_tolerance(5 * one_day)
+            .extend_tolerance(2 * one_day);
+        assert_eq!(tr.start, Some(tor_v0_0_2pre13 - 5 * one_day));
+        assert_eq!(tr.end, Some(tor_v0_4_4_5 + 2 * one_day));
+
+        let tr = TimerangeBound::new((), tor_v0_4_4_5..);
+        assert_eq!(tr.start, Some(tor_v0_4_4_5));
+        assert_eq!(tr.end, None);
+        assert_eq!(
+            tr.is_valid_at(&cussed_nougat),
+            Err(TimeValidityError::NotYetValid(4427 * one_day))
+        );
+        assert!(tr.is_valid_at(&today).is_ok());
+    }
+
+    #[test]
+    fn test_checking() {
+        let one_day = Duration::new(86400, 0);
+        let de = SystemTime::UNIX_EPOCH + one_day * 7580;
+        let cz_sk = SystemTime::UNIX_EPOCH + one_day * 8401;
+        let eu = SystemTime::UNIX_EPOCH + one_day * 8705;
+        let za = SystemTime::UNIX_EPOCH + one_day * 8882;
+
+        let tr = TimerangeBound::new("Hello world", cz_sk..eu);
+        assert!(tr.check_valid_at(&za).is_err());
+
+        let tr = TimerangeBound::new("Hello world", cz_sk..za);
+        assert_eq!(tr.check_valid_at(&eu), Ok("Hello world"));
+
+        let tr = TimerangeBound::new("hello world", de..);
+        assert_eq!(tr.check_valid_now(), Ok("hello world"));
+
+        let tr = TimerangeBound::new("hello world", ..za);
+        assert!(tr.check_valid_now().is_err());
+    }
+}
