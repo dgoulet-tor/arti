@@ -16,7 +16,7 @@ use futures::channel::{mpsc, oneshot};
 use futures::future::Fuse;
 use futures::select_biased;
 use futures::sink::SinkExt;
-use futures::stream::StreamExt;
+use futures::stream::{self, StreamExt};
 use futures::FutureExt;
 
 /// Object to handle incoming cells on a circuit
@@ -31,7 +31,7 @@ pub struct Reactor {
     /// Input Stream, on which we receive ChanMsg objects from this circuit's
     /// channel.
     // TODO: could use a SPSC channel here instead.
-    input: mpsc::Receiver<ChanMsg>,
+    input: stream::Fuse<mpsc::Receiver<ChanMsg>>,
     /// The main implementation of the reactor.
     core: ReactorCore,
 }
@@ -52,7 +52,7 @@ impl Reactor {
         let core = ReactorCore { circuit };
         Reactor {
             closeflag: closeflag.fuse(),
-            input,
+            input: input.fuse(),
             core,
         }
     }
@@ -62,13 +62,12 @@ impl Reactor {
     pub async fn run(mut self) -> Result<()> {
         let mut close_future = self.closeflag;
         loop {
-            let mut next_future = self.input.next().fuse();
             // What's next to do?
             let item = select_biased! {
                 // we were asked to close
                 _ = close_future => return Ok(()),
                 // we got a message on our channel, or it closed.
-                item = next_future => item,
+                item = self.input.next() => item,
             };
             let item = match item {
                 // the channel closed; we're done.

@@ -17,7 +17,7 @@ use futures::io::AsyncRead;
 use futures::lock::Mutex;
 use futures::select_biased;
 use futures::sink::SinkExt;
-use futures::stream::{SplitStream, StreamExt};
+use futures::stream::{self, SplitStream, StreamExt};
 use futures::FutureExt;
 
 use std::sync::Arc;
@@ -38,7 +38,7 @@ where
     closeflag: Fuse<oneshot::Receiver<()>>,
     /// A Stream from which we can read ChanCells.  This should be backed
     /// by a TLS connection.
-    input: SplitStream<CellFrame<T>>,
+    input: stream::Fuse<SplitStream<CellFrame<T>>>,
     /// The reactorcore object that knows how to handle cells.
     core: ReactorCore,
 }
@@ -71,7 +71,7 @@ where
         let core = ReactorCore { circs: circmap };
         Reactor {
             closeflag: closeflag.fuse(),
-            input,
+            input: input.fuse(),
             core,
         }
     }
@@ -81,7 +81,6 @@ where
     pub async fn run(mut self) -> Result<()> {
         let mut close_future = self.closeflag;
         loop {
-            let mut next_future = self.input.next().fuse();
             // Let's see what's next: maybe we got a cell, maybe the TLS
             // connection got closed, or maybe we've been told to shut
             // down.
@@ -89,7 +88,7 @@ where
                 // we were asked to shut down.
                 _ = close_future => return Ok(()),
                 // we got a cell or a close.
-                item = next_future => item,
+                item = self.input.next() => item,
             };
             let item = match item {
                 None => return Ok(()), // the TLS connection closed.
