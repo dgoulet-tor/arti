@@ -135,3 +135,68 @@ impl PartialOrd for LinkSpec {
         Some(self.sort_pos().cmp(&other.sort_pos()))
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use hex_literal::hex;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+    use tor_bytes::{Reader, Writer};
+
+    #[test]
+    fn test_parse_enc() {
+        fn t(b: &[u8], val: &LinkSpec) {
+            let mut r = Reader::from_slice(b);
+            let got: LinkSpec = r.extract().unwrap();
+            assert_eq!(r.remaining(), 0);
+            assert_eq!(&got, val);
+            let mut v = Vec::new();
+            v.write(val);
+            assert_eq!(&v[..], b);
+        }
+
+        t(
+            &hex!("00 06 01020304 0050"),
+            &LinkSpec::OrPort(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)), 80),
+        );
+        t(
+            &hex!("01 12 0001 0002 0003 0004 0005 0006 0007 0008 01bb"),
+            &LinkSpec::OrPort(IpAddr::V6(Ipv6Addr::new(1, 2, 3, 4, 5, 6, 7, 8)), 443),
+        );
+        t(
+            &[
+                2, 20, 104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 33, 33, 33, 33, 33,
+                33, 33, 33, 33,
+            ],
+            &LinkSpec::RSAId(RSAIdentity::from_bytes(b"hello world!!!!!!!!!").unwrap()),
+        );
+        let key = ed25519::PublicKey::from_bytes(&hex!(
+            "B440EEDB32D5C89EF21D6B16BE85A658774CE5992355737411678EE1041BDFBA"
+        ))
+        .unwrap();
+        t(
+            &hex!("03 20 B440EEDB32D5C89EF21D6B16BE85A658774CE5992355737411678EE1041BDFBA"),
+            &LinkSpec::Ed25519Id(key),
+        );
+
+        t(
+            &[77, 7, 115, 116, 114, 97, 110, 103, 101],
+            &LinkSpec::Unrecognized(77, (&b"strange"[..]).into()),
+        );
+    }
+
+    #[test]
+    fn test_parse_bad() {
+        use tor_bytes::Error;
+
+        fn t(b: &[u8]) -> Error {
+            let mut r = Reader::from_slice(b);
+            let got: Result<LinkSpec> = r.extract();
+            got.err().unwrap()
+        }
+
+        assert!(matches!(t(&hex!("00 03")), Error::BadMessage(_)));
+        assert!(matches!(t(&hex!("00 06 01020304")), Error::Truncated));
+        assert!(matches!(t(&hex!("99 07 010203")), Error::Truncated));
+    }
+}

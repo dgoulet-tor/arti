@@ -10,3 +10,6 @@ publish = false
 tor-llcrypto = { path="../tor-llcrypto" }
 tor-bytes = { path="../tor-bytes" }
 tor-protover = { path="../tor-protover" }
+
+[dev-dependencies]
+hex-literal = "0.3.1"
