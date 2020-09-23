@@ -8,12 +8,15 @@ use crate::Result;
 
 use futures::channel::{mpsc, oneshot};
 
+use rand::distributions::Distribution;
 use rand::Rng;
+use std::collections::HashMap;
 
 /// Which group of circuit IDs are we allowed to allocate in this map?
 ///
 /// If we initiated the channel, we use High circuit ids.  If we're the
 /// responder, we use low circuit ids.
+#[derive(Copy, Clone)]
 pub(super) enum CircIDRange {
     /// Only use circuit IDs with the MSB cleared.
     Low,
@@ -66,14 +69,16 @@ pub(super) enum CircEnt {
 
 /// A map from circuit IDs to circuit entries. Each channel has one.
 pub(super) struct CircMap {
-    m: IdMap<CircID, CircIDRange, CircEnt>,
+    m: HashMap<CircID, CircEnt>,
+    range: CircIDRange,
 }
 
 impl CircMap {
     /// Make a new empty CircMap
     pub(super) fn new(idrange: CircIDRange) -> Self {
         CircMap {
-            m: IdMap::new(idrange),
+            m: HashMap::new(),
+            range: idrange,
         }
     }
 
@@ -87,8 +92,9 @@ impl CircMap {
         createdsink: oneshot::Sender<ChanMsg>,
         sink: mpsc::Sender<ChanMsg>,
     ) -> Result<CircID> {
+        let mut iter = (&mut self.range).sample_iter(rng).take(16);
         let ent = CircEnt::Opening(createdsink, sink);
-        self.m.add_ent(rng, ent)
+        self.m.add_ent(&mut iter, ent)
     }
 
     /// Return the entry for `id` in this map, if any.
@@ -104,7 +110,7 @@ impl CircMap {
         let ok = matches!(self.m.get(&id), Some(CircEnt::Opening(_, _)));
         if ok {
             if let Some(CircEnt::Opening(oneshot, sink)) = self.m.remove(&id) {
-                self.m.put_ent(id, CircEnt::Open(sink));
+                self.m.insert(id, CircEnt::Open(sink));
                 Some(oneshot)
             } else {
                 panic!("internal error: inconsistent circuit state");

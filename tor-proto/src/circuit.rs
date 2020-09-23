@@ -270,11 +270,9 @@ impl ClientCirc {
         // XXXX Both a bound and a lack of bound are scary here :/
         let (sender, receiver) = mpsc::channel(128);
 
-        let mut rng = rand::thread_rng();
-
         let mut c = self.c.lock().await;
         let hopnum = c.hops.len() - 1;
-        let id = c.hops[hopnum].map.add_ent(&mut rng, sender)?;
+        let id = c.hops[hopnum].map.add_ent(sender)?;
         let relaycell = RelayCell::new(id, begin_msg);
         let hopnum = (hopnum as u8).into();
         c.send_relay_cell(hopnum, false, relaycell).await?;

@@ -5,10 +5,8 @@ use crate::relaycell::{msg::RelayMsg, StreamID};
 use crate::util::idmap::IdMap;
 use crate::Result;
 
-use rand::distributions::Distribution;
-use rand::Rng;
-
 use futures::channel::mpsc;
+use std::collections::HashMap;
 
 /// The entry for a stream.
 pub(super) enum StreamEnt {
@@ -17,42 +15,28 @@ pub(super) enum StreamEnt {
     Open(mpsc::Sender<RelayMsg>),
 }
 
-/// A distribution to construct (nonzero) stream IDs
-struct StreamIDDist;
-impl Distribution<StreamID> for StreamIDDist {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> StreamID {
-        loop {
-            let val: u16 = rng.gen();
-            if val != 0 {
-                return val.into();
-            }
-        }
-    }
-}
-
 /// A map from stream IDs to stream entries. Each circuit has one for each
 /// hop.
 pub(super) struct StreamMap {
-    m: IdMap<StreamID, StreamIDDist, StreamEnt>,
+    m: HashMap<StreamID, StreamEnt>,
+    i: std::iter::Cycle<std::ops::RangeInclusive<u16>>,
 }
 
 impl StreamMap {
     /// Make a new empty StreamMap.
     pub(super) fn new() -> Self {
+        let iter = (1_u16..=65535_u16).cycle();
         StreamMap {
-            m: IdMap::new(StreamIDDist),
+            m: HashMap::new(),
+            i: iter,
         }
     }
 
     /// Add an entry to this map; return the newly allocated StreamID.
-    pub(super) fn add_ent<R: Rng>(
-        &mut self,
-        rng: &mut R,
-        sink: mpsc::Sender<RelayMsg>,
-    ) -> Result<StreamID> {
+    pub(super) fn add_ent(&mut self, sink: mpsc::Sender<RelayMsg>) -> Result<StreamID> {
         let ent = StreamEnt::Open(sink);
-        let id = self.m.add_ent(rng, ent)?;
-        Ok(id)
+        let mut iter = (&mut self.i).map(|x| x.into()).take(65536);
+        self.m.add_ent(&mut iter, ent)
     }
 
     /// Return the entry for `id` in this map, if any.
