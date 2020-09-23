@@ -30,3 +30,48 @@ impl<T> super::SelfSigned<T> for SignatureGated<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::SelfSigned;
+    use tor_llcrypto::pk::ValidatableSignature;
+
+    struct BadSig;
+    struct GoodSig;
+    impl ValidatableSignature for BadSig {
+        fn is_valid(&self) -> bool {
+            false
+        }
+    }
+    impl ValidatableSignature for GoodSig {
+        fn is_valid(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn test_sig_gated() {
+        // no signature objects means it's valid
+        let sg = SignatureGated::new(3_u32, Vec::new());
+        assert_eq!(sg.check_signature().unwrap(), 3_u32);
+
+        // any bad signature means it's bad.
+        let sg = SignatureGated::new(77_u32, vec![Box::new(BadSig)]);
+        assert!(sg.check_signature().is_err());
+        let sg = SignatureGated::new(
+            77_u32,
+            vec![Box::new(GoodSig), Box::new(BadSig), Box::new(GoodSig)],
+        );
+        assert!(sg.check_signature().is_err());
+
+        // All good signatures means it's good.
+        let sg = SignatureGated::new(103_u32, vec![Box::new(GoodSig)]);
+        assert_eq!(sg.check_signature().unwrap(), 103_u32);
+        let sg = SignatureGated::new(
+            104_u32,
+            vec![Box::new(GoodSig), Box::new(GoodSig), Box::new(GoodSig)],
+        );
+        assert_eq!(sg.check_signature().unwrap(), 104_u32);
+    }
+}
