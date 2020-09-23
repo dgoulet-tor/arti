@@ -8,6 +8,8 @@ use crate::Result;
 use futures::channel::mpsc;
 use std::collections::HashMap;
 
+use rand::Rng;
+
 /// The entry for a stream.
 pub(super) enum StreamEnt {
     /// An open stream: any relay cells tagged for this stream should get
@@ -25,7 +27,10 @@ pub(super) struct StreamMap {
 impl StreamMap {
     /// Make a new empty StreamMap.
     pub(super) fn new() -> Self {
-        let iter = (1_u16..=65535_u16).cycle();
+        let mut iter = (1_u16..=65535_u16).cycle();
+        let mut rng = rand::thread_rng();
+        let skip: u16 = rng.gen(); // is this really O(1)? check. XXXX
+        let _ = iter.nth(skip as usize);
         StreamMap {
             m: HashMap::new(),
             i: iter,
