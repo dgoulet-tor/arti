@@ -332,6 +332,17 @@ pub struct End {
 }
 const REASON_MISC: u8 = 1;
 const REASON_EXITPOLICY: u8 = 4;
+impl End {
+    /// Make a new END_REASON_MISC message.
+    ///
+    /// Clients send this every time they decide to close a stream.
+    pub fn new_misc() -> Self {
+        End {
+            reason: REASON_MISC,
+            addr: None,
+        }
+    }
+}
 impl Body for End {
     fn as_message(self) -> RelayMsg {
         RelayMsg::End(self)

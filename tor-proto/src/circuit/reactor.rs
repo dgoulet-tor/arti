@@ -9,15 +9,38 @@
 use super::streammap::StreamEnt;
 use crate::chancell::{msg::ChanMsg, msg::Relay};
 use crate::circuit::ClientCirc;
-use crate::relaycell::msg::RelayCell;
+use crate::crypto::cell::HopNum;
+use crate::relaycell::msg::{End, RelayCell, RelayMsg};
+use crate::relaycell::StreamID;
 use crate::{Error, Result};
 
 use futures::channel::{mpsc, oneshot};
-use futures::future::Fuse;
 use futures::select_biased;
 use futures::sink::SinkExt;
 use futures::stream::{self, StreamExt};
-use futures::FutureExt;
+
+/// A message telling the reactor to do something.
+pub(super) enum CtrlMsg {
+    /// Shut down the reactor.
+    Shutdown,
+    /// Register a new one-shot receiver that can send a CtrlMsg to the
+    /// reactor.
+    ///
+    /// IMPORTANT: we can't just let everybody use the mpsc control stream,
+    /// since we need to be able to send messages to the reactor from drop().
+    /// One-shot senders can be activated synchronously, but mpsc senders
+    /// require the sender to .await.
+    Register(oneshot::Receiver<CtrlMsg>),
+    /// Tell the reactor that a given stream has gone away.
+    CloseStream(HopNum, StreamID),
+}
+
+/// Type returned by a oneshot channel for a ctonrolmsg.  For convenience,
+/// we also use this as the type for the control mpsc channel, so we can
+/// join them.
+pub(super) type CtrlResult = std::result::Result<CtrlMsg, oneshot::Canceled>;
+
+type OneshotStream = stream::SelectAll<stream::Once<oneshot::Receiver<CtrlMsg>>>;
 
 /// Object to handle incoming cells on a circuit
 ///
@@ -25,9 +48,15 @@ use futures::FutureExt;
 /// new task that calls `run()` on it.
 #[must_use = "If you don't call run() on a reactor, the circuit won't work."]
 pub struct Reactor {
-    /// A onshot receiver that lets the reactor know when to shut down.
-    /// The circuit holds the corresponding Sender.
-    closeflag: Fuse<oneshot::Receiver<()>>,
+    /// A stream of oneshot receivers that tell this reactor about things it
+    /// needs to handle, like closed streams.
+    //
+    // The actual type here is quite ugly! Is there a better way?
+    //
+    // See documentation of CtrlMsg and CtrlResult for info about why
+    // we're using this ugly type.
+    control: stream::Fuse<stream::Select<mpsc::Receiver<CtrlResult>, OneshotStream>>,
+
     /// Input Stream, on which we receive ChanMsg objects from this circuit's
     /// channel.
     // TODO: could use a SPSC channel here instead.
@@ -46,13 +75,18 @@ impl Reactor {
     /// Construct a new Reactor.
     pub(super) fn new(
         circuit: ClientCirc,
-        closeflag: oneshot::Receiver<()>,
+        control: mpsc::Receiver<CtrlResult>,
+        closeflag: oneshot::Receiver<CtrlMsg>,
         input: mpsc::Receiver<ChanMsg>,
     ) -> Self {
         let core = ReactorCore { circuit };
+
+        let mut oneshots = stream::SelectAll::new();
+        oneshots.push(stream::once(closeflag));
+        let control = stream::select(control, oneshots);
         Reactor {
-            closeflag: closeflag.fuse(),
             input: input.fuse(),
+            control: control.fuse(),
             core,
         }
     }
@@ -60,12 +94,19 @@ impl Reactor {
     /// Launch the reactor, and run until the circuit closes or we
     /// encounter an error.
     pub async fn run(mut self) -> Result<()> {
-        let mut close_future = self.closeflag;
         loop {
             // What's next to do?
             let item = select_biased! {
-                // we were asked to close
-                _ = close_future => return Ok(()),
+                // Got a control message!
+                ctrl = self.control.next() => {
+                    match ctrl {
+                        Some(Ok(CtrlMsg::Shutdown)) => return Ok(()),
+                        Some(Ok(msg)) => self.handle_control(msg).await?,
+                        Some(Err(_)) => (), // sender was cancelled; ignore.
+                        None => panic!(), // impossible, right? XXXX
+                    }
+                    continue;
+                }
                 // we got a message on our channel, or it closed.
                 item = self.input.next() => item,
             };
@@ -82,6 +123,40 @@ impl Reactor {
                 return Ok(());
             }
         }
+    }
+
+    /// Handle a CtrlMsg other than Shutdown.
+    async fn handle_control(&mut self, msg: CtrlMsg) -> Result<()> {
+        match msg {
+            CtrlMsg::Shutdown => panic!(), // was handled in reactor loop.
+            CtrlMsg::CloseStream(hop, id) => self.close_stream(hop, id).await?,
+            CtrlMsg::Register(ch) => self.register(ch),
+        }
+        Ok(())
+    }
+
+    /// Close the stream associated with `id` because the stream was
+    /// dropped.
+    ///
+    /// If we have not already received an END cell on this stream, send one.
+    async fn close_stream(&mut self, hopnum: HopNum, id: StreamID) -> Result<()> {
+        // Mark the stream as closing.
+        let mut circ = self.core.circuit.c.lock().await;
+        let hop = &mut circ.hops[Into::<usize>::into(hopnum)];
+        let should_send_end = hop.map.remove(id);
+        // TODO: I am about 80% sure that we only send an END cell if
+        // we didn't already get an END cell.  But I should double-check!
+        if should_send_end {
+            let end_cell = RelayCell::new(id, End::new_misc().into());
+            circ.send_relay_cell(hopnum, false, end_cell).await?;
+        }
+        Ok(())
+    }
+
+    /// Ensure that we get a message on self.control when `ch` fires.
+    fn register(&mut self, ch: oneshot::Receiver<CtrlMsg>) {
+        let (_, select_all) = self.control.get_mut().get_mut();
+        select_all.push(stream::once(ch));
     }
 }
 
@@ -140,6 +215,10 @@ impl ReactorCore {
         if let Some(StreamEnt::Open(s)) = hop.map.get_mut(streamid) {
             // The stream for this message exists, and is open.
 
+            // Remember if this was an end cell: if so we should close
+            // the stram.
+            let end_cell = matches!(msg, RelayMsg::End(_));
+
             // XXXX handle errors better. Does this one mean that the
             // the stream is closed?
 
@@ -147,7 +226,11 @@ impl ReactorCore {
 
             // XXXX reject cells that should never go to a client,
             // XXXX like BEGIN.
-            s.send(msg).await.map_err(|_| Error::CircProto("x".into()))
+            let result = s.send(msg).await.map_err(|_| Error::CircProto("x".into()));
+            if end_cell {
+                hop.map.mark_closing(streamid);
+            }
+            result
         } else {
             // No stream wants this message.
 

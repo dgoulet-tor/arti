@@ -15,6 +15,9 @@ pub(super) enum StreamEnt {
     /// An open stream: any relay cells tagged for this stream should get
     /// sent over the mpsc::Sender.
     Open(mpsc::Sender<RelayMsg>),
+    /// A stream for which we have received an END cell, but not yet
+    /// had the stream object get dropped.
+    Closing,
 }
 
 /// A map from stream IDs to stream entries. Each circuit has one for each
@@ -49,8 +52,29 @@ impl StreamMap {
         self.m.get_mut(&id)
     }
 
-    // TODO: need a way to remove streams.
+    /// Marks the stream with `id` as closing.
+    ///
+    /// Returns true if there was really a stream there.
+    pub(super) fn mark_closing(&mut self, id: StreamID) -> bool {
+        let old = self.m.insert(id, StreamEnt::Closing);
+        match old {
+            None => false,
+            Some(StreamEnt::Closing) => false,
+            Some(StreamEnt::Open(_)) => true,
+        }
+    }
+
+    /// Remove the entry with `id`, if there is one.  Return true if the
+    /// stream was open.
+    pub(super) fn remove(&mut self, id: StreamID) -> bool {
+        let old = self.m.remove(&id);
+        match old {
+            None => false,
+            Some(StreamEnt::Closing) => false,
+            Some(StreamEnt::Open(_)) => true,
+        }
+    }
 
     // TODO: Eventually if we want relay support, we'll need to support
-    // circuit IDs chosen by somebody else. But for now, we don't need those.
+    // stream IDs chosen by somebody else. But for now, we don't need those.
 }

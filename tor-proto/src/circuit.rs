@@ -36,6 +36,7 @@ mod streammap;
 
 use crate::chancell::{self, msg::ChanMsg, ChanCell, CircID};
 use crate::channel::Channel;
+use crate::circuit::reactor::{CtrlMsg, CtrlResult};
 use crate::crypto::cell::{ClientCrypt, ClientLayer, CryptInit, HopNum};
 use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
 use crate::relaycell::msg::{RelayCell, RelayMsg, Sendme};
@@ -47,6 +48,7 @@ use tor_linkspec::LinkSpec;
 
 use futures::channel::{mpsc, oneshot};
 use futures::lock::Mutex;
+use futures::sink::SinkExt;
 
 use std::cell::Cell;
 use std::sync::Arc;
@@ -86,8 +88,10 @@ struct ClientCircImpl {
     ///
     /// Note that hops.len() must be the same as crypto.n_layers().
     hops: Vec<CircHop>,
+    /// A stream that can be used to register streams with the reactor.
+    control: mpsc::Sender<CtrlResult>,
     /// A oneshot sender that can be used to tell the reactor to shut down.
-    sendclosed: Cell<Option<oneshot::Sender<()>>>,
+    sendshutdown: Cell<Option<oneshot::Sender<CtrlMsg>>>,
     /// A oneshot sender that can be used by the reactor to report a
     /// meta-cell to an owning task.
     ///
@@ -102,6 +106,8 @@ struct ClientCircImpl {
 ///
 /// Rather than using the stream directly, the stream uses this object
 /// to send its relay cells to the correct hop, using the correct stream ID.
+///
+/// When this object is dropped, the reactor will be told to close the stream.
 // XXXX TODO: rename this
 pub(crate) struct StreamTarget {
     stream_id: StreamID,
@@ -109,6 +115,7 @@ pub(crate) struct StreamTarget {
     // XXXX truncated and then re-extended.
     hop: HopNum,
     circ: ClientCirc,
+    stream_closed: Cell<Option<oneshot::Sender<CtrlMsg>>>,
 }
 
 /// Information about a single hop of a client circuit.
@@ -275,12 +282,18 @@ impl ClientCirc {
         let id = c.hops[hopnum].map.add_ent(sender)?;
         let relaycell = RelayCell::new(id, begin_msg);
         let hopnum = (hopnum as u8).into();
+        let (send_close, recv_close) = oneshot::channel::<CtrlMsg>();
         c.send_relay_cell(hopnum, false, relaycell).await?;
+        c.control
+            .send(Ok(CtrlMsg::Register(recv_close)))
+            .await
+            .map_err(|_| Error::InternalError("Can't queue stream closer".into()))?;
 
         let target = StreamTarget {
             circ: self.clone(),
             stream_id: id,
             hop: hopnum,
+            stream_closed: Cell::new(Some(send_close)),
         };
 
         Ok(TorStream::new(target, receiver))
@@ -394,7 +407,9 @@ impl PendingClientCirc {
         input: mpsc::Receiver<ChanMsg>,
     ) -> (PendingClientCirc, reactor::Reactor) {
         let crypto = ClientCrypt::new();
-        let (sendclosed, recvclosed) = oneshot::channel::<()>();
+        let (sendclosed, recvclosed) = oneshot::channel::<CtrlMsg>();
+        // Should this be bounded, really? XXX
+        let (sendctrl, recvctrl) = mpsc::channel::<CtrlResult>(128);
         let hops = Vec::new();
 
         let circuit_impl = ClientCircImpl {
@@ -402,7 +417,8 @@ impl PendingClientCirc {
             channel,
             crypto,
             hops,
-            sendclosed: Cell::new(Some(sendclosed)),
+            control: sendctrl,
+            sendshutdown: Cell::new(Some(sendclosed)),
             sendmeta: Cell::new(None),
         };
         let circuit = ClientCirc {
@@ -412,7 +428,7 @@ impl PendingClientCirc {
             recvcreated: createdreceiver,
             circ: circuit.clone(),
         };
-        let reactor = reactor::Reactor::new(circuit, recvclosed, input);
+        let reactor = reactor::Reactor::new(circuit, recvctrl, recvclosed, input);
         (pending, reactor)
     }
 
@@ -562,5 +578,23 @@ impl StreamTarget {
         let cell = RelayCell::new(self.stream_id, msg);
         let mut c = self.circ.c.lock().await;
         c.send_relay_cell(self.hop, false, cell).await
+    }
+}
+
+impl Drop for ClientCircImpl {
+    fn drop(&mut self) {
+        if let Some(sender) = self.sendshutdown.take() {
+            // ignore the error, since it can only be canceled.
+            let _ = sender.send(CtrlMsg::Shutdown);
+        }
+    }
+}
+
+impl Drop for StreamTarget {
+    fn drop(&mut self) {
+        if let Some(sender) = self.stream_closed.take() {
+            // ignore the error, since it can only be canceled.
+            let _ = sender.send(CtrlMsg::CloseStream(self.hop, self.stream_id));
+        }
     }
 }

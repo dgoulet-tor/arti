@@ -28,7 +28,7 @@ MILESTONE 2: Working streams
    - Make authenticated sendmes work.
    o Improve circuit API.
    o Get an initial stream API together.
-   - Make end cells work, and get sent both ways.
+   o Make end cells work, and get sent both ways.
    - Improve testing
    - Improve documentation
    - Make sure readme is right

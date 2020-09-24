@@ -52,5 +52,3 @@ impl TorStream {
         self.target.send(msg).await
     }
 }
-
-// XXXX TODO send END cell when dropping!
