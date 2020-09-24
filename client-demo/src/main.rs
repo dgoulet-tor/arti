@@ -135,25 +135,18 @@ fn main() -> Result<()> {
 
         let mut stream = circ.begin_stream("www.torproject.org", 80).await?;
 
-        use tor_proto::relaycell::msg;
-        let request =
-            msg::Data::new("GET / HTTP/1.0\r\nHost: www.torproject.org\r\n\r\n".as_bytes());
+        let request = b"GET / HTTP/1.0\r\nHost: www.torproject.org\r\n\r\n";
 
-        stream.send(request.into()).await?;
+        stream.write_bytes(&request[..]).await?;
 
-        loop {
-            let msg = stream.recv().await?;
-            info!("{}", msg.get_cmd());
-            match msg {
-                msg::RelayMsg::Data(d) => {
-                    // XXXX crash on bad utf8.
-                    println!("{}", std::str::from_utf8(d.as_ref()).unwrap());
-                }
-                msg::RelayMsg::End(_) => {
-                    break;
-                }
-                _ => (),
+        let mut buf = [0u8; 512];
+        while let Ok(n) = stream.read_bytes(&mut buf[..]).await {
+            if n == 0 {
+                break;
             }
+            let msg = &buf[..n];
+            // XXXX this will crash on bad utf-8
+            println!("{}", std::str::from_utf8(msg).unwrap());
         }
         Ok(())
     })

@@ -102,10 +102,10 @@ impl DataStream {
             if v.len() > buf.len() {
                 let remainder = v.split_off(buf.len());
                 buf.copy_from_slice(&v[..]);
-                return (v.len(), Some(remainder));
+                (v.len(), Some(remainder))
             } else {
                 (&mut buf[..v.len()]).copy_from_slice(&v[..]);
-                return (v.len(), None);
+                (v.len(), None)
             }
         }
 

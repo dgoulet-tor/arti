@@ -41,7 +41,7 @@ use crate::crypto::cell::{ClientCrypt, ClientLayer, CryptInit, HopNum};
 use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
 use crate::relaycell::msg::{RelayCell, RelayMsg, Sendme};
 use crate::relaycell::{RelayCmd, StreamID};
-use crate::stream::TorStream;
+use crate::stream::{DataStream, TorStream};
 use crate::{Error, Result};
 
 use tor_linkspec::LinkSpec;
@@ -299,23 +299,17 @@ impl ClientCirc {
         Ok(TorStream::new(target, receiver))
     }
 
-    /// Start a connection to the given address and port, using a BEGIN
-    /// cell.
-    ///
-    /// The use of a string for the address is intentional: you should let
-    /// the remote Tor relay do the hostname lookup for you.
-    pub async fn begin_stream(&mut self, target: &str, port: u16) -> Result<TorStream> {
-        // TODO: this should take flags to specify IP version preference
-        let beginmsg = crate::relaycell::msg::Begin::new(target, port, 0)?;
-
-        let mut stream = self.begin_stream_impl(beginmsg.into()).await?;
+    /// Start a DataStream connection to the given address and port,
+    /// using a BEGIN cell.
+    async fn begin_data_stream(&mut self, msg: RelayMsg) -> Result<DataStream> {
+        let mut stream = self.begin_stream_impl(msg).await?;
         let response = stream.recv().await?;
 
         // XXXXX We need to remove the stream if we get an END cell or
         // a weird cell.
 
         if response.get_cmd() == RelayCmd::CONNECTED {
-            Ok(stream) // Return a DataStream XXXX
+            Ok(DataStream::new(stream))
         } else if response.get_cmd() == RelayCmd::END {
             // XXX Handle this properly and give a reasonable error.
             Err(Error::InternalError("XXXX end cell".into()))
@@ -323,6 +317,23 @@ impl ClientCirc {
             // XXX Handle this properly and give a reasonable error.
             Err(Error::InternalError("XXXX weird cell".into()))
         }
+    }
+
+    /// Start a connection to the given address and port, using a BEGIN
+    /// cell.
+    ///
+    /// The use of a string for the address is intentional: you should let
+    /// the remote Tor relay do the hostname lookup for you.
+    pub async fn begin_stream(&mut self, target: &str, port: u16) -> Result<DataStream> {
+        // TODO: this should take flags to specify IP version preference
+        let beginmsg = crate::relaycell::msg::Begin::new(target, port, 0)?;
+        self.begin_data_stream(beginmsg.into()).await
+    }
+
+    /// Start a new connection to the last router in the circuit, using
+    /// a BEGIN_DIR cell.
+    pub async fn begin_dir_stream(&mut self) -> Result<DataStream> {
+        self.begin_data_stream(RelayMsg::BeginDir).await
     }
 
     // XXXX Add a RESOLVE implementation, it will be simple.
