@@ -298,10 +298,18 @@ pub struct Data {
     body: Vec<u8>,
 }
 impl Data {
+    /// The longest allowable body length for a single data cell.
+    pub const MAXLEN: usize = CELL_DATA_LEN - 11;
+
     /// Construct a new data cell.
     pub fn new(inp: &[u8]) -> Self {
         // XXXX check length!
         Data { body: inp.into() }
+    }
+}
+impl Into<Vec<u8>> for Data {
+    fn into(self) -> Vec<u8> {
+        self.body
     }
 }
 impl AsRef<[u8]> for Data {

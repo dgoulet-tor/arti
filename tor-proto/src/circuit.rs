@@ -315,7 +315,7 @@ impl ClientCirc {
         // a weird cell.
 
         if response.get_cmd() == RelayCmd::CONNECTED {
-            Ok(stream)
+            Ok(stream) // Return a DataStream XXXX
         } else if response.get_cmd() == RelayCmd::END {
             // XXX Handle this properly and give a reasonable error.
             Err(Error::InternalError("XXXX end cell".into()))
@@ -324,6 +324,8 @@ impl ClientCirc {
             Err(Error::InternalError("XXXX weird cell".into()))
         }
     }
+
+    // XXXX Add a RESOLVE implementation, it will be simple.
 }
 
 impl ClientCircImpl {

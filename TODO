@@ -24,11 +24,12 @@ MILESTONE 1: Refactoring on above
    o Make sure readme is right
 
 MILESTONE 2: Working streams
-   - Make SENDMEs work
-   - Make authenticated sendmes work.
    o Improve circuit API.
    o Get an initial stream API together.
    o Make end cells work, and get sent both ways.
+     - Use same ideas for circuit DESTROYs.
+   - Make SENDMEs work
+   - Make authenticated sendmes work.
    - Improve testing
    - Improve documentation
    - Make sure readme is right
@@ -36,6 +37,7 @@ MILESTONE 2: Working streams
 MILESTONE 3: Clean and tidy
    - Less copying, esp around Box<RawCellBody>.  Consider bytes crate.
    - Is this "reactor" business a sensible design?  Is there a better one?
+   - Use better types for cases when only a few messages are possible.
    - Get a data-oriented stream API
    - Make a plan for what closes when
    - Make sure everything closes when it is supposed to.
