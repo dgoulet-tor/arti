@@ -10,6 +10,8 @@
 use crate::chancell::RawCellBody;
 use crate::{Error, Result};
 
+use generic_array::GenericArray;
+
 /// Type for the body of a relay cell.
 #[derive(Clone)]
 pub struct RelayCellBody(RawCellBody);
@@ -66,14 +68,17 @@ pub trait RelayCrypt {
 
 /// A client's view of the crypto state shared with a single relay.
 pub trait ClientLayer {
-    /// Prepare a RelayCellBody to be sent to the relay at this layer.
-    fn originate_for(&mut self, cell: &mut RelayCellBody);
+    /// Prepare a RelayCellBody to be sent to the relay at this layer, and
+    /// encrypt it.
+    ///
+    /// Return the authentication tag.
+    fn originate_for(&mut self, cell: &mut RelayCellBody) -> &[u8];
     /// Encrypt a RelayCellBody to be decrypted by this layer.
     fn encrypt_outbound(&mut self, cell: &mut RelayCellBody);
     /// Decrypt a CellBopdy that passed through this layer.
     ///
-    /// Return true if this layer is the originator.
-    fn decrypt_inbound(&mut self, cell: &mut RelayCellBody) -> bool;
+    /// Return an authentication tag if this layer is the originator.
+    fn decrypt_inbound(&mut self, cell: &mut RelayCellBody) -> Option<&[u8]>;
 }
 
 /// Type to store hop indices on a circuit.
@@ -124,28 +129,29 @@ impl ClientCrypt {
     ///
     /// On success, returns a reference to tag that should be expected
     /// for an authenticated SENDME sent in response to this cell.
-    pub fn encrypt(&mut self, cell: &mut RelayCellBody, hop: HopNum) -> Result<&[u8; 20]> {
+    pub fn encrypt(&mut self, cell: &mut RelayCellBody, hop: HopNum) -> Result<&[u8]> {
         let hop: usize = hop.into();
-        if hop > self.layers.len() {
+        if hop >= self.layers.len() {
             return Err(Error::NoSuchHop);
         }
 
-        self.layers[hop].originate_for(cell);
-        for layer in self.layers.iter_mut().rev() {
+        let mut layers = self.layers.iter_mut().take(hop + 1).rev();
+        let first_layer = layers.next().unwrap();
+        let tag = first_layer.originate_for(cell);
+        for layer in layers {
             layer.encrypt_outbound(cell);
         }
-        // XXXX use a real type for the tag.
-        Ok(&[0u8; 20]) // XXXX implement real tag.
+        Ok(tag)
     }
     /// Decrypt an incoming cell that is coming to the client.
     ///
     /// On success, return which hop was the originator of the cell.
     // XXXX use real tag type
-    pub fn decrypt(&mut self, cell: &mut RelayCellBody) -> Result<(HopNum, &[u8; 20])> {
+    pub fn decrypt(&mut self, cell: &mut RelayCellBody) -> Result<(HopNum, &[u8])> {
         for (hopnum, layer) in self.layers.iter_mut().enumerate() {
-            if layer.decrypt_inbound(cell) {
+            if let Some(tag) = layer.decrypt_inbound(cell) {
                 assert!(hopnum <= std::u8::MAX as usize);
-                return Ok(((hopnum as u8).into(), &[0u8; 20])); // XXXX compute real tag.
+                return Ok(((hopnum as u8).into(), tag));
             }
         }
         Err(Error::BadCellAuth)
@@ -186,6 +192,8 @@ pub mod tor1 {
         b_c: SC,
         f_d: D,
         b_d: D,
+        last_sent_digest: GenericArray<u8, D::OutputSize>,
+        last_rcvd_digest: GenericArray<u8, D::OutputSize>,
     }
 
     impl<SC: StreamCipher + NewStreamCipher, D: Digest + Clone> CryptInit for CryptState<SC, D> {
@@ -205,39 +213,53 @@ pub mod tor1 {
                 b_c: SC::new(bckey.try_into().expect("Wrong length"), &Default::default()),
                 f_d: D::new().chain(fdinit),
                 b_d: D::new().chain(bdinit),
+                last_sent_digest: GenericArray::default(),
+                last_rcvd_digest: GenericArray::default(),
             }
         }
     }
 
     impl<SC: StreamCipher, D: Digest + Clone> RelayCrypt for CryptState<SC, D> {
         fn originate(&mut self, cell: &mut RelayCellBody) {
-            cell.set_digest(&mut self.b_d);
+            let mut d_ignored = GenericArray::default();
+            cell.set_digest(&mut self.b_d, &mut d_ignored);
         }
         fn encrypt_inbound(&mut self, cell: &mut RelayCellBody) {
             self.b_c.encrypt(cell.as_mut());
         }
         fn decrypt_outbound(&mut self, cell: &mut RelayCellBody) -> bool {
             self.f_c.decrypt(cell.as_mut());
-            cell.recognized(&mut self.f_d)
+            let mut d_ignored = GenericArray::default();
+            cell.recognized(&mut self.f_d, &mut d_ignored)
         }
     }
 
     impl<SC: StreamCipher, D: Digest + Clone> ClientLayer for CryptState<SC, D> {
-        fn originate_for(&mut self, cell: &mut RelayCellBody) {
-            cell.set_digest(&mut self.f_d);
+        fn originate_for(&mut self, cell: &mut RelayCellBody) -> &[u8] {
+            cell.set_digest(&mut self.f_d, &mut self.last_sent_digest);
+            self.encrypt_outbound(cell);
+            &self.last_sent_digest
         }
         fn encrypt_outbound(&mut self, cell: &mut RelayCellBody) {
             self.f_c.encrypt(&mut cell.0[..])
         }
-        fn decrypt_inbound(&mut self, cell: &mut RelayCellBody) -> bool {
+        fn decrypt_inbound(&mut self, cell: &mut RelayCellBody) -> Option<&[u8]> {
             self.b_c.decrypt(&mut cell.0[..]);
-            cell.recognized(&mut self.b_d)
+            if cell.recognized(&mut self.b_d, &mut self.last_rcvd_digest) {
+                Some(&self.last_rcvd_digest)
+            } else {
+                None
+            }
         }
     }
 
     impl RelayCellBody {
         /// Prepare a cell body by setting its digest and recognized field.
-        fn set_digest<D: Digest + Clone>(&mut self, d: &mut D) {
+        fn set_digest<D: Digest + Clone>(
+            &mut self,
+            d: &mut D,
+            used_digest: &mut GenericArray<u8, D::OutputSize>,
+        ) {
             self.0[1] = 0;
             self.0[2] = 0;
             self.0[5] = 0;
@@ -246,11 +268,15 @@ pub mod tor1 {
             self.0[8] = 0;
 
             d.update(&self.0[..]);
-            let r = d.clone().finalize(); // XXX can I avoid this clone?
-            self.0[5..9].copy_from_slice(&r[0..4]);
+            *used_digest = d.clone().finalize(); // XXX can I avoid this clone?
+            self.0[5..9].copy_from_slice(&used_digest[0..4]);
         }
         /// Check a cell to see whether its recognized field is set.
-        fn recognized<D: Digest + Clone>(&mut self, d: &mut D) -> bool {
+        fn recognized<D: Digest + Clone>(
+            &mut self,
+            d: &mut D,
+            rcvd: &mut GenericArray<u8, D::OutputSize>,
+        ) -> bool {
             // maybe too optimized? XXXX
             // XXXX self is only mut for an optimization.
             use crate::util::ct;
@@ -279,6 +305,7 @@ pub mod tor1 {
                 // apparently, since digesting is destructive
                 // according to the digest api.
                 d.update(&self.0[..]);
+                *rcvd = r;
                 return true;
             }
 

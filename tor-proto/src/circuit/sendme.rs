@@ -6,9 +6,13 @@ use futures::lock::Mutex;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-// XXXX Two problems with this tag.  First, we need to support unauthenticated
-// XXXX flow control.  Second, we want the comparison to happen with
-// XXXX a constant-time operation.
+// XXXX Three problems with this tag:
+// XXXX - First, we need to support unauthenticated flow control.
+// XXXX - Second, this tag type could be different for each layer (and
+// XXXX   will be, once we have v3 onion services working).
+// XXXX - Third, we want the comparison to happen with a constant-time
+// XXXX   operation.
+
 pub type CircTag = [u8; 20];
 pub type NoTag = ();
 

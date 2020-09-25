@@ -440,9 +440,13 @@ impl ClientCircImpl {
         if c_t_w {
             // TODO: I'd like to use get_hops_mut here, but the borrow checker
             // won't let me.
+            assert!(tag.len() == 20); // XXXX risky
+                                      // XXXX don't make this copy.
+            let mut tag_copy = [0u8; 20];
+            (&mut tag_copy[..]).copy_from_slice(&tag[..]);
             self.hops[Into::<usize>::into(hop)]
                 .sendwindow
-                .take(tag)
+                .take(&tag_copy)
                 .await;
         }
         self.send_msg(msg).await
