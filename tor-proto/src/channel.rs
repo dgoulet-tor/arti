@@ -61,6 +61,7 @@ pub struct Channel {
 /// Main implementation type for a channel.
 struct ChannelImpl {
     /// What link protocol is the channel using?
+    #[allow(dead_code)] // We don't support protocols where this would matter
     link_protocol: u16,
     /// The underlying channel, as a Sink of ChanCell.  Writing
     /// a ChanCell onto this sink sends it over the TLS channel.

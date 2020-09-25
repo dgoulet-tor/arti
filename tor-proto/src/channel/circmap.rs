@@ -19,6 +19,7 @@ use std::collections::HashMap;
 #[derive(Copy, Clone)]
 pub(super) enum CircIDRange {
     /// Only use circuit IDs with the MSB cleared.
+    #[allow(dead_code)] // Relays will need this.
     Low,
     /// Only use circuit IDs with the MSB set.
     High,

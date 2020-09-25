@@ -37,6 +37,7 @@ pub struct UnverifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     /// The certs cell that we got from the relay.
     certs_cell: msg::Certs,
     /// The netinfo cell that we got from the relay.
+    #[allow(dead_code)] // Relays will need this.
     netinfo_cell: msg::Netinfo,
 }
 

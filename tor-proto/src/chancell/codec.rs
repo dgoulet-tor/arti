@@ -30,6 +30,7 @@ use tor_bytes::{self, Reader, Writer};
 ///     u8 body[509];
 /// ```
 pub struct ChannelCodec {
+    #[allow(dead_code)] // We don't support any link versions where this matters
     link_version: u16,
 }
 

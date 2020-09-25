@@ -20,7 +20,6 @@
 //! probably reflects the most naive understranding of Rust.
 //!
 
-#![allow(dead_code)]
 #![deny(missing_docs)]
 
 pub mod chancell;

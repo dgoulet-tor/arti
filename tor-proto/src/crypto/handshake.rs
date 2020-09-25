@@ -92,6 +92,7 @@ pub struct ShakeKeyGenerator {
 
 impl ShakeKeyGenerator {
     /// Create a key generator based on a provided seed
+    #[allow(dead_code)] // We'll construct these for v3 onion services
     pub fn new(seed: SecretBytes) -> Self {
         ShakeKeyGenerator { seed }
     }

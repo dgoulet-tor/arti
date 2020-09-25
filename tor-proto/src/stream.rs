@@ -178,6 +178,7 @@ pub struct ResolveStream {
 }
 
 impl ResolveStream {
+    #[allow(dead_code)] // need to implement a caller for this.
     pub(crate) fn new(s: TorStream) -> Self {
         ResolveStream { s }
     }
