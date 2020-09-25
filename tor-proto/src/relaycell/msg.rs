@@ -482,14 +482,32 @@ impl Body for Sendme {
         RelayMsg::Sendme(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
-        Ok(Sendme {
-            digest: Some(r.take(r.remaining())?.into()),
-        })
+        let digest = if r.remaining() == 0 {
+            None
+        } else {
+            let ver = r.take_u8()?;
+            match ver {
+                0 => None,
+                1 => {
+                    let dlen = r.take_u16()?;
+                    Some(r.take(dlen as usize)?.into())
+                }
+                _ => {
+                    // XXXX is this an error?
+                    None
+                }
+            }
+        };
+        Ok(Sendme { digest })
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
         match self.digest {
             None => (),
-            Some(mut x) => w.append(&mut x),
+            Some(mut x) => {
+                w.write_u8(1);
+                w.write_u16(x.len() as u16);
+                w.append(&mut x)
+            }
         }
     }
 }
