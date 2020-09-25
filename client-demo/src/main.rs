@@ -15,6 +15,7 @@ use log::{info, LevelFilter};
 use std::path::PathBuf;
 use tor_linkspec::ChanTarget;
 use tor_proto::channel::{self, Channel};
+use tor_proto::circuit::ClientCirc;
 
 //use async_std::prelude::*;
 use async_native_tls::TlsConnector;
@@ -61,6 +62,57 @@ async fn connect<C: ChanTarget>(target: &C) -> Result<Channel> {
     async_std::task::spawn(async { reactor.run().await });
 
     Ok(chan)
+}
+
+#[allow(unused)]
+async fn test_cat(mut circ: ClientCirc) -> Result<()> {
+    let mut stream = circ.begin_stream("127.0.0.1", 9999).await?;
+    for x in 1..2000 {
+        let one_k = [b'x'; 1024];
+        stream.write_bytes(&one_k[..]).await?;
+        dbg!(x);
+    }
+    Ok(())
+}
+
+#[allow(unused)]
+async fn test_dl(mut circ: ClientCirc) -> Result<()> {
+    let mut stream = circ.begin_stream("127.0.0.1", 9999).await?;
+    let mut n_read = 0;
+    let mut buf = [0u8; 512];
+    while let Ok(n) = stream.read_bytes(&mut buf[..]).await {
+        if n == 0 {
+            dbg!("Closed, apparently.");
+        }
+        n_read += n;
+        dbg!(n_read);
+        if n_read >= 1000000 {
+            dbg!(n_read);
+            break;
+        }
+    }
+    dbg!("done?");
+    Ok(())
+}
+
+#[allow(unused)]
+async fn test_http(mut circ: ClientCirc) -> Result<()> {
+    let mut stream = circ.begin_stream("www.torproject.org", 80).await?;
+
+    let request = b"GET / HTTP/1.0\r\nHost: www.torproject.org\r\n\r\n";
+
+    stream.write_bytes(&request[..]).await?;
+
+    let mut buf = [0u8; 512];
+    while let Ok(n) = stream.read_bytes(&mut buf[..]).await {
+        if n == 0 {
+            break;
+        }
+        let msg = &buf[..n];
+        // XXXX this will crash on bad utf-8
+        println!("{}", std::str::from_utf8(msg).unwrap());
+    }
+    Ok(())
 }
 
 /// Load a network directory from `~/src/chutney/net/nodes/000a/`
@@ -133,21 +185,7 @@ fn main() -> Result<()> {
 
         info!("Built a three-hop circuit.");
 
-        let mut stream = circ.begin_stream("www.torproject.org", 80).await?;
-
-        let request = b"GET / HTTP/1.0\r\nHost: www.torproject.org\r\n\r\n";
-
-        stream.write_bytes(&request[..]).await?;
-
-        let mut buf = [0u8; 512];
-        while let Ok(n) = stream.read_bytes(&mut buf[..]).await {
-            if n == 0 {
-                break;
-            }
-            let msg = &buf[..n];
-            // XXXX this will crash on bad utf-8
-            println!("{}", std::str::from_utf8(msg).unwrap());
-        }
+        test_http(circ).await?;
         Ok(())
     })
 }
