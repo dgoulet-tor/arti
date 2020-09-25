@@ -57,9 +57,11 @@ There is no support yet for:
   * v3 onion service anything
   * the directory protocol
   * lots of optimizations that Tor does
+  * lots of security stuff that Tor does
+  * pluggable transports
+  * bridges
   * working with no_std
   * being a relay
-  * flow-control
   * rate limiting
   * API stability
 
