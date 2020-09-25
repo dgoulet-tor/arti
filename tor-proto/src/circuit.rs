@@ -125,6 +125,8 @@ struct CircHop {
     map: streammap::StreamMap,
     /// Window used to say how many cells we can send.
     sendwindow: sendme::CircSendWindow,
+    /// Window used to say how many cells we can receive.
+    recvwindow: sendme::CircRecvWindow,
 }
 
 impl CircHop {
@@ -134,6 +136,7 @@ impl CircHop {
             // TODO: this value should come from the consensus and not be
             // hardcoded.
             sendwindow: sendme::CircSendWindow::new(1000),
+            recvwindow: sendme::CircRecvWindow::new(1000),
         }
     }
 }

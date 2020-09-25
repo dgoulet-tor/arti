@@ -143,6 +143,7 @@ where
 }
 
 pub struct RecvWindow<I: WindowInc> {
+    capacity: u16,
     window: u16,
     _dummy: std::marker::PhantomData<I>,
 }
@@ -150,22 +151,26 @@ pub struct RecvWindow<I: WindowInc> {
 impl<I: WindowInc> RecvWindow<I> {
     pub fn new(window: u16) -> RecvWindow<I> {
         RecvWindow {
+            capacity: window,
             window,
             _dummy: std::marker::PhantomData,
         }
     }
 
     pub fn take(&mut self) -> Option<bool> {
+        let oldval = self.window;
         let v = self.window.checked_sub(1);
         if let Some(x) = v {
             self.window = x;
-            Some(x % I::get_val() == 0)
+            // TODO: same note as in SendWindow.take(). I don't know if
+            // this truly matches the spec, but Tot tor accepts it.
+            Some(oldval % I::get_val() == 0 && oldval != self.capacity)
         } else {
             None
         }
     }
 
     pub fn put(&mut self) {
-        self.window = self.window.checked_add(I::get_val()).unwrap()
+        self.window = self.window.checked_add(I::get_val()).unwrap();
     }
 }

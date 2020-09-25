@@ -10,7 +10,7 @@ use super::streammap::StreamEnt;
 use crate::chancell::{msg::ChanMsg, msg::Relay};
 use crate::circuit::ClientCirc;
 use crate::crypto::cell::HopNum;
-use crate::relaycell::msg::{End, RelayCell, RelayMsg};
+use crate::relaycell::msg::{End, RelayCell, RelayMsg, Sendme};
 use crate::relaycell::StreamID;
 use crate::{Error, Result};
 
@@ -192,11 +192,39 @@ impl ReactorCore {
 
         // Decrypt the cell. If it's recognized, then find the
         // corresponding hop.
-        let (hopnum, _) = circ.crypto.decrypt(&mut body)?;
-        let hop = circ.get_hop_mut(hopnum).unwrap(); // XXXX risky
-
+        let (hopnum, tag) = circ.crypto.decrypt(&mut body)?;
+        let tag = {
+            // TODO: See if we can find a way not to copy this.
+            let mut tag_copy = [0u8; 20];
+            // XXXX could crash if length changes.
+            (&mut tag_copy).copy_from_slice(tag);
+            tag_copy
+        };
         // Decode the cell.
         let msg = RelayCell::decode(body)?;
+
+        // Do we need to increment our sendme window?
+        let send_circ_sendme = if msg.counts_towards_circuit_windows() {
+            // XXXX unwrap is yucky.
+            match circ.get_hop_mut(hopnum).unwrap().recvwindow.take() {
+                Some(true) => true,
+                Some(false) => false,
+                None => {
+                    return Err(Error::CircProto(
+                        "received a cell when circuit sendme window was empty.".into(),
+                    ))
+                }
+            }
+        } else {
+            false
+        };
+        if send_circ_sendme {
+            let sendme = Sendme::new_tag(tag);
+            let cell = RelayCell::new(0.into(), sendme.into());
+            circ.send_relay_cell(hopnum, false, cell).await?;
+            circ.get_hop_mut(hopnum).unwrap().recvwindow.put();
+        }
+
         let (streamid, msg) = msg.into_streamid_and_msg();
         // If this cell wants/refuses to have a Stream ID, does it
         // have/not have one?
@@ -214,6 +242,8 @@ impl ReactorCore {
             return circ.handle_meta_cell(hopnum, msg).await;
         }
 
+        // still risky. XXXX
+        let hop = circ.get_hop_mut(hopnum).unwrap();
         if let Some(StreamEnt::Open(s, w)) = hop.map.get_mut(streamid) {
             // The stream for this message exists, and is open.
 
