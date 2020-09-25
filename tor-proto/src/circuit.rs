@@ -32,6 +32,7 @@
 //! XXXX We don't send DESTROY cells when we should, or handle them well.
 
 pub(crate) mod reactor;
+pub(crate) mod sendme;
 mod streammap;
 
 use crate::chancell::{self, msg::ChanMsg, ChanCell, CircID};
