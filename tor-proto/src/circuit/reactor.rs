@@ -190,10 +190,10 @@ impl ReactorCore {
         // XXX I don't like locking the whole circuit
         let mut circ = self.circuit.c.lock().await;
 
-        // Decrypt the cell.  If it's recognized, then find the corresponding
-        // hop.
-        let hopnum = circ.crypto.decrypt(&mut body)?;
-        let hop = &mut circ.hops[Into::<usize>::into(hopnum)];
+        // Decrypt the cell. If it's recognized, then find the
+        // corresponding hop.
+        let (hopnum, _tag) = circ.crypto.decrypt(&mut body)?;
+        let hop = circ.get_hop_mut(hopnum).unwrap(); // XXXX risky
 
         // Decode the cell.
         let msg = RelayCell::decode(body)?;
@@ -211,7 +211,7 @@ impl ReactorCore {
         // If this has a reasonable streamID value of 0, it's a meta cell,
         // not meant for a particualr stream.
         if streamid.is_zero() {
-            return circ.handle_meta_cell(hopnum, msg);
+            return circ.handle_meta_cell(hopnum, msg).await;
         }
 
         if let Some(StreamEnt::Open(s, w)) = hop.map.get_mut(streamid) {

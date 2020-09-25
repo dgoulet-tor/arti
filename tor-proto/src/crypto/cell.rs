@@ -121,7 +121,10 @@ impl ClientCrypt {
     ///
     /// The cell is prepared for the `hop`th hop, and then encrypted with
     /// the appropriate keys.
-    pub fn encrypt(&mut self, cell: &mut RelayCellBody, hop: HopNum) -> Result<()> {
+    ///
+    /// On success, returns a reference to tag that should be expected
+    /// for an authenticated SENDME sent in response to this cell.
+    pub fn encrypt(&mut self, cell: &mut RelayCellBody, hop: HopNum) -> Result<&[u8; 20]> {
         let hop: usize = hop.into();
         if hop > self.layers.len() {
             return Err(Error::NoSuchHop);
@@ -131,16 +134,18 @@ impl ClientCrypt {
         for layer in self.layers.iter_mut().rev() {
             layer.encrypt_outbound(cell);
         }
-        Ok(())
+        // XXXX use a real type for the tag.
+        Ok(&[0u8; 20]) // XXXX implement real tag.
     }
     /// Decrypt an incoming cell that is coming to the client.
     ///
     /// On success, return which hop was the originator of the cell.
-    pub fn decrypt(&mut self, cell: &mut RelayCellBody) -> Result<HopNum> {
+    // XXXX use real tag type
+    pub fn decrypt(&mut self, cell: &mut RelayCellBody) -> Result<(HopNum, &[u8; 20])> {
         for (hopnum, layer) in self.layers.iter_mut().enumerate() {
             if layer.decrypt_inbound(cell) {
                 assert!(hopnum <= std::u8::MAX as usize);
-                return Ok((hopnum as u8).into());
+                return Ok(((hopnum as u8).into(), &[0u8; 20])); // XXXX compute real tag.
             }
         }
         Err(Error::BadCellAuth)

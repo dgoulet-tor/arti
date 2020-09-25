@@ -6,6 +6,9 @@ use futures::lock::Mutex;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+// XXXX Two problems with this tag.  First, we need to support unauthenticated
+// XXXX flow control.  Second, we want the comparison to happen with
+// XXXX a constant-time operation.
 pub type CircTag = [u8; 20];
 pub type NoTag = ();
 
@@ -31,6 +34,7 @@ struct SendWindowInner<T>
 where
     T: PartialEq + Eq + Clone,
 {
+    capacity: u16,
     window: u16,
     tags: VecDeque<T>,
     unblock: Option<oneshot::Sender<()>>,
@@ -61,6 +65,7 @@ where
         let increment = I::get_val();
         let capacity = (window + increment - 1) / increment;
         let inner = SendWindowInner {
+            capacity: window,
             window,
             tags: VecDeque::with_capacity(capacity as usize),
             unblock: None,
@@ -82,12 +87,15 @@ where
         loop {
             let wait_on = {
                 let mut w = self.w.lock().await;
+                let oldval = w.window;
+                if oldval % I::get_val() == 0 && oldval != w.capacity {
+                    // We record this tag.
+                    // TODO: I'm not choosing this cell in particular
+                    // matches the spec, but Tor seems to like it.
+                    w.tags.push_back(tag.clone());
+                }
                 if let Some(val) = w.window.checked_sub(1) {
                     w.window = val;
-                    if val % I::get_val() == 0 {
-                        // We record this tag.
-                        w.tags.push_back(tag.clone());
-                    }
                     return val;
                 }
 

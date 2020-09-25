@@ -123,6 +123,19 @@ pub(crate) struct StreamTarget {
 /// Information about a single hop of a client circuit.
 struct CircHop {
     map: streammap::StreamMap,
+    /// Window used to say how many cells we can send.
+    sendwindow: sendme::CircSendWindow,
+}
+
+impl CircHop {
+    fn new() -> Self {
+        CircHop {
+            map: streammap::StreamMap::new(),
+            // TODO: this value should come from the consensus and not be
+            // hardcoded.
+            sendwindow: sendme::CircSendWindow::new(1000),
+        }
+    }
 }
 
 impl ClientCirc {
@@ -238,9 +251,7 @@ impl ClientCirc {
         // If we get here, it succeeded.  Add a new hop to the circuit.
         {
             let mut c = self.c.lock().await;
-            let hop = CircHop {
-                map: streammap::StreamMap::new(),
-            };
+            let hop = CircHop::new();
             c.hops.push(hop);
             c.crypto.add_layer(Box::new(layer));
         }
@@ -345,11 +356,15 @@ impl ClientCirc {
 }
 
 impl ClientCircImpl {
+    fn get_hop_mut(&mut self, hopnum: HopNum) -> Option<&mut CircHop> {
+        self.hops.get_mut(Into::<usize>::into(hopnum))
+    }
+
     /// Handle a RELAY cell on this circuit with stream ID 0.
-    fn handle_meta_cell(&mut self, hopnum: HopNum, msg: RelayMsg) -> Result<()> {
+    async fn handle_meta_cell(&mut self, hopnum: HopNum, msg: RelayMsg) -> Result<()> {
         // SENDME cells and TRUNCATED get handled internally by the circuit.
         if let RelayMsg::Sendme(s) = msg {
-            return self.handle_sendme(hopnum, s);
+            return self.handle_sendme(hopnum, s).await;
         }
         if let RelayMsg::Truncated(_) = msg {
             // XXXX need to handle Truncated cells.
@@ -378,9 +393,22 @@ impl ClientCircImpl {
     }
 
     /// Handle a RELAY_SENDME cell on this circuit with stream ID 0.
-    fn handle_sendme(&mut self, _hopnum: HopNum, _msg: Sendme) -> Result<()> {
-        // TODO: SENDME
-        Ok(())
+    async fn handle_sendme(&mut self, hopnum: HopNum, msg: Sendme) -> Result<()> {
+        let auth: [u8; 20] = match msg.into_tag() {
+            Some(v) if v.len() == 20 => {
+                // XXXX ugly code.
+                let mut tag = [0u8; 20];
+                (&mut tag).copy_from_slice(&v[..]);
+                tag
+            }
+            Some(_) => return Err(Error::StreamProto("malformed tag on circuit sendme".into())),
+            None => return Err(Error::StreamProto("missing tag on circuit sendme".into())),
+        };
+        let hop = self.get_hop_mut(hopnum).unwrap(); // XXXX risky
+        match hop.sendwindow.put(auth).await {
+            Some(_) => Ok(()),
+            None => Err(Error::StreamProto("bad auth tag on circuit sendme".into())),
+        }
     }
 
     /// Helper: Put a cell onto this circuit's channel.
@@ -400,14 +428,23 @@ impl ClientCircImpl {
     ///
     /// Does not check whether the cell is well-formed or reasonable.
     async fn send_relay_cell(&mut self, hop: HopNum, early: bool, cell: RelayCell) -> Result<()> {
+        let c_t_w = cell.counts_towards_circuit_windows();
         let mut body = cell.encode(&mut thread_rng())?;
-        self.crypto.encrypt(&mut body, hop)?;
+        let tag = self.crypto.encrypt(&mut body, hop)?;
         let msg = chancell::msg::Relay::from_raw(body.into());
         let msg = if early {
             ChanMsg::RelayEarly(msg)
         } else {
             ChanMsg::Relay(msg)
         };
+        if c_t_w {
+            // TODO: I'd like to use get_hops_mut here, but the borrow checker
+            // won't let me.
+            self.hops[Into::<usize>::into(hop)]
+                .sendwindow
+                .take(tag)
+                .await;
+        }
         self.send_msg(msg).await
     }
 }
@@ -488,9 +525,7 @@ impl PendingClientCirc {
 
         {
             let mut c = circ.c.lock().await;
-            let hop = CircHop {
-                map: streammap::StreamMap::new(),
-            };
+            let hop = CircHop::new();
             c.hops.push(hop);
             c.crypto.add_layer(Box::new(layer));
         }

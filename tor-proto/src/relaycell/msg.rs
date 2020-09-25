@@ -41,6 +41,14 @@ impl RelayCell {
     pub fn get_msg(&self) -> &RelayMsg {
         &self.msg
     }
+    /// Return true if this cell counts to the circuit-level sendme
+    /// window.
+    ///
+    /// (A stream-level sendme counts towards circuit windows, but
+    /// a circuit-level sendme doesn't.)
+    pub fn counts_towards_circuit_windows(&self) -> bool {
+        !self.streamid.is_zero() || self.msg.counts_towards_windows()
+    }
     /// Consume this relay message and encode it as a 509-byte padded cell
     /// body.
     pub fn encode<R: Rng + CryptoRng>(self, rng: &mut R) -> crate::Result<RelayCellBody> {
@@ -459,10 +467,14 @@ impl Sendme {
         Sendme { digest: None }
     }
     /// This format is used on circuits with sendme authentication.
-    fn new_tag(x: [u8; 20]) -> Self {
+    pub fn new_tag(x: [u8; 20]) -> Self {
         Sendme {
             digest: Some(x.into()),
         }
+    }
+    /// Consume this cell and return its authentication tag, if any
+    pub fn into_tag(self) -> Option<Vec<u8>> {
+        self.digest
     }
 }
 impl Body for Sendme {
