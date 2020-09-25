@@ -288,7 +288,10 @@ impl ClientCirc {
         // assuming it's the last hop.
 
         // XXXX Both a bound and a lack of bound are scary here :/
-        let (sender, receiver) = mpsc::channel(128);
+
+        // XXXX This bound is far too high, but without it we can deadlock.
+        // XXXX See note in ReactorCore::handle_relay_cell.
+        let (sender, receiver) = mpsc::channel(1024);
 
         let mut c = self.c.lock().await;
         let hopnum = c.hops.len() - 1;
@@ -639,6 +642,8 @@ impl StreamTarget {
             self.window.take(&()).await;
         }
         let cell = RelayCell::new(self.stream_id, msg);
+        // XXXX This can deadlock if the reactor is blocked;.
+        // XXXX See note in ReactorCore::handle_relay_cell.
         let mut c = self.circ.c.lock().await;
         c.send_relay_cell(self.hop, false, cell).await
     }

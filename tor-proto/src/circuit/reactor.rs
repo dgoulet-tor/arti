@@ -192,7 +192,7 @@ impl ReactorCore {
 
         // Decrypt the cell. If it's recognized, then find the
         // corresponding hop.
-        let (hopnum, _tag) = circ.crypto.decrypt(&mut body)?;
+        let (hopnum, _) = circ.crypto.decrypt(&mut body)?;
         let hop = circ.get_hop_mut(hopnum).unwrap(); // XXXX risky
 
         // Decode the cell.
@@ -231,10 +231,15 @@ impl ReactorCore {
             // XXXX handle errors better. Does this one mean that the
             // the stream is closed?
 
-            // XXXX should we really be holding the mutex for this?
-
             // XXXX reject cells that should never go to a client,
             // XXXX like BEGIN.
+
+            // XXXXX If possible we should try to stop holding the mutex
+            // XXXXX for this:
+            // XXXXX This send() operation can deadlock if the queue
+            // XXXXX is full and the other side is trying to send a sendme.
+            // XXXXX That's why I've chosen a really high queue length.
+            // XXXXX I should fix that.
             let result = s
                 .send(msg)
                 .await
