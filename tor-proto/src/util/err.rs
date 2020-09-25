@@ -41,6 +41,9 @@ pub enum Error {
     /// Protocol violation at the circuit level
     #[error("circuit protocol violation: {0}")]
     CircProto(String),
+    /// Circuit destroyed or channel closed.
+    #[error("circuit destroyed: {0}")]
+    CircDestroy(String),
     /// Circuit is closed.
     #[error("circuit closed")]
     CircuitClosed,
@@ -53,4 +56,10 @@ pub enum Error {
     /// Tried to make or use a stream to an invalid destination address.
     #[error("invalid stream target address")]
     BadStreamAddress,
+    /// Stream closed by end cell
+    #[error("stream closed: {0}")]
+    StreamClosed(&'static str), // TODO: make this a better type.
+    /// Stream protocol violation
+    #[error("stream protocol violation: {0}")]
+    StreamProto(String),
 }

@@ -206,7 +206,7 @@ impl ClientCirc {
 
         // ... and now we wait for a response.
         let (from_hop, msg) = receiver.await.map_err(|_| {
-            Error::CircProto("Circuit closed while waiting for extended cell".into())
+            Error::CircDestroy("Circuit closed while waiting for extended cell".into())
         })?;
 
         // XXXX If two EXTEND cells are of these are launched on the
@@ -311,11 +311,12 @@ impl ClientCirc {
         if response.get_cmd() == RelayCmd::CONNECTED {
             Ok(DataStream::new(stream))
         } else if response.get_cmd() == RelayCmd::END {
-            // XXX Handle this properly and give a reasonable error.
-            Err(Error::InternalError("XXXX end cell".into()))
+            Err(Error::StreamClosed("end cell when waiting for connection"))
         } else {
-            // XXX Handle this properly and give a reasonable error.
-            Err(Error::InternalError("XXXX weird cell".into()))
+            Err(Error::StreamProto(format!(
+                "Received {} while waiting for connection",
+                response.get_cmd()
+            )))
         }
     }
 
@@ -361,8 +362,8 @@ impl ClientCircImpl {
             // Somebody was waiting for a message -- maybe this message
             sender
                 .send((hopnum, msg))
-                // XXX I think this means that the channel got closed.
-                .map_err(|_| Error::InternalError("XXXX".into()))
+                // I think this means that the channel got closed.
+                .map_err(|_| Error::CircuitClosed)
         } else {
             // Nobody wanted this.
             Err(Error::CircProto(format!(

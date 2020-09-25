@@ -176,6 +176,8 @@ impl ReactorCore {
                 self.handle_destroy_cell()?;
                 Ok(true)
             }
+            // TODO: It would be better for this channel to instead
+            // carry only good cell types.
             _ => Err(Error::InternalError(
                 "Unsupported cell type on circuit.".into(),
             )),
@@ -226,7 +228,11 @@ impl ReactorCore {
 
             // XXXX reject cells that should never go to a client,
             // XXXX like BEGIN.
-            let result = s.send(msg).await.map_err(|_| Error::CircProto("x".into()));
+            let result = s
+                .send(msg)
+                .await
+                // XXXX I think this shouldn't be possible?
+                .map_err(|_| Error::InternalError("Can't queue cell for open stream?".into()));
             if end_cell {
                 hop.map.mark_closing(streamid);
             }

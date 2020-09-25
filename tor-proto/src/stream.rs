@@ -52,7 +52,7 @@ impl TorStream {
             .await
             // This probably means that the other side closed the
             // mpsc channel.
-            .ok_or_else(|| Error::InternalError("XXXX".into()))
+            .ok_or_else(|| Error::StreamClosed("stream channel disappeared without END cell?"))
     }
 
     /// Send a relay message along this stream
@@ -135,12 +135,13 @@ impl DataStream {
             }
             Err(_) | Ok(RelayMsg::End(_)) => {
                 self.s.received_end = Some(cell);
-                Ok(0) // XXXX NO! This should be a close error
+                // TODO: Hang on, is this a good inteface?
+                Err(Error::StreamClosed("received an end cell"))
             }
-            Ok(_) => {
-                // XXXX This is a bad cell; what do we do?
-                Ok(0)
-            }
+            Ok(m) => Err(Error::StreamProto(format!(
+                "Unexpected {} cell on steam",
+                m.get_cmd()
+            ))),
         }
     }
 }
@@ -161,13 +162,12 @@ impl ResolveStream {
     pub async fn read_msg(&mut self) -> Result<Resolved> {
         let cell = self.s.recv().await?;
         match cell {
-            RelayMsg::End(_) => Err(Error::InternalError(
-                "XXXX bad error type, do something smarter.".into(),
-            )),
+            RelayMsg::End(_) => Err(Error::StreamClosed("Received end cell on resolve stream")),
             RelayMsg::Resolved(r) => Ok(r),
-            _ => Err(Error::InternalError(
-                "XXXX what do i do if it's a bad cell?".into(),
-            )),
+            m => Err(Error::StreamProto(format!(
+                "Unexpected {} on resolve stream",
+                m.get_cmd()
+            ))),
         }
     }
 }
