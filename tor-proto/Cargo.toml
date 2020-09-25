@@ -13,6 +13,7 @@ tor-bytes = { path="../tor-bytes" }
 tor-cert = { path="../tor-cert" }
 tor-linkspec = { path="../tor-linkspec" }
 tor-checkable = { path="../tor-checkable" }
+tor-protover = { path="../tor-protover" }
 
 arrayref = "0.3.6"
 bytes = "0.5.6"

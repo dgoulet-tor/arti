@@ -256,7 +256,7 @@ impl ReactorCore {
                 // We need to handle sendmes here, not in the stream's
                 // recv() method, or else we'd never notice them if the
                 // stream isn't reading.
-                w.put(()).await;
+                w.put(Some(())).await;
                 return Ok(());
             }
 

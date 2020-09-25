@@ -29,7 +29,7 @@ MILESTONE 2: Working streams
    o Make end cells work, and get sent both ways.
    o Make SENDMEs work
    o Make authenticated sendmes work.
-   - Make sendme authentication optional.
+   o Make sendme authentication optional.
    - Circuit reactor shutdown needs to make writes fail; protocol
      failures on circuits/streams need to kill off the circuit.
    - Improve testing

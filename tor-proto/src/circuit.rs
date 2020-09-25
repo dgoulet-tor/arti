@@ -123,6 +123,7 @@ pub(crate) struct StreamTarget {
 /// Information about a single hop of a client circuit.
 struct CircHop {
     map: streammap::StreamMap,
+    auth_sendme_optional: bool,
     /// Window used to say how many cells we can send.
     sendwindow: sendme::CircSendWindow,
     /// Window used to say how many cells we can receive.
@@ -130,9 +131,10 @@ struct CircHop {
 }
 
 impl CircHop {
-    fn new() -> Self {
+    fn new(auth_sendme_optional: bool) -> Self {
         CircHop {
             map: streammap::StreamMap::new(),
+            auth_sendme_optional,
             // TODO: this value should come from the consensus and not be
             // hardcoded.
             sendwindow: sendme::CircSendWindow::new(1000),
@@ -189,6 +191,7 @@ impl ClientCirc {
         handshake_id: u16,
         key: &H::KeyType,
         linkspecs: Vec<LinkSpec>,
+        supports_flowctrl_1: bool,
     ) -> Result<()>
     where
         R: Rng + CryptoRng,
@@ -254,7 +257,7 @@ impl ClientCirc {
         // If we get here, it succeeded.  Add a new hop to the circuit.
         {
             let mut c = self.c.lock().await;
-            let hop = CircHop::new();
+            let hop = CircHop::new(supports_flowctrl_1);
             c.hops.push(hop);
             c.crypto.add_layer(Box::new(layer));
         }
@@ -275,8 +278,17 @@ impl ClientCirc {
             pk: *target.get_ntor_onion_key(),
         };
         let linkspecs = target.get_linkspecs();
-        self.extend_impl::<R, Tor1RelayCrypto, NtorClient>(rng, 0x0002, &key, linkspecs)
-            .await
+        let supports_flowctrl_1 = target
+            .get_protovers()
+            .supports_known_subver(tor_protover::ProtoKind::FlowCtrl, 1);
+        self.extend_impl::<R, Tor1RelayCrypto, NtorClient>(
+            rng,
+            0x0002,
+            &key,
+            linkspecs,
+            supports_flowctrl_1,
+        )
+        .await
     }
 
     /// Helper, used to begin a stream.
@@ -400,17 +412,23 @@ impl ClientCircImpl {
 
     /// Handle a RELAY_SENDME cell on this circuit with stream ID 0.
     async fn handle_sendme(&mut self, hopnum: HopNum, msg: Sendme) -> Result<()> {
-        let auth: [u8; 20] = match msg.into_tag() {
+        let hop = self.get_hop_mut(hopnum).unwrap(); // XXXX risky
+        let auth: Option<[u8; 20]> = match msg.into_tag() {
             Some(v) if v.len() == 20 => {
                 // XXXX ugly code.
                 let mut tag = [0u8; 20];
                 (&mut tag).copy_from_slice(&v[..]);
-                tag
+                Some(tag)
             }
             Some(_) => return Err(Error::StreamProto("malformed tag on circuit sendme".into())),
-            None => return Err(Error::StreamProto("missing tag on circuit sendme".into())),
+            None => {
+                if !hop.auth_sendme_optional {
+                    return Err(Error::StreamProto("missing tag on circuit sendme".into()));
+                } else {
+                    None
+                }
+            }
         };
-        let hop = self.get_hop_mut(hopnum).unwrap(); // XXXX risky
         match hop.sendwindow.put(auth).await {
             Some(_) => Ok(()),
             None => Err(Error::StreamProto("bad auth tag on circuit sendme".into())),
@@ -511,6 +529,7 @@ impl PendingClientCirc {
         rng: &mut R,
         wrap: &W,
         key: &H::KeyType,
+        supports_flowctrl_1: bool,
     ) -> Result<ClientCirc>
     where
         R: Rng + CryptoRng,
@@ -538,7 +557,7 @@ impl PendingClientCirc {
 
         {
             let mut c = circ.c.lock().await;
-            let hop = CircHop::new();
+            let hop = CircHop::new(supports_flowctrl_1);
             c.hops.push(hop);
             c.crypto.add_layer(Box::new(layer));
         }
@@ -558,7 +577,7 @@ impl PendingClientCirc {
         use crate::crypto::cell::Tor1RelayCrypto;
         use crate::crypto::handshake::fast::CreateFastClient;
         let wrap = CreateFastWrap;
-        self.create_impl::<R, Tor1RelayCrypto, CreateFastClient, _>(rng, &wrap, &())
+        self.create_impl::<R, Tor1RelayCrypto, CreateFastClient, _>(rng, &wrap, &(), false)
             .await
     }
 
@@ -579,7 +598,10 @@ impl PendingClientCirc {
             id: target.get_rsa_identity().clone(),
             pk: *target.get_ntor_onion_key(),
         };
-        self.create_impl::<R, Tor1RelayCrypto, NtorClient, _>(rng, &wrap, &key)
+        let supports_flowctrl_1 = target
+            .get_protovers()
+            .supports_known_subver(tor_protover::ProtoKind::FlowCtrl, 1);
+        self.create_impl::<R, Tor1RelayCrypto, NtorClient, _>(rng, &wrap, &key, supports_flowctrl_1)
             .await
     }
 }

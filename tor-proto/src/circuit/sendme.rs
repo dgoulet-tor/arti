@@ -165,15 +165,20 @@ where
 
     /// Handle an incoming sendme with a provided tag.
     ///
+    /// If the tag is None, then we don't enforce tag requirements. (We can
+    /// remove this option once we no longer support getting SENDME cells
+    /// from relays without the FlowCtrl=1 protocol.)
+    ///
     /// On success, return the number of cells left in the window.
     ///
     /// On failure, return None: the caller should close the stream
     /// or circuit with a protocol error.
-    pub async fn put(&mut self, tag: T) -> Option<u16> {
+    pub async fn put(&mut self, tag: Option<T>) -> Option<u16> {
         let mut w = self.w.lock().await;
 
-        match w.tags.pop_front() {
-            Some(t) if t == tag => {} // this is the right tag.
+        match (w.tags.pop_front(), tag) {
+            (Some(t), Some(tag)) if t == tag => {} // this is the right tag.
+            (Some(_), None) => {}                  // didn't need a tag.
             _ => {
                 return None;
             } // Bad tag or unexpected sendme.
