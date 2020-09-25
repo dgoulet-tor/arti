@@ -9,8 +9,8 @@ use std::sync::Arc;
 pub type CircTag = [u8; 20];
 pub type NoTag = ();
 
-pub type CircSendWindow = SendWindow<CircTag, CircInc>;
-pub type StreamSendWindow = SendWindow<NoTag, StreamInc>;
+pub type CircSendWindow = SendWindow<CircInc, CircTag>;
+pub type StreamSendWindow = SendWindow<StreamInc, NoTag>;
 
 pub type CircRecvWindow = RecvWindow<CircInc>;
 pub type StreamRecvWindow = RecvWindow<StreamInc>;
@@ -18,7 +18,7 @@ pub type StreamRecvWindow = RecvWindow<StreamInc>;
 pub struct SendWindow<I, T>
 where
     I: WindowInc,
-    T: PartialEq + Eq,
+    T: PartialEq + Eq + Clone,
 {
     // TODO could use a bilock if that becomes non-experimental.
     // TODO I wish we could do this without locking; we could make a bunch
@@ -29,7 +29,7 @@ where
 
 struct SendWindowInner<T>
 where
-    T: PartialEq + Eq,
+    T: PartialEq + Eq + Clone,
 {
     window: u16,
     tags: VecDeque<T>,
@@ -55,7 +55,7 @@ impl WindowInc for StreamInc {
 impl<I, T> SendWindow<I, T>
 where
     I: WindowInc,
-    T: PartialEq + Eq,
+    T: PartialEq + Eq + Clone,
 {
     pub fn new(window: u16) -> SendWindow<I, T> {
         let increment = I::get_val();
@@ -71,12 +71,23 @@ where
         }
     }
 
-    pub async fn take(&mut self) -> u16 {
+    pub fn new_ref(&self) -> Self {
+        SendWindow {
+            w: Arc::clone(&self.w),
+            _dummy: std::marker::PhantomData,
+        }
+    }
+
+    pub async fn take(&mut self, tag: &T) -> u16 {
         loop {
             let wait_on = {
                 let mut w = self.w.lock().await;
                 if let Some(val) = w.window.checked_sub(1) {
                     w.window = val;
+                    if val % I::get_val() == 0 {
+                        // We record this tag.
+                        w.tags.push_back(tag.clone());
+                    }
                     return val;
                 }
 
@@ -94,11 +105,6 @@ where
             // to it.
             wait_on.await.unwrap()
         }
-    }
-
-    pub async fn push_tag(&mut self, tag: T) {
-        let mut w = self.w.lock().await;
-        w.tags.push_back(tag);
     }
 
     pub async fn put(&mut self, tag: T) -> Option<u16> {
@@ -137,12 +143,14 @@ impl<I: WindowInc> RecvWindow<I> {
         }
     }
 
-    pub fn take(&mut self) -> Option<u16> {
+    pub fn take(&mut self) -> Option<bool> {
         let v = self.window.checked_sub(1);
         if let Some(x) = v {
             self.window = x;
+            Some(x % I::get_val() == 0)
+        } else {
+            None
         }
-        v
     }
 
     pub fn put(&mut self) {

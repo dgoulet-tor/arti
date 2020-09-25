@@ -12,8 +12,8 @@
 //!
 //! XXXX TODO: There is no fariness, rate-limiting, or flow control.
 
-use crate::circuit::StreamTarget;
-use crate::relaycell::msg::{Data, RelayMsg, Resolved};
+use crate::circuit::{sendme, StreamTarget};
+use crate::relaycell::msg::{Data, RelayMsg, Resolved, Sendme};
 use crate::{Error, Result};
 
 use futures::channel::mpsc;
@@ -26,38 +26,61 @@ pub struct TorStream {
     ///
     /// TODO: do something similar with circuits?
     target: StreamTarget,
+    /// Window to track incoming cells and SENDMEs.
+    recvwindow: sendme::StreamRecvWindow,
     /// A Stream over which we receive relay messages.  Only relay messages
     /// that can be associated with a stream ID will be received.
     receiver: mpsc::Receiver<RelayMsg>,
-
     /// Have we been informed that this stream is closed?  If so this is
     /// the message or the error that told us.
     received_end: Option<Result<RelayMsg>>,
 }
 
 impl TorStream {
+    const RECV_INIT: u16 = 500;
+
     /// Internal: build a new TorStream.
     pub(crate) fn new(target: StreamTarget, receiver: mpsc::Receiver<RelayMsg>) -> Self {
         TorStream {
             target,
             receiver,
+            recvwindow: sendme::StreamRecvWindow::new(500),
             received_end: None,
         }
     }
 
     /// Try to read the next relay message from this stream.
     pub async fn recv(&mut self) -> Result<RelayMsg> {
-        self.receiver
+        let msg = self
+            .receiver
             .next()
             .await
             // This probably means that the other side closed the
             // mpsc channel.
-            .ok_or_else(|| Error::StreamClosed("stream channel disappeared without END cell?"))
+            .ok_or_else(|| Error::StreamClosed("stream channel disappeared without END cell?"))?;
+
+        if msg.counts_towards_windows() {
+            match self.recvwindow.take() {
+                Some(true) => self.send_sendme().await?,
+                Some(false) => {}
+                None => return Err(Error::StreamProto("stream violated SENDME window".into())),
+            }
+        }
+
+        Ok(msg)
     }
 
     /// Send a relay message along this stream
     pub async fn send(&mut self, msg: RelayMsg) -> Result<()> {
         self.target.send(msg).await
+    }
+
+    /// Send a SENDME cell and adjust the receive window.
+    async fn send_sendme(&mut self) -> Result<()> {
+        let sendme = Sendme::new_empty();
+        self.target.send(sendme.into()).await?;
+        self.recvwindow.put();
+        Ok(())
     }
 }
 

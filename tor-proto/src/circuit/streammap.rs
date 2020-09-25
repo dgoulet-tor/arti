@@ -1,3 +1,4 @@
+use crate::circuit::sendme;
 /// Mapping from stream ID to streams.
 // NOTE: This is a work in progress and I bet I'll refactor it a lot;
 // it needs to stay opaque!
@@ -14,7 +15,7 @@ use rand::Rng;
 pub(super) enum StreamEnt {
     /// An open stream: any relay cells tagged for this stream should get
     /// sent over the mpsc::Sender.
-    Open(mpsc::Sender<RelayMsg>),
+    Open(mpsc::Sender<RelayMsg>, sendme::StreamSendWindow),
     /// A stream for which we have received an END cell, but not yet
     /// had the stream object get dropped.
     Closing,
@@ -41,8 +42,12 @@ impl StreamMap {
     }
 
     /// Add an entry to this map; return the newly allocated StreamID.
-    pub(super) fn add_ent(&mut self, sink: mpsc::Sender<RelayMsg>) -> Result<StreamID> {
-        let ent = StreamEnt::Open(sink);
+    pub(super) fn add_ent(
+        &mut self,
+        sink: mpsc::Sender<RelayMsg>,
+        window: sendme::StreamSendWindow,
+    ) -> Result<StreamID> {
+        let ent = StreamEnt::Open(sink, window);
         let mut iter = (&mut self.i).map(|x| x.into()).take(65536);
         self.m.add_ent(&mut iter, ent)
     }
@@ -60,7 +65,7 @@ impl StreamMap {
         match old {
             None => false,
             Some(StreamEnt::Closing) => false,
-            Some(StreamEnt::Open(_)) => true,
+            Some(StreamEnt::Open(_, _)) => true,
         }
     }
 
@@ -71,7 +76,7 @@ impl StreamMap {
         match old {
             None => false,
             Some(StreamEnt::Closing) => false,
-            Some(StreamEnt::Open(_)) => true,
+            Some(StreamEnt::Open(_, _)) => true,
         }
     }
 

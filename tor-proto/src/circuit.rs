@@ -116,6 +116,7 @@ pub(crate) struct StreamTarget {
     // XXXX truncated and then re-extended.
     hop: HopNum,
     circ: ClientCirc,
+    window: sendme::StreamSendWindow,
     stream_closed: Cell<Option<oneshot::Sender<CtrlMsg>>>,
 }
 
@@ -280,7 +281,8 @@ impl ClientCirc {
 
         let mut c = self.c.lock().await;
         let hopnum = c.hops.len() - 1;
-        let id = c.hops[hopnum].map.add_ent(sender)?;
+        let window = sendme::StreamSendWindow::new(StreamTarget::WINDOW_INIT);
+        let id = c.hops[hopnum].map.add_ent(sender, window.new_ref())?;
         let relaycell = RelayCell::new(id, begin_msg);
         let hopnum = (hopnum as u8).into();
         let (send_close, recv_close) = oneshot::channel::<CtrlMsg>();
@@ -294,6 +296,7 @@ impl ClientCirc {
             circ: self.clone(),
             stream_id: id,
             hop: hopnum,
+            window,
             stream_closed: Cell::new(Some(send_close)),
         };
 
@@ -584,12 +587,18 @@ impl CreateHandshakeWrap for Create2Wrap {
 }
 
 impl StreamTarget {
+    const WINDOW_INIT: u16 = 500;
+    const WINDOW_MAX: u16 = 500;
+
     /// Deliver a relay message for the stream that owns this StreamTarget.
     ///
     /// The StreamTarget will set the correct stream ID and pick the
     /// right hop, but will not validate that the message is well-formed
     /// or meaningful in context.
     pub(crate) async fn send(&mut self, msg: RelayMsg) -> Result<()> {
+        if msg.counts_towards_windows() {
+            self.window.take(&()).await;
+        }
         let cell = RelayCell::new(self.stream_id, msg);
         let mut c = self.circ.c.lock().await;
         c.send_relay_cell(self.hop, false, cell).await

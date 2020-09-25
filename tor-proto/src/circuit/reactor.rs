@@ -214,8 +214,15 @@ impl ReactorCore {
             return circ.handle_meta_cell(hopnum, msg);
         }
 
-        if let Some(StreamEnt::Open(s)) = hop.map.get_mut(streamid) {
+        if let Some(StreamEnt::Open(s, w)) = hop.map.get_mut(streamid) {
             // The stream for this message exists, and is open.
+
+            if let RelayMsg::Sendme(_) = msg {
+                // We need to handle sendmes here, not in the stream, or
+                // else we'd never notice them if we aren't reading.
+                w.put(()).await;
+                return Ok(());
+            }
 
             // Remember if this was an end cell: if so we should close
             // the stram.

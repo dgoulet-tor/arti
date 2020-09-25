@@ -235,6 +235,14 @@ impl RelayMsg {
             Unrecognized(b) => b.encode_onto(w),
         }
     }
+
+    /// Return true if this message is counted by flow-control windows.
+    pub(crate) fn counts_towards_windows(&self) -> bool {
+        match self {
+            RelayMsg::Sendme(_) => false,
+            _ => true,
+        }
+    }
 }
 
 /// Message to create a enw stream
@@ -442,7 +450,21 @@ impl Body for Connected {
 pub struct Sendme {
     digest: Option<Vec<u8>>,
 }
-
+impl Sendme {
+    /// Return a new empty sendme cell
+    ///
+    /// This format is used on streams, and on circuits without sendme
+    /// authentication.
+    pub fn new_empty() -> Self {
+        Sendme { digest: None }
+    }
+    /// This format is used on circuits with sendme authentication.
+    fn new_tag(x: [u8; 20]) -> Self {
+        Sendme {
+            digest: Some(x.into()),
+        }
+    }
+}
 impl Body for Sendme {
     fn as_message(self) -> RelayMsg {
         RelayMsg::Sendme(self)
