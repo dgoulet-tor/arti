@@ -193,8 +193,9 @@ impl ReactorCore {
         // Decrypt the cell. If it's recognized, then find the
         // corresponding hop.
         let (hopnum, tag) = circ.crypto.decrypt(&mut body)?;
+        // Make a copy of the authentication tag. TODO: I'd rather not
+        // copy it, but I don't see a way around it right now.
         let tag = {
-            // TODO: See if we can find a way not to copy this.
             let mut tag_copy = [0u8; 20];
             // XXXX could crash if length changes.
             (&mut tag_copy).copy_from_slice(tag);
@@ -203,7 +204,8 @@ impl ReactorCore {
         // Decode the cell.
         let msg = RelayCell::decode(body)?;
 
-        // Do we need to increment our sendme window?
+        // Decrement the circuit sendme windows, and see if we need to
+        // send a sendme cell.
         let send_circ_sendme = if msg.counts_towards_circuit_windows() {
             // XXXX unwrap is yucky.
             match circ.get_hop_mut(hopnum).unwrap().recvwindow.take() {
@@ -218,6 +220,7 @@ impl ReactorCore {
         } else {
             false
         };
+        // If we do need to send a circuit-level SENDME cell, do so.
         if send_circ_sendme {
             let sendme = Sendme::new_tag(tag);
             let cell = RelayCell::new(0.into(), sendme.into());
@@ -225,7 +228,9 @@ impl ReactorCore {
             circ.get_hop_mut(hopnum).unwrap().recvwindow.put();
         }
 
+        // Break the message apart into its streamID and message.
         let (streamid, msg) = msg.into_streamid_and_msg();
+
         // If this cell wants/refuses to have a Stream ID, does it
         // have/not have one?
         if !msg.get_cmd().accepts_streamid_val(streamid) {
@@ -242,20 +247,21 @@ impl ReactorCore {
             return circ.handle_meta_cell(hopnum, msg).await;
         }
 
-        // still risky. XXXX
+        //XXXX this is still an unwrap, and still risky.
         let hop = circ.get_hop_mut(hopnum).unwrap();
         if let Some(StreamEnt::Open(s, w)) = hop.map.get_mut(streamid) {
             // The stream for this message exists, and is open.
 
             if let RelayMsg::Sendme(_) = msg {
-                // We need to handle sendmes here, not in the stream, or
-                // else we'd never notice them if we aren't reading.
+                // We need to handle sendmes here, not in the stream's
+                // recv() method, or else we'd never notice them if the
+                // stream isn't reading.
                 w.put(()).await;
                 return Ok(());
             }
 
-            // Remember if this was an end cell: if so we should close
-            // the stram.
+            // Remember whether this was an end cell: if so we should
+            // close the stream.
             let end_cell = matches!(msg, RelayMsg::End(_));
 
             // XXXX handle errors better. Does this one mean that the
@@ -264,6 +270,7 @@ impl ReactorCore {
             // XXXX reject cells that should never go to a client,
             // XXXX like BEGIN.
 
+            // XXXXXXXXXXXXXXXXXXXXX
             // XXXXX If possible we should try to stop holding the mutex
             // XXXXX for this:
             // XXXXX This send() operation can deadlock if the queue

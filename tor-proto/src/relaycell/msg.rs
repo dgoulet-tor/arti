@@ -46,7 +46,7 @@ impl RelayCell {
     ///
     /// (A stream-level sendme counts towards circuit windows, but
     /// a circuit-level sendme doesn't.)
-    pub fn counts_towards_circuit_windows(&self) -> bool {
+    pub(crate) fn counts_towards_circuit_windows(&self) -> bool {
         !self.streamid.is_zero() || self.msg.counts_towards_windows()
     }
     /// Consume this relay message and encode it as a 509-byte padded cell
@@ -246,6 +246,8 @@ impl RelayMsg {
 
     /// Return true if this message is counted by flow-control windows.
     pub(crate) fn counts_towards_windows(&self) -> bool {
+        // TODO Instead of looking at !sendme, tor looks at data. We
+        // should document and  make the spec conform.
         match self {
             RelayMsg::Sendme(_) => false,
             _ => true,

@@ -298,7 +298,7 @@ impl ClientCirc {
 
         let mut c = self.c.lock().await;
         let hopnum = c.hops.len() - 1;
-        let window = sendme::StreamSendWindow::new(StreamTarget::WINDOW_INIT);
+        let window = sendme::StreamSendWindow::new(StreamTarget::SEND_WINDOW_INIT);
         let id = c.hops[hopnum].map.add_ent(sender, window.new_ref())?;
         let relaycell = RelayCell::new(id, begin_msg);
         let hopnum = (hopnum as u8).into();
@@ -443,13 +443,16 @@ impl ClientCircImpl {
         } else {
             ChanMsg::Relay(msg)
         };
+        // If the cell counted towards our sendme window, decrement
+        // that window, and maybe remember the authentication tag.
         if c_t_w {
+            // XXXX I wish I didn't have to copy the tag.
             // TODO: I'd like to use get_hops_mut here, but the borrow checker
             // won't let me.
-            assert!(tag.len() == 20); // XXXX risky
-                                      // XXXX don't make this copy.
+            assert!(tag.len() == 20); // XXXX risky, will break with v3 hs
             let mut tag_copy = [0u8; 20];
             (&mut tag_copy[..]).copy_from_slice(&tag[..]);
+            // This blocks if the send window is empty.
             self.hops[Into::<usize>::into(hop)]
                 .sendwindow
                 .take(&tag_copy)
@@ -632,8 +635,7 @@ impl CreateHandshakeWrap for Create2Wrap {
 }
 
 impl StreamTarget {
-    const WINDOW_INIT: u16 = 500;
-    const WINDOW_MAX: u16 = 500;
+    const SEND_WINDOW_INIT: u16 = 500;
 
     /// Deliver a relay message for the stream that owns this StreamTarget.
     ///
@@ -642,6 +644,7 @@ impl StreamTarget {
     /// or meaningful in context.
     pub(crate) async fn send(&mut self, msg: RelayMsg) -> Result<()> {
         if msg.counts_towards_windows() {
+            // Decrement the stream window (and block if it's empty)
             self.window.take(&()).await;
         }
         let cell = RelayCell::new(self.stream_id, msg);

@@ -44,7 +44,7 @@ impl TorStream {
         TorStream {
             target,
             receiver,
-            recvwindow: sendme::StreamRecvWindow::new(500),
+            recvwindow: sendme::StreamRecvWindow::new(Self::RECV_INIT),
             received_end: None,
         }
     }
@@ -59,6 +59,8 @@ impl TorStream {
             // mpsc channel.
             .ok_or_else(|| Error::StreamClosed("stream channel disappeared without END cell?"))?;
 
+        // Possibly decrement the window for the cell we just received, and
+        // send a SENDME if doing so took us under the threshold.
         if msg.counts_towards_windows() {
             match self.recvwindow.take() {
                 Some(true) => self.send_sendme().await?,
