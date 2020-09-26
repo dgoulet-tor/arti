@@ -35,15 +35,15 @@ pub(crate) mod reactor;
 pub(crate) mod sendme;
 mod streammap;
 
-use crate::chancell::{self, msg::ChanMsg, ChanCell, CircID};
 use crate::channel::Channel;
 use crate::circuit::reactor::{CtrlMsg, CtrlResult};
-use crate::crypto::cell::{ClientCrypt, ClientLayer, CryptInit, HopNum};
+use crate::crypto::cell::{ClientCrypt, ClientLayer, CryptInit, HopNum, RelayCellBody};
 use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
-use crate::relaycell::msg::{RelayCell, RelayMsg, Sendme};
-use crate::relaycell::{RelayCmd, StreamID};
 use crate::stream::{DataStream, TorStream};
 use crate::{Error, Result};
+use tor_cell::chancell::{self, msg::ChanMsg, ChanCell, CircID};
+use tor_cell::relaycell::msg::{RelayCell, RelayMsg, Sendme};
+use tor_cell::relaycell::{RelayCmd, StreamID};
 
 use tor_linkspec::LinkSpec;
 
@@ -199,7 +199,7 @@ impl ClientCirc {
         H: ClientHandshake,
         H::KeyGen: KeyGenerator,
     {
-        use crate::relaycell::msg::{Body, Extend2};
+        use tor_cell::relaycell::msg::{Body, Extend2};
         // Perform the first part of the cryptographic handshake
         let (state, msg) = H::client1(rng, &key)?;
         let extend_msg = Extend2::new(linkspecs, handshake_id, msg);
@@ -360,7 +360,7 @@ impl ClientCirc {
     /// the remote Tor relay do the hostname lookup for you.
     pub async fn begin_stream(&mut self, target: &str, port: u16) -> Result<DataStream> {
         // TODO: this should take flags to specify IP version preference
-        let beginmsg = crate::relaycell::msg::Begin::new(target, port, 0)?;
+        let beginmsg = tor_cell::relaycell::msg::Begin::new(target, port, 0)?;
         self.begin_data_stream(beginmsg.into()).await
     }
 
@@ -453,7 +453,7 @@ impl ClientCircImpl {
     /// Does not check whether the cell is well-formed or reasonable.
     async fn send_relay_cell(&mut self, hop: HopNum, early: bool, cell: RelayCell) -> Result<()> {
         let c_t_w = cell.counts_towards_circuit_windows();
-        let mut body = cell.encode(&mut thread_rng())?;
+        let mut body: RelayCellBody = cell.encode(&mut thread_rng())?.into();
         let tag = self.crypto.encrypt(&mut body, hop)?;
         let msg = chancell::msg::Relay::from_raw(body.into());
         let msg = if early {

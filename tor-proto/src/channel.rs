@@ -25,12 +25,13 @@
 //! fairness.
 
 mod circmap;
+mod codec;
 mod handshake;
 mod reactor;
 
-use crate::chancell::{codec, msg, ChanCell};
 use crate::circuit;
 use crate::{Error, Result};
+use tor_cell::chancell::{msg, ChanCell};
 
 use futures::channel::{mpsc, oneshot};
 use futures::io::{AsyncRead, AsyncWrite};
@@ -49,7 +50,7 @@ pub use handshake::{OutboundClientHandshake, UnverifiedChannel, VerifiedChannel}
 
 // Type alias: A Sink and Stream that transforms a TLS connection into
 // a cell-based communication mechanism.
-type CellFrame<T> = futures_codec::Framed<T, codec::ChannelCodec>;
+type CellFrame<T> = futures_codec::Framed<T, crate::channel::codec::ChannelCodec>;
 
 /// An open client channel, ready to send and receive Tor cells.
 ///
@@ -65,7 +66,7 @@ struct ChannelImpl {
     link_protocol: u16,
     /// The underlying channel, as a Sink of ChanCell.  Writing
     /// a ChanCell onto this sink sends it over the TLS channel.
-    tls: Box<dyn Sink<ChanCell, Error = Error> + Send + Unpin + 'static>,
+    tls: Box<dyn Sink<ChanCell, Error = tor_cell::Error> + Send + Unpin + 'static>,
     /// A circuit map, to translate circuit IDs into circuits.
     ///
     /// The ChannelImpl side of this object only needs to use this

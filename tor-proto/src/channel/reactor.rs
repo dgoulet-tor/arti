@@ -8,8 +8,8 @@
 
 use super::circmap::{CircEnt, CircMap};
 use super::CellFrame;
-use crate::chancell::{msg::ChanMsg, ChanCell, CircID};
 use crate::{Error, Result};
+use tor_cell::chancell::{msg::ChanMsg, ChanCell, CircID};
 
 use futures::channel::oneshot;
 use futures::future::Fuse;
@@ -125,15 +125,18 @@ impl ReactorCore {
                 msg.get_cmd()
             ))),
 
-            // These are always ignored.
-            Padding(_) | VPadding(_) | Unrecognized(_) => Ok(()),
-
             // These are allowed, and need to be handled.
             Relay(_) => self.deliver_relay(circid, msg).await,
 
             Destroy(_) => self.deliver_destroy(circid, msg).await,
 
             CreatedFast(_) | Created2(_) => self.deliver_created(circid, msg).await,
+
+            // These are always ignored.
+            Padding(_) | VPadding(_) | Unrecognized(_) => Ok(()),
+
+            // tor_cells knows about this type, but we don't.
+            _ => Ok(()),
         }
     }
 

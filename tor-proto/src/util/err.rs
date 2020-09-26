@@ -16,6 +16,9 @@ pub enum Error {
     /// An error that occurred from the io system.
     #[error("io error: {0}")]
     IoErr(#[from] std::io::Error),
+    /// An error occurred in the cell-handling layer.
+    #[error("cell encoding error: {0}")]
+    CellErr(#[from] tor_cell::Error),
     /// Somebody asked for a key that we didn't have.
     #[error("specified key was missing")]
     MissingKey,

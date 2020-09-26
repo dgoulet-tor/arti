@@ -1,10 +1,10 @@
 use crate::circuit::sendme;
+use crate::util::idmap::IdMap;
+use crate::Result;
 /// Mapping from stream ID to streams.
 // NOTE: This is a work in progress and I bet I'll refactor it a lot;
 // it needs to stay opaque!
-use crate::relaycell::{msg::RelayMsg, StreamID};
-use crate::util::idmap::IdMap;
-use crate::Result;
+use tor_cell::relaycell::{msg::RelayMsg, StreamID};
 
 use futures::channel::mpsc;
 use std::collections::HashMap;

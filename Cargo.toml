@@ -10,6 +10,7 @@ members = [
     "tor-checkable",
     "tor-cert",
     "tor-linkspec",
+    "tor-cell",
     "tor-proto",
     "tor-netdoc",
     "tor-netdir",

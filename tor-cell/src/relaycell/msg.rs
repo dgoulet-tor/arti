@@ -6,8 +6,7 @@
 use super::RelayCmd;
 use super::StreamID;
 use crate::chancell::msg::{TAP_C_HANDSHAKE_LEN, TAP_S_HANDSHAKE_LEN};
-use crate::chancell::CELL_DATA_LEN;
-use crate::crypto::cell::RelayCellBody;
+use crate::chancell::{RawCellBody, CELL_DATA_LEN};
 use std::net::{IpAddr, Ipv4Addr};
 use tor_bytes::{Error, Result};
 use tor_bytes::{Readable, Reader, Writeable, Writer};
@@ -46,12 +45,12 @@ impl RelayCell {
     ///
     /// (A stream-level sendme counts towards circuit windows, but
     /// a circuit-level sendme doesn't.)
-    pub(crate) fn counts_towards_circuit_windows(&self) -> bool {
+    pub fn counts_towards_circuit_windows(&self) -> bool {
         !self.streamid.is_zero() || self.msg.counts_towards_windows()
     }
     /// Consume this relay message and encode it as a 509-byte padded cell
     /// body.
-    pub fn encode<R: Rng + CryptoRng>(self, rng: &mut R) -> crate::Result<RelayCellBody> {
+    pub fn encode<R: Rng + CryptoRng>(self, rng: &mut R) -> crate::Result<RawCellBody> {
         // always this many zero-values bytes before padding.
         // XXXX We should specify this value more exactly, to avoid fingerprinting
         const MIN_SPACE_BEFORE_PADDING: usize = 4;
@@ -71,7 +70,7 @@ impl RelayCell {
             rng.fill_bytes(&mut raw[enc_len + MIN_SPACE_BEFORE_PADDING..]);
         }
 
-        Ok(raw.into())
+        Ok(raw)
     }
 
     /// Consume a relay cell and return its contents, encoded for use
@@ -98,7 +97,7 @@ impl RelayCell {
     ///
     /// Requires that the cryptographic checks on the message have already been
     /// performed
-    pub fn decode(body: RelayCellBody) -> Result<Self> {
+    pub fn decode(body: RawCellBody) -> Result<Self> {
         let mut reader = Reader::from_slice(body.as_ref());
         RelayCell::decode_from_reader(&mut reader)
     }
@@ -245,7 +244,7 @@ impl RelayMsg {
     }
 
     /// Return true if this message is counted by flow-control windows.
-    pub(crate) fn counts_towards_windows(&self) -> bool {
+    pub fn counts_towards_windows(&self) -> bool {
         // TODO Instead of looking at !sendme, tor looks at data. We
         // should document and  make the spec conform.
         match self {

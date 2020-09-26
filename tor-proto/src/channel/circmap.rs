@@ -1,10 +1,10 @@
 // NOTE: This is a work in progress and I bet I'll refactor it a lot;
 // it needs to stay opaque!
 
-use crate::chancell::msg::ChanMsg;
-use crate::chancell::CircID;
 use crate::util::idmap::IdMap;
 use crate::Result;
+use tor_cell::chancell::msg::ChanMsg;
+use tor_cell::chancell::CircID;
 
 use futures::channel::{mpsc, oneshot};
 

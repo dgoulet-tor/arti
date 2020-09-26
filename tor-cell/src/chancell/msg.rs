@@ -226,13 +226,15 @@ macro_rules! fixed_len {
     }
 }
 
-// XXXX MOVE THESE
 /// Number of bytes used for a TAP handshake by the initiator.
-pub const TAP_C_HANDSHAKE_LEN: usize = 128 * 2 + 42;
+pub(crate) const TAP_C_HANDSHAKE_LEN: usize = 128 * 2 + 42;
 /// Number of bytes used for a TAP handshake response
-pub const TAP_S_HANDSHAKE_LEN: usize = 128 + 20;
+pub(crate) const TAP_S_HANDSHAKE_LEN: usize = 128 + 20;
 
-use crate::crypto::handshake::fast::{FAST_C_HANDSHAKE_LEN, FAST_S_HANDSHAKE_LEN};
+/// Number of bytes used for a CREATE_FAST handshake by the initiator
+const FAST_C_HANDSHAKE_LEN: usize = 20;
+/// Number of bytes used for a CRATE_FAST handshake response
+const FAST_S_HANDSHAKE_LEN: usize = 20 + 20;
 
 fixed_len! {
     /// A Create cell creates a circuit, using the TAP handshake
@@ -369,8 +371,8 @@ impl Relay {
     }
     /// Consume this Relay message and return a RelayCellBody for
     /// encryption/decryption.
-    pub fn into_relay_body(self) -> crate::crypto::cell::RelayCellBody {
-        (*self.body).into()
+    pub fn into_relay_body(self) -> RawCellBody {
+        *self.body
     }
 }
 impl std::fmt::Debug for Relay {

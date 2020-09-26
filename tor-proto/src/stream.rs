@@ -13,8 +13,8 @@
 //! XXXX TODO: There is no fariness, rate-limiting, or flow control.
 
 use crate::circuit::{sendme, StreamTarget};
-use crate::relaycell::msg::{Data, RelayMsg, Resolved, Sendme};
 use crate::{Error, Result};
+use tor_cell::relaycell::msg::{Data, RelayMsg, Resolved, Sendme};
 
 use futures::channel::mpsc;
 use futures::stream::StreamExt;

@@ -5,8 +5,9 @@ use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 
-use crate::chancell::{codec, msg, ChanCmd};
+use crate::channel::codec::ChannelCodec;
 use crate::{Error, Result};
+use tor_cell::chancell::{msg, ChanCmd};
 
 use std::net;
 use tor_bytes::Reader;
@@ -94,7 +95,8 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         // Now we can switch to using a "Framed". We can ignore the
         // AsyncRead/AsyncWrite aspects of the tls, and just treat it
         // as a stream and a sink for cells.
-        let mut tls = futures_codec::Framed::new(self.tls, codec::ChannelCodec::new(link_protocol));
+        let codec = ChannelCodec::new(link_protocol);
+        let mut tls = futures_codec::Framed::new(self.tls, codec);
 
         // Read until we have the netinfo cells.
         let mut certs: Option<msg::Certs> = None;

@@ -1,15 +1,14 @@
-//! Implementation for asynchronus encoding and decoding of ChanCells.
+//! Implementation for encoding and decoding of ChanCells.
 
 use super::CELL_DATA_LEN;
 use crate::chancell::{msg, ChanCell, ChanCmd, CircID};
 use crate::Error;
 use arrayref::{array_mut_ref, array_ref};
 use tor_bytes::{self, Reader, Writer};
-//use log::trace;
 
-/// This Codec object can be used with the `futures_codec` crate to
-/// turn an asynchronous byte stream into an asynchronous Stream/Sink pair
-/// of ChannelCell.
+use bytes::BytesMut;
+
+/// This object can be used to encode and decode channel cells.
 ///
 /// NOTE: only link protocol versions 3 and higher are supported.
 /// VERSIONS cells are not supported via the encoder/decoder, since it
@@ -39,13 +38,9 @@ impl ChannelCodec {
     pub fn new(link_version: u16) -> Self {
         ChannelCodec { link_version }
     }
-}
 
-impl futures_codec::Encoder for ChannelCodec {
-    type Item = ChanCell;
-    type Error = Error;
-
-    fn encode(&mut self, item: Self::Item, dst: &mut bytes::BytesMut) -> Result<(), Self::Error> {
+    /// Write the given cell into the provided BytesMut object.
+    pub fn write_cell(&self, item: ChanCell, dst: &mut BytesMut) -> crate::Result<()> {
         let ChanCell { circid, msg } = item;
         let cmd = msg.get_cmd();
         dst.write_u32(circid.into());
@@ -74,13 +69,12 @@ impl futures_codec::Encoder for ChannelCodec {
         }
         Ok(())
     }
-}
 
-impl futures_codec::Decoder for ChannelCodec {
-    type Item = ChanCell;
-    type Error = Error;
-
-    fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+    /// Try to decode a cell from the provided BytesMut object.
+    ///
+    /// On a definite decoding error, return Err(_).  On a cell that might
+    /// just be truncated, return Ok(None).
+    pub fn decode_cell(&mut self, src: &mut BytesMut) -> crate::Result<Option<ChanCell>> {
         if src.len() < 7 {
             // Smallest possible command: varcell with len 0
             return Ok(None);

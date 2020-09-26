@@ -159,11 +159,14 @@ big.
 
 `tor-linkspec`: Traits and types for connecting and extending to Tor relays.
 
-`tor-proto`: Functions to work with cell types, handshakes, and other aspects
-of the Tor protocol.  This crate is NOT ALLOWED to have any dependencies on
-specific TLS libraries or specificaasync environments; those have to happen
-at a higher level.  (Perhaps this crate should be split into a cell handling
-API and a network API.  The division point would fairly logical.)
+`tor-cell`: Encoding and decoding for Tor cells.
+
+`tor-proto`: Functions to work with handshakes, channels, circuits, streams,
+and other aspects of the Tor protocol.  This crate is NOT ALLOWED to have any
+dependencies on specific TLS libraries or specific async environments; those
+have to happen at a higher level.  (Perhaps this crate should be split into a
+cell handling API and a network API.  The division point would fairly
+logical.)
 
 `tor-netdir`: Wraps tor-netdoc to expose a "tor network directory" interface.
 Doesn't touch the network itself.  Right now it only handles microdesc-based

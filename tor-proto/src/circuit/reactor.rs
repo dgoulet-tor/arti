@@ -7,12 +7,12 @@
 //! it should just not exist.
 
 use super::streammap::StreamEnt;
-use crate::chancell::{msg::ChanMsg, msg::Relay};
 use crate::circuit::ClientCirc;
 use crate::crypto::cell::HopNum;
-use crate::relaycell::msg::{End, RelayCell, RelayMsg, Sendme};
-use crate::relaycell::StreamID;
 use crate::{Error, Result};
+use tor_cell::chancell::{msg::ChanMsg, msg::Relay};
+use tor_cell::relaycell::msg::{End, RelayCell, RelayMsg, Sendme};
+use tor_cell::relaycell::StreamID;
 
 use futures::channel::{mpsc, oneshot};
 use futures::select_biased;
@@ -186,7 +186,7 @@ impl ReactorCore {
 
     /// React to a Relay or RelayEarly cell.
     async fn handle_relay_cell(&mut self, cell: Relay) -> Result<()> {
-        let mut body = cell.into_relay_body();
+        let mut body = cell.into_relay_body().into();
         // XXX I don't like locking the whole circuit
         let mut circ = self.circuit.c.lock().await;
 
@@ -202,7 +202,7 @@ impl ReactorCore {
             tag_copy
         };
         // Decode the cell.
-        let msg = RelayCell::decode(body)?;
+        let msg = RelayCell::decode(body.into())?;
 
         // Decrement the circuit sendme windows, and see if we need to
         // send a sendme cell.

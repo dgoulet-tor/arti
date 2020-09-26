@@ -7,8 +7,8 @@
 //! one for "inbound" traffic.
 //!
 
-use crate::chancell::RawCellBody;
 use crate::{Error, Result};
+use tor_cell::chancell::RawCellBody;
 
 use generic_array::GenericArray;
 
