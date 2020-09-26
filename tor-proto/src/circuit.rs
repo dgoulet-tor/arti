@@ -467,7 +467,7 @@ impl ClientCircImpl {
             // XXXX I wish I didn't have to copy the tag.
             // TODO: I'd like to use get_hops_mut here, but the borrow checker
             // won't let me.
-            assert!(tag.len() == 20); // XXXX risky, will break with v3 hs
+            assert!(tag.len() == 20); // XXXX risky
             let mut tag_copy = [0u8; 20];
             (&mut tag_copy[..]).copy_from_slice(&tag[..]);
             // This blocks if the send window is empty.

@@ -18,8 +18,8 @@ use std::sync::Arc;
 
 // XXXX Three problems with this tag:
 // XXXX - First, we need to support unauthenticated flow control.
-// XXXX - Second, this tag type could be different for each layer (and
-// XXXX   will be, once we have v3 onion services working).
+// XXXX - Second, this tag type could be different for each layer, if we
+// XXXX   eventually have an authenticator that isn't 20 bytes long.
 // XXXX - Third, we want the comparison to happen with a constant-time
 // XXXX   operation.
 
