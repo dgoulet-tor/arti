@@ -14,7 +14,7 @@ tor-protover = { path="../tor-protover", version= "*" }
 tor-checkable = { path="../tor-checkable", version= "*" }
 
 base64 = "0.12.3"
-chrono = "0.4.15"
+chrono = "0.4.18"
 digest = "0.9.0"
 hex = "0.4.2"
 lazy_static = "1.4.0"
