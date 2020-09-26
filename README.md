@@ -36,16 +36,16 @@ So far the code has untested or under-tested implementations of:
   * parsing and validating microdesc consensuses
   * link authentication (client->server type)
   * building circuits from chosen hops
-  * an incomplete origin circuit abstraction
-  * an incomplete stream abstraction
+  * a slightly wonky circuit abstraction
+  * a slightly stream abstraction
 
 Before I share it more broadly, I think it needs more work on:
 
   * refactoring everywhere
+  * cleanup everywhere
   * lots of tests
   * a better api for cell types
-  * A more complete API for dealing with circuits and streams (rather than
-    handling cells one by one)
+  * better APIs for anything that needs to get exposed
 
 There is no support yet for:
 
@@ -55,13 +55,14 @@ There is no support yet for:
   * creating network documents
   * v2 onion service anything
   * v3 onion service anything
-  * the directory protocol
+  * the directory protocol (downloading or uploading)
   * lots of optimizations that Tor does
   * lots of security stuff that Tor does
   * pluggable transports
   * bridges
-  * working with no_std
+  * working with no_std, at all.
   * being a relay
+  * disabling unused code
   * rate limiting
   * API stability
 
@@ -160,8 +161,9 @@ big.
 
 `tor-proto`: Functions to work with cell types, handshakes, and other aspects
 of the Tor protocol.  This crate is NOT ALLOWED to have any dependencies on
-specific TLS libraries or async environments; those have to happen at a
-higher level.
+specific TLS libraries or specificaasync environments; those have to happen
+at a higher level.  (Perhaps this crate should be split into a cell handling
+API and a network API.  The division point would fairly logical.)
 
 `tor-netdir`: Wraps tor-netdoc to expose a "tor network directory" interface.
 Doesn't touch the network itself.  Right now it only handles microdesc-based
