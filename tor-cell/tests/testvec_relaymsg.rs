@@ -8,6 +8,8 @@ use tor_llcrypto::pk::rsa::RSAIdentity;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
+use hex_literal::hex;
+
 fn msg(cmd: RelayCmd, s: &str, msg: &msg::RelayMsg) {
     let body = {
         let mut s = s.to_string();
@@ -205,10 +207,95 @@ RENDEZVOUS_ESTABLISHED, 39, ""
 
  */
 
+#[test]
+fn test_resolve() {
+    // these values are hand-generated.
+
+    let cmd = RelayCmd::RESOLVE;
+    assert_eq!(Into::<u8>::into(cmd), 11_u8);
+
+    let body = hex::encode(b"www.torproject.org\0");
+    msg(cmd, &body, &msg::Resolve::new("www.torproject.org").into());
+
+    let body = hex::encode(b"1.0.0.127.in-addr.arpa\0");
+    let addr = "127.0.0.1".parse::<IpAddr>().unwrap();
+    msg(cmd, &body, &msg::Resolve::new_reverse(&addr).into());
+
+    let body = hex::encode(
+        &b"0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.1.0.0.2.ip6.arpa\0"[..],
+    );
+    let addr = "2001::".parse::<IpAddr>().unwrap();
+    msg(cmd, &body, &msg::Resolve::new_reverse(&addr).into());
+}
+
+#[test]
+fn test_resolved() {
+    // these values are hand-generated.
+    let cmd = RelayCmd::RESOLVED;
+    assert_eq!(Into::<u8>::into(cmd), 12_u8);
+
+    msg(cmd, "", &msg::Resolved::new_empty().into());
+    msg(
+        cmd,
+        "F0 00 00000E10",
+        &msg::Resolved::new_err(true, 3600).into(),
+    );
+    msg(
+        cmd,
+        "F1 00 00000E10",
+        &msg::Resolved::new_err(false, 3600).into(),
+    );
+
+    let mut r = msg::Resolved::new_empty();
+    r.add_answer(msg::ResolvedVal::Ip("127.0.0.1".parse().unwrap()), 3600);
+    r.add_answer(msg::ResolvedVal::Ip("127.0.0.2".parse().unwrap()), 7200);
+    msg(
+        cmd,
+        "04 04 7f000001 00000E10 04 04 7f000002 00001c20",
+        &r.into(),
+    );
+
+    let mut r = msg::Resolved::new_empty();
+    r.add_answer(msg::ResolvedVal::Ip("1234::5678".parse().unwrap()), 128);
+    msg(
+        cmd,
+        "06 10 12340000000000000000000000005678 00000080",
+        &r.into(),
+    );
+
+    let mut r = msg::Resolved::new_empty();
+    r.add_answer(msg::ResolvedVal::Hostname("www.torproject.org".into()), 600);
+    msg(
+        cmd,
+        "00 12 7777772e746f7270726f6a6563742e6f7267 00000258",
+        &r.into(),
+    );
+}
+
+#[test]
+fn test_sendme() {
+    // these values are hand-generated.
+    let cmd = RelayCmd::SENDME;
+    assert_eq!(Into::<u8>::into(cmd), 5_u8);
+
+    msg(cmd, "", &msg::Sendme::new_empty().into());
+
+    let tag = hex!("F01234989823478bcdefabcdef01234567890123");
+    msg(
+        cmd,
+        "01 0014 F01234989823478bcdefabcdef01234567890123",
+        &msg::Sendme::new_tag(tag).into(),
+    )
+}
+
+#[test]
+fn test_truncate() {
+    let cmd = RelayCmd::TRUNCATE;
+    assert_eq!(Into::<u8>::into(cmd), 8_u8);
+
+    msg(cmd, "", &msg::RelayMsg::Truncate);
+}
+
 // TODO: need to add tests for:
 //    - unrecognized
-//    - resolve
-//    - resolved
-//    - truncate
-//    - sendme
 //    - data

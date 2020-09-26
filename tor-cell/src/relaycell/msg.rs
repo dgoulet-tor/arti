@@ -142,7 +142,7 @@ pub enum RelayMsg {
     /// Successful response to an Extend2 message
     Extended2(Extended2),
     /// Partially close a circuit
-    Truncate(Truncate),
+    Truncate,
     /// Tell the client the a circuit has been partially closed
     Truncated(Truncated),
     /// Used for padding
@@ -189,7 +189,7 @@ impl RelayMsg {
             Extended(_) => RelayCmd::EXTENDED,
             Extend2(_) => RelayCmd::EXTEND2,
             Extended2(_) => RelayCmd::EXTENDED2,
-            Truncate(_) => RelayCmd::TRUNCATE,
+            Truncate => RelayCmd::TRUNCATE,
             Truncated(_) => RelayCmd::TRUNCATED,
             Drop => RelayCmd::DROP,
             Resolve(_) => RelayCmd::RESOLVE,
@@ -210,7 +210,7 @@ impl RelayMsg {
             RelayCmd::EXTENDED => RelayMsg::Extended(Extended::decode_from_reader(r)?),
             RelayCmd::EXTEND2 => RelayMsg::Extend2(Extend2::decode_from_reader(r)?),
             RelayCmd::EXTENDED2 => RelayMsg::Extended2(Extended2::decode_from_reader(r)?),
-            RelayCmd::TRUNCATE => RelayMsg::Truncate(Truncate::decode_from_reader(r)?),
+            RelayCmd::TRUNCATE => RelayMsg::Truncate,
             RelayCmd::TRUNCATED => RelayMsg::Truncated(Truncated::decode_from_reader(r)?),
             RelayCmd::DROP => RelayMsg::Drop,
             RelayCmd::RESOLVE => RelayMsg::Resolve(Resolve::decode_from_reader(r)?),
@@ -233,7 +233,7 @@ impl RelayMsg {
             Extended(b) => b.encode_onto(w),
             Extend2(b) => b.encode_onto(w),
             Extended2(b) => b.encode_onto(w),
-            Truncate(b) => b.encode_onto(w),
+            Truncate => (),
             Truncated(b) => b.encode_onto(w),
             Drop => (),
             Resolve(b) => b.encode_onto(w),
@@ -682,20 +682,6 @@ impl Body for Extended2 {
     }
 }
 
-/// End the circuit after this hop
-#[derive(Debug, Clone)]
-pub struct Truncate {}
-
-impl Body for Truncate {
-    fn as_message(self) -> RelayMsg {
-        RelayMsg::Truncate(self)
-    }
-    fn decode_from_reader(_r: &mut Reader<'_>) -> Result<Self> {
-        Ok(Truncate {})
-    }
-    fn encode_onto(self, _w: &mut Vec<u8>) {}
-}
-
 /// The remaining hops of this circuit have gone away
 #[derive(Debug, Clone)]
 pub struct Truncated {
@@ -728,7 +714,37 @@ impl Body for Truncated {
 pub struct Resolve {
     query: Vec<u8>,
 }
-
+impl Resolve {
+    /// Construct a new resolve message to look up a hostname.
+    pub fn new(s: &str) -> Self {
+        Resolve {
+            query: s.as_bytes().into(),
+        }
+    }
+    /// Construct a new resolve message to do a reverse lookup on an address
+    pub fn new_reverse(addr: &IpAddr) -> Self {
+        let query = match addr {
+            IpAddr::V4(v4) => {
+                let [a, b, c, d] = v4.octets();
+                format!("{}.{}.{}.{}.in-addr.arpa", d, c, b, a)
+            }
+            IpAddr::V6(v6) => {
+                let mut s = String::with_capacity(72);
+                for o in v6.octets().iter().rev() {
+                    let high_nybble = o >> 4;
+                    let low_nybble = o & 15;
+                    s.push_str(&format!("{:x}.{:x}.", low_nybble, high_nybble));
+                }
+                s.push_str("ip6.arpa");
+                s
+            }
+        };
+        dbg!(&query);
+        Resolve {
+            query: query.into_bytes(),
+        }
+    }
+}
 impl Body for Resolve {
     fn as_message(self) -> RelayMsg {
         RelayMsg::Resolve(self)
@@ -847,7 +863,32 @@ impl Writeable for ResolvedVal {
 pub struct Resolved {
     answers: Vec<(ResolvedVal, u32)>,
 }
-
+impl Resolved {
+    /// Return a new empty Resolved object with no answers.
+    pub fn new_empty() -> Self {
+        Resolved {
+            answers: Vec::new(),
+        }
+    }
+    /// Return a new Resolved object reporting a name lookup error.
+    ///
+    /// TODO: Is getting no answer an error; or it is represented by
+    /// a list of no answers?
+    pub fn new_err(transient: bool, ttl: u32) -> Self {
+        let mut res = Self::new_empty();
+        let err = if transient {
+            ResolvedVal::TransientError
+        } else {
+            ResolvedVal::NontransientError
+        };
+        res.add_answer(err, ttl);
+        res
+    }
+    /// Add a single answer to this Resolved message
+    pub fn add_answer(&mut self, answer: ResolvedVal, ttl: u32) {
+        self.answers.push((answer, ttl));
+    }
+}
 impl Body for Resolved {
     fn as_message(self) -> RelayMsg {
         RelayMsg::Resolved(self)
