@@ -1,6 +1,6 @@
 
 [package]
-name = "tor-proto-fuzz"
+name = "tor-cell-fuzz"
 version = "0.0.0"
 authors = ["Automatically generated"]
 publish = false
@@ -14,7 +14,7 @@ bytes = "0.5.6"
 futures_codec = "0.4.1"
 libfuzzer-sys = "0.3"
 
-[dependencies.tor-proto]
+[dependencies.tor-cell]
 path = ".."
 
 [dependencies.tor-bytes]
