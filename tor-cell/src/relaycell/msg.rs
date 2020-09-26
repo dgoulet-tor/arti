@@ -305,7 +305,9 @@ impl Body for Begin {
         w.write_u8(b':');
         w.write_all(self.port.to_string().as_bytes());
         w.write_u8(0);
-        w.write_u32(self.flags);
+        if self.flags != 0 {
+            w.write_u32(self.flags);
+        }
     }
 }
 
