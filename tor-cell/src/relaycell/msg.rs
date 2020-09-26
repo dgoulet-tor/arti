@@ -121,7 +121,7 @@ impl RelayCell {
 }
 
 /// A single parsed relay message, sent or received along a circuit
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RelayMsg {
     /// Create a stream
     Begin(Begin),
@@ -255,7 +255,7 @@ impl RelayMsg {
 }
 
 /// Message to create a enw stream
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Begin {
     addr: Vec<u8>,
     port: u16,
@@ -312,7 +312,7 @@ impl Body for Begin {
 }
 
 /// Data on a stream
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Data {
     body: Vec<u8>,
 }
@@ -352,7 +352,7 @@ impl Body for Data {
 }
 
 /// Closing a stream
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct End {
     reason: u8,
     addr: Option<(IpAddr, u32)>,
@@ -368,6 +368,12 @@ impl End {
             reason: REASON_MISC,
             addr: None,
         }
+    }
+    /// Make a new END message with the provided end reason.
+    ///
+    /// TODO: reason should be an enum-like thing.
+    pub fn new_with_reason(reason: u8) -> Self {
+        End { reason, addr: None }
     }
 }
 impl Body for End {
@@ -414,9 +420,21 @@ impl Body for End {
 }
 
 /// Successful response to a Begin message
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Connected {
     addr: Option<(IpAddr, u32)>,
+}
+impl Connected {
+    /// Construct a new empty connected cell.
+    pub fn new_empty() -> Self {
+        Connected { addr: None }
+    }
+    /// Construct a connected cell with an address and a time-to-live value.
+    pub fn new_with_addr(addr: IpAddr, ttl: u32) -> Self {
+        Connected {
+            addr: Some((addr, ttl)),
+        }
+    }
 }
 impl Body for Connected {
     fn as_message(self) -> RelayMsg {
@@ -457,7 +475,7 @@ impl Body for Connected {
 }
 
 /// Used for flow control to increase flow control window
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Sendme {
     digest: Option<Vec<u8>>,
 }
@@ -516,14 +534,24 @@ impl Body for Sendme {
 }
 
 /// Obsolete circuit extension message
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Extend {
     addr: Ipv4Addr,
     port: u16,
     handshake: Vec<u8>,
     rsaid: RSAIdentity,
 }
-
+impl Extend {
+    /// Construct a new (deprecated) extend cell
+    pub fn new(addr: Ipv4Addr, port: u16, handshake: Vec<u8>, rsaid: RSAIdentity) -> Self {
+        Extend {
+            addr,
+            port,
+            handshake,
+            rsaid,
+        }
+    }
+}
 impl Body for Extend {
     fn as_message(self) -> RelayMsg {
         RelayMsg::Extend(self)
@@ -549,11 +577,16 @@ impl Body for Extend {
 }
 
 /// Obsolete circuit extension message (reply)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Extended {
     handshake: Vec<u8>,
 }
-
+impl Extended {
+    /// Construct a new Extended message with the provided handshake
+    pub fn new(handshake: Vec<u8>) -> Self {
+        Extended { handshake }
+    }
+}
 impl Body for Extended {
     fn as_message(self) -> RelayMsg {
         RelayMsg::Extended(self)
@@ -568,7 +601,7 @@ impl Body for Extended {
 }
 
 /// Extend the circuit to a new hop
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Extend2 {
     linkspec: Vec<LinkSpec>,
     handshake_type: u16,
@@ -617,11 +650,15 @@ impl Body for Extend2 {
 }
 
 /// Successful reply to an Extend2
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Extended2 {
     handshake: Vec<u8>,
 }
 impl Extended2 {
+    /// Construct a new Extended2 message with the provided handshake
+    pub fn new(handshake: Vec<u8>) -> Self {
+        Extended2 { handshake }
+    }
     /// Consume this extended2 cell and return its body.
     pub fn into_body(self) -> Vec<u8> {
         self.handshake
@@ -646,7 +683,7 @@ impl Body for Extended2 {
 }
 
 /// End the circuit after this hop
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Truncate {}
 
 impl Body for Truncate {
@@ -660,11 +697,18 @@ impl Body for Truncate {
 }
 
 /// The remaining hops of this circuit have gone away
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Truncated {
     reason: u8,
 }
-
+impl Truncated {
+    /// Construct a new truncated message.
+    ///
+    /// TODO: add an enum for reasons.
+    pub fn new(reason: u8) -> Self {
+        Truncated { reason }
+    }
+}
 impl Body for Truncated {
     fn as_message(self) -> RelayMsg {
         RelayMsg::Truncated(self)
@@ -680,7 +724,7 @@ impl Body for Truncated {
 }
 
 /// Launch a DNS lookup
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Resolve {
     query: Vec<u8>,
 }
@@ -702,7 +746,7 @@ impl Body for Resolve {
 }
 
 /// Possible response to a DNS lookup
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ResolvedVal {
     /// We found an IP address
     Ip(IpAddr),
@@ -799,7 +843,7 @@ impl Writeable for ResolvedVal {
 }
 
 /// Response to a Resolve message
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Resolved {
     answers: Vec<(ResolvedVal, u32)>,
 }
@@ -826,7 +870,7 @@ impl Body for Resolved {
 }
 
 /// A relay message that we didn't recognize
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Unrecognized {
     cmd: RelayCmd,
     body: Vec<u8>,

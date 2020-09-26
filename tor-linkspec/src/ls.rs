@@ -14,7 +14,7 @@ use tor_llcrypto::pk::rsa::RSAIdentity;
 ///
 /// TODO: move this. It's used in a bunch of other places.
 #[non_exhaustive]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LinkSpec {
     /// The TCP address of an OR Port for a relay
     OrPort(IpAddr, u16),
@@ -108,6 +108,11 @@ impl Writeable for LinkSpec {
 impl From<&SocketAddr> for LinkSpec {
     fn from(sa: &SocketAddr) -> Self {
         LinkSpec::OrPort(sa.ip(), sa.port())
+    }
+}
+impl From<SocketAddr> for LinkSpec {
+    fn from(sa: SocketAddr) -> Self {
+        (&sa).into()
     }
 }
 impl From<RSAIdentity> for LinkSpec {
