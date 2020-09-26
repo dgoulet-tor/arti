@@ -247,7 +247,7 @@ macro_rules! fixed_len {
 }
 
 /// Number of bytes used for a TAP handshake by the initiator.
-pub(crate) const TAP_C_HANDSHAKE_LEN: usize = 128 * 2 + 42;
+pub(crate) const TAP_C_HANDSHAKE_LEN: usize = 128 + 16 + 42;
 /// Number of bytes used for a TAP handshake response
 pub(crate) const TAP_S_HANDSHAKE_LEN: usize = 128 + 20;
 
