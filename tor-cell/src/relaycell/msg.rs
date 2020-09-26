@@ -523,6 +523,8 @@ impl Body for Sendme {
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
         match self.digest {
+            // SPEC: we should be clear in the spec that this is what we
+            // do when linkauth is off.
             None => (),
             Some(mut x) => {
                 w.write_u8(1);
