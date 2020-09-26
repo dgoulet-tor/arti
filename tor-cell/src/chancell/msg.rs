@@ -158,6 +158,17 @@ impl ChanMsg {
 /// The correct response to a padding cell is to drop it and do nothing.
 #[derive(Clone, Debug)]
 pub struct Padding {}
+impl Padding {
+    /// Create a new fixed-length padding cell
+    pub fn new() -> Self {
+        Padding {}
+    }
+}
+impl Default for Padding {
+    fn default() -> Self {
+        Padding::new()
+    }
+}
 impl Body for Padding {
     fn as_message(self) -> ChanMsg {
         ChanMsg::Padding(self)
@@ -208,6 +219,15 @@ macro_rules! fixed_len {
         pub struct $name {
             handshake: Vec<u8>
         }
+        impl $name {
+            /// Create a new cell from a provided handshake.
+            pub fn new<B>(handshake: B) -> Self
+                where B: Into<Vec<u8>>
+            {
+                let handshake = handshake.into();
+                $name { handshake }
+            }
+        }
         impl Body for $name {
             fn as_message(self) -> ChanMsg {
                 ChanMsg::$name(self)
@@ -257,10 +277,6 @@ fixed_len! {
     CreateFast, CREATE_FAST, FAST_C_HANDSHAKE_LEN
 }
 impl CreateFast {
-    /// Create a new CreateFast handshake.
-    pub fn new(handshake: Vec<u8>) -> Self {
-        CreateFast { handshake }
-    }
     /// Return the content of this handshake
     pub fn get_body(&self) -> &[u8] {
         &self.handshake
@@ -310,7 +326,11 @@ impl Readable for Create2 {
 }
 impl Create2 {
     /// Wrap a typed handshake as a create2 cell
-    pub fn new(handshake_type: u16, handshake: Vec<u8>) -> Self {
+    pub fn new<B>(handshake_type: u16, handshake: B) -> Self
+    where
+        B: Into<Vec<u8>>,
+    {
+        let handshake = handshake.into();
         Create2 {
             handshake_type,
             handshake,
@@ -324,6 +344,14 @@ pub struct Created2 {
     handshake: Vec<u8>,
 }
 impl Created2 {
+    /// Create a new Created2 to hold a given handshake.
+    pub fn new<B>(handshake: B) -> Self
+    where
+        B: Into<Vec<u8>>,
+    {
+        let handshake = handshake.into();
+        Created2 { handshake }
+    }
     /// Consume this created2 cell and return its body.
     pub fn into_body(self) -> Vec<u8> {
         self.handshake
@@ -402,16 +430,29 @@ impl Readable for Relay {
 /// tear down the associated circuit, and relay the destroy message
 /// down the circuit to later/earlier nodes on the circuit (if any).
 #[derive(Clone, Debug)]
-pub struct Destroy {}
+pub struct Destroy {
+    reason: u8,
+}
+impl Destroy {
+    /// Create a new destroy cell.
+    ///
+    /// TODO: make an enum-like thing for destroy reasons.
+    pub fn new(reason: u8) -> Self {
+        Destroy { reason }
+    }
+}
 impl Body for Destroy {
     fn as_message(self) -> ChanMsg {
         ChanMsg::Destroy(self)
     }
-    fn write_body_onto<W: Writer + ?Sized>(self, _w: &mut W) {}
+    fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
+        w.write_u8(self.reason)
+    }
 }
 impl Readable for Destroy {
-    fn take_from(_r: &mut Reader<'_>) -> Result<Self> {
-        Ok(Destroy {})
+    fn take_from(r: &mut Reader<'_>) -> Result<Self> {
+        let reason = r.take_u8()?;
+        Ok(Destroy { reason })
     }
 }
 
@@ -473,6 +514,18 @@ impl Netinfo {
             my_addr: Vec::new(), // clients don't report their addrs.
         }
     }
+    /// Construct a new Netinfo to be sent by a relay
+    pub fn for_relay<V>(timestamp: u32, their_addr: IpAddr, my_addrs: V) -> Self
+    where
+        V: Into<Vec<IpAddr>>,
+    {
+        let my_addr = my_addrs.into();
+        Netinfo {
+            timestamp,
+            their_addr,
+            my_addr,
+        }
+    }
 }
 impl Body for Netinfo {
     fn as_message(self) -> ChanMsg {
@@ -522,9 +575,12 @@ pub struct Versions {
 impl Versions {
     /// Construct a new Versions message using a provided list of link
     /// protocols
-    pub fn new(vs: &[u16]) -> Self {
+    pub fn new<B>(vs: B) -> Self
+    where
+        B: Into<Vec<u16>>,
+    {
         let versions = vs.into();
-        assert!(vs.len() < (std::u16::MAX / 2) as usize);
+        assert!(versions.len() < (std::u16::MAX / 2) as usize);
         Self { versions }
     }
     /// Encode this VERSIONS cell in the manner expected for a handshake.
@@ -649,6 +705,22 @@ pub struct Certs {
     certs: Vec<TorCert>,
 }
 impl Certs {
+    /// Return a new empty certs cell.
+    pub fn new_empty() -> Self {
+        Certs { certs: Vec::new() }
+    }
+    /// Add a new encoded certificate to this cell.
+    ///
+    /// Does not check anything about the well-formedness of the certificate.
+    pub fn push_cert_body<B>(&mut self, certtype: tor_cert::CertType, cert: B)
+    where
+        B: Into<Vec<u8>>,
+    {
+        let certtype = certtype.into();
+        let cert = cert.into();
+        self.certs.push(TorCert { certtype, cert });
+    }
+
     /// Return the body of the certificate tagged with 'tp', if any.
     pub fn get_cert_body(&self, tp: tor_cert::CertType) -> Option<&[u8]> {
         self.certs
@@ -711,6 +783,21 @@ pub struct AuthChallenge {
     challenge: Vec<u8>,
     methods: Vec<u16>,
 }
+impl AuthChallenge {
+    /// Construct a new AuthChallenge cell with a given challenge
+    /// value (chosen randomly) and a set of acceptable authentication methods.
+    pub fn new<B, M>(challenge: B, methods: M) -> Self
+    where
+        B: Into<Vec<u8>>,
+        M: Into<Vec<u16>>,
+    {
+        AuthChallenge {
+            challenge: challenge.into(),
+            methods: methods.into(),
+        }
+    }
+}
+
 const CHALLENGE_LEN: usize = 32;
 impl Body for AuthChallenge {
     fn as_message(self) -> ChanMsg {
@@ -747,6 +834,18 @@ impl Readable for AuthChallenge {
 pub struct Authenticate {
     authtype: u16,
     auth: Vec<u8>,
+}
+impl Authenticate {
+    /// Create a new Authenticate message from a given type and body.
+    pub fn new<B>(authtype: u16, body: B) -> Self
+    where
+        B: Into<Vec<u8>>,
+    {
+        Authenticate {
+            authtype,
+            auth: body.into(),
+        }
+    }
 }
 impl Body for Authenticate {
     fn as_message(self) -> ChanMsg {
