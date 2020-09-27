@@ -136,8 +136,8 @@ impl NetDirConfig {
     pub fn add_authority(&mut self, name: &str, ident: &str) -> Result<()> {
         let ident: Vec<u8> =
             hex::decode(ident).map_err(|_| Error::BadArgument("bad hex identity"))?;
-        let v3ident = RSAIdentity::from_bytes(&ident)
-            .ok_or_else(|| Error::BadArgument("wrong identity length"))?;
+        let v3ident =
+            RSAIdentity::from_bytes(&ident).ok_or(Error::BadArgument("wrong identity length"))?;
         self.authorities.push(Authority {
             name: name.to_string(),
             v3ident,

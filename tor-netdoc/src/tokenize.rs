@@ -139,8 +139,8 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
     fn get_kwdline(&mut self) -> Result<(&'a str, &'a str)> {
         let pos = self.off;
         let line = self.get_line()?;
-        let (line, anno_ok) = if line.starts_with("opt ") {
-            (&line[4..], false)
+        let (line, anno_ok) = if let Some(rem) = line.strip_prefix("opt ") {
+            (rem, false)
         } else {
             (line, true)
         };

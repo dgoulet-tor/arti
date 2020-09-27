@@ -57,7 +57,9 @@ impl TorStream {
             .await
             // This probably means that the other side closed the
             // mpsc channel.
-            .ok_or_else(|| Error::StreamClosed("stream channel disappeared without END cell?"))?;
+            .ok_or(Error::StreamClosed(
+                "stream channel disappeared without END cell?",
+            ))?;
 
         // Possibly decrement the window for the cell we just received, and
         // send a SENDME if doing so took us under the threshold.
