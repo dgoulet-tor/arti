@@ -295,6 +295,18 @@ fn test_resolved() {
         "00 12 7777772e746f7270726f6a6563742e6f7267 00000258",
         &r.into(),
     );
+
+    // Hand-generated, to try out "unrecognized"
+    let mut r = msg::Resolved::new_empty();
+    r.add_answer(
+        msg::ResolvedVal::Unrecognized(99, "www.torproject.org".into()),
+        600,
+    );
+    msg(
+        cmd,
+        "63 12 7777772e746f7270726f6a6563742e6f7267 00000258",
+        &r.into(),
+    );
 }
 
 #[test]
@@ -319,6 +331,31 @@ fn test_truncate() {
     assert_eq!(Into::<u8>::into(cmd), 8_u8);
 
     msg(cmd, "", &msg::RelayMsg::Truncate);
+}
+
+#[test]
+fn test_unrecognized() {
+    let cmd = 249.into(); // not an actual relay command.
+
+    // Hand-generated and arbitrary: we don't parse these.
+    msg(
+        cmd,
+        "617262697472617279206279746573",
+        &msg::Unrecognized::new(cmd, &b"arbitrary bytes"[..]).into(),
+    );
+}
+
+#[test]
+fn test_data() {
+    let cmd = RelayCmd::DATA;
+    assert_eq!(Into::<u8>::into(cmd), 2_u8);
+
+    // hand-generated; no special encoding.
+    msg(
+        cmd,
+        "474554202f20485454502f312e310d0a0d0a",
+        &msg::Data::new(&b"GET / HTTP/1.1\r\n\r\n"[..]).into(),
+    );
 }
 
 // TODO: need to add tests for:

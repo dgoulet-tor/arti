@@ -950,6 +950,15 @@ pub struct Unrecognized {
 }
 
 impl Unrecognized {
+    /// Create a new 'unrecognized' cell.
+    pub fn new<B>(cmd: RelayCmd, body: B) -> Self
+    where
+        B: Into<Vec<u8>>,
+    {
+        let body = body.into();
+        Unrecognized { cmd, body }
+    }
+
     /// Return the command associated with this message
     pub fn get_cmd(&self) -> RelayCmd {
         self.cmd
