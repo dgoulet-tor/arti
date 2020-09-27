@@ -267,8 +267,10 @@ impl Begin {
         if !addr.is_ascii() {
             return Err(crate::Error::BadStreamAddress);
         }
+        let mut addr = addr.to_string();
+        addr.make_ascii_lowercase(); // SPEC: the spec doesn't say to do this.
         Ok(Begin {
-            addr: addr.as_bytes().into(),
+            addr: addr.into_bytes(),
             port,
             flags,
         })
@@ -280,7 +282,21 @@ impl Body for Begin {
         RelayMsg::Begin(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
-        let addr = r.take_until(b':')?;
+        let addr = {
+            if r.peek(1)? == b"[" {
+                // IPv6 address
+                r.advance(1)?;
+                let a = r.take_until(b']')?;
+                let colon = r.take_u8()?;
+                if colon != b':' {
+                    return Err(Error::BadMessage("missing port in begin cell"));
+                }
+                a
+            } else {
+                // IPv4 address, or hostname.
+                r.take_until(b':')?
+            }
+        };
         let port = r.take_until(0)?;
         let flags = if r.remaining() >= 4 { r.take_u32()? } else { 0 };
 
@@ -301,7 +317,13 @@ impl Body for Begin {
         })
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
-        w.write_all(&self.addr[..]);
+        if self.addr.contains(&b':') {
+            w.write_u8(b'[');
+            w.write_all(&self.addr[..]);
+            w.write_u8(b']');
+        } else {
+            w.write_all(&self.addr[..]);
+        }
         w.write_u8(b':');
         w.write_all(self.port.to_string().as_bytes());
         w.write_u8(0);

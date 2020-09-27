@@ -11,6 +11,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use hex_literal::hex;
 
 fn msg(cmd: RelayCmd, s: &str, msg: &msg::RelayMsg) {
+    assert_eq!(msg.get_cmd(), cmd);
     let body = {
         let mut s = s.to_string();
         s.retain(|c| !c.is_whitespace());
@@ -44,7 +45,19 @@ fn test_begin() {
         &msg::Begin::new("127.0.0.1", 7003, 0).unwrap().into(),
     );
 
-    // TODO: test with flags.
+    // hand-generated test, with flags set.
+    msg(
+        cmd,
+        "7777772e786b63642e636f6d3a34343300 00000003",
+        &msg::Begin::new("www.xkcd.com", 443, 3).unwrap().into(),
+    );
+
+    // hand-generated test, with IPv6 set.
+    msg(
+        cmd,
+        "5b323030313a6462383a3a315d3a323200",
+        &msg::Begin::new("2001:db8::1", 22, 0).unwrap().into(),
+    );
 }
 
 #[test]
