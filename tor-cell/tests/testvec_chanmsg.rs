@@ -114,11 +114,20 @@ fn test_certs() {
     let mut certs = msg::Certs::new_empty();
     certs.push_cert_body(1.into(), cert1body);
     certs.push_cert_body(2.into(), cert2body);
-    certs.push_cert_body(4.into(), cert3body);
+    certs.push_cert_body(4.into(), &cert3body[..]);
     certs.push_cert_body(5.into(), cert4body);
     certs.push_cert_body(7.into(), cert5body);
 
-    vbody(cmd, body, &certs.into());
+    vbody(cmd, body, &certs.clone().into());
+
+    // Test some accessors.
+    let body3 = certs.get_cert_body(4.into());
+    assert_eq!(body3, Some(&cert3body[..]));
+    let body_not_present = certs.get_cert_body(66.into());
+    assert_eq!(body_not_present, None);
+
+    let cert3 = certs.parse_ed_cert(4.into());
+    assert!(cert3.is_ok());
 }
 
 #[test]
