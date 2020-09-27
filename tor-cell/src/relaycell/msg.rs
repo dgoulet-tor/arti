@@ -397,6 +397,14 @@ impl End {
     pub fn new_with_reason(reason: u8) -> Self {
         End { reason, addr: None }
     }
+    /// Make a new END message with END_REASON_EXITPOLICY, and the
+    /// provided address and ttl.
+    pub fn new_exitpolicy(addr: IpAddr, ttl: u32) -> Self {
+        End {
+            reason: REASON_EXITPOLICY,
+            addr: Some((addr, ttl)),
+        }
+    }
 }
 impl Body for End {
     fn as_message(self) -> RelayMsg {

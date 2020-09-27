@@ -98,7 +98,19 @@ fn test_end() {
     msg(cmd, "01", &msg::End::new_misc().into());
     msg(cmd, "06", &msg::End::new_with_reason(6).into());
 
-    // TODO: exit policy.
+    // hand-generated, for exit policy rejections
+    let localhost = "127.0.0.7".parse::<IpAddr>().unwrap();
+    msg(
+        cmd,
+        "04 7f000007 00000100",
+        &msg::End::new_exitpolicy(localhost, 256).into(),
+    );
+    let addr = "2001:db8::f00b".parse::<IpAddr>().unwrap();
+    msg(
+        cmd,
+        "04 20010db8 00000000 00000000 0000f00b 00000200",
+        &msg::End::new_exitpolicy(addr, 512).into(),
+    );
 }
 
 #[test]
