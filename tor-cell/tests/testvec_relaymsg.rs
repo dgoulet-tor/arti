@@ -80,6 +80,14 @@ fn test_connected() {
         "7F000001 00000E10",
         &msg::Connected::new_with_addr(localhost, 0xe10).into(),
     );
+
+    // hand-generated for IPv6
+    let addr = "2001:db8::1122".parse::<IpAddr>().unwrap();
+    msg(
+        cmd,
+        "00000000 06 20010db8 00000000 00000000 00001122 00000E10",
+        &msg::Connected::new_with_addr(addr, 0xe10).into(),
+    );
 }
 
 #[test]

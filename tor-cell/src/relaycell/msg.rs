@@ -412,6 +412,7 @@ impl Body for End {
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         if r.remaining() == 0 {
+            // XXXX Or is this an error?
             return Ok(End {
                 reason: REASON_MISC,
                 addr: None,
@@ -424,6 +425,7 @@ impl Body for End {
                 20 => IpAddr::V6(r.extract()?),
                 _ => {
                     // Ignores other message lengths
+                    // XXXX or is this an error?
                     return Ok(End { reason, addr: None });
                 }
             };
@@ -477,6 +479,7 @@ impl Body for Connected {
         let ipv4 = r.take_u32()?;
         let addr = if ipv4 == 0 {
             if r.take_u8()? != 6 {
+                // XXXX or is this an error?
                 return Ok(Connected { addr: None });
             }
             IpAddr::V6(r.extract()?)
