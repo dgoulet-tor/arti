@@ -188,6 +188,12 @@ impl Readable for Padding {
 pub struct VPadding {
     len: u16,
 }
+impl VPadding {
+    /// Return a new vpadding cell with given length.
+    pub fn new(len: u16) -> Self {
+        VPadding { len }
+    }
+}
 impl Body for VPadding {
     fn as_message(self) -> ChanMsg {
         ChanMsg::VPadding(self)
@@ -391,16 +397,33 @@ pub struct Relay {
     body: Box<RawCellBody>,
 }
 impl Relay {
+    /// Construct a Relay message from a slice containing its contents.
+    pub fn new<P>(body: P) -> Self
+    where
+        P: AsRef<[u8]>,
+    {
+        let body = body.as_ref();
+        let mut r = [0u8; CELL_DATA_LEN];
+        // TODO: This will panic if body is too long, but that would be a
+        // programming error anyway.
+        (&mut r[..body.len()]).copy_from_slice(body);
+        Relay { body: Box::new(r) }
+    }
     /// Construct a Relay message from its body.
     pub fn from_raw(body: RawCellBody) -> Self {
         Relay {
             body: Box::new(body),
         }
     }
+
     /// Consume this Relay message and return a RelayCellBody for
     /// encryption/decryption.
     pub fn into_relay_body(self) -> RawCellBody {
         *self.body
+    }
+    /// Wrap this Relay message into a RelayMsg as a RELAY_EARLY cell.
+    pub fn into_early(self) -> ChanMsg {
+        ChanMsg::RelayEarly(self)
     }
 }
 impl std::fmt::Debug for Relay {
@@ -872,6 +895,16 @@ impl Readable for Authenticate {
 pub struct Authorize {
     content: Vec<u8>,
 }
+impl Authorize {
+    /// Construct a new Authorize cell.
+    pub fn new<B>(content: B) -> Self
+    where
+        B: Into<Vec<u8>>,
+    {
+        let content = content.into();
+        Authorize { content }
+    }
+}
 impl Body for Authorize {
     fn as_message(self) -> ChanMsg {
         ChanMsg::Authorize(self)
@@ -903,6 +936,14 @@ fn unrecognized_with_cmd(cmd: ChanCmd, r: &mut Reader<'_>) -> Result<Unrecognize
     Ok(u)
 }
 impl Unrecognized {
+    /// Construct a new cell of arbitrary or unrecognized type.
+    pub fn new<B>(cmd: ChanCmd, content: B) -> Self
+    where
+        B: Into<Vec<u8>>,
+    {
+        let content = content.into();
+        Unrecognized { cmd, content }
+    }
     fn get_cmd(&self) -> ChanCmd {
         self.cmd
     }
