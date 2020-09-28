@@ -39,7 +39,7 @@ impl AsMut<[u8]> for RelayCellBody {
 
 /// Represents the ability for a circuit crypto state to be initialized
 /// from a given seed.
-pub trait CryptInit: Sized {
+pub(crate) trait CryptInit: Sized {
     /// Return the number of bytes that this state will require.
     fn seed_len() -> usize;
     /// Construct this state from a seed of the appropriate length.
@@ -55,7 +55,7 @@ pub trait CryptInit: Sized {
 }
 
 /// Represents a relay's view of the crypto state on a given circuit.
-pub trait RelayCrypt {
+pub(crate) trait RelayCrypt {
     /// Prepare a RelayCellBody to be sent towards the client.
     fn originate(&mut self, cell: &mut RelayCellBody);
     /// Encrypt a RelayCellBody that is moving towards the client.
@@ -67,7 +67,7 @@ pub trait RelayCrypt {
 }
 
 /// A client's view of the crypto state shared with a single relay.
-pub trait ClientLayer {
+pub(crate) trait ClientLayer {
     /// Prepare a RelayCellBody to be sent to the relay at this layer, and
     /// encrypt it.
     ///
@@ -85,7 +85,7 @@ pub trait ClientLayer {
 ///
 /// Hop indices are zero-based: "0" denotes the first hop on the circuit.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub struct HopNum(u8);
+pub(crate) struct HopNum(u8);
 
 impl Into<u8> for HopNum {
     fn into(self) -> u8 {
@@ -113,7 +113,7 @@ impl std::fmt::Display for HopNum {
 
 /// A client's view of the cryptographic state for an entire
 /// constructed circuit.
-pub struct ClientCrypt {
+pub(crate) struct ClientCrypt {
     layers: Vec<Box<dyn ClientLayer + Send>>,
 }
 
@@ -171,11 +171,11 @@ impl ClientCrypt {
 }
 
 /// Standard Tor relay crypto, as instantiated for RELAY cells.
-pub type Tor1RelayCrypto =
+pub(crate) type Tor1RelayCrypto =
     tor1::CryptState<tor_llcrypto::cipher::aes::Aes128Ctr, tor_llcrypto::d::Sha1>;
 
 /// Incomplete untested implementation of Tor's current cell crypto.
-pub mod tor1 {
+pub(crate) mod tor1 {
     use super::*;
     use digest::Digest;
     use std::convert::TryInto;
