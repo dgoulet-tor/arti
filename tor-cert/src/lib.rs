@@ -36,9 +36,9 @@
 pub mod rsa;
 
 use caret::caret_int;
-use signature::{Signer, Verifier};
+use signature::Verifier;
 use tor_bytes::{Error, Result};
-use tor_bytes::{Readable, Reader, Writeable, Writer};
+use tor_bytes::{Readable, Reader};
 use tor_llcrypto::pk::*;
 
 use std::time;
@@ -107,6 +107,7 @@ pub struct Ed25519Cert {
     /// The key or object being certified.
     cert_key: CertifiedKey,
     /// A list of extensions.
+    #[allow(unused)]
     extensions: Vec<CertExt>,
     /// The key that signed this cert.
     ///
@@ -188,6 +189,7 @@ enum CertExt {
 }
 
 /// Any unrecongized extension on a Tor certificate.
+#[allow(unused)]
 struct UnrecognizedExt {
     /// True iff this extension must be understand in order to validate the
     /// certificate.
@@ -208,6 +210,7 @@ impl CertExt {
     }
 }
 
+/*
 impl Writeable for CertExt {
     fn write_onto<B: Writer + ?Sized>(&self, w: &mut B) {
         match self {
@@ -216,6 +219,7 @@ impl Writeable for CertExt {
         }
     }
 }
+ */
 
 /// Extension indicating that a key that signed a given certificate.
 struct SignedWithEd25519Ext {
@@ -223,6 +227,7 @@ struct SignedWithEd25519Ext {
     pk: ed25519::PublicKey,
 }
 
+/*
 impl Writeable for SignedWithEd25519Ext {
     fn write_onto<B: Writer + ?Sized>(&self, w: &mut B) {
         // body length
@@ -235,7 +240,9 @@ impl Writeable for SignedWithEd25519Ext {
         w.write_all(self.pk.as_bytes());
     }
 }
+*/
 
+/*
 impl UnrecognizedExt {
     /// Assert that there is no problem with the internal representation
     /// of this object.
@@ -243,7 +250,9 @@ impl UnrecognizedExt {
         assert!(self.body.len() <= std::u16::MAX as usize);
     }
 }
+*/
 
+/*
 impl Writeable for UnrecognizedExt {
     fn write_onto<B: Writer + ?Sized>(&self, w: &mut B) {
         self.assert_rep_ok();
@@ -254,6 +263,7 @@ impl Writeable for UnrecognizedExt {
         w.write_all(&self.body[..]);
     }
 }
+*/
 
 impl Readable for CertExt {
     fn take_from(b: &mut Reader<'_>) -> Result<Self> {
@@ -289,31 +299,33 @@ impl Readable for CertExt {
 }
 
 impl Ed25519Cert {
-    /// Helper: Assert that there is nothing wrong with the
-    /// internal structure of this certificate.
-    fn assert_rep_ok(&self) {
-        assert!(self.extensions.len() <= std::u8::MAX as usize);
-    }
-
-    /// Encode a certificate into a new vector, signing the result
-    /// with `keypair`.
-    pub fn encode_and_sign(&self, skey: &ed25519::Keypair) -> Vec<u8> {
-        self.assert_rep_ok();
-        let mut w = Vec::new();
-        w.write_u8(1); // Version
-        w.write_u8(self.cert_type.into());
-        w.write_u32(self.exp_hours);
-        w.write_u8(self.cert_key.key_type().into());
-        w.write_all(self.cert_key.as_bytes());
-
-        for e in self.extensions.iter() {
-            w.write(e);
+    /*
+        /// Helper: Assert that there is nothing wrong with the
+        /// internal structure of this certificate.
+        fn assert_rep_ok(&self) {
+            assert!(self.extensions.len() <= std::u8::MAX as usize);
         }
 
-        let signature = skey.sign(&w[..]);
-        w.write(&signature);
-        w
-    }
+        /// Encode a certificate into a new vector, signing the result
+        /// with `keypair`.
+        pub fn encode_and_sign(&self, skey: &ed25519::Keypair) -> Vec<u8> {
+            self.assert_rep_ok();
+            let mut w = Vec::new();
+            w.write_u8(1); // Version
+            w.write_u8(self.cert_type.into());
+            w.write_u32(self.exp_hours);
+            w.write_u8(self.cert_key.key_type().into());
+            w.write_all(self.cert_key.as_bytes());
+
+            for e in self.extensions.iter() {
+                w.write(e);
+            }
+
+            let signature = skey.sign(&w[..]);
+            w.write(&signature);
+            w
+        }
+    */
 
     /// Try to decode a certificate from a byte slice, and check its
     /// signature.
