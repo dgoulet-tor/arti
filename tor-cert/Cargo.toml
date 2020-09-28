@@ -17,3 +17,4 @@ signature = "1.2.2"
 
 [dev-dependencies]
 base64 = "0.12.3"
+hex-literal = "0.3.1"
