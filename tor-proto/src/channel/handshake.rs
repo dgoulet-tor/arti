@@ -173,15 +173,15 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         // We need to check the following lines of authentication:
         //
         // First, to bind the ed identity to the channel.
-        //    peer.get_ed_identity() matches the key in...
+        //    peer.ed_identity() matches the key in...
         //    IDENTITY_V_SIGNING cert, which signs...
         //    SIGNING_V_TLS_CERT cert, which signs peer_cert.
         //
         // Second, to bind the rsa identity to the ed identity:
-        //    peer.get_rsa_identity() matches the key in...
+        //    peer.rsa_identity() matches the key in...
         //    the x.509 RSA identity certificate (type 2), which signs...
         //    the RSA->Ed25519 crosscert (type 7), which signs...
-        //    peer.get_ed_identity().
+        //    peer.ed_identity().
 
         let c = &self.certs_cell;
         let id_sk = c.parse_ed_cert(CertType::IDENTITY_V_SIGNING)?;
@@ -265,11 +265,11 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         // We do this _last_, since "this is the wrong peer" is
         // usually a different situation than "this peer couldn't even
         // identify itself right."
-        if identity_key != peer.get_ed_identity() {
+        if identity_key != peer.ed_identity() {
             return Err(Error::ChanProto("Peer ed25519 id not as expected".into()));
         }
 
-        if &pkrsa.to_rsa_identity() != peer.get_rsa_identity() {
+        if &pkrsa.to_rsa_identity() != peer.rsa_identity() {
             return Err(Error::ChanProto("Peer RSA id not as expected".into()));
         }
 

@@ -274,12 +274,12 @@ impl ClientCirc {
         use crate::crypto::cell::Tor1RelayCrypto;
         use crate::crypto::handshake::ntor::{NtorClient, NtorPublicKey};
         let key = NtorPublicKey {
-            id: target.get_rsa_identity().clone(),
-            pk: *target.get_ntor_onion_key(),
+            id: target.rsa_identity().clone(),
+            pk: *target.ntor_onion_key(),
         };
-        let linkspecs = target.get_linkspecs();
+        let linkspecs = target.linkspecs();
         let supports_flowctrl_1 = target
-            .get_protovers()
+            .protovers()
             .supports_known_subver(tor_protover::ProtoKind::FlowCtrl, 1);
         self.extend_impl::<R, Tor1RelayCrypto, NtorClient>(
             rng,
@@ -595,11 +595,11 @@ impl PendingClientCirc {
             handshake_type: 0x0002, // ntor
         };
         let key = NtorPublicKey {
-            id: target.get_rsa_identity().clone(),
-            pk: *target.get_ntor_onion_key(),
+            id: target.rsa_identity().clone(),
+            pk: *target.ntor_onion_key(),
         };
         let supports_flowctrl_1 = target
-            .get_protovers()
+            .protovers()
             .supports_known_subver(tor_protover::ProtoKind::FlowCtrl, 1);
         self.create_impl::<R, Tor1RelayCrypto, NtorClient, _>(rng, &wrap, &key, supports_flowctrl_1)
             .await

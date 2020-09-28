@@ -12,11 +12,11 @@ use tor_llcrypto::pk;
 pub trait ChanTarget {
     /// Return the addresses at which you can connect to this relay
     // TODO: bad API
-    fn get_addrs(&self) -> &[SocketAddr];
+    fn addrs(&self) -> &[SocketAddr];
     /// Return the ed25519 identity for this relay.
-    fn get_ed_identity(&self) -> &pk::ed25519::PublicKey;
+    fn ed_identity(&self) -> &pk::ed25519::PublicKey;
     /// Return the RSA identity for this relay.
-    fn get_rsa_identity(&self) -> &pk::rsa::RSAIdentity;
+    fn rsa_identity(&self) -> &pk::rsa::RSAIdentity;
 }
 
 /// Information about a Tor relay used to extend a circuit to it.
@@ -26,17 +26,17 @@ pub trait ChanTarget {
 pub trait CircTarget: ChanTarget {
     /// Return a new vector of link specifiers for this relay.
     // TODO: bad API
-    fn get_linkspecs(&self) -> Vec<crate::LinkSpec> {
+    fn linkspecs(&self) -> Vec<crate::LinkSpec> {
         let mut result = Vec::new();
-        result.push(self.get_ed_identity().clone().into());
-        result.push(self.get_rsa_identity().clone().into());
-        for addr in self.get_addrs().iter() {
+        result.push(self.ed_identity().clone().into());
+        result.push(self.rsa_identity().clone().into());
+        for addr in self.addrs().iter() {
             result.push(addr.into());
         }
         result
     }
     /// Return the ntor onion key for this relay
-    fn get_ntor_onion_key(&self) -> &pk::curve25519::PublicKey;
+    fn ntor_onion_key(&self) -> &pk::curve25519::PublicKey;
     /// Return the subprotocols implemented by this relay.
-    fn get_protovers(&self) -> &tor_protover::Protocols;
+    fn protovers(&self) -> &tor_protover::Protocols;
 }

@@ -27,7 +27,7 @@ use rand::thread_rng;
 /// Launch an authenticated channel to a relay.
 async fn connect<C: ChanTarget>(target: &C) -> Result<Channel> {
     let addr = target
-        .get_addrs()
+        .addrs()
         .get(0) // Instead we might want to try multiple addresses in parallel
         .ok_or(Error::Misc("No addresses for chosen relay‽"))?;
 

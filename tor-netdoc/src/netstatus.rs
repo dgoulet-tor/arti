@@ -218,7 +218,7 @@ impl MDConsensusRouterStatus {
         &self.md_digest
     }
     /// Return the expected microdescriptor digest for this routerstatus
-    pub fn get_rsa_identity(&self) -> &RSAIdentity {
+    pub fn rsa_identity(&self) -> &RSAIdentity {
         &self.identity
     }
     /// Return an iterator of ORPort addresses for this routerstatus
@@ -230,11 +230,11 @@ impl MDConsensusRouterStatus {
         &self.weight
     }
     /// Return the ORPort addresses of this routerstatus
-    pub fn get_addrs(&self) -> &[net::SocketAddr] {
+    pub fn addrs(&self) -> &[net::SocketAddr] {
         &self.addrs[..]
     }
     /// Return the protovers that this routerstatus says it implements.
-    pub fn get_protovers(&self) -> &Option<Protocols> {
+    pub fn protovers(&self) -> &Option<Protocols> {
         &self.protos
     }
 }
