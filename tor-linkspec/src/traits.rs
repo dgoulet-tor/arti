@@ -21,9 +21,9 @@ pub trait ChanTarget {
 
 /// Information about a Tor relay used to extend a circuit to it.
 ///
-/// Anything that implements 'ExtendTarget' can be used as the
+/// Anything that implements 'CircTarget' can be used as the
 /// identity of a relay for the purposes of extending a circuit.
-pub trait ExtendTarget: ChanTarget {
+pub trait CircTarget: ChanTarget {
     /// Return a new vector of link specifiers for this relay.
     // TODO: bad API
     fn get_linkspecs(&self) -> Vec<crate::LinkSpec> {

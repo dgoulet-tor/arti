@@ -269,7 +269,7 @@ impl ClientCirc {
     pub async fn extend_ntor<R, Tg>(&mut self, rng: &mut R, target: &Tg) -> Result<()>
     where
         R: Rng + CryptoRng,
-        Tg: tor_linkspec::ExtendTarget,
+        Tg: tor_linkspec::CircTarget,
     {
         use crate::crypto::cell::Tor1RelayCrypto;
         use crate::crypto::handshake::ntor::{NtorClient, NtorPublicKey};
@@ -587,7 +587,7 @@ impl PendingClientCirc {
     pub async fn create_firsthop_ntor<R, Tg>(self, rng: &mut R, target: &Tg) -> Result<ClientCirc>
     where
         R: Rng + CryptoRng,
-        Tg: tor_linkspec::ExtendTarget,
+        Tg: tor_linkspec::CircTarget,
     {
         use crate::crypto::cell::Tor1RelayCrypto;
         use crate::crypto::handshake::ntor::{NtorClient, NtorPublicKey};

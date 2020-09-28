@@ -444,7 +444,7 @@ impl<'a> tor_linkspec::ChanTarget for Relay<'a> {
     }
 }
 
-impl<'a> tor_linkspec::ExtendTarget for Relay<'a> {
+impl<'a> tor_linkspec::CircTarget for Relay<'a> {
     fn get_ntor_onion_key(&self) -> &ll::pk::curve25519::PublicKey {
         // XXXX unwrap might fail if is_usable is false
         self.md.unwrap().get_ntor_key()

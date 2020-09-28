@@ -10,4 +10,4 @@ mod ls;
 mod traits;
 
 pub use ls::LinkSpec;
-pub use traits::{ChanTarget, ExtendTarget};
+pub use traits::{ChanTarget, CircTarget};
