@@ -946,7 +946,7 @@ impl Signature {
         match self.find_cert(certs) {
             None => SigCheckResult::MissingCert,
             Some(cert) => {
-                let key = cert.get_signing_key();
+                let key = cert.signing_key();
                 match key.verify(signed_digest, &self.signature[..]) {
                     Ok(()) => SigCheckResult::Valid,
                     Err(_) => SigCheckResult::Invalid,

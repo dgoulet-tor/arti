@@ -37,11 +37,11 @@ fn test_valid_ed() {
         .check_valid_at(&notional_time)
         .unwrap();
 
-    assert_eq!(cert.get_subject_key().as_ed25519(), Some(&signing_key));
-    assert_eq!(cert.get_signing_key().unwrap(), &identity_key);
-    assert_eq!(cert.get_cert_type(), 4.into());
+    assert_eq!(cert.subject_key().as_ed25519(), Some(&signing_key));
+    assert_eq!(cert.signing_key().unwrap(), &identity_key);
+    assert_eq!(cert.cert_type(), 4.into());
     assert_eq!(
-        cert.get_expiry(),
+        cert.expiry(),
         SystemTime::UNIX_EPOCH + Duration::new(0x6cc2a * 3600, 0)
     );
 
@@ -64,11 +64,11 @@ fn test_valid_ed() {
         .unwrap()
         .check_valid_at(&notional_time)
         .unwrap();
-    assert_eq!(cert.get_subject_key().as_bytes(), &tls_cert_digest[..]);
-    assert_eq!(cert.get_signing_key().unwrap(), &signing_key);
-    assert_eq!(cert.get_cert_type(), 5.into());
+    assert_eq!(cert.subject_key().as_bytes(), &tls_cert_digest[..]);
+    assert_eq!(cert.signing_key().unwrap(), &signing_key);
+    assert_eq!(cert.cert_type(), 5.into());
     assert_eq!(
-        cert.get_expiry(),
+        cert.expiry(),
         SystemTime::UNIX_EPOCH + Duration::new(0x6c98a * 3600, 0)
     );
 }

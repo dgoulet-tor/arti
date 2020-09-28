@@ -557,8 +557,8 @@ impl RouterDesc {
         let crosscert_cert = crosscert_cert.dangerously_assume_timely();
         let expirations = &[
             published + time::Duration::new(ROUTER_EXPIRY_SECONDS, 0),
-            identity_cert.get_expiry(),
-            crosscert_cert.get_expiry(),
+            identity_cert.expiry(),
+            crosscert_cert.expiry(),
         ];
         let expiry = *expirations.iter().max().unwrap();
 

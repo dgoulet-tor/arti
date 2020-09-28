@@ -198,13 +198,13 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
             .map_err(|_| Error::ChanProto("Certificate expired or not yet valid".into()))?;
 
         // Take the identity key from the identity->signing cert
-        let identity_key = id_sk.get_signing_key().ok_or_else(|| {
+        let identity_key = id_sk.signing_key().ok_or_else(|| {
             Error::ChanProto("Missing identity key in identity->signing cert".into())
         })?;
 
         // Take the signing key from the identity->signing cert
         let signing_key = id_sk
-            .get_subject_key()
+            .subject_key()
             .as_ed25519()
             .ok_or_else(|| Error::ChanProto("Bad key type in identity->signing cert".into()))?;
 
@@ -218,7 +218,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
             .map_err(|_| Error::ChanProto("Certificate expired or not yet valid".into()))?;
 
         let cert_sha256 = ll::d::Sha256::digest(peer_cert);
-        if &cert_sha256[..] != sk_tls.get_subject_key().as_bytes() {
+        if &cert_sha256[..] != sk_tls.subject_key().as_bytes() {
             return Err(Error::ChanProto(
                 "Peer cert did not authenticate TLS cert".into(),
             ));

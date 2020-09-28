@@ -27,7 +27,7 @@
 //!     .check_key(&None).unwrap()
 //!     .check_signature().unwrap()
 //!     .dangerously_assume_timely();
-//! let signed_key = cert.get_subject_key();
+//! let signed_key = cert.subject_key();
 //! ```
 
 #![deny(missing_docs)]
@@ -137,7 +137,7 @@ pub struct UnrecognizedKey {
 
 impl CertifiedKey {
     /// Return the byte that identifies the type of this key.
-    pub fn get_key_type(&self) -> KeyType {
+    pub fn key_type(&self) -> KeyType {
         match self {
             CertifiedKey::Ed25519(_) => KeyType::ED25519_KEY,
             CertifiedKey::RSASha256Digest(_) => KeyType::SHA256_OF_RSA,
@@ -200,7 +200,7 @@ struct UnrecognizedExt {
 
 impl CertExt {
     /// Return the identifier code for this Extension.
-    pub fn get_ext_id(&self) -> ExtType {
+    pub fn ext_id(&self) -> ExtType {
         match self {
             CertExt::SignedWithEd25519(_) => ExtType::SIGNED_WITH_ED25519_KEY,
             CertExt::Unrecognized(u) => u.ext_type,
@@ -303,7 +303,7 @@ impl Ed25519Cert {
         w.write_u8(1); // Version
         w.write_u8(self.cert_type.into());
         w.write_u32(self.exp_hours);
-        w.write_u8(self.cert_key.get_key_type().into());
+        w.write_u8(self.cert_key.key_type().into());
         w.write_all(self.cert_key.as_bytes());
 
         for e in self.extensions.iter() {
@@ -351,7 +351,7 @@ impl Ed25519Cert {
 
         let keyext = extensions
             .iter()
-            .find(|e| e.get_ext_id() == ExtType::SIGNED_WITH_ED25519_KEY);
+            .find(|e| e.ext_id() == ExtType::SIGNED_WITH_ED25519_KEY);
 
         let included_pkey = match keyext {
             Some(CertExt::SignedWithEd25519(s)) => Some(s.pk),
@@ -375,29 +375,29 @@ impl Ed25519Cert {
     }
 
     /// Return the time at which this certificate becomes expired
-    pub fn get_expiry(&self) -> std::time::SystemTime {
+    pub fn expiry(&self) -> std::time::SystemTime {
         let d = std::time::Duration::new((self.exp_hours as u64) * 3600, 0);
         std::time::SystemTime::UNIX_EPOCH + d
     }
 
     /// Return true iff this certificate will be expired at the time `when`.
     pub fn is_expired_at(&self, when: std::time::SystemTime) -> bool {
-        when >= self.get_expiry()
+        when >= self.expiry()
     }
 
     /// Return the signed key or object that is authenticated by this
     /// certificate.
-    pub fn get_subject_key(&self) -> &CertifiedKey {
+    pub fn subject_key(&self) -> &CertifiedKey {
         &self.cert_key
     }
 
     /// Return the ed25519 key that signed this certificate.
-    pub fn get_signing_key(&self) -> Option<&ed25519::PublicKey> {
+    pub fn signing_key(&self) -> Option<&ed25519::PublicKey> {
         self.signed_with.as_ref()
     }
 
     /// Return the type of this certificate.
-    pub fn get_cert_type(&self) -> CertType {
+    pub fn cert_type(&self) -> CertType {
         self.cert_type
     }
 }
@@ -509,7 +509,7 @@ impl tor_checkable::SelfSigned<SigCheckedCert> for UncheckedCert {
 impl tor_checkable::Timebound<Ed25519Cert> for SigCheckedCert {
     type Error = tor_checkable::TimeValidityError;
     fn is_valid_at(&self, t: &time::SystemTime) -> std::result::Result<(), Self::Error> {
-        let expiry = self.cert.get_expiry();
+        let expiry = self.cert.expiry();
         if t >= &expiry {
             Err(Self::Error::Expired(t.duration_since(expiry).unwrap()))
         } else {

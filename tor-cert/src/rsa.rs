@@ -31,7 +31,7 @@ pub struct RSACrosscert {
 
 impl RSACrosscert {
     /// Return the time at which this certificate becomes expired
-    pub fn get_expiry(&self) -> std::time::SystemTime {
+    pub fn expiry(&self) -> std::time::SystemTime {
         let d = std::time::Duration::new((self.exp_hours as u64) * 3600, 0);
         std::time::SystemTime::UNIX_EPOCH + d
     }
@@ -89,7 +89,7 @@ impl ExternallySigned<TimerangeBound<RSACrosscert>> for UncheckedRSACrosscert {
     }
 
     fn dangerously_assume_wellsigned(self) -> TimerangeBound<RSACrosscert> {
-        let expiration = self.0.get_expiry();
+        let expiration = self.0.expiry();
         TimerangeBound::new(self.0, ..expiration)
     }
 }

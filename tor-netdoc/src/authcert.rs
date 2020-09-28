@@ -104,7 +104,7 @@ impl AuthCert {
         }
     */
     /// Return the signing key certified by this certificate.
-    pub fn get_signing_key(&self) -> &rsa::PublicKey {
+    pub fn signing_key(&self) -> &rsa::PublicKey {
         &self.signing_key
     }
 
