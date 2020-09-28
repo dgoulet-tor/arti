@@ -39,7 +39,9 @@ MILESTONE 2: Working streams
 MILESTONE 3: Clean and tidy
    - Make sure that circuit Destroys are handled and sent correctly.
      Use ideas from circuit module.
+   - Complete testing in tor-proto crate.
    - Better solution for deadlock in lock on sendwindow.
+   - Ed25519 needs to have an "identity" non-parsed version, maybe.
    - Add a state for streams _we_ have closed where we haven't got an end
      from the other side.  Treat unexpected stream data as fatal.
      (Defend against DropMark attack from 25573)
@@ -47,35 +49,70 @@ MILESTONE 3: Clean and tidy
    - Is this "reactor" business a sensible design?  Is there a better one?
    - Use better types for cases when only a few messages are possible.
    - Get a data-oriented stream API
+   - Make all APIs conform to best practices
+   - Figure out which consensus method we require, and say so.
    - Make a plan for what closes when
    - Make sure everything closes when it is supposed to.
    - Refactor XXXX and TODO code; make sure everything is tested and
      documented.
 
 
-MILESTONE C???: Client parity (not hidden services yet, no needless junk)
+MILESTONE A: Experimental client use
+   - Build circuits on demand
+   - Downloading directory information, using compression and diffs.
+   - Minimal stable API.
+   - Optionally, expose a socks port
+   - Begin using semver.
+
+MILESTONE B: Secure minimal client
    - Correct path selection
    - Timeouts
       - Circuit timeout logic
       - Connection timeout logic.
       - What other kinds of timeouts?
-   - Downloading directory information, using compression and diffs.
    - Connection padding (link protocol 5)
    - Circuit padding (with padding machines)
-   - Optionally, expose a socks port
-   - Automatically build circuits
    - Build preemptive circuits
    - Guard nodes
-   - Rate-limiting
-   - Fairness on circuits/streams?
-   - CBT logic?
    - Change behavior depending on network parameters
-   - Figure out which consensus method we require, and say so.
+   - CBT logic?
+   - Pathbias logic
+   - Figure out where to put a specific async executor and/or TLS
+     implementation in our stack.
+
+MILESTONE C: Client feature parity
+   - V3 onion services
+   - Fairness on circuits/streams?
+   - Support for using bridges
+   - Pluggable transport support
+   - Controller API?
+   - Dormant mode?
+   - Transparent proxy mode(s)
 
 
-LATER MILESTONES:
-   - Client hidden service support
-   - Be-a-hidden-service support.
+MILESTONE H:
+   - Be a hidden service
+
+MILESTONE R: Relay support
+   - Relay TLS handshake support
+   - Directory cache support
+   - Fairness support
+   - Better circuit queues and circuitmuxes (for performance)
+   - Statistics collection
+   - Key management
+   - Pluggable transports (server side)
+   - Being a bridge
+   - Self-testing
+   - Publishing descriptors
+   - Address discovery and configuration
+   - DNS lookup
+   - KIST scheduler
+   - DoS-resistence handling
+   - Rate-limiting
+   - Accounting
+
+
+
 
 
 - Spec issues
@@ -92,65 +129,10 @@ LATER MILESTONES:
     - Whitespace at start of line, y/n?  Mixed whitespace, y/n? CR, y/n?
     - UTF-8.
 
-- Primitive crypto
-  - Wrap x25519 in a trait?
-  - Use signature trait for ed25519?
-  - Ed25519 needs to have an "identity" non-parsed version, maybe.
-  o Add RSA-pkcs1 signature support
-  o Add RSA-pem encode/decode support
-  - RSA-oaep, if supported and we actually want it.
-  o test vectors for sha1
-  o test vectors for sha2
-  o test vectors for sha3/shake
-  - RSA test vectors as needed
-
-- Higher level crypto
-  - Test vectors for hmac
-  - Test vectors for tap-kdf
-  - Test vectors for hkdf
-  - Test vectors for other kdfs
-
-- Main Protocol functionality
-  o encode and decode regular cell types.
-  . handshakes
-    o ntor
-    o fast
-    X TAP
-  . relay crypto
-    o implement
-    - tests
-  - Internals:
-    - Consider using a safer thing instead of current bytereader.  Like the
-      one rustls has? Like "untrusted"?
-    - Consider using a writer trait that's agnostic about whether it's
-      writing into an expanding Vec or a fixed slice.
-    - Use "bytes" crate more natively in tor-bytes trait.
-  - Tests
-    - For all cell types
-    - for all relay cell types
-    - For all handshakes
-  . State for multiplexing circuits on a connection
-  - State for sending sendme cells, both versions.
-    - V1 sendmes
-  - State for managing streams
-  o Initial protocol handshake for client/relay authentication
-  - Initial protocol handshake for relay/relay authentication
-
-- HS functionality
-  - encode and decode hs cell types
-  - State as needed for hs lookup
-  - hs cell types
-  - hs directory stuff
-    - HSv3 directory obejcts, encode
-    - HSv3 directory objects, decode
-  - crypto variants
-    - hsv3 variant of relay crypto
-    - hsv3 variant of ntor
-    - tests and vectors for the above.
 
 PROBABLY NEVER:
    - TAP
    - Link protocols before 4.
-   - Older consensus milestones
+   - Older consensus methods
 
 
