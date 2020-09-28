@@ -6,6 +6,7 @@ use tor_cell::chancell::{codec, msg, ChanCell, CircID};
 use tor_cell::Error;
 
 use bytes::BytesMut;
+use hex_literal::hex;
 
 const FIXED_BODY_LEN: usize = 514;
 
@@ -97,9 +98,18 @@ fn short_cell(body: &str) {
 fn test_truncated_cells() {
     // short relay (fixed)
     short_cell("00000001 03 1234");
+    short_cell("00000001 03 12");
+    short_cell("00000001 03 ");
+    short_cell("00000001");
+    short_cell("000000");
+    short_cell("");
 
     // short certs (varlen)
     short_cell("00000000 81 0003 1234");
+    short_cell("00000000 81 0003 12");
+    short_cell("00000000 81 0003 ");
+    short_cell("00000000 81 00 ");
+    short_cell("00000000 81 ");
 }
 
 fn bad_cell(body: &str, err: Error, pad_body: bool) {
@@ -133,4 +143,20 @@ fn bad_circid_cells() {
         Error::ChanProto("Invalid circuit ID 16 for cell command NETINFO".into()),
         true,
     );
+}
+
+#[test]
+fn versions() {
+    // Test the special encoding of the versions cell.  (It's special
+    // because it uses a 2-byte circid.
+    let v = msg::Versions::new([4, 5, 6]);
+    let encoded = v.clone().encode_for_handshake();
+    assert_eq!(encoded, hex!("0000 07 0006 0004 0005 0006"));
+
+    // Test the best_shared_protocol function.
+    assert_eq!(v.best_shared_link_protocol(&[1, 2, 3, 77]), None);
+    assert_eq!(v.best_shared_link_protocol(&[]), None);
+    assert_eq!(v.best_shared_link_protocol(&[4, 5, 6, 7]), Some(6));
+    assert_eq!(v.best_shared_link_protocol(&[4, 5, 11]), Some(5));
+    assert_eq!(v.best_shared_link_protocol(&[4, 5]), Some(5));
 }
