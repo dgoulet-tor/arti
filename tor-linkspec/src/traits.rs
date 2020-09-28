@@ -40,3 +40,92 @@ pub trait CircTarget: ChanTarget {
     /// Return the subprotocols implemented by this relay.
     fn protovers(&self) -> &tor_protover::Protocols;
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use hex_literal::hex;
+    use std::net::IpAddr;
+    use tor_llcrypto::pk;
+
+    struct Example {
+        addrs: Vec<SocketAddr>,
+        ed_id: pk::ed25519::PublicKey,
+        rsa_id: pk::rsa::RSAIdentity,
+        ntor: pk::curve25519::PublicKey,
+        pv: tor_protover::Protocols,
+    }
+    impl ChanTarget for Example {
+        fn addrs(&self) -> &[SocketAddr] {
+            &self.addrs[..]
+        }
+        fn ed_identity(&self) -> &pk::ed25519::PublicKey {
+            &self.ed_id
+        }
+        fn rsa_identity(&self) -> &pk::rsa::RSAIdentity {
+            &self.rsa_id
+        }
+    }
+    impl CircTarget for Example {
+        fn ntor_onion_key(&self) -> &pk::curve25519::PublicKey {
+            &self.ntor
+        }
+        fn protovers(&self) -> &tor_protover::Protocols {
+            &self.pv
+        }
+    }
+
+    #[test]
+    fn test_linkspecs() {
+        let ex = Example {
+            addrs: vec![
+                "127.0.0.1:99".parse::<SocketAddr>().unwrap(),
+                "[::1]:909".parse::<SocketAddr>().unwrap(),
+            ],
+            ed_id: pk::ed25519::PublicKey::from_bytes(&hex!(
+                "fc51cd8e6218a1a38da47ed00230f058
+                 0816ed13ba3303ac5deb911548908025"
+            ))
+            .unwrap(),
+            rsa_id: pk::rsa::RSAIdentity::from_bytes(&hex!(
+                "1234567890abcdef12341234567890abcdef1234"
+            ))
+            .unwrap(),
+            ntor: pk::curve25519::PublicKey::from(hex!(
+                "e6db6867583030db3594c1a424b15f7c
+                 726624ec26b3353b10a903a6d0ab1c4c"
+            )),
+            pv: tor_protover::Protocols::default(),
+        };
+
+        let specs = ex.linkspecs();
+        assert_eq!(4, specs.len());
+
+        use crate::ls::LinkSpec;
+        assert_eq!(
+            specs[0],
+            LinkSpec::Ed25519Id(
+                pk::ed25519::PublicKey::from_bytes(&hex!(
+                    "fc51cd8e6218a1a38da47ed00230f058
+                     0816ed13ba3303ac5deb911548908025"
+                ))
+                .unwrap()
+            )
+        );
+        assert_eq!(
+            specs[1],
+            LinkSpec::RSAId(
+                pk::rsa::RSAIdentity::from_bytes(&hex!("1234567890abcdef12341234567890abcdef1234"))
+                    .unwrap()
+            )
+        );
+        assert_eq!(
+            specs[2],
+            LinkSpec::OrPort("127.0.0.1".parse::<IpAddr>().unwrap(), 99)
+        );
+        assert_eq!(
+            specs[3],
+            LinkSpec::OrPort("::1".parse::<IpAddr>().unwrap(), 909)
+        );
+    }
+}
