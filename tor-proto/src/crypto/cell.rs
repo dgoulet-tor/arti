@@ -316,3 +316,77 @@ pub mod tor1 {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+    use crate::SecretBytes;
+    use rand::RngCore;
+
+    #[test]
+    fn roundtrip() {
+        // Take canned keys and make sure we can do crypto correctly.
+        use crate::crypto::handshake::ShakeKeyGenerator as KGen;
+        fn s(seed: &[u8]) -> SecretBytes {
+            let mut s: SecretBytes = SecretBytes::new(Vec::new());
+            s.extend(seed);
+            s
+        }
+
+        let seed1 = s(b"hidden we are free");
+        let seed2 = s(b"free to speak, to free ourselves");
+        let seed3 = s(b"free to hide no more");
+
+        let mut cc = ClientCrypt::new();
+        cc.add_layer(Box::new(
+            Tor1RelayCrypto::construct(KGen::new(seed1.clone().into())).unwrap(),
+        ));
+        cc.add_layer(Box::new(
+            Tor1RelayCrypto::construct(KGen::new(seed2.clone().into())).unwrap(),
+        ));
+        cc.add_layer(Box::new(
+            Tor1RelayCrypto::construct(KGen::new(seed3.clone().into())).unwrap(),
+        ));
+
+        let mut r1 = Tor1RelayCrypto::construct(KGen::new(seed1.into())).unwrap();
+        let mut r2 = Tor1RelayCrypto::construct(KGen::new(seed2.into())).unwrap();
+        let mut r3 = Tor1RelayCrypto::construct(KGen::new(seed3.into())).unwrap();
+
+        let mut rng = rand::thread_rng();
+        for _ in 1..1000 {
+            // outbound cell
+            let mut cell = [0_u8; 509];
+            let mut cell_orig = [0_u8; 509];
+            rng.fill_bytes(&mut cell_orig[..]);
+            (&mut cell).copy_from_slice(&cell_orig[..]);
+            let mut cell = cell.into();
+            let _tag = cc.encrypt(&mut cell, 2.into());
+            assert_ne!(&cell.as_ref()[9..], &cell_orig.as_ref()[9..]);
+            assert_eq!(false, r1.decrypt_outbound(&mut cell));
+            assert_eq!(false, r2.decrypt_outbound(&mut cell));
+            assert_eq!(true, r3.decrypt_outbound(&mut cell));
+
+            assert_eq!(&cell.as_ref()[9..], &cell_orig.as_ref()[9..]);
+
+            // inbound cell
+            let mut cell = [0_u8; 509];
+            let mut cell_orig = [0_u8; 509];
+            rng.fill_bytes(&mut cell_orig[..]);
+            (&mut cell).copy_from_slice(&cell_orig[..]);
+            let mut cell = cell.into();
+
+            r3.originate(&mut cell);
+            r3.encrypt_inbound(&mut cell);
+            r2.encrypt_inbound(&mut cell);
+            r1.encrypt_inbound(&mut cell);
+            let (layer, _tag) = cc.decrypt(&mut cell).unwrap();
+            assert_eq!(layer, 2.into());
+            assert_eq!(&cell.as_ref()[9..], &cell_orig.as_ref()[9..]);
+
+            // TODO: Test tag somehow.
+        }
+    }
+
+    // TODO: Generate test vectors from Tor.
+}
