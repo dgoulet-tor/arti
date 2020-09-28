@@ -233,11 +233,11 @@ impl ReactorCore {
 
         // If this cell wants/refuses to have a Stream ID, does it
         // have/not have one?
-        if !msg.get_cmd().accepts_streamid_val(streamid) {
+        if !msg.cmd().accepts_streamid_val(streamid) {
             return Err(Error::CircProto(format!(
                 "Invalid stream ID {} for relay command {}",
                 streamid,
-                msg.get_cmd()
+                msg.cmd()
             )));
         }
 

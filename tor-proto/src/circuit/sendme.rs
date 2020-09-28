@@ -73,25 +73,25 @@ where
 /// Helper: parameterizes a window to determine its maximum and its increment.
 pub trait WindowParams {
     /// Largest allowable value for this window.
-    fn get_maximum() -> u16;
+    fn maximum() -> u16;
     /// Increment for this window.
-    fn get_increment() -> u16;
+    fn increment() -> u16;
 }
 pub struct CircParams;
 impl WindowParams for CircParams {
-    fn get_maximum() -> u16 {
+    fn maximum() -> u16 {
         1000
     }
-    fn get_increment() -> u16 {
+    fn increment() -> u16 {
         100
     }
 }
 pub struct StreamParams;
 impl WindowParams for StreamParams {
-    fn get_maximum() -> u16 {
+    fn maximum() -> u16 {
         500
     }
-    fn get_increment() -> u16 {
+    fn increment() -> u16 {
         50
     }
 }
@@ -103,7 +103,7 @@ where
 {
     /// Construct a new SendWindow.
     pub fn new(window: u16) -> SendWindow<P, T> {
-        let increment = P::get_increment();
+        let increment = P::increment();
         let capacity = (window + increment - 1) / increment;
         let inner = SendWindowInner {
             window,
@@ -136,7 +136,7 @@ where
             let wait_on = {
                 let mut w = self.w.lock().await;
                 let oldval = w.window;
-                if oldval % P::get_increment() == 0 && oldval != P::get_maximum() {
+                if oldval % P::increment() == 0 && oldval != P::maximum() {
                     // We record this tag.
                     // TODO: I'm not saying that this cell in particular
                     // matches the spec, but Tor seems to like it.
@@ -184,7 +184,7 @@ where
             } // Bad tag or unexpected sendme.
         }
 
-        let v = w.window.checked_add(P::get_increment())?;
+        let v = w.window.checked_add(P::increment())?;
         w.window = v;
 
         if let Some(send) = w.unblock.take() {
@@ -224,7 +224,7 @@ impl<P: WindowParams> RecvWindow<P> {
             self.window = x;
             // TODO: same note as in SendWindow.take(). I don't know if
             // this truly matches the spec, but Tot tor accepts it.
-            Some(oldval % P::get_increment() == 0 && oldval != P::get_maximum())
+            Some(oldval % P::increment() == 0 && oldval != P::maximum())
         } else {
             None
         }
@@ -232,6 +232,6 @@ impl<P: WindowParams> RecvWindow<P> {
 
     /// Called when we've just send a SENDME.
     pub fn put(&mut self) {
-        self.window = self.window.checked_add(P::get_increment()).unwrap();
+        self.window = self.window.checked_add(P::increment()).unwrap();
     }
 }

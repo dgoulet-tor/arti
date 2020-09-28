@@ -235,11 +235,11 @@ impl ClientCirc {
         // the function?
 
         // Did we get the right response?
-        if from_hop != hop || msg.get_cmd() != RelayCmd::EXTENDED2 {
+        if from_hop != hop || msg.cmd() != RelayCmd::EXTENDED2 {
             return Err(Error::CircProto(format!(
                 "wanted EXTENDED2 from {}; got {} from {}",
                 hop,
-                msg.get_cmd(),
+                msg.cmd(),
                 from_hop
             )));
         }
@@ -341,14 +341,14 @@ impl ClientCirc {
         // XXXXX We need to remove the stream if we get an END cell or
         // a weird cell.
 
-        if response.get_cmd() == RelayCmd::CONNECTED {
+        if response.cmd() == RelayCmd::CONNECTED {
             Ok(DataStream::new(stream))
-        } else if response.get_cmd() == RelayCmd::END {
+        } else if response.cmd() == RelayCmd::END {
             Err(Error::StreamClosed("end cell when waiting for connection"))
         } else {
             Err(Error::StreamProto(format!(
                 "Received {} while waiting for connection",
-                response.get_cmd()
+                response.cmd()
             )))
         }
     }
@@ -405,7 +405,7 @@ impl ClientCircImpl {
             // Nobody wanted this.
             Err(Error::CircProto(format!(
                 "Unexpected {} cell on client circuit",
-                msg.get_cmd()
+                msg.cmd()
             )))
         }
     }

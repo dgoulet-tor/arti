@@ -36,7 +36,7 @@ pub struct TokenFmt<T: Keyword> {
 
 impl<T: Keyword> TokenFmt<T> {
     /// Return the keyword that this rule restricts.
-    pub fn get_kwd(&self) -> T {
+    pub fn kwd(&self) -> T {
         self.kwd
     }
     /// Check whether a single Item matches this TokenFmt rule, with respect

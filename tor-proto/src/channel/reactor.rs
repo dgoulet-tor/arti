@@ -105,24 +105,24 @@ impl ReactorCore {
     /// or rejected; a few get delivered to circuits.
     async fn handle_cell(&mut self, cell: ChanCell) -> Result<()> {
         let (circid, msg) = cell.into_circid_and_msg();
-        trace!("Received {} on {}", msg.get_cmd(), circid);
+        trace!("Received {} on {}", msg.cmd(), circid);
         use ChanMsg::*;
 
         match msg {
             // These aren't allowed on clients.
             Create(_) | CreateFast(_) | Create2(_) | RelayEarly(_) | PaddingNegotiate(_) => Err(
-                Error::ChanProto(format!("{} cell on client channel", msg.get_cmd())),
+                Error::ChanProto(format!("{} cell on client channel", msg.cmd())),
             ),
 
             // In theory this is allowed in clients, but we should never get
             // one, since we don't use TAP.
-            Created(_) => Err(Error::ChanProto(format!("{} cell received", msg.get_cmd()))),
+            Created(_) => Err(Error::ChanProto(format!("{} cell received", msg.cmd()))),
 
             // These aren't allowed after handshaking is done.
             Versions(_) | Certs(_) | Authorize(_) | Authenticate(_) | AuthChallenge(_)
             | Netinfo(_) => Err(Error::ChanProto(format!(
                 "{} cell after handshake is done",
-                msg.get_cmd()
+                msg.cmd()
             ))),
 
             // These are allowed, and need to be handled.
@@ -174,10 +174,7 @@ impl ReactorCore {
                 )
             })
         } else {
-            Err(Error::ChanProto(format!(
-                "Unexpected {} cell",
-                msg.get_cmd()
-            )))
+            Err(Error::ChanProto(format!("Unexpected {} cell", msg.cmd())))
         }
     }
 

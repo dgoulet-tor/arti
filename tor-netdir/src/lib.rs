@@ -227,7 +227,7 @@ impl NetDirConfig {
                 let found = self
                     .authorities
                     .iter()
-                    .any(|a| &a.v3ident == cert.get_id_fingerprint());
+                    .any(|a| &a.v3ident == cert.id_fingerprint());
                 if !found {
                     return Err(Error::Unwanted("no such authority"));
                 }
@@ -239,8 +239,8 @@ impl NetDirConfig {
                 Ok(cert) => {
                     debug!(
                         "adding cert for {} (SK={})",
-                        cert.get_id_fingerprint(),
-                        cert.get_sk_fingerprint()
+                        cert.id_fingerprint(),
+                        cert.sk_fingerprint()
                     );
                     res.push(cert);
                 }
@@ -278,7 +278,7 @@ impl NetDirConfig {
             match r {
                 Err(e) => warn!("bad microdesc: {}", e),
                 Ok(md) => {
-                    res.insert(*md.get_digest(), md);
+                    res.insert(*md.digest(), md);
                 }
             }
         }
@@ -334,14 +334,14 @@ impl NetDir {
     /// Construct a (possibly invalid) Relay object from a routerstatus and its
     /// microdescriptor (if any).
     fn relay_from_rs<'a>(&'a self, rs: &'a netstatus::MDConsensusRouterStatus) -> Relay<'a> {
-        let md = self.mds.get(rs.get_md_digest());
+        let md = self.mds.get(rs.md_digest());
         Relay { rs, md }
     }
     /// Return an iterator over all Relay objects, including invalid ones
     /// that we can't use.
     fn all_relays(&self) -> impl Iterator<Item = Relay<'_>> {
         self.consensus
-            .get_routers()
+            .routers()
             .iter()
             .map(move |rs| self.relay_from_rs(rs))
     }
@@ -352,8 +352,8 @@ impl NetDir {
     /// Heolper: Set self.weight_fn to the function we should use to find
     /// initial relay weights.
     fn pick_weight_fn(&self) {
-        let has_measured = self.relays().any(|r| r.rs.get_weight().is_measured());
-        let has_nonzero = self.relays().any(|r| r.rs.get_weight().is_nonzero());
+        let has_measured = self.relays().any(|r| r.rs.weight().is_measured());
+        let has_nonzero = self.relays().any(|r| r.rs.weight().is_nonzero());
         if !has_nonzero {
             self.weight_fn.set(Some(WeightFn::Uniform));
         } else if !has_measured {
@@ -385,7 +385,7 @@ impl NetDir {
     {
         let weight_fn = self.get_weight_fn();
         pick::pick_weighted(rng, self.relays(), |r| {
-            reweight(r, r.get_weight(weight_fn)) as u64
+            reweight(r, r.weight(weight_fn)) as u64
         })
     }
 }
@@ -400,29 +400,29 @@ impl<'a> Relay<'a> {
     }
     /// Return the Ed25519 ID for this relay, assuming it has one.
     // TODO: This should always succeed.
-    pub fn get_id(&self) -> Option<&ll::pk::ed25519::PublicKey> {
+    pub fn id(&self) -> Option<&ll::pk::ed25519::PublicKey> {
         self.md?.get_opt_ed25519_id().as_ref()
     }
     /// Return the RSAIdentity for this relay.
-    pub fn get_rsa_id(&self) -> &RSAIdentity {
+    pub fn rsa_id(&self) -> &RSAIdentity {
         self.rs.rsa_identity()
     }
     /// Return true if this relay and `other` seem to be the same relay.
     ///
     /// (Two relays are the same if they have the same identity.)
     pub fn same_relay<'b>(&self, other: &Relay<'b>) -> bool {
-        self.get_id() == other.get_id() && self.get_rsa_id() == other.get_rsa_id()
+        self.id() == other.id() && self.rsa_id() == other.rsa_id()
     }
     /// Return true if this relay allows exiting to `port` on IPv4.
     // XXXX ipv4/ipv6
     pub fn supports_exit_port(&self, port: u16) -> bool {
-        self.md.unwrap().get_ipv4_policy().allows_port(port)
+        self.md.unwrap().ipv4_policy().allows_port(port)
     }
     /// Return the weight of this Relay, according to `wf`.
-    fn get_weight(&self, wf: WeightFn) -> u32 {
+    fn weight(&self, wf: WeightFn) -> u32 {
         use netstatus::RouterWeight::*;
         use WeightFn::*;
-        match (wf, self.rs.get_weight()) {
+        match (wf, self.rs.weight()) {
             (Uniform, _) => 1,
             (IncludeUnmeasured, Unmeasured(u)) => *u,
             (IncludeUnmeasured, Measured(u)) => *u,
@@ -437,17 +437,17 @@ impl<'a> tor_linkspec::ChanTarget for Relay<'a> {
         self.rs.addrs()
     }
     fn ed_identity(&self) -> &ll::pk::ed25519::PublicKey {
-        self.get_id().unwrap()
+        self.id().unwrap()
     }
     fn rsa_identity(&self) -> &RSAIdentity {
-        self.get_rsa_id()
+        self.rsa_id()
     }
 }
 
 impl<'a> tor_linkspec::CircTarget for Relay<'a> {
     fn ntor_onion_key(&self) -> &ll::pk::curve25519::PublicKey {
         // XXXX unwrap might fail if is_usable is false
-        self.md.unwrap().get_ntor_key()
+        self.md.unwrap().ntor_key()
     }
     /// Return the subprotocols implemented by this relay.
     fn protovers(&self) -> &tor_protover::Protocols {

@@ -33,11 +33,11 @@ impl RelayCell {
         (self.streamid, self.msg)
     }
     /// Return the command for this cell.
-    pub fn get_cmd(&self) -> RelayCmd {
-        self.msg.get_cmd()
+    pub fn cmd(&self) -> RelayCmd {
+        self.msg.cmd()
     }
     /// Return the underlying message for this cell.
-    pub fn get_msg(&self) -> &RelayMsg {
+    pub fn msg(&self) -> &RelayMsg {
         &self.msg
     }
     /// Return true if this cell counts to the circuit-level sendme
@@ -79,7 +79,7 @@ impl RelayCell {
     /// TODO: not the best interface, as this requires copying into a cell.
     fn encode_to_vec(self) -> Vec<u8> {
         let mut w = Vec::new();
-        w.write_u8(self.msg.get_cmd().into());
+        w.write_u8(self.msg.cmd().into());
         w.write_u16(0); // "Recognized"
         w.write_u16(self.streamid.0);
         w.write_u32(0); // Digest
@@ -177,7 +177,7 @@ impl<B: Body> From<B> for RelayMsg {
 
 impl RelayMsg {
     /// Return the stream command associated with this message.
-    pub fn get_cmd(&self) -> RelayCmd {
+    pub fn cmd(&self) -> RelayCmd {
         use RelayMsg::*;
         match self {
             Begin(_) => RelayCmd::BEGIN,
@@ -195,7 +195,7 @@ impl RelayMsg {
             Resolve(_) => RelayCmd::RESOLVE,
             Resolved(_) => RelayCmd::RESOLVED,
             BeginDir => RelayCmd::BEGIN_DIR,
-            Unrecognized(u) => u.get_cmd(),
+            Unrecognized(u) => u.cmd(),
         }
     }
     /// Extract the body of this message from `r`
@@ -960,7 +960,7 @@ impl Unrecognized {
     }
 
     /// Return the command associated with this message
-    pub fn get_cmd(&self) -> RelayCmd {
+    pub fn cmd(&self) -> RelayCmd {
         self.cmd
     }
     /// Decode this message, using a provided command.

@@ -42,7 +42,7 @@ impl ChannelCodec {
     /// Write the given cell into the provided BytesMut object.
     pub fn write_cell(&mut self, item: ChanCell, dst: &mut BytesMut) -> crate::Result<()> {
         let ChanCell { circid, msg } = item;
-        let cmd = msg.get_cmd();
+        let cmd = msg.cmd();
         dst.write_u32(circid.into());
         dst.write_u8(cmd.into());
 

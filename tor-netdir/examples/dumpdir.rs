@@ -23,7 +23,7 @@ fn main() -> Result<()> {
     let dir = cfg.load()?;
 
     for r in dir.relays() {
-        println!("{}", r.get_rsa_id())
+        println!("{}", r.rsa_id())
     }
 
     Ok(())

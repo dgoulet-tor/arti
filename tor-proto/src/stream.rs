@@ -167,7 +167,7 @@ impl DataStream {
             }
             Ok(m) => Err(Error::StreamProto(format!(
                 "Unexpected {} cell on steam",
-                m.get_cmd()
+                m.cmd()
             ))),
         }
     }
@@ -194,7 +194,7 @@ impl ResolveStream {
             RelayMsg::Resolved(r) => Ok(r),
             m => Err(Error::StreamProto(format!(
                 "Unexpected {} on resolve stream",
-                m.get_cmd()
+                m.cmd()
             ))),
         }
     }

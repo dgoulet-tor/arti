@@ -13,7 +13,7 @@ const CELL_SIZE: usize = 509;
 
 /// check whether a cell body encoded in a hex string matches a given message.
 fn test_body(cmd: ChanCmd, s: &str, m: &msg::ChanMsg, pad_to_len: bool) {
-    assert_eq!(cmd, m.get_cmd());
+    assert_eq!(cmd, m.cmd());
     let body = {
         let mut s = s.to_string();
         s.retain(|c| !c.is_whitespace());
@@ -121,9 +121,9 @@ fn test_certs() {
     vbody(cmd, body, &certs.clone().into());
 
     // Test some accessors.
-    let body3 = certs.get_cert_body(4.into());
+    let body3 = certs.cert_body(4.into());
     assert_eq!(body3, Some(&cert3body[..]));
-    let body_not_present = certs.get_cert_body(66.into());
+    let body_not_present = certs.cert_body(66.into());
     assert_eq!(body_not_present, None);
 
     let cert3 = certs.parse_ed_cert(4.into());

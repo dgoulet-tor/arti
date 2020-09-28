@@ -69,7 +69,7 @@ pub enum ChanMsg {
 
 impl ChanMsg {
     /// Return the ChanCmd for this message.
-    pub fn get_cmd(&self) -> ChanCmd {
+    pub fn cmd(&self) -> ChanCmd {
         use ChanMsg::*;
         match self {
             Padding(_) => ChanCmd::PADDING,
@@ -90,7 +90,7 @@ impl ChanMsg {
             AuthChallenge(_) => ChanCmd::AUTH_CHALLENGE,
             Authenticate(_) => ChanCmd::AUTHENTICATE,
             Authorize(_) => ChanCmd::AUTHORIZE,
-            Unrecognized(c) => c.get_cmd(),
+            Unrecognized(c) => c.cmd(),
         }
     }
 
@@ -284,7 +284,7 @@ fixed_len! {
 }
 impl CreateFast {
     /// Return the content of this handshake
-    pub fn get_body(&self) -> &[u8] {
+    pub fn body(&self) -> &[u8] {
         &self.handshake
     }
 }
@@ -745,7 +745,7 @@ impl Certs {
     }
 
     /// Return the body of the certificate tagged with 'tp', if any.
-    pub fn get_cert_body(&self, tp: tor_cert::CertType) -> Option<&[u8]> {
+    pub fn cert_body(&self, tp: tor_cert::CertType) -> Option<&[u8]> {
         self.certs
             .iter()
             .find(|c| c.certtype == tp.into())
@@ -756,7 +756,7 @@ impl Certs {
     /// there is one.
     pub fn parse_ed_cert(&self, tp: tor_cert::CertType) -> crate::Result<tor_cert::KeyUnknownCert> {
         let body = self
-            .get_cert_body(tp)
+            .cert_body(tp)
             .ok_or_else(|| crate::Error::ChanProto(format!("Missing {} certificate", tp)))?;
 
         let cert = tor_cert::Ed25519Cert::decode(body)?;
@@ -944,7 +944,7 @@ impl Unrecognized {
         let content = content.into();
         Unrecognized { cmd, content }
     }
-    fn get_cmd(&self) -> ChanCmd {
+    fn cmd(&self) -> ChanCmd {
         self.cmd
     }
 }

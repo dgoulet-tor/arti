@@ -53,19 +53,19 @@ pub struct Microdesc {
 
 impl Microdesc {
     /// Return the sha256 digest of this microdesc.
-    pub fn get_digest(&self) -> &MDDigest {
+    pub fn digest(&self) -> &MDDigest {
         &self.sha256
     }
     /// Return the ntor onion key for this microdesc
-    pub fn get_ntor_key(&self) -> &curve25519::PublicKey {
+    pub fn ntor_key(&self) -> &curve25519::PublicKey {
         &self.ntor_onion_key
     }
     /// Return the ipv4 exit policy for this microdesc
-    pub fn get_ipv4_policy(&self) -> &PortPolicy {
+    pub fn ipv4_policy(&self) -> &PortPolicy {
         &self.ipv4_policy
     }
     /// Return the ipv6 exit policy for this microdesc
-    pub fn get_ipv6_policy(&self) -> &PortPolicy {
+    pub fn ipv6_policy(&self) -> &PortPolicy {
         &self.ipv6_policy
     }
     /// Return the ed25519 identity for this microdesc (if any)
@@ -171,8 +171,8 @@ impl Microdesc {
         let mut items = reader.pause_at(|item| match item {
             Err(_) => false,
             Ok(item) => {
-                item.get_kwd().is_annotation()
-                    || if item.get_kwd() == ONION_KEY {
+                item.kwd().is_annotation()
+                    || if item.kwd() == ONION_KEY {
                         let was_first = first_onion_key;
                         first_onion_key = false;
                         !was_first
@@ -189,17 +189,17 @@ impl Microdesc {
             // unwrap here is safe because parsing would have failed
             // had there not been at least one item.
             let first = body.first_item().unwrap();
-            if first.get_kwd() != ONION_KEY {
+            if first.kwd() != ONION_KEY {
                 // TODO: this is not the best possible error.
                 return Err(Error::MissingToken("onion-key"));
             }
             // Unwrap is safe here because we are parsing these strings from s
-            util::str_offset(s, first.get_kwd_str()).unwrap()
+            util::str_offset(s, first.kwd_str()).unwrap()
         };
 
         // Legacy (tap) onion key
         let tap_onion_key: rsa::PublicKey = body
-            .get_required(ONION_KEY)?
+            .required(ONION_KEY)?
             .parse_obj::<RSAPublic>("RSA PUBLIC KEY")?
             .check_len_eq(1024)?
             .check_exponent(65537)?
@@ -207,7 +207,7 @@ impl Microdesc {
 
         // Ntor onion key
         let ntor_onion_key = body
-            .get_required(NTOR_ONION_KEY)?
+            .required(NTOR_ONION_KEY)?
             .parse_arg::<Curve25519Public>(0)?
             .into();
 
@@ -230,9 +230,9 @@ impl Microdesc {
         // ed25519 identity
         let ed25519_id = {
             let id_tok = body
-                .get_slice(ID)
+                .slice(ID)
                 .iter()
-                .find(|item| item.get_arg(0) == Some("ed25519"));
+                .find(|item| item.arg(0) == Some("ed25519"));
             match id_tok {
                 None => None,
                 Some(tok) => Some(tok.parse_arg::<Ed25519Public>(1)?.into()),
@@ -277,7 +277,7 @@ fn advance_to_next_microdesc(reader: &mut NetDocReader<'_, MicrodescKW>, annotat
         let item = iter.peek();
         match item {
             Some(Ok(t)) => {
-                let kwd = t.get_kwd();
+                let kwd = t.kwd();
                 if (annotated && kwd.is_annotation()) || kwd == ONION_KEY {
                     return;
                 }

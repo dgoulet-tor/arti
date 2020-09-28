@@ -109,12 +109,12 @@ impl AuthCert {
     }
 
     /// Return an RSAIdentity for this certificate's identity key.
-    pub fn get_id_fingerprint(&self) -> &rsa::RSAIdentity {
+    pub fn id_fingerprint(&self) -> &rsa::RSAIdentity {
         &self.id_fingerprint
     }
 
     /// Return an RSAIdentity for this certificate's signing key.
-    pub fn get_sk_fingerprint(&self) -> &rsa::RSAIdentity {
+    pub fn sk_fingerprint(&self) -> &rsa::RSAIdentity {
         &self.sk_fingerprint
     }
 
@@ -137,46 +137,43 @@ impl AuthCert {
         // safely call unwrap() on first and last, since there are required
         // tokens in the rules, so we know that at least one token will have
         // been parsed.
-        if body.first_item().unwrap().get_kwd() != DIR_KEY_CERTIFICATE_VERSION {
+        if body.first_item().unwrap().kwd() != DIR_KEY_CERTIFICATE_VERSION {
             // TODO: this is not the best possible error.
             return Err(Error::MissingToken("onion-key"));
         }
-        if body.last_item().unwrap().get_kwd() != DIR_KEY_CERTIFICATION {
+        if body.last_item().unwrap().kwd() != DIR_KEY_CERTIFICATION {
             // TODO: this is not the best possible error.
             return Err(Error::MissingToken("dir-key-certification"));
         }
 
-        let version = body
-            .get_required(DIR_KEY_CERTIFICATE_VERSION)?
-            .get_arg(0)
-            .unwrap();
+        let version = body.required(DIR_KEY_CERTIFICATE_VERSION)?.arg(0).unwrap();
         if version != "3" {
             // TODO Better error needed
             return Err(Error::Internal(Pos::None));
         }
 
         let signing_key: rsa::PublicKey = body
-            .get_required(DIR_SIGNING_KEY)?
+            .required(DIR_SIGNING_KEY)?
             .parse_obj::<RSAPublic>("RSA PUBLIC KEY")?
             .check_len(1024..)?
             .check_exponent(65537)?
             .into();
 
         let identity_key: rsa::PublicKey = body
-            .get_required(DIR_IDENTITY_KEY)?
+            .required(DIR_IDENTITY_KEY)?
             .parse_obj::<RSAPublic>("RSA PUBLIC KEY")?
             .check_len(1024..)?
             .check_exponent(65537)?
             .into();
 
         let published = body
-            .get_required(DIR_KEY_PUBLISHED)?
+            .required(DIR_KEY_PUBLISHED)?
             .args_as_str()
             .parse::<ISO8601TimeSp>()?
             .into();
 
         let expires = body
-            .get_required(DIR_KEY_EXPIRES)?
+            .required(DIR_KEY_EXPIRES)?
             .args_as_str()
             .parse::<ISO8601TimeSp>()?
             .into();
@@ -189,13 +186,13 @@ impl AuthCert {
 
         // check crosscert
         let v_crosscert = {
-            let crosscert = body.get_required(DIR_KEY_CROSSCERT)?;
-            let mut tag = crosscert.get_obj_tag().unwrap();
+            let crosscert = body.required(DIR_KEY_CROSSCERT)?;
+            let mut tag = crosscert.obj_tag().unwrap();
             // we are required to support both.
             if tag != "ID SIGNATURE" && tag != "SIGNATURE" {
                 tag = "ID SIGNATURE";
             }
-            let sig = crosscert.get_obj(tag)?;
+            let sig = crosscert.obj(tag)?;
 
             let signed = identity_key.to_rsa_identity();
             // TODO: we need to accept prefixes here. COMPAT BLOCKER.
@@ -205,8 +202,8 @@ impl AuthCert {
 
         // check the signature
         let v_sig = {
-            let signature = body.get_required(DIR_KEY_CERTIFICATION)?;
-            let sig = signature.get_obj("SIGNATURE")?;
+            let signature = body.required(DIR_KEY_CERTIFICATION)?;
+            let sig = signature.obj("SIGNATURE")?;
 
             let mut sha1 = d::Sha1::new();
             let s = reader.str();
@@ -252,7 +249,7 @@ impl AuthCert {
         use AuthCertKW::*;
         let iter = reader.iter();
         while let Some(Ok(item)) = iter.peek() {
-            if item.get_kwd() == DIR_KEY_CERTIFICATE_VERSION {
+            if item.kwd() == DIR_KEY_CERTIFICATE_VERSION {
                 return;
             }
             iter.next();

@@ -342,11 +342,11 @@ impl RouterDesc {
         let s = r.str();
         let (header, body, sig) = RouterDesc::parse_sections(r)?;
 
-        let start_offset = header.get_required(ROUTER)?.offset_in(s).unwrap();
+        let start_offset = header.required(ROUTER)?.offset_in(s).unwrap();
 
         // ed25519 identity and signing key.
         let (identity_cert, ed25519_signing_key) = {
-            let cert_tok = header.get_required(IDENTITY_ED25519)?;
+            let cert_tok = header.required(IDENTITY_ED25519)?;
             if cert_tok.offset_in(s).unwrap() < start_offset {
                 return Err(Error::MisplacedToken("identity-ed25519", cert_tok.pos()));
             }
@@ -364,14 +364,14 @@ impl RouterDesc {
 
         // Legacy RSA identity
         let rsa_identity: ll::pk::rsa::PublicKey = body
-            .get_required(SIGNING_KEY)?
+            .required(SIGNING_KEY)?
             .parse_obj::<RSAPublic>("RSA PUBLIC KEY")?
             .check_len_eq(1024)?
             .check_exponent(65537)?
             .into();
 
-        let ed_sig = sig.get_required(ROUTER_SIG_ED25519)?;
-        let rsa_sig = sig.get_required(ROUTER_SIGNATURE)?;
+        let ed_sig = sig.required(ROUTER_SIG_ED25519)?;
+        let rsa_sig = sig.required(ROUTER_SIGNATURE)?;
         let ed_sig_pos = ed_sig.offset_in(s).unwrap();
         let rsa_sig_pos = rsa_sig.offset_in(s).unwrap();
 
@@ -404,7 +404,7 @@ impl RouterDesc {
             let signed_end = rsa_sig_pos + b"router-signature\n".len();
             d.update(&s[start_offset..signed_end]);
             let d = d.finalize();
-            let sig = rsa_sig.get_obj("SIGNATURE")?;
+            let sig = rsa_sig.obj("SIGNATURE")?;
             // TODO: we need to accept prefixes here. COMPAT BLOCKER.
 
             ll::pk::rsa::ValidatableRSASignature::new(&rsa_identity, &sig, &d)
@@ -412,9 +412,9 @@ impl RouterDesc {
 
         // router nickname ipv4addr orport socksport dirport
         let (nickname, ipv4addr, orport, dirport) = {
-            let rtrline = header.get_required(ROUTER)?;
+            let rtrline = header.required(ROUTER)?;
             (
-                rtrline.get_arg(0).unwrap().to_string(),
+                rtrline.arg(0).unwrap().to_string(),
                 Some(rtrline.parse_arg::<net::Ipv4Addr>(1)?),
                 rtrline.parse_arg(2)?,
                 // Skipping socksport.
@@ -427,19 +427,19 @@ impl RouterDesc {
 
         // published time.
         let published = body
-            .get_required(PUBLISHED)?
+            .required(PUBLISHED)?
             .args_as_str()
             .parse::<ISO8601TimeSp>()?
             .into();
 
         // ntor key
         // XXXX technically this isn't "required"
-        let ntor_onion_key: Curve25519Public = body.get_required(NTOR_ONION_KEY)?.parse_arg(0)?;
+        let ntor_onion_key: Curve25519Public = body.required(NTOR_ONION_KEY)?.parse_arg(0)?;
         let ntor_onion_key: ll::pk::curve25519::PublicKey = ntor_onion_key.into();
         // ntor crosscert
         let crosscert_cert: tor_cert::UncheckedCert = {
             // Technically required? XXXX
-            let cc = body.get_required(NTOR_ONION_KEY_CROSSCERT)?;
+            let cc = body.required(NTOR_ONION_KEY_CROSSCERT)?;
             let sign: u8 = cc.parse_arg(0)?;
             if sign != 0 && sign != 1 {
                 return Err(Error::BadArgument(cc.arg_pos(0), "not 0 or 1".to_string()));
@@ -457,7 +457,7 @@ impl RouterDesc {
 
         // TAP key
         let tap_onion_key: ll::pk::rsa::PublicKey = body
-            .get_required(ONION_KEY)?
+            .required(ONION_KEY)?
             .parse_obj::<RSAPublic>("RSA PUBLIC KEY")?
             .check_len_eq(1024)?
             .check_exponent(65537)?
@@ -466,8 +466,8 @@ impl RouterDesc {
         // TAP crosscert
         let tap_crosscert_sig = {
             // not offically required yet xxxx
-            let cc_tok = body.get_required(ONION_KEY_CROSSCERT)?;
-            let cc_val = cc_tok.get_obj("CROSSCERT")?;
+            let cc_tok = body.required(ONION_KEY_CROSSCERT)?;
+            let cc_val = cc_tok.obj("CROSSCERT")?;
             let mut signed = Vec::new();
             signed.extend(rsa_identity.to_rsa_identity().as_bytes());
             signed.extend(identity_cert.peek_signing_key().as_bytes());
@@ -476,7 +476,7 @@ impl RouterDesc {
 
         // Protocols: treat these as required. (XXXX)
         let proto = {
-            let proto_tok = body.get_required(PROTO)?;
+            let proto_tok = body.required(PROTO)?;
             proto_tok
                 .args_as_str()
                 .parse::<tor_protover::Protocols>()
@@ -510,7 +510,7 @@ impl RouterDesc {
         // Extract at most one ipv6 address from the list.  It's not great,
         // but it's what Tor does.
         let mut ipv6addr = None;
-        for tok in body.get_slice(OR_ADDRESS) {
+        for tok in body.slice(OR_ADDRESS) {
             if let Ok(net::SocketAddr::V6(a)) = tok.parse_arg::<net::SocketAddr>(0) {
                 ipv6addr = Some((*a.ip(), a.port()));
                 break;
@@ -524,8 +524,8 @@ impl RouterDesc {
         // ipv4_policy
         let ipv4_policy = {
             let mut pol = AddrPolicy::new();
-            for ruletok in body.get_slice(POLICY).iter() {
-                let accept = ruletok.get_kwd_str() == "accept";
+            for ruletok in body.slice(POLICY).iter() {
+                let accept = ruletok.kwd_str() == "accept";
                 let pat: AddrPortPattern = ruletok
                     .args_as_str()
                     .parse()
@@ -610,7 +610,7 @@ fn advance_to_next_routerdesc(reader: &mut NetDocReader<'_, RouterKW>, annotated
         let item = iter.peek();
         match item {
             Some(Ok(t)) => {
-                let kwd = t.get_kwd();
+                let kwd = t.kwd();
                 if (annotated && kwd.is_annotation()) || kwd == ROUTER {
                     return;
                 }

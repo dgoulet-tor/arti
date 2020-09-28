@@ -162,11 +162,11 @@ impl ChanCell {
         ChanCell { circid, msg }
     }
     /// Return the circuit ID for this cell.
-    pub fn get_circid(&self) -> CircID {
+    pub fn circid(&self) -> CircID {
         self.circid
     }
     /// Return a reference to the underlying message of this cell.
-    pub fn get_msg(&self) -> &msg::ChanMsg {
+    pub fn msg(&self) -> &msg::ChanMsg {
         &self.msg
     }
     /// Consume this cell and return its components.

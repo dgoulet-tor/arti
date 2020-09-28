@@ -104,24 +104,24 @@ impl<'a, T: Keyword> Section<'a, T> {
         }
     }
     /// Helper: return the tokval for some Keyword.
-    fn get_tokval(&self, t: T) -> &TokVal<'a, T> {
+    fn tokval(&self, t: T) -> &TokVal<'a, T> {
         let idx = t.idx();
         &self.v[idx]
     }
     /// Return all the Items for some Keyword, as a slice.
-    pub fn get_slice(&self, t: T) -> &[Item<'a, T>] {
-        self.get_tokval(t).as_slice()
+    pub fn slice(&self, t: T) -> &[Item<'a, T>] {
+        self.tokval(t).as_slice()
     }
     /// Return a single Item for some Keyword, if there is exactly one.
     pub fn get(&self, t: T) -> Option<&Item<'a, T>> {
-        self.get_tokval(t).singleton()
+        self.tokval(t).singleton()
     }
     /// Return a single Item for some Keyword, giving an error if there
     /// is not exactly one.
     ///
     /// It is usually a mistake to use this function on a Keyword that is
     /// not required.
-    pub fn get_required(&self, t: T) -> Result<&Item<'a, T>> {
+    pub fn required(&self, t: T) -> Result<&Item<'a, T>> {
         self.get(t).ok_or_else(|| Error::MissingToken(t.to_str()))
     }
     /// Return a proxy MaybeItem object for some keyword.
@@ -136,7 +136,7 @@ impl<'a, T: Keyword> Section<'a, T> {
     pub fn first_item(&self) -> Option<&Item<'a, T>> {
         match self.first {
             None => None,
-            Some(t) => self.get_tokval(t).first(),
+            Some(t) => self.tokval(t).first(),
         }
     }
     /// Return the last item that was accepted for this section, or None
@@ -144,7 +144,7 @@ impl<'a, T: Keyword> Section<'a, T> {
     pub fn last_item(&self) -> Option<&Item<'a, T>> {
         match self.last {
             None => None,
-            Some(t) => self.get_tokval(t).last(),
+            Some(t) => self.tokval(t).last(),
         }
     }
     /// Insert an `item`.
@@ -189,7 +189,7 @@ impl<T: Keyword> SectionRules<T> {
     /// Requires that no rule yet exists for the provided keyword.
     pub fn add(&mut self, t: TokenFmtBuilder<T>) {
         let rule: TokenFmt<_> = t.into();
-        let idx = rule.get_kwd().idx();
+        let idx = rule.kwd().idx();
         assert!(self.rules[idx].is_none());
         self.rules[idx] = Some(rule);
     }
@@ -206,11 +206,11 @@ impl<T: Keyword> SectionRules<T> {
         for item in tokens {
             let item = item?;
 
-            let tok = item.get_kwd();
+            let tok = item.kwd();
             let tok_idx = tok.idx();
             if let Some(rule) = &self.rules[tok_idx] {
                 // we want this token.
-                assert!(rule.get_kwd() == tok);
+                assert!(rule.kwd() == tok);
                 section.add_tok(tok, item);
                 rule.check_multiplicity(section.v[tok_idx].as_slice())?;
             } else {

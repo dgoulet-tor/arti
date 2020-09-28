@@ -90,7 +90,7 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
         }
     }
     /// Return the current Pos within the string.
-    fn get_pos(&self, pos: usize) -> Pos {
+    fn pos(&self, pos: usize) -> Pos {
         Pos::from_offset(self.s, pos)
     }
     /// Skip forward by n bytes.
@@ -115,7 +115,7 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
     }
     /// Try to extract a NL-terminated line from this reader.  Always
     /// remove data if the reader is nonempty.
-    fn get_line(&mut self) -> Result<&'a str> {
+    fn line(&mut self) -> Result<&'a str> {
         let remainder = &self.s[self.off..];
         let mut line;
         if let Some(nl_pos) = remainder.find('\n') {
@@ -123,7 +123,7 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
             line = &remainder[..nl_pos];
         } else {
             self.advance(remainder.len())?; // drain everything.
-            return Err(Error::TruncatedLine(self.get_pos(self.s.len())));
+            return Err(Error::TruncatedLine(self.pos(self.s.len())));
         }
 
         // Not in dirspec! XXXX
@@ -136,9 +136,9 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
     /// Try to extract a line that begins with a keyword from this reader.
     ///
     /// Returns a (kwd, args) tuple on success.
-    fn get_kwdline(&mut self) -> Result<(&'a str, &'a str)> {
+    fn kwdline(&mut self) -> Result<(&'a str, &'a str)> {
         let pos = self.off;
-        let line = self.get_line()?;
+        let line = self.line()?;
         let (line, anno_ok) = if let Some(rem) = line.strip_prefix("opt ") {
             (rem, false)
         } else {
@@ -147,10 +147,10 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
         let mut parts_iter = line.splitn(2, |c| c == ' ' || c == '\t');
         let kwd = match parts_iter.next() {
             Some(k) => k,
-            None => return Err(Error::MissingKeyword(self.get_pos(pos))),
+            None => return Err(Error::MissingKeyword(self.pos(pos))),
         };
         if !keyword_ok(kwd, anno_ok) {
-            return Err(Error::BadKeyword(self.get_pos(pos)));
+            return Err(Error::BadKeyword(self.pos(pos)));
         }
         // XXXX spec should allow unicode in args.
         let args = match parts_iter.next() {
@@ -166,7 +166,7 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
     /// Returns Ok(Some(Object(...))) on success if an object is
     /// found, Ok(None) if no object is found, and Err only if a
     /// corrupt object is found.
-    fn get_object(&mut self) -> Result<Option<Object<'a>>> {
+    fn object(&mut self) -> Result<Option<Object<'a>>> {
         const BEGIN_STR: &str = "-----BEGIN ";
         const END_STR: &str = "-----END ";
         const TAG_END: &str = "-----";
@@ -174,18 +174,18 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
         if !self.starts_with(BEGIN_STR) {
             return Ok(None);
         }
-        let line = self.get_line()?;
+        let line = self.line()?;
         if !line.ends_with(TAG_END) {
-            return Err(Error::BadObjectBeginTag(self.get_pos(pos)));
+            return Err(Error::BadObjectBeginTag(self.pos(pos)));
         }
         let tag = &line[BEGIN_STR.len()..(line.len() - TAG_END.len())];
         if !tag_keyword_ok(tag) {
-            return Err(Error::BadObjectBeginTag(self.get_pos(pos)));
+            return Err(Error::BadObjectBeginTag(self.pos(pos)));
         }
         let datapos = self.off;
         let (endlinepos, endline) = loop {
             let p = self.off;
-            let line = self.get_line()?;
+            let line = self.line()?;
             if line.starts_with(END_STR) {
                 break (p, line);
             }
@@ -197,11 +197,11 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
         };
         let data = &self.s[datapos..endlinepos];
         if !endline.ends_with(TAG_END) {
-            return Err(Error::BadObjectEndTag(self.get_pos(endlinepos)));
+            return Err(Error::BadObjectEndTag(self.pos(endlinepos)));
         }
         let endtag = &endline[END_STR.len()..(endline.len() - TAG_END.len())];
         if endtag != tag {
-            return Err(Error::BadObjectMismatchedTag(self.get_pos(endlinepos)));
+            return Err(Error::BadObjectMismatchedTag(self.pos(endlinepos)));
         }
         Ok(Some(Object { tag, data }))
     }
@@ -213,12 +213,12 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
     ///
     /// Always consumes at least one line if possible; always ends on a
     /// line boundary if one exists.
-    fn get_item(&mut self) -> Result<Option<Item<'a, K>>> {
+    fn item(&mut self) -> Result<Option<Item<'a, K>>> {
         if self.remaining() == 0 {
             return Ok(None);
         }
-        let (kwd_str, args) = self.get_kwdline()?;
-        let object = self.get_object()?;
+        let (kwd_str, args) = self.kwdline()?;
+        let object = self.object()?;
         let split_args = RefCell::new(None);
         let kwd = K::from_str(kwd_str);
         Ok(Some(Item {
@@ -279,7 +279,7 @@ fn tag_keyword_ok(s: &str) -> bool {
 impl<'a, K: Keyword> Iterator for NetDocReaderBase<'a, K> {
     type Item = Result<Item<'a, K>>;
     fn next(&mut self) -> Option<Self::Item> {
-        self.get_item().transpose()
+        self.item().transpose()
     }
 }
 
@@ -296,11 +296,11 @@ fn base64_decode_multiline(s: &str) -> std::result::Result<Vec<u8>, base64::Deco
 
 impl<'a, K: Keyword> Item<'a, K> {
     /// Return the parsed keyword part of this item.
-    pub fn get_kwd(&self) -> K {
+    pub fn kwd(&self) -> K {
         self.kwd
     }
     /// Return the keyword part of this item, as a string.
-    pub fn get_kwd_str(&self) -> &'a str {
+    pub fn kwd_str(&self) -> &'a str {
         self.kwd_str
     }
     /// Return true if the keyword for this item is in 'ks'.
@@ -328,12 +328,12 @@ impl<'a, K: Keyword> Item<'a, K> {
         self.args.split(is_sp).filter(|s| !s.is_empty())
     }
     /// Return the nth argument of this item, if there is one.
-    pub fn get_arg(&self, idx: usize) -> Option<&'a str> {
+    pub fn arg(&self, idx: usize) -> Option<&'a str> {
         self.args_as_vec().get(idx).copied()
     }
     /// Return the nth argument of this item, or an error if it isn't there.
     pub fn required_arg(&self, idx: usize) -> Result<&'a str> {
-        self.get_arg(idx)
+        self.arg(idx)
             .ok_or_else(|| Error::MissingArgument(Pos::at(self.args)))
     }
     /// Try to parse the nth argument (if it exists) into some type
@@ -344,7 +344,7 @@ impl<'a, K: Keyword> Item<'a, K> {
     where
         Error: From<V::Err>,
     {
-        match self.get_arg(idx) {
+        match self.arg(idx) {
             None => Ok(None),
             Some(s) => match s.parse() {
                 Ok(r) => Ok(Some(r)),
@@ -378,11 +378,11 @@ impl<'a, K: Keyword> Item<'a, K> {
         self.object.is_some()
     }
     /// Return the tag of this item's associated object, if it has one.
-    pub fn get_obj_tag(&self) -> Option<&'a str> {
+    pub fn obj_tag(&self) -> Option<&'a str> {
         self.object.map(|o| o.tag)
     }
     /// Try to decode the base64 contents of this Item's associated object.
-    pub fn get_obj(&self, want_tag: &str) -> Result<Vec<u8>> {
+    pub fn obj(&self, want_tag: &str) -> Result<Vec<u8>> {
         match self.object {
             None => Err(Error::MissingObject("entry", self.end_pos())),
             Some(obj) => {
@@ -398,7 +398,7 @@ impl<'a, K: Keyword> Item<'a, K> {
     /// Try to decode the base64 contents of this item's associated object
     /// as a given type that implements FromBytes.
     pub fn parse_obj<V: FromBytes>(&self, want_tag: &str) -> Result<V> {
-        let bytes = self.get_obj(want_tag)?;
+        let bytes = self.obj(want_tag)?;
         let p = Pos::at(self.object.unwrap().data);
         V::from_vec(bytes, p).map_err(|e| e.at_pos(p))
     }
@@ -491,9 +491,9 @@ impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
         }
     }
     #[allow(dead_code)]
-    pub fn get_obj(&self, want_tag: &str) -> Result<Option<Vec<u8>>> {
+    pub fn obj(&self, want_tag: &str) -> Result<Option<Vec<u8>>> {
         match self.0 {
-            Some(item) => Ok(Some(item.get_obj(want_tag)?)),
+            Some(item) => Ok(Some(item.obj(want_tag)?)),
             None => Ok(None),
         }
     }
@@ -517,13 +517,13 @@ pub trait ItemResult<K: Keyword> {
 impl<'a, K: Keyword> ItemResult<K> for Result<Item<'a, K>> {
     fn is_ok_with_annotation(&self) -> bool {
         match self {
-            Ok(item) => item.get_kwd().is_annotation(),
+            Ok(item) => item.kwd().is_annotation(),
             Err(_) => false,
         }
     }
     fn is_ok_with_non_annotation(&self) -> bool {
         match self {
-            Ok(item) => !item.get_kwd().is_annotation(),
+            Ok(item) => !item.kwd().is_annotation(),
             Err(_) => false,
         }
     }
@@ -597,7 +597,7 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
     pub fn should_be_exhausted(&mut self) -> Result<()> {
         match self.iter().peek() {
             None => Ok(()),
-            Some(Ok(t)) => Err(Error::UnexpectedToken(t.get_kwd().to_str(), t.pos())),
+            Some(Ok(t)) => Err(Error::UnexpectedToken(t.kwd().to_str(), t.pos())),
             Some(Err(e)) => Err(e.clone()),
         }
     }

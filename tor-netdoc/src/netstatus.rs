@@ -214,7 +214,7 @@ pub struct MDConsensusRouterStatus {
 // methods on a RouterStatus trait.
 impl MDConsensusRouterStatus {
     /// Return the expected microdescriptor digest for this routerstatus
-    pub fn get_md_digest(&self) -> &crate::microdesc::MDDigest {
+    pub fn md_digest(&self) -> &crate::microdesc::MDDigest {
         &self.md_digest
     }
     /// Return the expected microdescriptor digest for this routerstatus
@@ -226,7 +226,7 @@ impl MDConsensusRouterStatus {
         self.addrs.iter()
     }
     /// Return the declared weight of this routerstatus in the directory.
-    pub fn get_weight(&self) -> &RouterWeight {
+    pub fn weight(&self) -> &RouterWeight {
         &self.weight
     }
     /// Return the ORPort addresses of this routerstatus
@@ -267,7 +267,7 @@ pub struct MDConsensus {
 
 impl MDConsensus {
     /// Return a slice of all the routerstatus entries in this consensus.
-    pub fn get_routers(&self) -> &[MDConsensusRouterStatus] {
+    pub fn routers(&self) -> &[MDConsensusRouterStatus] {
         &self.routers[..]
     }
 }
@@ -519,34 +519,31 @@ impl CommonHeader {
             // this unwrap is safe because if there is not at least one
             // token in the section, the section is unparseable.
             let first = sec.first_item().unwrap();
-            if first.get_kwd() != NETWORK_STATUS_VERSION {
-                return Err(Error::UnexpectedToken(
-                    first.get_kwd().to_str(),
-                    first.pos(),
-                ));
+            if first.kwd() != NETWORK_STATUS_VERSION {
+                return Err(Error::UnexpectedToken(first.kwd().to_str(), first.pos()));
             }
         }
 
-        let ver_item = sec.get_required(NETWORK_STATUS_VERSION)?;
+        let ver_item = sec.required(NETWORK_STATUS_VERSION)?;
 
         let version: u32 = ver_item.parse_arg(0)?;
         if version != 3 {
             return Err(Error::BadDocumentVersion(version));
         }
-        let flavor = ver_item.get_arg(1).map(str::to_string);
+        let flavor = ver_item.arg(1).map(str::to_string);
 
         let valid_after = sec
-            .get_required(VALID_AFTER)?
+            .required(VALID_AFTER)?
             .args_as_str()
             .parse::<ISO8601TimeSp>()?
             .into();
         let fresh_until = sec
-            .get_required(FRESH_UNTIL)?
+            .required(FRESH_UNTIL)?
             .args_as_str()
             .parse::<ISO8601TimeSp>()?
             .into();
         let valid_until = sec
-            .get_required(VALID_UNTIL)?
+            .required(VALID_UNTIL)?
             .args_as_str()
             .parse::<ISO8601TimeSp>()?
             .into();
@@ -604,7 +601,7 @@ impl CommonHeader {
 
 impl SharedRandVal {
     fn from_item(item: &Item<'_, NetstatusKW>) -> Result<Self> {
-        match item.get_kwd() {
+        match item.kwd() {
             NetstatusKW::SHARED_RAND_PREVIOUS_VALUE | NetstatusKW::SHARED_RAND_CURRENT_VALUE => (),
             _ => return Err(Error::Internal(item.pos())),
         }
@@ -619,7 +616,7 @@ impl ConsensusHeader {
     fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<ConsensusHeader> {
         use NetstatusKW::*;
 
-        let status: &str = sec.get_required(VOTE_STATUS)?.get_arg(0).unwrap_or("");
+        let status: &str = sec.required(VOTE_STATUS)?.arg(0).unwrap_or("");
         if status != "consensus" {
             return Err(Error::BadDocumentType);
         }
@@ -628,7 +625,7 @@ impl ConsensusHeader {
 
         let hdr = CommonHeader::from_section(sec)?;
 
-        let consensus_method: u32 = sec.get_required(CONSENSUS_METHOD)?.parse_arg(0)?;
+        let consensus_method: u32 = sec.required(CONSENSUS_METHOD)?.parse_arg(0)?;
 
         let shared_rand_prev = sec
             .get(SHARED_RAND_PREVIOUS_VALUE)
@@ -651,7 +648,7 @@ impl ConsensusHeader {
 
 impl DirSource {
     fn from_item(item: &Item<'_, NetstatusKW>) -> Result<Self> {
-        if item.get_kwd() != NetstatusKW::DIR_SOURCE {
+        if item.kwd() != NetstatusKW::DIR_SOURCE {
             return Err(Error::Internal(item.pos()));
         }
         let nickname = item.required_arg(0)?.to_string();
@@ -675,14 +672,14 @@ impl DirSource {
 impl ConsensusVoterInfo {
     fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<ConsensusVoterInfo> {
         use NetstatusKW::*;
-        if sec.first_item().unwrap().get_kwd() != DIR_SOURCE {
+        if sec.first_item().unwrap().kwd() != DIR_SOURCE {
             return Err(Error::Internal(sec.first_item().unwrap().pos()));
         }
-        let dir_source = DirSource::from_item(sec.get_required(DIR_SOURCE)?)?;
+        let dir_source = DirSource::from_item(sec.required(DIR_SOURCE)?)?;
 
-        let contact = sec.get_required(CONTACT)?.args_as_str().to_string();
+        let contact = sec.required(CONTACT)?.args_as_str().to_string();
 
-        let vote_digest = sec.get_required(VOTE_DIGEST)?.parse_arg::<B16>(0)?.into();
+        let vote_digest = sec.required(VOTE_DIGEST)?.parse_arg::<B16>(0)?.into();
 
         Ok(ConsensusVoterInfo {
             dir_source,
@@ -694,7 +691,7 @@ impl ConsensusVoterInfo {
 
 impl RouterFlags {
     fn from_item(item: &Item<'_, NetstatusKW>) -> Result<RouterFlags> {
-        if item.get_kwd() != NetstatusKW::RS_S {
+        if item.kwd() != NetstatusKW::RS_S {
             return Err(Error::Internal(item.pos()));
         }
         let mut authority = false;
@@ -764,7 +761,7 @@ impl Default for RouterWeight {
 
 impl RouterWeight {
     fn from_item(item: &Item<'_, NetstatusKW>) -> Result<RouterWeight> {
-        if item.get_kwd() != NetstatusKW::RS_W {
+        if item.kwd() != NetstatusKW::RS_W {
             return Err(Error::Internal(item.pos()));
         }
 
@@ -793,7 +790,7 @@ impl MDConsensusRouterStatus {
     fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<MDConsensusRouterStatus> {
         use NetstatusKW::*;
         // R line
-        let r_item = sec.get_required(RS_R)?;
+        let r_item = sec.required(RS_R)?;
         let nickname = r_item.required_arg(0)?.to_string();
         let ident = r_item.required_arg(1)?.parse::<B64>()?;
         let identity = RSAIdentity::from_bytes(ident.as_bytes())
@@ -818,12 +815,12 @@ impl MDConsensusRouterStatus {
         )));
 
         // A lines
-        for a_item in sec.get_slice(RS_A) {
+        for a_item in sec.slice(RS_A) {
             addrs.push(a_item.required_arg(0)?.parse::<net::SocketAddr>()?);
         }
 
         // S line
-        let flags = RouterFlags::from_item(sec.get_required(RS_S)?)?;
+        let flags = RouterFlags::from_item(sec.required(RS_S)?)?;
 
         // V line
         let version = sec.maybe(RS_V).args_as_str().map(str::to_string);
@@ -851,7 +848,7 @@ impl MDConsensusRouterStatus {
 
         // M line
         let md_digest: [u8; 32] = {
-            let m_item = sec.get_required(RS_M)?;
+            let m_item = sec.required(RS_M)?;
             m_item
                 .required_arg(0)?
                 .parse::<B64>()?
@@ -880,7 +877,7 @@ impl MDConsensusRouterStatus {
 impl Footer {
     fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<Footer> {
         use NetstatusKW::*;
-        sec.get_required(DIRECTORY_FOOTER)?;
+        sec.required(DIRECTORY_FOOTER)?;
 
         let weights = sec
             .maybe(BANDWIDTH_WEIGHTS)
@@ -901,7 +898,7 @@ enum SigCheckResult {
 
 impl Signature {
     fn from_item(item: &Item<'_, NetstatusKW>) -> Result<Signature> {
-        if item.get_kwd() != NetstatusKW::DIRECTORY_SIGNATURE {
+        if item.kwd() != NetstatusKW::DIRECTORY_SIGNATURE {
             return Err(Error::Internal(item.pos()));
         }
 
@@ -918,7 +915,7 @@ impl Signature {
         let digestname = alg.to_string();
         let id_fingerprint = id_fp.parse::<Fingerprint>()?.into();
         let sk_fingerprint = sk_fp.parse::<Fingerprint>()?.into();
-        let signature = item.get_obj("SIGNATURE")?;
+        let signature = item.obj("SIGNATURE")?;
 
         Ok(Signature {
             digestname,
@@ -929,8 +926,8 @@ impl Signature {
     }
 
     fn matches_cert(&self, cert: &AuthCert) -> bool {
-        cert.get_id_fingerprint() == &self.id_fingerprint
-            && cert.get_sk_fingerprint() == &self.sk_fingerprint
+        cert.id_fingerprint() == &self.id_fingerprint
+            && cert.sk_fingerprint() == &self.sk_fingerprint
     }
 
     fn find_cert<'a>(&self, certs: &'a [AuthCert]) -> Option<&'a AuthCert> {
@@ -981,8 +978,8 @@ impl MDConsensus {
         let mut p = r.pause_at(|i| match i {
             Err(_) => false,
             Ok(item) => {
-                item.get_kwd() == RS_R
-                    || if item.get_kwd() == DIR_SOURCE {
+                item.kwd() == RS_R
+                    || if item.kwd() == DIR_SOURCE {
                         let was_first = first_dir_source;
                         first_dir_source = false;
                         !was_first
@@ -1020,8 +1017,8 @@ impl MDConsensus {
         let mut p = r.pause_at(|i| match i {
             Err(_) => false,
             Ok(item) => {
-                item.get_kwd() == DIRECTORY_FOOTER
-                    || if item.get_kwd() == RS_R {
+                item.kwd() == DIRECTORY_FOOTER
+                    || if item.kwd() == RS_R {
                         let was_first = first_r;
                         first_r = false;
                         !was_first
@@ -1074,8 +1071,8 @@ impl MDConsensus {
         let mut signatures = Vec::new();
         for item in r.iter() {
             let item = item?;
-            if item.get_kwd() != DIRECTORY_SIGNATURE {
-                return Err(Error::UnexpectedToken(item.get_kwd().to_str(), item.pos()));
+            if item.kwd() != DIRECTORY_SIGNATURE {
+                return Err(Error::UnexpectedToken(item.kwd().to_str(), item.pos()));
             }
 
             let sig = Signature::from_item(&item)?;

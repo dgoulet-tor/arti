@@ -11,7 +11,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use hex_literal::hex;
 
 fn msg(cmd: RelayCmd, s: &str, msg: &msg::RelayMsg) {
-    assert_eq!(msg.get_cmd(), cmd);
+    assert_eq!(msg.cmd(), cmd);
     let body = {
         let mut s = s.to_string();
         s.retain(|c| !c.is_whitespace());

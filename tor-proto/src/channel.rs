@@ -130,16 +130,16 @@ impl Channel {
     /// Check whether a cell type is acceptable on an open client channel.
     fn check_cell(&self, cell: &ChanCell) -> Result<()> {
         use msg::ChanMsg::*;
-        let msg = cell.get_msg();
+        let msg = cell.msg();
         match msg {
             Created(_) | Created2(_) | CreatedFast(_) => Err(Error::ChanProto(format!(
                 "Can't send {} cell on client channel",
-                msg.get_cmd()
+                msg.cmd()
             ))),
             Certs(_) | Versions(_) | Authenticate(_) | Authorize(_) | AuthChallenge(_)
             | Netinfo(_) => Err(Error::ChanProto(format!(
                 "Can't send {} cell after handshake is done",
-                msg.get_cmd()
+                msg.cmd()
             ))),
             _ => Ok(()),
         }
@@ -147,11 +147,7 @@ impl Channel {
 
     /// Transmit a single cell on a channel.
     pub async fn send_cell(&self, cell: ChanCell) -> Result<()> {
-        trace!(
-            "Sending {} on {}",
-            cell.get_msg().get_cmd(),
-            cell.get_circid()
-        );
+        trace!("Sending {} on {}", cell.msg().cmd(), cell.circid());
         self.check_cell(&cell)?;
         let sink = &mut self.inner.lock().await.tls;
         // XXXX I don't like holding the lock here. :(
