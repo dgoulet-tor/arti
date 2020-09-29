@@ -23,7 +23,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 use thiserror::Error;
 
-pub use addrpolicy::{AddrPolicy, AddrPortPattern};
+pub use addrpolicy::{AddrPolicy, AddrPortPattern, RuleKind};
 pub use portpolicy::PortPolicy;
 
 /// Error from an unpareasble or invalid policy.

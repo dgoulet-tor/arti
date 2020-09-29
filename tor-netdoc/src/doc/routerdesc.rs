@@ -1,4 +1,3 @@
-//! Parsing implementation for Tor router descriptors.
 //!
 //! A "router descriptor" is a signed statment that a relay makes
 //! about itself, explaining its keys, its capabilities, its location,
@@ -525,7 +524,11 @@ impl RouterDesc {
         let ipv4_policy = {
             let mut pol = AddrPolicy::new();
             for ruletok in body.slice(POLICY).iter() {
-                let accept = ruletok.kwd_str() == "accept";
+                let accept = match ruletok.kwd_str() {
+                    "accept" => RuleKind::Accept,
+                    "reject" => RuleKind::Reject,
+                    _ => return Err(Error::Internal(ruletok.pos())),
+                };
                 let pat: AddrPortPattern = ruletok
                     .args_as_str()
                     .parse()

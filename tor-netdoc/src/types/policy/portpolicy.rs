@@ -22,11 +22,11 @@ use super::{PolicyError, PortRange};
 /// assert!(! policy.allows_port(1024));
 /// assert!(! policy.allows_port(9000));
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PortPolicy {
     /// A list of port ranges that this policy allows.
     ///
-    /// These ranges are sorted and disjoint.
+    /// These ranges sorted, disjoint, and compact.
     allowed: Vec<PortRange>,
 }
 
@@ -70,6 +70,26 @@ impl PortPolicy {
         }
         self.allowed = new_allowed;
     }
+    /// Helper: add a new range to the end of this portpolicy.
+    ///
+    /// gives an error if this range cannot appear next in sequence.
+    fn push_policy(&mut self, item: PortRange) -> Result<(), PolicyError> {
+        if let Some(prev) = self.allowed.last() {
+            if prev.hi >= item.lo {
+                // Or should this be ">"? TODO XXXX
+                return Err(PolicyError::InvalidPolicy);
+            } else if prev.hi == item.lo - 1 {
+                // We compress a-b,(b+1)-c into a-c.
+                let r = PortRange::new_unchecked(prev.lo, item.hi);
+                self.allowed.pop();
+                self.allowed.push(r);
+                return Ok(());
+            }
+        }
+
+        self.allowed.push(item);
+        Ok(())
+    }
     /// Return true iff `port` is allowed by this policy.
     pub fn allows_port(&self, port: u16) -> bool {
         self.allowed
@@ -94,17 +114,75 @@ impl FromStr for PortPolicy {
         s = &s[7..];
         for item in s.split(',') {
             let r: PortRange = item.parse()?;
-            if let Some(prev) = result.allowed.last() {
-                if r.lo <= prev.hi {
-                    // Or should this be "<"? TODO XXXX
-                    return Err(PolicyError::InvalidPolicy);
-                }
-            }
-            result.allowed.push(r);
+            result.push_policy(r)?;
         }
         if invert {
             result.invert();
         }
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_roundtrip() {
+        fn check(inp: &str, outp: &str, allow: &[u16], deny: &[u16]) {
+            let policy = inp.parse::<PortPolicy>().unwrap();
+            assert_eq!(format!("{}", policy), outp);
+            for p in allow {
+                assert!(policy.allows_port(*p));
+            }
+            for p in deny {
+                assert!(!policy.allows_port(*p));
+            }
+        }
+
+        check(
+            "accept 1-10,30-50,600",
+            "accept 1-10,30-50,600",
+            &[1, 10, 35, 600],
+            &[0, 11, 55, 599, 601],
+        );
+        check("accept 1-10,11-20", "accept 1-20", &[], &[]);
+        check(
+            "reject 1-30",
+            "accept 31-65535",
+            &[31, 10001, 65535],
+            &[0, 1, 30],
+        );
+        check(
+            "reject 300-500",
+            "accept 1-299,501-65535",
+            &[31, 10001, 65535],
+            &[300, 301, 500],
+        );
+        check("reject 10,11,12,13,15", "accept 1-9,14,16-65535", &[], &[]);
+        check(
+            "reject 1-65535",
+            "reject 1-65535",
+            &[],
+            &[1, 300, 301, 500, 10001, 65535],
+        );
+    }
+
+    #[test]
+    fn test_bad() {
+        for s in &[
+            "ignore 1-10",
+            "allow 1-100",
+            "accept",
+            "reject",
+            "accept x-y",
+            "accept 1-20,19-30",
+            "accept 1-20,20-30",
+            "reject 1,1,1,1",
+            "reject 1,2,foo,4",
+            "reject 5,4,3,2",
+        ] {
+            assert!(s.parse::<PortPolicy>().is_err());
+        }
     }
 }
