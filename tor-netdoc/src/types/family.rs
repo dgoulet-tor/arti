@@ -16,6 +16,7 @@ use tor_llcrypto::pk::rsa::RSAIdentity;
 /// entries, including entries that are only nicknames.
 ///
 /// TODO: This type probably belongs in a different crate.
+#[derive(Clone, Debug)]
 pub struct RelayFamily(Vec<RSAIdentity>);
 
 impl RelayFamily {
@@ -40,5 +41,37 @@ impl std::str::FromStr for RelayFamily {
             .filter(Result::is_ok)
             .collect();
         Ok(RelayFamily(v?))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::Result;
+    #[test]
+    fn family() -> Result<()> {
+        let f = "nickname1 nickname2 $ffffffffffffffffffffffffffffffffffffffff=foo eeeeeeeeeeeeeeeeeeeEEEeeeeeeeeeeeeeeeeee ddddddddddddddddddddddddddddddddd  $cccccccccccccccccccccccccccccccccccccccc~blarg ".parse::<RelayFamily>()?;
+        let mut v = Vec::new();
+        v.push(
+            RSAIdentity::from_bytes(
+                &hex::decode("ffffffffffffffffffffffffffffffffffffffff").unwrap()[..],
+            )
+            .unwrap(),
+        );
+        v.push(
+            RSAIdentity::from_bytes(
+                &hex::decode("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee").unwrap()[..],
+            )
+            .unwrap(),
+        );
+        // "d" key is too short.
+        v.push(
+            RSAIdentity::from_bytes(
+                &hex::decode("cccccccccccccccccccccccccccccccccccccccc").unwrap()[..],
+            )
+            .unwrap(),
+        );
+        assert_eq!(f.0, v);
+        Ok(())
     }
 }

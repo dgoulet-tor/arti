@@ -127,9 +127,14 @@ mod ed25519impl {
         type Err = Error;
         fn from_str(s: &str) -> Result<Self> {
             let b64: B64 = s.parse()?;
-            let key = PublicKey::from_bytes(b64.as_bytes()).map_err(|_| {
-                Error::BadArgument(Pos::at(s), "bad length for ed25519 key.".into())
-            })?;
+            if b64.as_bytes().len() != 32 {
+                return Err(Error::BadArgument(
+                    Pos::at(s),
+                    "bad length for ed25519 key.".into(),
+                ));
+            }
+            let key = PublicKey::from_bytes(b64.as_bytes())
+                .map_err(|_| Error::BadArgument(Pos::at(s), "bad value for ed25519 key.".into()))?;
             Ok(Ed25519Public(key))
         }
     }
@@ -327,5 +332,136 @@ mod fingerprint {
             let ident = parse_hex_ident(s)?;
             Ok(LongIdent(ident))
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::Result;
+
+    #[test]
+    fn base64() -> Result<()> {
+        assert_eq!("Mi43MTgyOA".parse::<B64>()?.as_bytes(), &b"2.71828"[..]);
+        assert_eq!("Mi43MTgyOA==".parse::<B64>()?.as_bytes(), &b"2.71828"[..]);
+        assert!("Mi43!!!!!!".parse::<B64>().is_err());
+        assert!("Mi".parse::<B64>().is_err());
+        assert!("Mi43MTgyOA".parse::<B64>()?.check_len(7..=8).is_ok());
+        assert!("Mi43MTgyOA".parse::<B64>()?.check_len(8..).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn base16() -> Result<()> {
+        assert_eq!("332e313432".parse::<B16>()?.as_bytes(), &b"3.142"[..]);
+        assert_eq!("332E313432".parse::<B16>()?.as_bytes(), &b"3.142"[..]);
+        assert_eq!("332E3134".parse::<B16>()?.as_bytes(), &b"3.14"[..]);
+        assert!("332E313".parse::<B16>().is_err());
+        assert!("332G3134".parse::<B16>().is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn curve25519() -> Result<()> {
+        use std::convert::TryInto;
+        use tor_llcrypto::pk::curve25519::PublicKey;
+        let k1 = "ppwthHXW8kXD0f9fE7UPYsOAAu4uj5ORwSomCMxKkz8=";
+        let k2 = hex::decode("a69c2d8475d6f245c3d1ff5f13b50f62c38002ee2e8f9391c12a2608cc4a933f")
+            .unwrap();
+        let k2: &[u8; 32] = &k2[..].try_into().unwrap();
+
+        let k1: PublicKey = k1.parse::<Curve25519Public>()?.into();
+        assert_eq!(k1, (*k2).into());
+
+        assert!("ppwthHXW8kXD0f9fE7UPYsOAAu4uj5ORwSomCMxKkz"
+            .parse::<Curve25519Public>()
+            .is_err());
+        assert!("ppwthHXW8kXD0f9fE7UPYsOAAu4uj5ORSomCMxKkz"
+            .parse::<Curve25519Public>()
+            .is_err());
+        assert!("ppwthHXW8kXD0f9fE7UPYsOAAu4uj5wSomCMxKkz"
+            .parse::<Curve25519Public>()
+            .is_err());
+        assert!("ppwthHXW8kXD0f9fE7UPYsOAAu4ORwSomCMxKkz"
+            .parse::<Curve25519Public>()
+            .is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn ed25519() -> Result<()> {
+        use tor_llcrypto::pk::ed25519::PublicKey;
+        let k1 = "WVIPQ8oArAqLY4XzkcpIOI6U8KsUJHBQhG8SC57qru0";
+        let k2 = hex::decode("59520f43ca00ac0a8b6385f391ca48388e94f0ab14247050846f120b9eeaaeed")
+            .unwrap();
+
+        let k1: PublicKey = k1.parse::<Ed25519Public>()?.into();
+        assert_eq!(k1, PublicKey::from_bytes(&k2).unwrap());
+
+        assert!("WVIPQ8oArAqLY4Xzk0!!!!8KsUJHBQhG8SC57qru"
+            .parse::<Curve25519Public>()
+            .is_err());
+        assert!("WVIPQ8oArAqLY4XzkcpIU8KsUJHBQhG8SC57qru"
+            .parse::<Curve25519Public>()
+            .is_err());
+        assert!("WVIPQ8oArAqLY4XzkcpIU8KsUJHBQhG8SC57qr"
+            .parse::<Curve25519Public>()
+            .is_err());
+        // right length, bad key:
+        assert!("ppwthHXW8kXD0f9fE7UPYsOAAu4uj5ORwSomCMxaaaa"
+            .parse::<Curve25519Public>()
+            .is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn time() -> Result<()> {
+        use std::time::{Duration, SystemTime};
+
+        let t = "2020-09-29 13:36:33".parse::<ISO8601TimeSp>()?;
+        let t: SystemTime = t.into();
+        assert_eq!(t, SystemTime::UNIX_EPOCH + Duration::new(1601386593, 0));
+
+        assert!("2020-FF-29 13:36:33".parse::<ISO8601TimeSp>().is_err());
+        assert!("2020-09-29Q13:99:33".parse::<ISO8601TimeSp>().is_err());
+        assert!("2020-09-29".parse::<ISO8601TimeSp>().is_err());
+        assert!("too bad, waluigi time".parse::<ISO8601TimeSp>().is_err());
+
+        Ok(())
+    }
+
+    // TODO: tests for RSA public key parsing.
+    // TODO: tests for edcert parsing.
+
+    #[test]
+    fn fingerprint() -> Result<()> {
+        use tor_llcrypto::pk::rsa::RSAIdentity;
+        let fp1 = "7467 A97D 19CD 2B4F 2BC0 388A A99C 5E67 710F 847E";
+        let fp2 = "7467A97D19CD2B4F2BC0388AA99C5E67710F847E";
+        let fp3 = "$7467A97D19CD2B4F2BC0388AA99C5E67710F847E";
+        let fp4 = "$7467A97D19CD2B4F2BC0388AA99C5E67710F847E=fred";
+
+        let k = hex::decode(fp2).unwrap();
+        let k = RSAIdentity::from_bytes(&k[..]).unwrap();
+
+        assert_eq!(RSAIdentity::from(fp1.parse::<SpFingerprint>()?), k);
+        assert_eq!(RSAIdentity::from(fp2.parse::<SpFingerprint>()?), k);
+        assert!(fp3.parse::<SpFingerprint>().is_err());
+        assert!(fp4.parse::<SpFingerprint>().is_err());
+
+        assert!(fp1.parse::<Fingerprint>().is_err());
+        assert_eq!(RSAIdentity::from(fp2.parse::<Fingerprint>()?), k);
+        assert!(fp3.parse::<Fingerprint>().is_err());
+        assert!(fp4.parse::<Fingerprint>().is_err());
+
+        assert!(fp1.parse::<LongIdent>().is_err());
+        assert_eq!(RSAIdentity::from(fp2.parse::<LongIdent>()?), k);
+        assert_eq!(RSAIdentity::from(fp3.parse::<LongIdent>()?), k);
+        assert_eq!(RSAIdentity::from(fp4.parse::<LongIdent>()?), k);
+
+        assert!("xxxx".parse::<Fingerprint>().is_err());
+        assert!("ffffffffff".parse::<Fingerprint>().is_err());
+        Ok(())
     }
 }

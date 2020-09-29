@@ -209,4 +209,18 @@ mod test {
             lastver = Some(t);
         }
     }
+
+    #[test]
+    fn parse_bad() {
+        for s in &[
+            "fred.and.bob",
+            "11",
+            "11.22",
+            "0x2020",
+            "1.2.3.marzipan",
+            "0.1.2.5-alpha-deeev",
+        ] {
+            assert!(s.parse::<TorVersion>().is_err());
+        }
+    }
 }

@@ -64,7 +64,7 @@ pub enum PolicyError {
 /// assert!(! r.contains(21));
 /// assert!(! r.contains(8001));
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PortRange {
     /// The first port in this range.
     pub lo: u16,
@@ -156,5 +156,82 @@ impl FromStr for PortRange {
             (v, v)
         };
         PortRange::new(lo, hi).ok_or(PolicyError::InvalidRange)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::Result;
+    #[test]
+    fn parse_portrange() -> Result<()> {
+        assert_eq!(
+            "1-100".parse::<PortRange>()?,
+            PortRange::new(1, 100).unwrap()
+        );
+        assert_eq!(
+            "01-100".parse::<PortRange>()?,
+            PortRange::new(1, 100).unwrap()
+        );
+        assert_eq!("1-65535".parse::<PortRange>()?, PortRange::new_all());
+        assert_eq!(
+            "10-30".parse::<PortRange>()?,
+            PortRange::new(10, 30).unwrap()
+        );
+        assert_eq!(
+            "9001".parse::<PortRange>()?,
+            PortRange::new(9001, 9001).unwrap()
+        );
+        assert_eq!(
+            "9001-9001".parse::<PortRange>()?,
+            PortRange::new(9001, 9001).unwrap()
+        );
+
+        assert!("hello".parse::<PortRange>().is_err());
+        assert!("0".parse::<PortRange>().is_err());
+        assert!("65536".parse::<PortRange>().is_err());
+        assert!("65537".parse::<PortRange>().is_err());
+        assert!("1-2-3".parse::<PortRange>().is_err());
+        assert!("10-5".parse::<PortRange>().is_err());
+        assert!("1-".parse::<PortRange>().is_err());
+        assert!("-2".parse::<PortRange>().is_err());
+        assert!("-".parse::<PortRange>().is_err());
+        assert!("*".parse::<PortRange>().is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn pr_manip() {
+        assert!(PortRange::new_all().is_all());
+        assert!(!PortRange::new(2, 65535).unwrap().is_all());
+
+        assert!(PortRange::new_all().contains(1));
+        assert!(PortRange::new_all().contains(65535));
+        assert!(PortRange::new_all().contains(7777));
+
+        assert!(PortRange::new(20, 30).unwrap().contains(20));
+        assert!(PortRange::new(20, 30).unwrap().contains(25));
+        assert!(PortRange::new(20, 30).unwrap().contains(30));
+        assert!(!PortRange::new(20, 30).unwrap().contains(19));
+        assert!(!PortRange::new(20, 30).unwrap().contains(31));
+
+        use std::cmp::Ordering::*;
+        assert_eq!(PortRange::new(20, 30).unwrap().compare_to_port(7), Greater);
+        assert_eq!(PortRange::new(20, 30).unwrap().compare_to_port(20), Equal);
+        assert_eq!(PortRange::new(20, 30).unwrap().compare_to_port(25), Equal);
+        assert_eq!(PortRange::new(20, 30).unwrap().compare_to_port(30), Equal);
+        assert_eq!(PortRange::new(20, 30).unwrap().compare_to_port(100), Less);
+    }
+
+    #[test]
+    fn pr_fmt() {
+        fn chk(a: u16, b: u16, s: &str) {
+            let pr = PortRange::new(a, b).unwrap();
+            assert_eq!(format!("{}", pr), s);
+        }
+
+        chk(1, 65535, "1-65535");
+        chk(10, 20, "10-20");
+        chk(20, 20, "20");
     }
 }
