@@ -1,12 +1,12 @@
 use crate::circuit::sendme;
-use crate::util::idmap::IdMap;
-use crate::Result;
+use crate::{Error, Result};
 /// Mapping from stream ID to streams.
 // NOTE: This is a work in progress and I bet I'll refactor it a lot;
 // it needs to stay opaque!
 use tor_cell::relaycell::{msg::RelayMsg, StreamID};
 
 use futures::channel::mpsc;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use rand::Rng;
@@ -25,19 +25,22 @@ pub(super) enum StreamEnt {
 /// hop.
 pub(super) struct StreamMap {
     m: HashMap<StreamID, StreamEnt>,
-    i: std::iter::Cycle<std::ops::RangeInclusive<u16>>,
+    next_stream_id: u16,
 }
 
 impl StreamMap {
     /// Make a new empty StreamMap.
     pub(super) fn new() -> Self {
-        let mut iter = (1_u16..=65535_u16).cycle();
         let mut rng = rand::thread_rng();
-        let skip: u16 = rng.gen(); // is this really O(1)? check. XXXX
-        let _ = iter.nth(skip as usize);
+        let next_stream_id: u16 = loop {
+            let v: u16 = rng.gen();
+            if v != 0 {
+                break v;
+            }
+        };
         StreamMap {
             m: HashMap::new(),
-            i: iter,
+            next_stream_id,
         }
     }
 
@@ -47,9 +50,22 @@ impl StreamMap {
         sink: mpsc::Sender<RelayMsg>,
         window: sendme::StreamSendWindow,
     ) -> Result<StreamID> {
-        let ent = StreamEnt::Open(sink, window);
-        let mut iter = (&mut self.i).map(|x| x.into()).take(65536);
-        self.m.add_ent(&mut iter, ent)
+        let stream_ent = StreamEnt::Open(sink, window);
+        // This seems too aggressive, but it's what tor does
+        for _ in 1..=65536 {
+            let id: StreamID = self.next_stream_id.into();
+            self.next_stream_id = self.next_stream_id.wrapping_add(1);
+            if id.is_zero() {
+                continue;
+            }
+            let ent = self.m.entry(id);
+            if let Entry::Vacant(_) = ent {
+                ent.or_insert(stream_ent);
+                return Ok(id);
+            }
+        }
+
+        Err(Error::IDRangeFull)
     }
 
     /// Return the entry for `id` in this map, if any.

@@ -1,8 +1,7 @@
 // NOTE: This is a work in progress and I bet I'll refactor it a lot;
 // it needs to stay opaque!
 
-use crate::util::idmap::IdMap;
-use crate::Result;
+use crate::{Error, Result};
 use tor_cell::chancell::msg::ChanMsg;
 use tor_cell::chancell::CircID;
 
@@ -10,7 +9,7 @@ use futures::channel::{mpsc, oneshot};
 
 use rand::distributions::Distribution;
 use rand::Rng;
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 /// Which group of circuit IDs are we allowed to allocate in this map?
 ///
@@ -93,9 +92,17 @@ impl CircMap {
         createdsink: oneshot::Sender<ChanMsg>,
         sink: mpsc::Sender<ChanMsg>,
     ) -> Result<CircID> {
-        let mut iter = (&mut self.range).sample_iter(rng).take(16);
-        let ent = CircEnt::Opening(createdsink, sink);
-        self.m.add_ent(&mut iter, ent)
+        const N_ATTEMPTS: usize = 16;
+        let iter = (&mut self.range).sample_iter(rng).take(N_ATTEMPTS);
+        let circ_ent = CircEnt::Opening(createdsink, sink);
+        for id in iter {
+            let ent = self.m.entry(id);
+            if let Entry::Vacant(_) = &ent {
+                ent.or_insert(circ_ent);
+                return Ok(id);
+            }
+        }
+        Err(Error::IDRangeFull)
     }
 
     /// Return the entry for `id` in this map, if any.
