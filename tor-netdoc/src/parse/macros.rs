@@ -89,10 +89,10 @@ macro_rules! decl_keyword {
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
 
     decl_keyword! {
-        Fruit {
+        pub(crate) Fruit {
         "apple" => APPLE,
         "orange" => ORANGE,
         "lemon" => LEMON,

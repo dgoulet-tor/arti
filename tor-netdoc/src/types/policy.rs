@@ -27,7 +27,7 @@ pub use addrpolicy::{AddrPolicy, AddrPortPattern, RuleKind};
 pub use portpolicy::PortPolicy;
 
 /// Error from an unpareasble or invalid policy.
-#[derive(Debug, Error, Clone)]
+#[derive(Debug, Error, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum PolicyError {
     /// A port was not a number in the range 1..65535

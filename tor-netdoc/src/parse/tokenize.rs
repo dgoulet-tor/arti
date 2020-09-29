@@ -602,3 +602,59 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::parse::macros::test::Fruit;
+
+    #[test]
+    fn read_simple() {
+        use Fruit::*;
+
+        let s = "\
+@tasty very much so
+apple 77
+banana 60
+cherry 6
+-----BEGIN CHERRY SYNOPSIS-----
+8J+NkvCfjZLwn42S8J+NkvCfjZLwn42S
+-----END CHERRY SYNOPSIS-----
+plum hello there
+";
+        let mut r: NetDocReader<Fruit> = NetDocReader::new(s);
+
+        assert_eq!(r.str(), s);
+        assert!(r.should_be_exhausted().is_err()); // it's not exhausted.
+
+        let toks: Result<Vec<_>> = r.iter().collect();
+        let toks = toks.unwrap();
+        assert_eq!(toks.len(), 5);
+        assert_eq!(toks[0].kwd(), ANN_TASTY);
+        assert_eq!(toks[0].n_args(), 3);
+        assert_eq!(toks[0].args_as_str(), "very much so");
+        assert_eq!(toks[0].arg(1), Some("much"));
+        {
+            let a: Vec<_> = toks[0].args().collect();
+            assert_eq!(a, vec!["very", "much", "so"]);
+        }
+        assert!(toks[0].parse_arg::<usize>(0).is_err());
+        assert!(!toks[0].has_obj());
+        assert_eq!(toks[0].obj_tag(), None);
+
+        assert_eq!(toks[3].kwd(), STONEFRUIT);
+        assert_eq!(toks[3].kwd_str(), "cherry"); // not cherry/plum!
+        assert_eq!(toks[3].n_args(), 1);
+        assert_eq!(toks[3].required_arg(0), Ok("6"));
+        assert_eq!(toks[3].parse_arg::<usize>(0), Ok(6));
+        assert_eq!(toks[3].parse_optional_arg::<usize>(0), Ok(Some(6)));
+        assert_eq!(toks[3].parse_optional_arg::<usize>(3), Ok(None));
+        assert!(toks[3].has_obj());
+        assert_eq!(toks[3].obj_tag(), Some("CHERRY SYNOPSIS"));
+        assert_eq!(
+            &toks[3].obj("CHERRY SYNOPSIS").unwrap()[..],
+            "🍒🍒🍒🍒🍒🍒".as_bytes()
+        );
+        assert!(toks[3].obj("PLUOT SYNOPSIS").is_err());
+    }
+}

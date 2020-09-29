@@ -129,7 +129,7 @@ impl fmt::Display for Pos {
 }
 
 /// An error that occurred while parsing a directory object of some kind.
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum Error {
     /// An internal error in the parser: these should never happen.
