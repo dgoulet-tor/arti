@@ -354,7 +354,7 @@ mod test {
         let mut r3 = Tor1RelayCrypto::construct(KGen::new(seed3.into())).unwrap();
 
         let mut rng = rand::thread_rng();
-        for _ in 1..1000 {
+        for _ in 1..300 {
             // outbound cell
             let mut cell = [0_u8; 509];
             let mut cell_orig = [0_u8; 509];
@@ -388,5 +388,51 @@ mod test {
         }
     }
 
-    // TODO: Generate test vectors from Tor.
+    // From tor's test_relaycrypt.c
+
+    #[test]
+    fn testvec() {
+        use digest::XofReader;
+        use digest::{ExtendableOutput, Update};
+
+        const K1: &[u8; 72] =
+            b"    'My public key is in this signed x509 object', said Tom assertively.";
+        const K2: &[u8; 72] =
+            b"'Let's chart the pedal phlanges in the tomb', said Tom cryptographically";
+        const K3: &[u8; 72] =
+            b"     'Segmentation fault bugs don't _just happen_', said Tom seethingly.";
+
+        const SEED: &[u8;108] = b"'You mean to tell me that there's a version of Sha-3 with no limit on the output length?', said Tom shakily.";
+
+        // These test vectors were generated from Tor.
+        let data: &[(usize, &str)] = &include!("../../testdata/cell_crypt.data");
+
+        let mut cc = ClientCrypt::new();
+        cc.add_layer(Box::new(Tor1RelayCrypto::initialize(&K1[..])));
+        cc.add_layer(Box::new(Tor1RelayCrypto::initialize(&K2[..])));
+        cc.add_layer(Box::new(Tor1RelayCrypto::initialize(&K3[..])));
+
+        let mut xof = tor_llcrypto::d::Shake256::default();
+        xof.update(&SEED[..]);
+        let mut stream = xof.finalize_xof();
+
+        let mut j = 0;
+        for cellno in 0..51 {
+            let mut body = [0u8; 509];
+            body[0] = 2; // command: data.
+            body[4] = 1; // streamid: 1.
+            body[9] = 1; // length: 498
+            body[10] = 242;
+            stream.read(&mut body[11..]);
+
+            let mut cell = body.into();
+            let _ = cc.encrypt(&mut cell, 2.into());
+
+            if cellno == data[j].0 {
+                let expected = hex::decode(data[j].1).unwrap();
+                assert_eq!(cell.as_ref(), expected);
+                j += 1;
+            }
+        }
+    }
 }
