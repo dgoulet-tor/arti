@@ -42,8 +42,8 @@ use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
 use crate::stream::{DataStream, TorStream};
 use crate::{Error, Result};
 use tor_cell::chancell::{self, msg::ChanMsg, ChanCell, CircID};
-use tor_cell::relaycell::msg::{RelayCell, RelayMsg, Sendme};
-use tor_cell::relaycell::{RelayCmd, StreamID};
+use tor_cell::relaycell::msg::{RelayMsg, Sendme};
+use tor_cell::relaycell::{RelayCell, RelayCmd, StreamID};
 
 use tor_linkspec::LinkSpec;
 

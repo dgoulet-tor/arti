@@ -11,8 +11,8 @@ use crate::circuit::ClientCirc;
 use crate::crypto::cell::HopNum;
 use crate::{Error, Result};
 use tor_cell::chancell::{msg::ChanMsg, msg::Relay};
-use tor_cell::relaycell::msg::{End, RelayCell, RelayMsg, Sendme};
-use tor_cell::relaycell::StreamID;
+use tor_cell::relaycell::msg::{End, RelayMsg, Sendme};
+use tor_cell::relaycell::{RelayCell, StreamID};
 
 use futures::channel::{mpsc, oneshot};
 use futures::select_biased;

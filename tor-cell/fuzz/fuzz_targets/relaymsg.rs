@@ -1,6 +1,6 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use tor_cell::relaycell::msg::RelayCell;
+use tor_cell::relaycell::RelayCell;
 use tor_bytes::Reader;
 
 fuzz_target!(|data: &[u8]| {

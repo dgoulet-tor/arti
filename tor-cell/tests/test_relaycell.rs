@@ -1,6 +1,6 @@
 // Tests for encoding/decoding relay messags into relay cell bodies.
 
-use tor_cell::relaycell::{msg, msg::RelayCell, msg::RelayMsg, StreamID};
+use tor_cell::relaycell::{msg, msg::RelayMsg, RelayCell, StreamID};
 
 const CELL_BODY_LEN: usize = 509;
 

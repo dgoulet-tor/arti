@@ -4,121 +4,13 @@
 //! cells.
 
 use super::RelayCmd;
-use super::StreamID;
 use crate::chancell::msg::{TAP_C_HANDSHAKE_LEN, TAP_S_HANDSHAKE_LEN};
-use crate::chancell::{RawCellBody, CELL_DATA_LEN};
+use crate::chancell::CELL_DATA_LEN;
 use std::net::{IpAddr, Ipv4Addr};
 use tor_bytes::{Error, Result};
 use tor_bytes::{Readable, Reader, Writeable, Writer};
 use tor_linkspec::LinkSpec;
 use tor_llcrypto::pk::rsa::RSAIdentity;
-
-use arrayref::array_mut_ref;
-use rand::{CryptoRng, Rng};
-
-/// A parsed relay cell.
-#[derive(Debug)]
-pub struct RelayCell {
-    streamid: StreamID,
-    msg: RelayMsg,
-}
-
-impl RelayCell {
-    /// Construct a new relay cell.
-    pub fn new(streamid: StreamID, msg: RelayMsg) -> Self {
-        RelayCell { streamid, msg }
-    }
-    /// Consume this cell and return its components.
-    pub fn into_streamid_and_msg(self) -> (StreamID, RelayMsg) {
-        (self.streamid, self.msg)
-    }
-    /// Return the command for this cell.
-    pub fn cmd(&self) -> RelayCmd {
-        self.msg.cmd()
-    }
-    /// Return the underlying message for this cell.
-    pub fn msg(&self) -> &RelayMsg {
-        &self.msg
-    }
-    /// Return true if this cell counts to the circuit-level sendme
-    /// window.
-    ///
-    /// (A stream-level sendme counts towards circuit windows, but
-    /// a circuit-level sendme doesn't.)
-    pub fn counts_towards_circuit_windows(&self) -> bool {
-        !self.streamid.is_zero() || self.msg.counts_towards_windows()
-    }
-    /// Consume this relay message and encode it as a 509-byte padded cell
-    /// body.
-    pub fn encode<R: Rng + CryptoRng>(self, rng: &mut R) -> crate::Result<RawCellBody> {
-        // always this many zero-values bytes before padding.
-        // XXXX We should specify this value more exactly, to avoid fingerprinting
-        const MIN_SPACE_BEFORE_PADDING: usize = 4;
-
-        // TODO: This implementation is inefficient; it copies too much.
-        let encoded = self.encode_to_vec();
-        let enc_len = encoded.len();
-        if enc_len > CELL_DATA_LEN {
-            return Err(crate::Error::InternalError(
-                "too many bytes in relay cell".into(),
-            ));
-        }
-        let mut raw = [0u8; CELL_DATA_LEN];
-        raw[0..enc_len].copy_from_slice(&encoded);
-
-        if enc_len < CELL_DATA_LEN - MIN_SPACE_BEFORE_PADDING {
-            rng.fill_bytes(&mut raw[enc_len + MIN_SPACE_BEFORE_PADDING..]);
-        }
-
-        Ok(raw)
-    }
-
-    /// Consume a relay cell and return its contents, encoded for use
-    /// in a RELAY or RELAY_EARLY cell
-    ///
-    /// TODO: not the best interface, as this requires copying into a cell.
-    fn encode_to_vec(self) -> Vec<u8> {
-        let mut w = Vec::new();
-        w.write_u8(self.msg.cmd().into());
-        w.write_u16(0); // "Recognized"
-        w.write_u16(self.streamid.0);
-        w.write_u32(0); // Digest
-        let len_pos = w.len();
-        w.write_u16(0); // Length.
-        let body_pos = w.len();
-        self.msg.encode_onto(&mut w);
-        assert!(w.len() >= body_pos); // nothing was removed
-        let payload_len = w.len() - body_pos;
-        assert!(payload_len <= std::u16::MAX as usize);
-        *(array_mut_ref![w, len_pos, 2]) = (payload_len as u16).to_be_bytes();
-        w
-    }
-    /// Parse a RELAY or RELAY_EARLY cell body into a RelayCell.
-    ///
-    /// Requires that the cryptographic checks on the message have already been
-    /// performed
-    pub fn decode(body: RawCellBody) -> Result<Self> {
-        let mut reader = Reader::from_slice(body.as_ref());
-        RelayCell::decode_from_reader(&mut reader)
-    }
-    /// Parse a RELAY or RELAY_EARLY cell body into a RelayCell from a reader.
-    ///
-    /// Requires that the cryptographic checks on the message have already been
-    /// performed
-    pub fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
-        let cmd = r.take_u8()?.into();
-        r.advance(2)?; // "recognized"
-        let streamid = StreamID(r.take_u16()?);
-        r.advance(4)?; // digest
-        let len = r.take_u16()? as usize;
-        if r.remaining() < len {
-            return Err(Error::BadMessage("Insufficient data in relay cell"));
-        }
-        r.truncate(len);
-        let msg = RelayMsg::decode_from_reader(cmd, r)?;
-        Ok(RelayCell { streamid, msg })
-    }
-}
 
 /// A single parsed relay message, sent or received along a circuit
 #[derive(Debug, Clone)]
