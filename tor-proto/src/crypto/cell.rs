@@ -430,7 +430,7 @@ mod test {
 
             if cellno == data[j].0 {
                 let expected = hex::decode(data[j].1).unwrap();
-                assert_eq!(cell.as_ref(), expected);
+                assert_eq!(cell.as_ref(), &expected[..]);
                 j += 1;
             }
         }
