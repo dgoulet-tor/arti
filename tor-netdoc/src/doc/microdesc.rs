@@ -8,12 +8,12 @@
 //! change less frequently. For this reason, they're currently used
 //! for building circuits by all relays and clients.
 
-use crate::argtype::*;
-use crate::family::RelayFamily;
-use crate::keyword::Keyword;
-use crate::parse::SectionRules;
-use crate::policy::PortPolicy;
-use crate::tokenize::{ItemResult, NetDocReader};
+use crate::parse::keyword::Keyword;
+use crate::parse::parser::SectionRules;
+use crate::parse::tokenize::{ItemResult, NetDocReader};
+use crate::types::family::RelayFamily;
+use crate::types::misc::*;
+use crate::types::policy::PortPolicy;
 use crate::util;
 use crate::{AllowAnnotations, Error, Result};
 use tor_llcrypto::d;
@@ -155,7 +155,7 @@ impl MicrodescAnnotation {
 impl Microdesc {
     /// Parse a string into a new microdescriptor.
     pub fn parse(s: &str) -> Result<Microdesc> {
-        let mut items = crate::tokenize::NetDocReader::new(s);
+        let mut items = crate::parse::tokenize::NetDocReader::new(s);
         let result = Self::parse_from_reader(&mut items).map_err(|e| e.within(s));
         items.should_be_exhausted()?;
         result
@@ -369,8 +369,8 @@ impl<'a> Iterator for MicrodescReader<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    const TESTDATA: &str = include_str!("../testdata/microdesc1.txt");
-    const TESTDATA2: &str = include_str!("../testdata/microdesc2.txt");
+    const TESTDATA: &str = include_str!("../../testdata/microdesc1.txt");
+    const TESTDATA2: &str = include_str!("../../testdata/microdesc2.txt");
 
     #[test]
     fn parse_single() -> Result<()> {

@@ -22,9 +22,9 @@ mod err;
 mod pick;
 
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
-use tor_netdoc::authcert::AuthCert;
-use tor_netdoc::microdesc::{self, MDDigest, Microdesc};
-use tor_netdoc::netstatus::{self, MDConsensus};
+use tor_netdoc::doc::authcert::AuthCert;
+use tor_netdoc::doc::microdesc::{self, MDDigest, Microdesc};
+use tor_netdoc::doc::netstatus::{self, MDConsensus};
 use tor_netdoc::AllowAnnotations;
 
 use ll::pk::rsa::RSAIdentity;

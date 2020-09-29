@@ -1,7 +1,7 @@
 //! Keywords for interpreting items and rules for validating them.
 
-use crate::keyword::Keyword;
-use crate::tokenize::Item;
+use crate::parse::keyword::Keyword;
+use crate::parse::tokenize::Item;
 use crate::{Error, Result};
 
 /// May an Item take an object?

@@ -28,13 +28,13 @@
 //! TODO: There should be accessor functions for some or all of the
 //! fields in RouterDesc.  I'm deferring those until I know what they
 //! should be.
-use crate::argtype::*;
-use crate::family::RelayFamily;
-use crate::keyword::Keyword;
-use crate::parse::{Section, SectionRules};
-use crate::policy::*;
-use crate::tokenize::{ItemResult, NetDocReader};
-use crate::version::TorVersion;
+use crate::parse::keyword::Keyword;
+use crate::parse::parser::{Section, SectionRules};
+use crate::parse::tokenize::{ItemResult, NetDocReader};
+use crate::types::family::RelayFamily;
+use crate::types::misc::*;
+use crate::types::policy::*;
+use crate::types::version::TorVersion;
 use crate::{AllowAnnotations, Error, Result};
 
 use lazy_static::lazy_static;
@@ -323,7 +323,7 @@ impl RouterDesc {
     /// future work for now, partially because of limitations in the
     /// ed25519 API.
     pub fn parse(s: &str) -> Result<UncheckedRouterDesc> {
-        let mut reader = crate::tokenize::NetDocReader::new(s);
+        let mut reader = crate::parse::tokenize::NetDocReader::new(s);
         let result = Self::parse_internal(&mut reader).map_err(|e| e.within(s));
         reader.should_be_exhausted()?;
         result
@@ -673,7 +673,7 @@ impl<'a> Iterator for RouterReader<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    const TESTDATA: &str = include_str!("../testdata/routerdesc1.txt");
+    const TESTDATA: &str = include_str!("../../testdata/routerdesc1.txt");
 
     #[test]
     fn parse_arbitrary() -> Result<()> {

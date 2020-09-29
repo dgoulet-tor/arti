@@ -6,11 +6,11 @@
 //! to keep their identity keys securely offline, while using the
 //! signing keys to sign votes and consensuses.
 
-use crate::argtype::{ISO8601TimeSp, RSAPublic};
 use crate::err::Pos;
-use crate::keyword::Keyword;
-use crate::parse::SectionRules;
-use crate::tokenize::{ItemResult, NetDocReader};
+use crate::parse::keyword::Keyword;
+use crate::parse::parser::SectionRules;
+use crate::parse::tokenize::{ItemResult, NetDocReader};
+use crate::types::misc::{ISO8601TimeSp, RSAPublic};
 use crate::{Error, Result};
 
 use tor_checkable::{signed, timed};
@@ -279,7 +279,7 @@ impl<'a> Iterator for AuthCertIterator<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    const TESTDATA: &str = include_str!("../testdata/authcert1.txt");
+    const TESTDATA: &str = include_str!("../../testdata/authcert1.txt");
 
     #[test]
     fn parse_one() -> Result<()> {

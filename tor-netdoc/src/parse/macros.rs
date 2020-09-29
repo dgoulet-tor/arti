@@ -30,7 +30,7 @@ macro_rules! decl_keyword {
             UNRECOGNIZED,
             ANN_UNRECOGNIZED
         }
-        impl $crate::keyword::Keyword for $name {
+        impl $crate::parse::keyword::Keyword for $name {
             fn idx(self) -> usize { self as usize }
             fn n_vals() -> usize { ($name::ANN_UNRECOGNIZED as usize) + 1 }
             fn from_str(s : &str) -> Self {

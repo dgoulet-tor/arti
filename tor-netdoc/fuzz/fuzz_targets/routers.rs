@@ -1,6 +1,6 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use tor_netdoc::routerdesc::RouterReader;
+use tor_netdoc::doc::routerdesc::RouterReader;
 use tor_netdoc::AllowAnnotations;
 
 fuzz_target!(|data: &[u8]| {

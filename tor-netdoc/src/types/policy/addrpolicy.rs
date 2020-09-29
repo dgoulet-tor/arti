@@ -80,7 +80,7 @@ impl Display for AddrPolicyRule {
 /// # Example
 ///
 /// ```
-/// use tor_netdoc::policy::AddrPortPattern;
+/// use tor_netdoc::types::policy::AddrPortPattern;
 /// use std::net::{IpAddr,Ipv4Addr};
 /// let localhost = IpAddr::V4(Ipv4Addr::new(127,3,4,5));
 /// let not_localhost = IpAddr::V4(Ipv4Addr::new(192,0,2,16));

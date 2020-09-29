@@ -4,8 +4,8 @@
 //! directory document, and NetDocReader, which is used to break a
 //! string into Items.
 
-use crate::argtype::FromBytes;
-use crate::keyword::Keyword;
+use crate::parse::keyword::Keyword;
+use crate::types::misc::FromBytes;
 use crate::util::PauseAt;
 use crate::{Error, Pos, Result};
 use std::cell::{Ref, RefCell};

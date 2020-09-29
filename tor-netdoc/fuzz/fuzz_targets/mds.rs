@@ -1,6 +1,6 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use tor_netdoc::microdesc::MicrodescReader;
+use tor_netdoc::doc::microdesc::MicrodescReader;
 use tor_netdoc::AllowAnnotations;
 
 fuzz_target!(|data: &[u8]| {

@@ -1,6 +1,6 @@
 //! Implements the relay 'family' type.
 
-use crate::argtype::LongIdent;
+use crate::types::misc::LongIdent;
 use crate::{Error, Result};
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
@@ -35,7 +35,7 @@ impl std::str::FromStr for RelayFamily {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
         let v: Result<Vec<RSAIdentity>> = s
-            .split(crate::tokenize::is_sp)
+            .split(crate::parse::tokenize::is_sp)
             .map(|e| e.parse::<LongIdent>().map(|v| v.into()))
             .filter(Result::is_ok)
             .collect();

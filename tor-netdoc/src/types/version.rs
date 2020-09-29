@@ -12,7 +12,7 @@
 //! # Examples
 //!
 //! ```
-//! use tor_netdoc::version::TorVersion;
+//! use tor_netdoc::types::version::TorVersion;
 //! let older: TorVersion = "0.3.5.8".parse()?;
 //! let latest: TorVersion = "0.4.3.4-rc".parse()?;
 //! assert!(older < latest);

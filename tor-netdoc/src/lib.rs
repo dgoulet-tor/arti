@@ -23,23 +23,12 @@
 
 #![deny(missing_docs)]
 
-mod argtype;
-mod err;
-mod keyword;
-mod parse;
-mod rules;
-mod tokenize;
-mod util;
 #[macro_use]
-mod macros;
-
-pub mod authcert;
-pub mod family;
-pub mod microdesc;
-pub mod netstatus;
-pub mod policy;
-pub mod routerdesc;
-pub mod version;
+pub(crate) mod parse;
+pub mod doc;
+mod err;
+pub mod types;
+mod util;
 
 pub use err::{Error, Pos};
 

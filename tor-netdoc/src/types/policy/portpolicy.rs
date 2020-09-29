@@ -14,7 +14,7 @@ use super::{PolicyError, PortRange};
 ///
 /// # Examples
 /// ```
-/// use tor_netdoc::policy::PortPolicy;
+/// use tor_netdoc::types::policy::PortPolicy;
 /// let policy: PortPolicy = "accept 1-1023,8000-8999,60000-65535".parse().unwrap();
 ///
 /// assert!(policy.allows_port(22));

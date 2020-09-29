@@ -1,7 +1,7 @@
 //! Error type from parsing a document, and the position where it occurred
 use thiserror::Error;
 
-use crate::policy::PolicyError;
+use crate::types::policy::PolicyError;
 use std::fmt;
 
 /// A position within a directory object. Used to tell where an error
@@ -301,8 +301,8 @@ macro_rules! derive_from_err{
 derive_from_err! {std::num::ParseIntError}
 derive_from_err! {std::net::AddrParseError}
 
-impl From<crate::policy::PolicyError> for Error {
-    fn from(e: crate::policy::PolicyError) -> Error {
+impl From<crate::types::policy::PolicyError> for Error {
+    fn from(e: crate::types::policy::PolicyError) -> Error {
         Error::BadPolicy(Pos::None, e)
     }
 }

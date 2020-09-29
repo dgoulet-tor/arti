@@ -54,7 +54,7 @@ pub enum PolicyError {
 ///
 /// # Example
 /// ```
-/// use tor_netdoc::policy::PortRange;
+/// use tor_netdoc::types::policy::PortRange;
 ///
 /// let r: PortRange = "22-8000".parse().unwrap();
 /// assert!(r.contains(128));

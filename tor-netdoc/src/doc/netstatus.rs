@@ -43,11 +43,11 @@
 //! As with the other tor-netdoc types, I'm deferring those till I know what
 //! they should be.
 
-use crate::argtype::*;
-use crate::authcert::AuthCert;
-use crate::keyword::Keyword;
-use crate::parse::{Section, SectionRules};
-use crate::tokenize::{Item, ItemResult, NetDocReader};
+use crate::doc::authcert::AuthCert;
+use crate::parse::keyword::Keyword;
+use crate::parse::parser::{Section, SectionRules};
+use crate::parse::tokenize::{Item, ItemResult, NetDocReader};
+use crate::types::misc::*;
 use crate::{Error, Pos, Result};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
@@ -203,7 +203,7 @@ pub struct MDConsensusRouterStatus {
     addrs: Vec<net::SocketAddr>,
     or_port: u16,
     dir_port: u16,
-    md_digest: crate::microdesc::MDDigest,
+    md_digest: crate::doc::microdesc::MDDigest,
     flags: RouterFlags,
     version: Option<String>,
     protos: Option<Protocols>,
@@ -214,7 +214,7 @@ pub struct MDConsensusRouterStatus {
 // methods on a RouterStatus trait.
 impl MDConsensusRouterStatus {
     /// Return the expected microdescriptor digest for this routerstatus
-    pub fn md_digest(&self) -> &crate::microdesc::MDDigest {
+    pub fn md_digest(&self) -> &crate::doc::microdesc::MDDigest {
         &self.md_digest
     }
     /// Return the expected microdescriptor digest for this routerstatus
@@ -1215,8 +1215,8 @@ impl SignatureGroup {
 mod test {
     use super::*;
 
-    const CERTS: &str = include_str!("../testdata/authcerts2.txt");
-    const CONSENSUS: &str = include_str!("../testdata/mdconsensus1.txt");
+    const CERTS: &str = include_str!("../../testdata/authcerts2.txt");
+    const CONSENSUS: &str = include_str!("../../testdata/mdconsensus1.txt");
 
     #[test]
     fn parse_and_validate() -> Result<()> {

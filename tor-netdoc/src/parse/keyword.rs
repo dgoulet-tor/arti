@@ -1,4 +1,4 @@
-use crate::rules;
+use crate::parse::rules;
 use std::hash::Hash;
 
 /// A Keyword identifies the possible types of a keyword for an Item.
