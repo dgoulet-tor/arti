@@ -64,10 +64,7 @@ macro_rules! decl_keyword {
             fn to_str(self) -> &'static str {
                 use $name::*;
                 match self {
-                    // TODO: this turns "accept" | "reject" into
-                    // "acceptreject", which is not great.
-                    // "accept/reject" would be better.
-                    $( $i => concat!{ $($s),+ } , )*
+                    $( $i => decl_keyword![@impl join $($s),+], )*
                     UNRECOGNIZED => "<unrecognized>",
                     ANN_UNRECOGNIZED => "<unrecognized annotation>"
                 }
@@ -85,4 +82,60 @@ macro_rules! decl_keyword {
     [ @impl is_anno annotation ] => ( true );
     [ @impl is_anno $x:ident ] => ( compile_error!("unrecognized keyword; not annotation") );
     [ @impl is_anno ] => ( false );
+    [ @impl join $s:literal ] => ( $s );
+    [ @impl join $s:literal , $($ss:literal),+ ] => (
+        concat! { $s, "/", decl_keyword![@impl join $($ss),*] }
+    );
+}
+
+#[cfg(test)]
+mod test {
+
+    decl_keyword! {
+        Fruit {
+        "apple" => APPLE,
+        "orange" => ORANGE,
+        "lemon" => LEMON,
+        "guava" => GUAVA,
+        "cherry" | "plum" => STONEFRUIT,
+        annotation "@tasty" => ANN_TASTY,
+        }
+    }
+
+    #[test]
+    fn kwd() {
+        use crate::parse::keyword::Keyword;
+        use Fruit::*;
+        assert_eq!(Fruit::from_str("lemon"), LEMON);
+        assert_eq!(Fruit::from_str("cherry"), STONEFRUIT);
+        assert_eq!(Fruit::from_str("plum"), STONEFRUIT);
+        assert_eq!(Fruit::from_str("pear"), UNRECOGNIZED);
+        assert_eq!(Fruit::from_str("@tasty"), ANN_TASTY);
+        assert_eq!(Fruit::from_str("@tastier"), ANN_UNRECOGNIZED);
+
+        assert_eq!(APPLE.idx(), 0);
+        assert_eq!(ORANGE.idx(), 1);
+        assert_eq!(ANN_UNRECOGNIZED.idx(), 7);
+        assert_eq!(Fruit::n_vals(), 8);
+
+        assert_eq!(Fruit::from_idx(0), Some(APPLE));
+        assert_eq!(Fruit::from_idx(7), Some(ANN_UNRECOGNIZED));
+        assert_eq!(Fruit::from_idx(8), None);
+
+        assert_eq!(Fruit::idx_to_str(3), "guava");
+        assert_eq!(Fruit::idx_to_str(999), "<out of range>");
+
+        assert_eq!(APPLE.to_str(), "apple");
+        assert_eq!(GUAVA.to_str(), "guava");
+        assert_eq!(ANN_TASTY.to_str(), "@tasty");
+        assert_eq!(STONEFRUIT.to_str(), "cherry/plum");
+        assert_eq!(UNRECOGNIZED.to_str(), "<unrecognized>");
+        assert_eq!(ANN_UNRECOGNIZED.to_str(), "<unrecognized annotation>");
+
+        assert!(!GUAVA.is_annotation());
+        assert!(!STONEFRUIT.is_annotation());
+        assert!(!UNRECOGNIZED.is_annotation());
+        assert!(ANN_TASTY.is_annotation());
+        assert!(ANN_UNRECOGNIZED.is_annotation());
+    }
 }
