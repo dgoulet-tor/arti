@@ -3,9 +3,8 @@
 //! Right now, all the client does is load a directory from disk, and
 //! launch an authenticated handshake.
 //!
-//! It expects to find a local chutney network running in
-//! `${HOME}/src/chutney/net/nodes/`.  This is hardwired for now, so that
-//! I don't accidentally turn it loose on the tor network.
+//! It expects to find a local chutney network, or a cached tor
+//! directory.
 
 #![warn(missing_docs)]
 
@@ -17,12 +16,28 @@ use tor_linkspec::ChanTarget;
 use tor_proto::channel::{self, Channel};
 use tor_proto::circuit::ClientCirc;
 
+use argh::FromArgs;
 //use async_std::prelude::*;
 use async_native_tls::TlsConnector;
 use async_std::net;
 use err::{Error, Result};
 
 use rand::thread_rng;
+
+#[derive(FromArgs)]
+/// Make a connection to the Tor network, connect to
+/// www.torproject.org, and see a redirect page. Requires a tor
+/// directory cache, or running chutney network.
+///
+/// This is a demo; you get no stability guarantee.
+struct Args {
+    /// where to find a tor directory cache.  Why not try ~/.tor?
+    #[argh(option)]
+    tor_dir: Option<PathBuf>,
+    /// where to find a chutney directory.
+    #[argh(option)]
+    chutney_dir: Option<PathBuf>,
+}
 
 /// Launch an authenticated channel to a relay.
 async fn connect<C: ChanTarget>(target: &C) -> Result<Channel> {
@@ -116,24 +131,31 @@ async fn test_http(mut circ: ClientCirc) -> Result<()> {
 }
 
 /// Load a network directory from `~/src/chutney/net/nodes/000a/`
-fn get_netdir() -> Result<tor_netdir::NetDir> {
-    let mut pb: PathBuf = std::env::var_os("HOME").unwrap().into();
-    pb.push("src");
-    pb.push("chutney");
-    pb.push("net");
-    pb.push("nodes");
-    pb.push("000a");
-
+fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
+    if args.tor_dir.is_some() && args.chutney_dir.is_some() {
+        eprintln!("Can't specify both --tor-dir and --chutney-dir");
+        return Err(Error::Misc("arguments"));
+    }
     let mut cfg = tor_netdir::NetDirConfig::new();
-    cfg.add_authorities_from_chutney(&pb)?;
-    cfg.set_cache_path(&pb);
+
+    if let Some(ref d) = args.tor_dir {
+        cfg.add_default_authorities();
+        cfg.set_cache_path(&d);
+    } else if let Some(ref d) = args.chutney_dir {
+        cfg.add_authorities_from_chutney(&d)?;
+        cfg.set_cache_path(&d);
+    } else {
+        eprintln!("Must specify --tor-dir or --chutney-dir");
+        return Err(Error::Misc("arguments"));
+    }
+
     Ok(cfg.load()?)
 }
 
 fn main() -> Result<()> {
     simple_logging::log_to_stderr(LevelFilter::Debug);
 
-    let dir = get_netdir()?;
+    let dir = get_netdir(&argh::from_env())?;
     // TODO CONFORMANCE: we should stop now if there are required
     // protovers we don't support.
 
