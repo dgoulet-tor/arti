@@ -276,9 +276,9 @@ impl<'a, K: Keyword> Iterator for NetDocReaderBase<'a, K> {
 fn base64_decode_multiline(s: &str) -> std::result::Result<Vec<u8>, base64::DecodeError> {
     // base64 module hates whitespace.
     let mut v = Vec::new();
-    for line in s.lines() {
-        base64::decode_config_buf(line.trim_end(), base64::STANDARD, &mut v)?;
-    }
+    let mut s = s.to_string();
+    s.retain(|ch| ch != '\n');
+    base64::decode_config_buf(s, base64::STANDARD, &mut v)?;
     Ok(v)
 }
 
