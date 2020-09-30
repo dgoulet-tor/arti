@@ -214,10 +214,6 @@ impl AuthCert {
             let sha1 = sha1.finalize();
             // TODO: we need to accept prefixes here. COMPAT BLOCKER.
 
-            let verified = identity_key.verify(&sha1, &sig);
-            if verified.is_err() {
-                return Err(Error::BadSignature(signature.pos()));
-            }
             rsa::ValidatableRSASignature::new(&identity_key, &sig, &sha1)
         };
 
