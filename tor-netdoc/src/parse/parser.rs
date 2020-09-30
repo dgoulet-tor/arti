@@ -273,3 +273,80 @@ impl<T: Keyword> SectionRules<T> {
         Ok(section)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::SectionRules;
+    use crate::parse::keyword::Keyword;
+    use crate::parse::macros::test::Fruit;
+    use crate::parse::tokenize::{Item, NetDocReader};
+    use crate::Result;
+    use lazy_static::lazy_static;
+
+    lazy_static! {
+        /// Rules for parsing a set of router annotations.
+        static ref FRUIT_SALAD : SectionRules<Fruit> = {
+            use Fruit::*;
+            let mut rules = SectionRules::new();
+            rules.add(ANN_TASTY.rule().required().args(1..=1));
+            rules.add(ORANGE.rule().args(1..));
+            rules.add(STONEFRUIT.rule().may_repeat());
+            rules.add(GUAVA.rule().obj_optional());
+            rules.add(LEMON.rule().no_args().obj_required());
+            rules
+        };
+    }
+
+    #[test]
+    fn parse_section() -> Result<()> {
+        use Fruit::*;
+        let s = "\
+@tasty yes
+orange soda
+cherry cobbler
+cherry pie
+plum compote
+guava fresh from 7 trees
+-----BEGIN GUAVA MANIFESTO-----
+VGhlIGd1YXZhIGVtb2ppIGlzIG5vdCBjdXJyZW50bHkgc3VwcG9ydGVkIGluI
+HVuaWNvZGUgMTMuMC4gTGV0J3MgZmlnaHQgYWdhaW5zdCBhbnRpLWd1YXZhIG
+JpYXMu
+-----END GUAVA MANIFESTO-----
+lemon
+-----BEGIN LEMON-----
+8J+Niw==
+-----END LEMON-----
+";
+        let mut r: NetDocReader<Fruit> = NetDocReader::new(s);
+        let sec = FRUIT_SALAD.parse(&mut r.iter()).unwrap();
+
+        assert_eq!(sec.required(ANN_TASTY)?.arg(0), Some("yes"));
+
+        assert!(sec.get(ORANGE).is_some());
+        assert_eq!(sec.get(ORANGE).unwrap().args_as_str(), "soda");
+
+        let stonefruit_slice = sec.slice(STONEFRUIT);
+        assert_eq!(stonefruit_slice.len(), 3);
+        let kwds: Vec<&str> = stonefruit_slice.iter().map(Item::kwd_str).collect();
+        assert_eq!(kwds, &["cherry", "cherry", "plum"]);
+
+        assert_eq!(sec.maybe(GUAVA).args_as_str(), Some("fresh from 7 trees"));
+        assert_eq!(sec.maybe(GUAVA).parse_arg::<u32>(2).unwrap(), Some(7));
+        assert!(sec.maybe(GUAVA).parse_arg::<u32>(1).is_err());
+
+        assert_eq!(sec.get(GUAVA).unwrap().obj("GUAVA MANIFESTO").unwrap(),
+                   &b"The guava emoji is not currently supported in unicode 13.0. Let's fight against anti-guava bias."[..]);
+
+        assert_eq!(
+            sec.get(ANN_TASTY).unwrap() as *const Item<'_, _>,
+            sec.first_item().unwrap() as *const Item<'_, _>
+        );
+
+        assert_eq!(
+            sec.get(LEMON).unwrap() as *const Item<'_, _>,
+            sec.last_item().unwrap() as *const Item<'_, _>
+        );
+
+        Ok(())
+    }
+}
