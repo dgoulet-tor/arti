@@ -9,18 +9,26 @@ also short for "artifact".   It has nothing to do with the
 
 ## Is this the future of Tor??!?11?!?
 
-No, this is a fun side project I'm doing on weekends to learn Rust.
+No, this started out as a fun a fun side project I've been doing on weekends
+and to learn Rust.
 
-Maybe if it turns out great we can turn it into something official,
-but right now nobody's working on it but me, and I'm not working on
-it seriously at all.
+Maybe if it turns out great, we can turn it into something official,
+but right now nobody's working on it but me, and it's not part of my
+official job.
 
 ## What the demo can do if you run it.
 
-There is a demo program that looks for a chutney directory in
-~/src/chutney/net/nodes/. If it finds one, it reads the directory info from
+There is a demo program that takes the location of a chutney directory or a
+tor directory. If it finds one, it reads the directory info from
 disk, builds a random three hop circuit, and sends a request for
-http://www.torproject.org:80/.  Then it displays the answer.
+http://www.torproject.org:80/.  Then it displays the answer on stdout.
+
+Example:
+   % cargo run -- --tor-dir ~/.tor/
+
+Remember that rust builds without optimizations by default, so it
+may be a bit slow.  You can try an optimized build with
+   % cargo run --release -- --tor-dir ~/.tor/
 
 ## What's here and what isn't.
 
@@ -80,9 +88,10 @@ You can make documentation with `cargo doc`.  I prefer
 `cargo doc --no-deps --document-private-items`, to include documentation for
 private members but not for dependencies.
 
-You can try running the demo code in `client-demo` with `cd client-demo &&
-cargo run`.  You'll need to have a running local chutney network first; see
-the documentation for that program.
+You can try running the demo code in `client-demo` with `cd
+client-demo && cargo run`.  You'll need to have a running local
+chutney network or an up-to-date tor directory first; see the
+documentation for that program.
 
 ## I want to help. What _should_ I do with this?
 
