@@ -46,7 +46,8 @@ fn b64check(s: &str) -> Result<()> {
 #[derive(Clone, Copy, Debug)]
 pub struct Object<'a> {
     tag: &'a str,
-    data: &'a str, // not yet guaranteed to be base64.
+    data: &'a str,    // not yet guaranteed to be base64.
+    endline: &'a str, // used to get position.
 }
 
 /// A single part of a directory object.
@@ -117,7 +118,7 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
     /// remove data if the reader is nonempty.
     fn line(&mut self) -> Result<&'a str> {
         let remainder = &self.s[self.off..];
-        let mut line;
+        let line;
         if let Some(nl_pos) = remainder.find('\n') {
             self.advance(nl_pos + 1)?;
             line = &remainder[..nl_pos];
@@ -126,10 +127,8 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
             return Err(Error::TruncatedLine(self.pos(self.s.len())));
         }
 
-        // Not in dirspec! XXXX
-        if line.ends_with('\r') {
-            line = &line[..line.len() - 1];
-        }
+        // TODO: we should probably detect \r and do something about it.
+        // Just ignoring it isn't the right answer, though.
         Ok(line)
     }
 
@@ -147,6 +146,8 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
         let mut parts_iter = line.splitn(2, |c| c == ' ' || c == '\t');
         let kwd = match parts_iter.next() {
             Some(k) => k,
+            // This case seems like it can't happen: split always returns
+            // something, apparently.
             None => return Err(Error::MissingKeyword(self.pos(pos))),
         };
         if !keyword_ok(kwd, anno_ok) {
@@ -193,7 +194,7 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
             // an unterminated base64 block could potentially
             // "consume" all the rest of the string, which would stop
             // us from recovering.
-            b64check(line)?;
+            b64check(line).map_err(|e| e.within(self.s))?;
         };
         let data = &self.s[datapos..endlinepos];
         if !endline.ends_with(TAG_END) {
@@ -203,7 +204,7 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
         if endtag != tag {
             return Err(Error::BadObjectMismatchedTag(self.pos(endlinepos)));
         }
-        Ok(Some(Object { tag, data }))
+        Ok(Some(Object { tag, data, endline }))
     }
 
     /// Read the next Item from this NetDocReaderBase.
@@ -251,28 +252,15 @@ fn keyword_ok(mut s: &str, anno_ok: bool) -> bool {
     if anno_ok && s.starts_with('@') {
         s = &s[1..];
     }
-    // XXXX I think we should disallow initial "-"
+    if s.starts_with('-') {
+        return false;
+    }
     s.chars().all(kwd_char_ok)
 }
 
 /// Return true iff 's' is a valid keyword for a BEGIN/END tag.
 fn tag_keyword_ok(s: &str) -> bool {
-    fn kwd_char_ok(c: char) -> bool {
-        match c {
-            'A'..='Z' => true,
-            'a'..='z' => true,
-            '0'..='9' => true,
-            '-' => true,
-            ' ' => true,
-            _ => false,
-        }
-    }
-
-    if s.is_empty() {
-        return false;
-    }
-    // XXXX I think we should disallow initial "-"
-    s.chars().all(kwd_char_ok)
+    s.split(' ').all(|w| keyword_ok(w, false))
 }
 
 /// When used as an Iterator, returns a sequence of Result<Item>.
@@ -440,7 +428,7 @@ impl<'a, K: Keyword> Item<'a, K> {
     /// Return the position of the end of this object.
     fn end_pos(&self) -> Pos {
         match self.object {
-            Some(o) => Pos::at_end_of(o.data),
+            Some(o) => Pos::at_end_of(o.endline),
             None => self.last_arg_end_pos(),
         }
     }
@@ -466,34 +454,15 @@ impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
             None => Ok(None), // XXXX is this correct?
         }
     }
-    #[allow(dead_code)]
-    pub fn parse_optional_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
-    where
-        Error: From<V::Err>,
-    {
-        match self.0 {
-            Some(item) => item.parse_optional_arg(idx),
-            None => Ok(None),
-        }
-    }
-    #[allow(dead_code)]
     pub fn args_as_str(&self) -> Option<&str> {
         self.0.map(|item| item.args_as_str())
     }
-    #[allow(dead_code)]
     pub fn parse_args_as_str<V: FromStr>(&self) -> Result<Option<V>>
     where
         Error: From<V::Err>,
     {
         match self.0 {
             Some(item) => Ok(Some(item.args_as_str().parse::<V>()?)),
-            None => Ok(None),
-        }
-    }
-    #[allow(dead_code)]
-    pub fn obj(&self, want_tag: &str) -> Result<Option<Vec<u8>>> {
-        match self.0 {
-            Some(item) => Ok(Some(item.obj(want_tag)?)),
             None => Ok(None),
         }
     }
@@ -607,6 +576,7 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
 mod test {
     use super::*;
     use crate::parse::macros::test::Fruit;
+    use crate::{Error, Pos, Result};
 
     #[test]
     fn read_simple() {
@@ -614,7 +584,7 @@ mod test {
 
         let s = "\
 @tasty very much so
-apple 77
+opt apple 77
 banana 60
 cherry 6
 -----BEGIN CHERRY SYNOPSIS-----
@@ -628,6 +598,8 @@ plum hello there
         assert!(r.should_be_exhausted().is_err()); // it's not exhausted.
 
         let toks: Result<Vec<_>> = r.iter().collect();
+        assert!(r.should_be_exhausted().is_ok());
+
         let toks = toks.unwrap();
         assert_eq!(toks.len(), 5);
         assert_eq!(toks[0].kwd(), ANN_TASTY);
@@ -639,8 +611,14 @@ plum hello there
             assert_eq!(a, vec!["very", "much", "so"]);
         }
         assert!(toks[0].parse_arg::<usize>(0).is_err());
+        assert!(toks[0].parse_arg::<usize>(10).is_err());
         assert!(!toks[0].has_obj());
         assert_eq!(toks[0].obj_tag(), None);
+
+        assert_eq!(toks[2].pos().within(s), Pos::from_line(3, 1));
+        assert_eq!(toks[2].arg_pos(0).within(s), Pos::from_line(3, 8));
+        assert_eq!(toks[2].last_arg_end_pos().within(s), Pos::from_line(3, 10));
+        assert_eq!(toks[2].end_pos().within(s), Pos::from_line(3, 10));
 
         assert_eq!(toks[3].kwd(), STONEFRUIT);
         assert_eq!(toks[3].kwd_str(), "cherry"); // not cherry/plum!
@@ -656,5 +634,165 @@ plum hello there
             "🍒🍒🍒🍒🍒🍒".as_bytes()
         );
         assert!(toks[3].obj("PLUOT SYNOPSIS").is_err());
+        // this "end-pos" value is questionable!
+        assert_eq!(toks[3].end_pos().within(s), Pos::from_line(7, 30));
+    }
+
+    #[test]
+    fn test_badtoks() {
+        use Fruit::*;
+
+        let s = "\
+-foobar 9090
+apple 3.14159
+$hello
+unrecognized 127.0.0.1 foo
+plum
+-----BEGIN WHATEVER-----
+8J+NkvCfjZLwn42S8J+NkvCfjZLwn42S
+-----END SOMETHING ELSE-----
+orange
+orange
+-----BEGIN WHATEVER-----
+not! base64!
+-----END WHATEVER-----
+guava paste
+opt @annotation
+orange
+-----BEGIN LOBSTER
+8J+NkvCfjZLwn42S8J+NkvCfjZLwn42S
+-----END SOMETHING ELSE-----
+orange
+-----BEGIN !!!!!!-----
+8J+NkvCfjZLwn42S8J+NkvCfjZLwn42S
+-----END !!!!!!-----
+cherry
+-----BEGIN CHERRY SYNOPSIS-----
+8J+NkvCfjZLwn42S8J+NkvCfjZLwn42S
+-----END CHERRY SYNOPSIS
+
+truncated line";
+
+        let mut r: NetDocReader<Fruit> = NetDocReader::new(s);
+        let toks: Vec<_> = r.iter().collect();
+
+        assert!(toks[0].is_err());
+        assert_eq!(
+            toks[0].as_ref().err().unwrap(),
+            &Error::BadKeyword(Pos::from_line(1, 1))
+        );
+
+        assert!(toks[1].is_ok());
+        assert!(toks[1].is_ok_with_non_annotation());
+        assert!(!toks[1].is_ok_with_annotation());
+        assert!(toks[1].is_ok_with_kwd_in(&[APPLE, ORANGE]));
+        assert!(toks[1].is_ok_with_kwd_not_in(&[ORANGE, UNRECOGNIZED]));
+        let t = toks[1].as_ref().unwrap();
+        assert_eq!(t.kwd(), APPLE);
+        assert_eq!(t.arg(0), Some("3.14159"));
+
+        assert!(toks[2].is_err());
+        assert!(!toks[2].is_ok_with_non_annotation());
+        assert!(!toks[2].is_ok_with_annotation());
+        assert!(!toks[2].is_ok_with_kwd_in(&[APPLE, ORANGE]));
+        assert!(!toks[2].is_ok_with_kwd_not_in(&[ORANGE, UNRECOGNIZED]));
+        assert_eq!(
+            toks[2].as_ref().err().unwrap(),
+            &Error::BadKeyword(Pos::from_line(3, 1))
+        );
+
+        assert!(toks[3].is_ok());
+        let t = toks[3].as_ref().unwrap();
+        assert_eq!(t.kwd(), UNRECOGNIZED);
+        assert_eq!(t.arg(1), Some("foo"));
+
+        assert!(toks[4].is_err());
+        assert_eq!(
+            toks[4].as_ref().err().unwrap(),
+            &Error::BadObjectMismatchedTag(Pos::from_line(8, 1))
+        );
+
+        assert!(toks[5].is_ok());
+        let t = toks[5].as_ref().unwrap();
+        assert_eq!(t.kwd(), ORANGE);
+        assert_eq!(t.args_as_str(), "");
+
+        // This blob counts as two errors: a bad base64 blob, and
+        // then an end line.
+        assert!(toks[6].is_err());
+        assert_eq!(
+            toks[6].as_ref().err().unwrap(),
+            &Error::BadObjectBase64(Pos::from_line(12, 1))
+        );
+
+        assert!(toks[7].is_err());
+        assert_eq!(
+            toks[7].as_ref().err().unwrap(),
+            &Error::BadKeyword(Pos::from_line(13, 1))
+        );
+
+        assert!(toks[8].is_ok());
+        let t = toks[8].as_ref().unwrap();
+        assert_eq!(t.kwd(), GUAVA);
+
+        // this is an error because you can't use opt with annotations.
+        assert!(toks[9].is_err());
+        assert_eq!(
+            toks[9].as_ref().err().unwrap(),
+            &Error::BadKeyword(Pos::from_line(15, 1))
+        );
+
+        // this looks like a few errors.
+        assert!(toks[10].is_err());
+        assert_eq!(
+            toks[10].as_ref().err().unwrap(),
+            &Error::BadObjectBeginTag(Pos::from_line(17, 1))
+        );
+        assert!(toks[11].is_err());
+        assert_eq!(
+            toks[11].as_ref().err().unwrap(),
+            &Error::BadKeyword(Pos::from_line(18, 1))
+        );
+        assert!(toks[12].is_err());
+        assert_eq!(
+            toks[12].as_ref().err().unwrap(),
+            &Error::BadKeyword(Pos::from_line(19, 1))
+        );
+
+        // so does this.
+        assert!(toks[13].is_err());
+        assert_eq!(
+            toks[13].as_ref().err().unwrap(),
+            &Error::BadObjectBeginTag(Pos::from_line(21, 1))
+        );
+        assert!(toks[14].is_err());
+        assert_eq!(
+            toks[14].as_ref().err().unwrap(),
+            &Error::BadKeyword(Pos::from_line(22, 1))
+        );
+        assert!(toks[15].is_err());
+        assert_eq!(
+            toks[15].as_ref().err().unwrap(),
+            &Error::BadKeyword(Pos::from_line(23, 1))
+        );
+
+        // not this.
+        assert!(toks[16].is_err());
+        assert_eq!(
+            toks[16].as_ref().err().unwrap(),
+            &Error::BadObjectEndTag(Pos::from_line(27, 1))
+        );
+
+        assert!(toks[17].is_err());
+        assert_eq!(
+            toks[17].as_ref().err().unwrap(),
+            &Error::BadKeyword(Pos::from_line(28, 1))
+        );
+
+        assert!(toks[18].is_err());
+        assert_eq!(
+            toks[18].as_ref().err().unwrap(),
+            &Error::TruncatedLine(Pos::from_line(29, 15))
+        );
     }
 }

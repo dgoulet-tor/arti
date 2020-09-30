@@ -62,7 +62,10 @@ impl Pos {
                         byte: off - pos,
                     }
                 }
-                None => Pos::PosInLine { line: 1, byte: off },
+                None => Pos::PosInLine {
+                    line: 1,
+                    byte: off + 1,
+                },
             }
         }
     }
@@ -81,6 +84,10 @@ impl Pos {
     /// Construct a position from a byte offset.
     pub fn from_byte(off: usize) -> Self {
         Pos::Byte { off }
+    }
+    /// Construct a position from a line and a byte offset within that line.
+    pub fn from_line(line: usize, byte: usize) -> Self {
+        Pos::PosInLine { line, byte }
     }
     /// Given a position, if it was at a byte offset, convert it to a
     /// line-and-byte position within `s`.
