@@ -93,12 +93,12 @@ pub(crate) mod test {
 
     decl_keyword! {
         pub(crate) Fruit {
-        "apple" => APPLE,
-        "orange" => ORANGE,
-        "lemon" => LEMON,
-        "guava" => GUAVA,
-        "cherry" | "plum" => STONEFRUIT,
-        annotation "@tasty" => ANN_TASTY,
+            "apple" => APPLE,
+            "orange" => ORANGE,
+            "lemon" => LEMON,
+            "guava" => GUAVA,
+            "cherry" | "plum" => STONEFRUIT,
+            annotation "@tasty" => ANN_TASTY,
         }
     }
 

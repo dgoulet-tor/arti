@@ -224,26 +224,19 @@ impl<T: Keyword> SectionRules<T> {
     /// Check whether the tokens in a section we've parsed conform to
     /// these rules.
     fn validate<'a>(&self, s: &Section<'a, T>) -> Result<()> {
-        // If there are more items in the section than we have rules for,
-        // they may be unexpected.
-        if s.v.len() > self.rules.len() {
-            for (idx, t) in s.v.iter().enumerate().skip(self.rules.len()) {
-                if let Some(item) = t.first() {
-                    let tokname = T::idx_to_str(idx);
-                    return Err(Error::UnexpectedToken(tokname, item.pos()));
-                }
-            }
-        }
+        // These vectors are both generated from T::n_vals().
+        assert_eq!(s.v.len(), self.rules.len());
 
         // Iterate over every item, and make sure it matches the
         // corresponding rule.
-        for (idx, (rule, t)) in self.rules.iter().zip(s.v.iter()).enumerate() {
+        for (rule, t) in self.rules.iter().zip(s.v.iter()) {
             match rule {
                 None => {
                     // We aren't supposed to have any of these.
                     if t.count() > 0 {
-                        let tokname = T::idx_to_str(idx);
-                        return Err(Error::UnexpectedToken(tokname, t.first().unwrap().pos()));
+                        unreachable!(
+                            "This item should have been rejected earlier, in parse_unverified()"
+                        );
                     }
                 }
                 Some(rule) => {
@@ -280,7 +273,7 @@ mod test {
     use crate::parse::keyword::Keyword;
     use crate::parse::macros::test::Fruit;
     use crate::parse::tokenize::{Item, NetDocReader};
-    use crate::Result;
+    use crate::{Error, Result};
     use lazy_static::lazy_static;
 
     lazy_static! {
@@ -348,5 +341,48 @@ lemon
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn rejected() {
+        use crate::Pos;
+        fn check(s: &str, e: Error) {
+            let mut r: NetDocReader<Fruit> = NetDocReader::new(s);
+            let res = FRUIT_SALAD.parse(&mut r.iter());
+            assert!(res.is_err());
+            assert_eq!(res.err().unwrap().within(s), e);
+        }
+
+        // unrecognized tokens aren't allowed here
+        check(
+            "orange foo\nfoobar x\n@tasty yes\n",
+            Error::UnexpectedToken("<unrecognized>", Pos::from_line(2, 1)),
+        );
+
+        // Only one orange per customer.
+        check(
+            "@tasty yes\norange foo\norange bar\n",
+            Error::DuplicateToken("orange", Pos::from_line(3, 1)),
+        );
+
+        // There needs to be a declaration of tastiness.
+        check("orange foo\n", Error::MissingToken("@tasty"));
+
+        // You can't have an orange without an argument.
+        check(
+            "@tasty nope\norange\n",
+            Error::TooFewArguments("orange", Pos::from_line(2, 1)),
+        );
+        // You can't have an more than one argument on "tasty".
+        check(
+            "@tasty yup indeed\norange normal\n",
+            Error::TooManyArguments("@tasty", Pos::from_line(1, 1)),
+        );
+
+        // Every lemon needs an object
+        check(
+            "@tasty yes\nlemon\norange no\n",
+            Error::MissingObject("lemon", Pos::from_line(2, 1)),
+        );
     }
 }
