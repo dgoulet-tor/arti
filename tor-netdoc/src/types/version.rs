@@ -113,18 +113,18 @@ impl FromStr for TorVersion {
         let status_part = parts.next();
         let dev_part = parts.next();
         if parts.next().is_some() {
-            return Err(Error::BadVersion(Pos::at_end_of(dev_part.unwrap())));
+            return Err(Error::BadTorVersion(Pos::at_end_of(dev_part.unwrap())));
         }
 
         // Split the version on "." into 3 or 4 numbers.
         let vers: Result<Vec<_>, _> = ver_part
-            .ok_or_else(|| Error::BadVersion(Pos::at(s)))?
+            .ok_or_else(|| Error::BadTorVersion(Pos::at(s)))?
             .splitn(4, '.')
             .map(|v| v.parse::<u8>())
             .collect();
-        let vers = vers.map_err(|_| Error::BadVersion(Pos::at(s)))?;
+        let vers = vers.map_err(|_| Error::BadTorVersion(Pos::at(s)))?;
         if vers.len() < 3 {
-            return Err(Error::BadVersion(Pos::at(s)));
+            return Err(Error::BadTorVersion(Pos::at(s)));
         }
         let major = vers[0];
         let minor = vers[1];
@@ -142,7 +142,7 @@ impl FromStr for TorVersion {
         let dev = match (status_part, dev_part) {
             (_, Some("dev")) => true,
             (_, Some(s)) => {
-                return Err(Error::BadVersion(Pos::at(s)));
+                return Err(Error::BadTorVersion(Pos::at(s)));
             }
             (Some("dev"), None) => true,
             (_, _) => false,

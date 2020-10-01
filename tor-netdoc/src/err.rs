@@ -213,7 +213,7 @@ pub enum Error {
     BadSignature(Pos), // say which kind of signature. TODO
     /// There was a tor version we couldn't parse.
     #[error("couldn't parse Tor version{0}")]
-    BadVersion(Pos), // collapse into something else.
+    BadTorVersion(Pos),
     /// There was an ipv4 or ipv6 policy entry that we couldn't parse.
     #[error("invalid policy entry{0}: {1}")]
     BadPolicy(Pos, #[source] PolicyError),
@@ -263,7 +263,7 @@ impl Error {
             BadArgument(p, _) => Some(p),
             BadObjectVal(p, _) => Some(p),
             BadSignature(p) => Some(p),
-            BadVersion(p) => Some(p),
+            BadTorVersion(p) => Some(p),
             BadPolicy(p, _) => Some(p),
             Untimely(p, _) => Some(p),
             Undecodable(p, _) => Some(p),
