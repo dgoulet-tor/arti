@@ -229,6 +229,12 @@ pub enum Error {
     /// Unexpected document type
     #[error("unexpected document type")]
     BadDocumentType,
+    /// Document or section started with wrong token
+    #[error("Wrong starting token {0}{1}")]
+    WrongStartingToken(String, Pos),
+    /// Document or section ended with wrong token
+    #[error("Wrong ending token {0}{1}")]
+    WrongEndingToken(String, Pos),
 }
 
 impl Error {
@@ -263,6 +269,8 @@ impl Error {
             Undecodable(p, _) => Some(p),
             BadDocumentVersion(_) => None,
             BadDocumentType => None,
+            WrongStartingToken(_, p) => Some(p),
+            WrongEndingToken(_, p) => Some(p),
         }
     }
 

@@ -6,7 +6,6 @@
 //! to keep their identity keys securely offline, while using the
 //! signing keys to sign votes and consensuses.
 
-use crate::err::Pos;
 use crate::parse::keyword::Keyword;
 use crate::parse::parser::SectionRules;
 use crate::parse::tokenize::{ItemResult, NetDocReader};
@@ -137,19 +136,30 @@ impl AuthCert {
         // safely call unwrap() on first and last, since there are required
         // tokens in the rules, so we know that at least one token will have
         // been parsed.
-        if body.first_item().unwrap().kwd() != DIR_KEY_CERTIFICATE_VERSION {
-            // TODO: this is not the best possible error.
-            return Err(Error::MissingToken("onion-key"));
+        {
+            let first_item = body.first_item().unwrap();
+            if first_item.kwd() != DIR_KEY_CERTIFICATE_VERSION {
+                return Err(Error::WrongStartingToken(
+                    first_item.kwd_str().into(),
+                    first_item.pos(),
+                ));
+            }
         }
-        if body.last_item().unwrap().kwd() != DIR_KEY_CERTIFICATION {
-            // TODO: this is not the best possible error.
-            return Err(Error::MissingToken("dir-key-certification"));
+        {
+            let last_item = body.last_item().unwrap();
+            if last_item.kwd() != DIR_KEY_CERTIFICATION {
+                return Err(Error::WrongStartingToken(
+                    last_item.kwd_str().into(),
+                    last_item.pos(),
+                ));
+            }
         }
 
-        let version = body.required(DIR_KEY_CERTIFICATE_VERSION)?.arg(0).unwrap();
-        if version != "3" {
-            // TODO Better error needed
-            return Err(Error::Internal(Pos::None));
+        let version = body
+            .required(DIR_KEY_CERTIFICATE_VERSION)?
+            .parse_arg::<u32>(0)?;
+        if version != 3 {
+            return Err(Error::BadDocumentVersion(version));
         }
 
         let signing_key: rsa::PublicKey = body
@@ -280,7 +290,7 @@ mod test {
     #[test]
     fn parse_one() -> Result<()> {
         use tor_checkable::{SelfSigned, Timebound};
-        let _rd = AuthCert::parse(TESTDATA)?
+        let rd = AuthCert::parse(TESTDATA)?
             .check_signature()
             .unwrap()
             .dangerously_assume_timely();
