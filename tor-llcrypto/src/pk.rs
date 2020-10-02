@@ -48,6 +48,11 @@ pub mod ed25519 {
                 entire_text_of_signed_thing: text.into(),
             }
         }
+
+        /// View the interior of this signature object.
+        pub(crate) fn as_parts(&self) -> (&PublicKey, &Signature, &[u8]) {
+            (&self.key, &self.sig, &self.entire_text_of_signed_thing[..])
+        }
     }
 
     impl super::ValidatableSignature for ValidatableEd25519Signature {
@@ -56,6 +61,31 @@ pub mod ed25519 {
             self.key
                 .verify(&self.entire_text_of_signed_thing[..], &self.sig)
                 .is_ok()
+        }
+
+        fn as_ed25519(&self) -> Option<&ValidatableEd25519Signature> {
+            Some(self)
+        }
+    }
+
+    /// Perform a batch verification operation on the provided signatures
+    pub fn validate_batch(sigs: &[&ValidatableEd25519Signature]) -> bool {
+        use crate::pk::ValidatableSignature;
+        if sigs.is_empty() {
+            true
+        } else if sigs.len() == 1 {
+            sigs[0].is_valid()
+        } else {
+            let mut ed_msgs = Vec::new();
+            let mut ed_sigs = Vec::new();
+            let mut ed_pks = Vec::new();
+            for ed_sig in sigs {
+                let (pk, sig, msg) = ed_sig.as_parts();
+                ed_sigs.push(*sig);
+                ed_pks.push(*pk);
+                ed_msgs.push(msg);
+            }
+            ed25519_dalek::verify_batch(&ed_msgs[..], &ed_sigs[..], &ed_pks[..]).is_ok()
         }
     }
 }
@@ -67,6 +97,34 @@ pub mod ed25519 {
 pub trait ValidatableSignature {
     /// Check whether this signature is a correct signature for the document.
     fn is_valid(&self) -> bool;
+
+    /// Return this value as a validatable Ed25519 signature, if it is one.
+    fn as_ed25519(&self) -> Option<&ed25519::ValidatableEd25519Signature> {
+        None
+    }
+}
+
+/// Check whether all of the signatures in this Vec are valid.
+///
+/// (Having a separate implementation here enables us to use
+/// batch-verification when available.)
+pub fn validate_all_sigs(v: &[Box<dyn ValidatableSignature>]) -> bool {
+    // First we break out the ed25519 signatures (if any) so we can do
+    // a batch-verification on them.
+    let mut ed_sigs = Vec::new();
+    let mut non_ed_sigs = Vec::new();
+    for sig in v.iter() {
+        match sig.as_ed25519() {
+            Some(ed_sig) => ed_sigs.push(ed_sig),
+            None => non_ed_sigs.push(sig),
+        }
+    }
+
+    // Find out if the ed25519 batch is valid.
+    let ed_batch_is_valid = crate::pk::ed25519::validate_batch(&ed_sigs[..]);
+
+    // if so, verify the rest.
+    ed_batch_is_valid && non_ed_sigs.iter().all(|b| b.is_valid())
 }
 
 #[cfg(test)]

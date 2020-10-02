@@ -168,6 +168,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
     /// This is a separate function because it's likely to be somewhat
     /// CPU-intensive.
     pub fn check<U: ChanTarget>(self, peer: &U, peer_cert: &[u8]) -> Result<VerifiedChannel<T>> {
+        // TODO: Enable batch verification.
         use tor_cert::CertType;
         use tor_checkable::*;
         // We need to check the following lines of authentication:

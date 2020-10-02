@@ -1,6 +1,6 @@
 //! Convenience implementation of a SelfSigned object.
 
-use tor_llcrypto::pk::ValidatableSignature;
+use tor_llcrypto::pk::{self, ValidatableSignature};
 
 /// A SignatureGated object is a self-signed object that's well-signed
 /// when one or more ValidatableSignature objects are correct.
@@ -27,7 +27,7 @@ impl<T> super::SelfSigned<T> for SignatureGated<T> {
         self.obj
     }
     fn is_well_signed(&self) -> Result<(), Self::Error> {
-        if self.signatures.iter().all(|b| b.is_valid()) {
+        if pk::validate_all_sigs(&self.signatures[..]) {
             Ok(())
         } else {
             Err(signature::Error::new())
