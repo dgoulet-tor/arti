@@ -295,16 +295,53 @@ impl<'a> Iterator for AuthCertIterator<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{Error, Pos};
     const TESTDATA: &str = include_str!("../../testdata/authcert1.txt");
 
     #[test]
     fn parse_one() -> Result<()> {
         use tor_checkable::{SelfSigned, Timebound};
-        let rd = AuthCert::parse(TESTDATA)?
+        let _rd = AuthCert::parse(TESTDATA)?
             .check_signature()
             .unwrap()
             .dangerously_assume_timely();
 
         Ok(())
+    }
+
+    #[test]
+    fn parse_bad() {
+        fn check(fname: &str, err: Error) {
+            use std::fs;
+            use std::path::PathBuf;
+            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            path.push("testdata");
+            path.push("bad-certs");
+            path.push(fname);
+
+            let contents = fs::read_to_string(path).unwrap();
+
+            let cert = AuthCert::parse(&contents);
+            assert!(cert.is_err());
+            assert_eq!(cert.err().unwrap(), err);
+        }
+
+        check("bad-cc-tag", Error::WrongObject(Pos::from_line(27, 12)));
+        check(
+            "bad-fingerprint",
+            Error::BadArgument(
+                Pos::from_line(2, 1),
+                "fingerprint does not match RSA identity".into(),
+            ),
+        );
+        check("bad-version", Error::BadDocumentVersion(4));
+        check(
+            "wrong-end",
+            Error::WrongEndingToken("dir-key-crosscert".into(), Pos::from_line(37, 1)),
+        );
+        check(
+            "wrong-start",
+            Error::WrongStartingToken("fingerprint".into(), Pos::from_line(1, 1)),
+        );
     }
 }
