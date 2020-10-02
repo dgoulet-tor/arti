@@ -442,15 +442,25 @@ pub struct MaybeItem<'a, 'b, K: Keyword>(Option<&'a Item<'b, K>>);
 
 // All methods here are as for Item.
 impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
+    fn pos(&self) -> Pos {
+        match self.0 {
+            Some(item) => item.pos(),
+            None => Pos::None,
+        }
+    }
     pub fn from_option(opt: Option<&'a Item<'b, K>>) -> Self {
         MaybeItem(opt)
     }
+
     pub fn parse_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
     where
         Error: From<V::Err>,
     {
         match self.0 {
-            Some(item) => item.parse_arg(idx).map(Some),
+            Some(item) => match item.parse_arg(idx) {
+                Ok(v) => Ok(Some(v)),
+                Err(e) => Err(e.or_at_pos(self.pos())),
+            },
             None => Ok(None), // XXXX is this correct?
         }
     }
@@ -462,7 +472,13 @@ impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
         Error: From<V::Err>,
     {
         match self.0 {
-            Some(item) => Ok(Some(item.args_as_str().parse::<V>()?)),
+            Some(item) => match item.args_as_str().parse::<V>() {
+                Ok(v) => Ok(Some(v)),
+                Err(e) => {
+                    let e: Error = e.into();
+                    Err(e.or_at_pos(self.pos()))
+                }
+            },
             None => Ok(None),
         }
     }
