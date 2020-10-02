@@ -274,6 +274,45 @@ impl Error {
         }
     }
 
+    /// Helper: return this error's position.
+    pub(crate) fn pos(&self) -> Pos {
+        // XXXX This duplicate code is yucky. We should refactor this error
+        // type to use an ErrorKind pattern.
+        use Error::*;
+        let pos = match self {
+            Internal(p) => Some(p),
+            MissingKeyword(p) => Some(p),
+            TruncatedLine(p) => Some(p),
+            BadKeyword(p) => Some(p),
+            BadObjectBeginTag(p) => Some(p),
+            BadObjectEndTag(p) => Some(p),
+            BadObjectMismatchedTag(p) => Some(p),
+            BadObjectBase64(p) => Some(p),
+            DuplicateToken(_, p) => Some(p),
+            UnexpectedToken(_, p) => Some(p),
+            MissingToken(_) => None,
+            MisplacedToken(_, p) => Some(p),
+            TooManyArguments(_, p) => Some(p),
+            TooFewArguments(_, p) => Some(p),
+            UnexpectedObject(_, p) => Some(p),
+            MissingObject(_, p) => Some(p),
+            WrongObject(p) => Some(p),
+            MissingArgument(p) => Some(p),
+            BadArgument(p, _) => Some(p),
+            BadObjectVal(p, _) => Some(p),
+            BadSignature(p) => Some(p),
+            BadTorVersion(p) => Some(p),
+            BadPolicy(p, _) => Some(p),
+            Untimely(p, _) => Some(p),
+            Undecodable(p, _) => Some(p),
+            BadDocumentVersion(_) => None,
+            BadDocumentType => None,
+            WrongStartingToken(_, p) => Some(p),
+            WrongEndingToken(_, p) => Some(p),
+        };
+        *pos.unwrap_or(&Pos::Unknown)
+    }
+
     /// Return a new error based on this one, with any byte-based
     /// position mapped to some line within a string.
     pub fn within(mut self, s: &str) -> Error {

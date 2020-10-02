@@ -570,6 +570,16 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
             Some(Err(e)) => Err(e.clone()),
         }
     }
+
+    /// Return the position from which the underlying reader is about to take
+    /// the next token.  Use to make sure that the reader is progressing.
+    pub(crate) fn pos(&mut self) -> Pos {
+        match self.tokens.peek() {
+            Some(Ok(tok)) => tok.pos(),
+            Some(Err(e)) => e.pos(),
+            None => Pos::at_end_of(self.s),
+        }
+    }
 }
 
 #[cfg(test)]

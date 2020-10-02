@@ -332,21 +332,18 @@ impl<'a> MicrodescReader<'a> {
     ///
     /// On error, advance the reader to the start of the next microdescriptor.
     fn take_annotated_microdesc(&mut self) -> Result<AnnotatedMicrodesc> {
+        let pos_orig = self.reader.pos();
         let result = self.take_annotated_microdesc_raw();
         if result.is_err() {
-            // There is a subtle and tricky issue here:
-            // advance_to_next_microdesc() is not guaranteed to consume any
-            // tokens.  Neither is take_annotation() or
-            // Microdesc::parse_from_reader().  So how do we prevent an
-            // infinite loop here?
-            //
-            // The critical thing here is that if take_annotation() fails, it
-            // consumes at least one token, so take_annotated_microdesc() will
-            // advance.
-            //
-            // If parse_from_reader fails, either it has consumed at least one
-            // token, or the first token was not an ONION_KEY.  Either way,
-            // we advance.
+            if self.reader.pos() == pos_orig {
+                // No tokens were consumed from the reader.  We need to
+                // drop at least one token to ensure we aren't looping.
+                //
+                // (This might not be able to happen, but it's easier to
+                // explicitly catch this case than it is to prove that
+                // it's impossible.)
+                let _ = self.reader.iter().next();
+            }
             advance_to_next_microdesc(&mut self.reader, self.annotated);
         }
         result

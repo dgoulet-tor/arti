@@ -652,8 +652,19 @@ impl<'a> RouterReader<'a> {
     }
 
     fn take_annotated_routerdesc(&mut self) -> Result<AnnotatedRouterDesc> {
+        let pos_orig = self.reader.pos();
         let result = self.take_annotated_routerdesc_raw();
         if result.is_err() {
+            if self.reader.pos() == pos_orig {
+                // No tokens were consumed from the reader.  We need
+                // to drop at least one token to ensure we aren't in
+                // an infinite loop.
+                //
+                // (This might not be able to happen, but it's easier to
+                // explicitly catch this case than it is to prove that
+                // it's impossible.)
+                let _ = self.reader.iter().next();
+            }
             advance_to_next_routerdesc(&mut self.reader, self.annotated);
         }
         result

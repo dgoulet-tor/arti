@@ -282,10 +282,19 @@ impl<'a> Iterator for AuthCertIterator<'a> {
             return None;
         }
 
+        let pos_orig = self.0.pos();
         let result = AuthCert::take_from_reader(&mut self.0);
         if result.is_err() {
-            // XXXX Verify that at least one item was consumed from the
-            // XXXX reader!
+            if self.0.pos() == pos_orig {
+                // No tokens were consumed from the reader.  We need
+                // to drop at least one token to ensure we aren't in
+                // an infinite loop.
+                //
+                // (This might not be able to happen, but it's easier to
+                // explicitly catch this case than it is to prove that
+                // it's impossible.)
+                let _ = self.0.iter().next();
+            }
             AuthCert::advance_reader_to_next(&mut self.0);
         }
         Some(result.map_err(|e| e.within(self.0.str())))
@@ -344,4 +353,7 @@ mod test {
             Error::WrongStartingToken("fingerprint".into(), Pos::from_line(1, 1)),
         );
     }
+
+    #[test]
+    fn test_recovery() {}
 }
