@@ -27,6 +27,7 @@ use std::time;
 /// Annotations prepended to a microdescriptor that has been stored to
 /// disk.
 #[allow(dead_code)]
+#[derive(Clone, Debug)]
 pub struct MicrodescAnnotation {
     last_listed: Option<time::SystemTime>,
 }
@@ -36,6 +37,7 @@ pub type MDDigest = [u8; 32];
 
 /// A single microdescriptor.
 #[allow(dead_code)]
+#[derive(Clone, Debug)]
 pub struct Microdesc {
     // TODO: maybe this belongs somewhere else. Once it's used to store
     // correlate the microdesc to a consensus, it's never used again.
@@ -78,6 +80,7 @@ impl Microdesc {
 ///
 /// TODO: rename this.
 #[allow(dead_code)]
+#[derive(Clone, Debug)]
 pub struct AnnotatedMicrodesc {
     md: Microdesc,
     ann: MicrodescAnnotation,
@@ -88,12 +91,18 @@ impl AnnotatedMicrodesc {
     pub fn into_microdesc(self) -> Microdesc {
         self.md
     }
+
+    /// Return a reference to the microdescriptor within this annotated
+    /// microdescriptor.
+    pub fn md(&self) -> &Microdesc {
+        &self.md
+    }
 }
 
 decl_keyword! {
     /// Keyword type for recognized objects in microdescriptors.
     MicrodescKW {
-        annotation "last-listed" => ANN_LAST_LISTED,
+        annotation "@last-listed" => ANN_LAST_LISTED,
         "onion-key" => ONION_KEY,
         "ntor-onion-key" => NTOR_ONION_KEY,
         "family" => FAMILY,
@@ -140,7 +149,6 @@ impl MicrodescAnnotation {
         use MicrodescKW::*;
 
         let mut items = reader.pause_at(|item| item.is_ok_with_non_annotation());
-
         let body = MICRODESC_ANNOTATIONS.parse(&mut items)?;
 
         let last_listed = match body.get(ANN_LAST_LISTED) {
@@ -190,8 +198,10 @@ impl Microdesc {
             // had there not been at least one item.
             let first = body.first_item().unwrap();
             if first.kwd() != ONION_KEY {
-                // TODO: this is not the best possible error.
-                return Err(Error::MissingToken("onion-key"));
+                return Err(Error::WrongStartingToken(
+                    first.kwd_str().into(),
+                    first.pos(),
+                ));
             }
             // Unwrap is safe here because we are parsing these strings from s
             util::str_offset(s, first.kwd_str()).unwrap()
@@ -295,6 +305,7 @@ fn advance_to_next_microdesc(reader: &mut NetDocReader<'_, MicrodescKW>, annotat
 
 /// An iterator that parses one or more (possible annnotated)
 /// microdescriptors from a string.
+#[derive(Debug)]
 pub struct MicrodescReader<'a> {
     annotated: bool,
     reader: NetDocReader<'a, MicrodescKW>,
@@ -366,6 +377,7 @@ impl<'a> Iterator for MicrodescReader<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use hex_literal::hex;
     const TESTDATA: &str = include_str!("../../testdata/microdesc1.txt");
     const TESTDATA2: &str = include_str!("../../testdata/microdesc2.txt");
 
@@ -377,13 +389,33 @@ mod test {
 
     #[test]
     fn parse_multi() -> Result<()> {
-        let mut n: u32 = 0;
-        for md in MicrodescReader::new(TESTDATA2, AllowAnnotations::AnnotationsAllowed) {
-            md?;
-            n += 1;
-        }
-        assert_eq!(n, 4);
+        use std::time::{Duration, SystemTime};
+        let mds: Result<Vec<_>> =
+            MicrodescReader::new(TESTDATA2, AllowAnnotations::AnnotationsAllowed).collect();
+        let mds = mds?;
+        assert_eq!(mds.len(), 4);
+
+        assert_eq!(
+            mds[0].ann.last_listed.unwrap(),
+            SystemTime::UNIX_EPOCH + Duration::new(1580151129, 0)
+        );
+        assert_eq!(
+            mds[0].md().digest(),
+            &hex!("38c71329a87098cb341c46c9c62bd646622b4445f7eb985a0e6adb23a22ccf4f")
+        );
+        assert_eq!(
+            mds[0].md().ntor_key().as_bytes(),
+            &hex!("5e895d65304a3a1894616660143f7af5757fe08bc18045c7855ee8debb9e6c47")
+        );
+        assert!(mds[0].md().ipv4_policy().allows_port(993));
+        assert!(mds[0].md().ipv6_policy().allows_port(993));
+        assert!(!mds[0].md().ipv4_policy().allows_port(25));
+        assert!(!mds[0].md().ipv6_policy().allows_port(25));
+        assert_eq!(
+            mds[0].md().get_opt_ed25519_id().unwrap().as_bytes(),
+            &hex!("2d85fdc88e6c1bcfb46897fca1dba6d1354f93261d68a79e0b5bc170dd923084")
+        );
+
         Ok(())
-        // TODO: test actual contents.
     }
 }
