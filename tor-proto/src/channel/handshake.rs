@@ -168,7 +168,6 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
     /// This is a separate function because it's likely to be somewhat
     /// CPU-intensive.
     pub fn check<U: ChanTarget>(self, peer: &U, peer_cert: &[u8]) -> Result<VerifiedChannel<T>> {
-        // TODO: Enable batch verification.
         use tor_cert::CertType;
         use tor_checkable::*;
         // We need to check the following lines of authentication:
@@ -188,13 +187,14 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         let id_sk = c.parse_ed_cert(CertType::IDENTITY_V_SIGNING)?;
         let sk_tls = c.parse_ed_cert(CertType::SIGNING_V_TLS_CERT)?;
 
+        let mut sigs = Vec::new();
+
         // Part 1: validate ed25519 stuff.
 
         // Check the identity->signing cert
+        let (id_sk, id_sk_sig) = id_sk.check_key(&None)?.dangerously_split()?;
+        sigs.push(&id_sk_sig);
         let id_sk = id_sk
-            .check_key(&None)?
-            .check_signature()
-            .map_err(|_| Error::ChanProto("Bad certificate signature".into()))?
             .check_valid_now()
             .map_err(|_| Error::ChanProto("Certificate expired or not yet valid".into()))?;
 
@@ -211,10 +211,11 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
 
         // Now look at the signing->TLS cert and check it against the
         // peer certificate.
-        let sk_tls = sk_tls
+        let (sk_tls, sk_tls_sig) = sk_tls
             .check_key(&Some(*signing_key))? // this is a bad interface XXXX
-            .check_signature()
-            .map_err(|_| Error::ChanProto("Bad certificate signature".into()))?
+            .dangerously_split()?;
+        sigs.push(&sk_tls_sig);
+        let sk_tls = sk_tls
             .check_valid_now()
             .map_err(|_| Error::ChanProto("Certificate expired or not yet valid".into()))?;
 
@@ -222,6 +223,17 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         if &cert_sha256[..] != sk_tls.subject_key().as_bytes() {
             return Err(Error::ChanProto(
                 "Peer cert did not authenticate TLS cert".into(),
+            ));
+        }
+
+        // Batch-verify the ed25519 certificates in this handshake.
+        //
+        // In theory we could build a list of _all_ the certificates here
+        // and call pk::validate_all_sigs() instead, but that doesn't gain
+        // any performance.
+        if !ll::pk::ed25519::validate_batch(&sigs[..]) {
+            return Err(Error::ChanProto(
+                "Invalid ed25519 signature in handshake.".into(),
             ));
         }
 

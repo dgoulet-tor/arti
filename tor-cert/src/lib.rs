@@ -484,6 +484,7 @@ impl UncheckedCert {
     ) -> Result<(SigCheckedCert, ed25519::ValidatableEd25519Signature)> {
         use tor_checkable::SelfSigned;
         let signature = ed25519::ValidatableEd25519Signature::new(
+            // XXXX: Instead of unwrap, test.
             self.cert.signed_with.unwrap(),
             self.signature,
             &self.text[..],
