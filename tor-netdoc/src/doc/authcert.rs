@@ -307,6 +307,17 @@ mod test {
     use crate::{Error, Pos};
     const TESTDATA: &str = include_str!("../../testdata/authcert1.txt");
 
+    fn bad_data(fname: &str) -> String {
+        use std::fs;
+        use std::path::PathBuf;
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("testdata");
+        path.push("bad-certs");
+        path.push(fname);
+
+        fs::read_to_string(path).unwrap()
+    }
+
     #[test]
     fn parse_one() -> Result<()> {
         use tor_checkable::{SelfSigned, Timebound};
@@ -321,15 +332,7 @@ mod test {
     #[test]
     fn parse_bad() {
         fn check(fname: &str, err: Error) {
-            use std::fs;
-            use std::path::PathBuf;
-            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            path.push("testdata");
-            path.push("bad-certs");
-            path.push(fname);
-
-            let contents = fs::read_to_string(path).unwrap();
-
+            let contents = bad_data(fname);
             let cert = AuthCert::parse(&contents);
             assert!(cert.is_err());
             assert_eq!(cert.err().unwrap(), err);
@@ -355,5 +358,28 @@ mod test {
     }
 
     #[test]
-    fn test_recovery() {}
+    fn test_recovery_1() {
+        let mut data = "<><><<><>\nfingerprint ABC\n".to_string();
+        data += TESTDATA;
+
+        let res: Vec<Result<_>> = AuthCert::parse_multiple(&data).collect();
+
+        // We should recover from the failed case and read the next data fine.
+        assert!(res[0].is_err());
+        assert!(res[1].is_ok());
+        dbg!(res.len());
+    }
+
+    #[test]
+    fn test_recovery_2() {
+        let mut data = bad_data("bad-version");
+        data += TESTDATA;
+
+        let res: Vec<Result<_>> = AuthCert::parse_multiple(&data).collect();
+
+        // We should recover from the failed case and read the next data fine.
+        assert!(res[0].is_err());
+        assert!(res[1].is_ok());
+        dbg!(res.len());
+    }
 }
