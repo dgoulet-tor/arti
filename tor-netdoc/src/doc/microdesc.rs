@@ -381,6 +381,17 @@ mod test {
     const TESTDATA: &str = include_str!("../../testdata/microdesc1.txt");
     const TESTDATA2: &str = include_str!("../../testdata/microdesc2.txt");
 
+    fn read_bad(fname: &str) -> String {
+        use std::fs;
+        use std::path::PathBuf;
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("testdata");
+        path.push("bad-mds");
+        path.push(fname);
+
+        fs::read_to_string(path).unwrap()
+    }
+
     #[test]
     fn parse_single() -> Result<()> {
         let _md = Microdesc::parse(TESTDATA)?;
@@ -417,5 +428,39 @@ mod test {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn test_bad() {
+        use crate::types::policy::PolicyError;
+        use crate::Pos;
+        fn check(fname: &str, e: Error) {
+            let content = read_bad(fname);
+            let res = Microdesc::parse(&content);
+            assert!(res.is_err());
+            assert_eq!(res.err().unwrap(), e);
+        }
+
+        check(
+            "wrong-start",
+            Error::WrongStartingToken("family".into(), Pos::from_line(1, 1)),
+        );
+        check(
+            "bogus-policy",
+            Error::BadPolicy(Pos::from_line(9, 1), PolicyError::InvalidPort),
+        );
+    }
+
+    #[test]
+    fn test_recover() {
+        let mut data = read_bad("wrong-start");
+        data += TESTDATA;
+
+        let res: Vec<Result<_>> =
+            MicrodescReader::new(&data, AllowAnnotations::AnnotationsAllowed).collect();
+
+        assert_eq!(res.len(), 2);
+        assert!(res[0].is_err());
+        assert!(res[1].is_ok());
     }
 }
