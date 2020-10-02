@@ -309,18 +309,8 @@ impl RouterDesc {
 
     /// Try to parse `s` as a router descriptor.
     ///
-    /// # Limitations
-    ///
-    /// This function does too much and too little.  It validates all
-    /// the signatures in the descriptor, which is too much for a
-    /// parsing function, but it doesn't check the expiration time,
-    /// because it doesn't know it.
-    ///
-    /// I would prefer that this function would instead return some
-    /// kind of object that could only be used as a router descriptor
-    /// after the signatures and expiration were checked.  But that's
-    /// future work for now, partially because of limitations in the
-    /// ed25519 API.
+    /// Does not actually check liveness or signatures; you need to do that
+    /// yourself before you can do the output.
     pub fn parse(s: &str) -> Result<UncheckedRouterDesc> {
         let mut reader = crate::parse::tokenize::NetDocReader::new(s);
         let result = Self::parse_internal(&mut reader).map_err(|e| e.within(s));

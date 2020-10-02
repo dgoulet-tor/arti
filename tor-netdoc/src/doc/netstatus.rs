@@ -366,6 +366,7 @@ lazy_static! {
         rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
         rules
     };
+    /*
     /// Rules for parsing the header of a vote.
     static ref NS_HEADER_RULES_VOTE: SectionRules<NetstatusKW> = {
         use NetstatusKW::*;
@@ -393,6 +394,7 @@ lazy_static! {
         rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
         rules
     };
+     */
     /// Rules for parsing a single voter's information in a consensus
     static ref NS_VOTERINFO_RULES_CONSENSUS: SectionRules<NetstatusKW> = {
         use NetstatusKW::*;
@@ -423,6 +425,7 @@ lazy_static! {
         rules.add(RS_R.rule().required().args(8..));
         rules
     };
+    /*
     /// Rules for parsing a single routerstatus in a vote
     static ref NS_ROUTERSTATUS_RULES_VOTE: SectionRules<NetstatusKW> = {
         use NetstatusKW::*;
@@ -432,6 +435,7 @@ lazy_static! {
         rules.add(RS_ID.rule().may_repeat().args(2..)); // may-repeat?
         rules
     };
+*/
     /// Rules for parsing a single routerstatus in a microdesc consensus
     static ref NS_ROUTERSTATUS_RULES_MDCON: SectionRules<NetstatusKW> = {
         use NetstatusKW::*;
