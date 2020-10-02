@@ -86,7 +86,7 @@ impl RSAIdentity {
 ///
 /// This implementation is a simple wrapper so that we can define new
 /// methods and traits on the type.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PublicKey(rsa::RSAPublicKey);
 /// An RSA private key.
 pub struct PrivateKey(rsa::RSAPrivateKey);
