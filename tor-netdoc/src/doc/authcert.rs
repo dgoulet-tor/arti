@@ -9,12 +9,12 @@
 use crate::parse::keyword::Keyword;
 use crate::parse::parser::SectionRules;
 use crate::parse::tokenize::{ItemResult, NetDocReader};
-use crate::types::misc::{ISO8601TimeSp, RSAPublic};
+use crate::types::misc::{Fingerprint, ISO8601TimeSp, RSAPublic};
 use crate::{Error, Result};
 
 use tor_checkable::{signed, timed};
 use tor_llcrypto::pk::rsa;
-use tor_llcrypto::{d, pk};
+use tor_llcrypto::{d, pk, pk::rsa::RSAIdentity};
 
 use lazy_static::lazy_static;
 
@@ -148,7 +148,7 @@ impl AuthCert {
         {
             let last_item = body.last_item().unwrap();
             if last_item.kwd() != DIR_KEY_CERTIFICATION {
-                return Err(Error::WrongStartingToken(
+                return Err(Error::WrongEndingToken(
                     last_item.kwd_str().into(),
                     last_item.pos(),
                 ));
@@ -188,7 +188,17 @@ impl AuthCert {
             .parse::<ISO8601TimeSp>()?
             .into();
 
-        // TODO: Check fingerprint.
+        {
+            // Check fingerprint for consistency with key.
+            let fp_tok = body.required(FINGERPRINT)?;
+            let fingerprint: RSAIdentity = fp_tok.args_as_str().parse::<Fingerprint>()?.into();
+            if fingerprint != identity_key.to_rsa_identity() {
+                return Err(Error::BadArgument(
+                    fp_tok.pos(),
+                    "fingerprint does not match RSA identity".into(),
+                ));
+            }
+        }
 
         let address = body
             .maybe(DIR_ADDRESS)
