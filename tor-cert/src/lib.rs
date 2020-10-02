@@ -483,12 +483,12 @@ impl UncheckedCert {
         self,
     ) -> Result<(SigCheckedCert, ed25519::ValidatableEd25519Signature)> {
         use tor_checkable::SelfSigned;
-        let signature = ed25519::ValidatableEd25519Signature::new(
-            // XXXX: Instead of unwrap, test.
-            self.cert.signed_with.unwrap(),
-            self.signature,
-            &self.text[..],
-        );
+        let signing_key = self
+            .cert
+            .signed_with
+            .ok_or_else(|| Error::BadMessage("Missing public key on cert"))?;
+        let signature =
+            ed25519::ValidatableEd25519Signature::new(signing_key, self.signature, &self.text[..]);
         Ok((self.dangerously_assume_wellsigned(), signature))
     }
 
