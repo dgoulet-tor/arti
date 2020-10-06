@@ -235,6 +235,9 @@ pub enum Error {
     /// Document or section ended with wrong token
     #[error("Wrong ending token {0}{1}")]
     WrongEndingToken(String, Pos),
+    /// Items not sorted as expected
+    #[error("Incorrect sort order{0}")]
+    WrongSortOrder(Pos),
 }
 
 impl Error {
@@ -271,6 +274,7 @@ impl Error {
             BadDocumentType => None,
             WrongStartingToken(_, p) => Some(p),
             WrongEndingToken(_, p) => Some(p),
+            WrongSortOrder(p) => Some(p),
         }
     }
 
@@ -309,6 +313,7 @@ impl Error {
             BadDocumentType => None,
             WrongStartingToken(_, p) => Some(p),
             WrongEndingToken(_, p) => Some(p),
+            WrongSortOrder(p) => Some(p),
         };
         *pos.unwrap_or(&Pos::Unknown)
     }

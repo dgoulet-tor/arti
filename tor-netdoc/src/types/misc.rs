@@ -31,7 +31,7 @@ mod b64impl {
         type Err = Error;
         fn from_str(s: &str) -> Result<Self> {
             let bytes = base64::decode_config(s, base64::STANDARD_NO_PAD)
-                .map_err(|e| Error::BadArgument(Pos::at(s), format!("Invalid base64: {}", e)))?;
+                .map_err(|_| Error::BadArgument(Pos::at(s), "Invalid base64".into()))?;
             Ok(B64(bytes))
         }
     }

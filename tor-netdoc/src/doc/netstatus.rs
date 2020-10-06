@@ -418,6 +418,7 @@ lazy_static! {
         rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
         rules
     };
+/*
     /// Rules for parsing a single routerstatus in an NS consensus
     static ref NS_ROUTERSTATUS_RULES_NSCON: SectionRules<NetstatusKW> = {
         use NetstatusKW::*;
@@ -425,7 +426,6 @@ lazy_static! {
         rules.add(RS_R.rule().required().args(8..));
         rules
     };
-    /*
     /// Rules for parsing a single routerstatus in a vote
     static ref NS_ROUTERSTATUS_RULES_VOTE: SectionRules<NetstatusKW> = {
         use NetstatusKW::*;
@@ -1009,13 +1009,15 @@ impl MDConsensus {
 
     fn take_routerstatus(
         r: &mut NetDocReader<'_, NetstatusKW>,
-    ) -> Result<Option<MDConsensusRouterStatus>> {
+    ) -> Result<Option<(Pos, MDConsensusRouterStatus)>> {
         use NetstatusKW::*;
         match r.iter().peek() {
             None => return Ok(None),
             Some(e) if e.is_ok_with_kwd_in(&[DIRECTORY_FOOTER]) => return Ok(None),
             _ => (),
         };
+
+        let pos = r.pos();
 
         let mut first_r = true;
         let mut p = r.pause_at(|i| match i {
@@ -1034,7 +1036,7 @@ impl MDConsensus {
 
         let rs_sec = NS_ROUTERSTATUS_RULES_MDCON.parse(&mut p)?;
         let rs = MDConsensusRouterStatus::from_section(&rs_sec)?;
-        Ok(Some(rs))
+        Ok(Some((pos, rs)))
     }
 
     fn parse_from_reader(r: &mut NetDocReader<'_, NetstatusKW>) -> Result<UncheckedMDConsensus> {
@@ -1056,8 +1058,13 @@ impl MDConsensus {
             voters.push(voter);
         }
 
-        let mut routers = Vec::new();
-        while let Some(router) = MDConsensus::take_routerstatus(r)? {
+        let mut routers: Vec<MDConsensusRouterStatus> = Vec::new();
+        while let Some((pos, router)) = MDConsensus::take_routerstatus(r)? {
+            if let Some(prev) = routers.last() {
+                if prev.rsa_identity() >= router.rsa_identity() {
+                    return Err(Error::WrongSortOrder(pos));
+                }
+            }
             routers.push(router);
         }
 
@@ -1222,6 +1229,17 @@ mod test {
     const CERTS: &str = include_str!("../../testdata/authcerts2.txt");
     const CONSENSUS: &str = include_str!("../../testdata/mdconsensus1.txt");
 
+    fn read_bad(fname: &str) -> String {
+        use std::fs;
+        use std::path::PathBuf;
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("testdata");
+        path.push("bad-mdconsensus");
+        path.push(fname);
+
+        fs::read_to_string(path).unwrap()
+    }
+
     #[test]
     fn parse_and_validate() -> Result<()> {
         use tor_checkable::{SelfSigned, Timebound};
@@ -1239,5 +1257,45 @@ mod test {
             .check_signature(&certs)?;
 
         Ok(())
+    }
+
+    #[test]
+    fn test_bad() {
+        use crate::Pos;
+        fn check(fname: &str, e: Error) {
+            let content = read_bad(fname);
+            let res = MDConsensus::parse(&content);
+            assert!(res.is_err());
+            assert_eq!(res.err().unwrap(), e);
+        }
+
+        check(
+            "bad-flags",
+            Error::BadArgument(Pos::from_line(27, 1), "Flags out of order".into()),
+        );
+        check(
+            "bad-md-digest",
+            Error::BadArgument(Pos::from_line(40, 3), "Invalid base64".into()),
+        );
+        check(
+            "bad-weight",
+            Error::BadArgument(
+                Pos::from_line(67, 141),
+                "invalid digit found in string".into(),
+            ),
+        );
+        check(
+            "bad-weights",
+            Error::BadArgument(
+                Pos::from_line(51, 13),
+                "invalid digit found in string".into(),
+            ),
+        );
+        check("wrong-order", Error::WrongSortOrder(Pos::from_line(52, 1)));
+        check(
+            "wrong-start",
+            Error::UnexpectedToken("vote-status".into(), Pos::from_line(1, 1)),
+        );
+        check("wrong-version", Error::BadDocumentVersion(10));
     }
 }
