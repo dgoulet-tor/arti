@@ -1225,6 +1225,7 @@ impl SignatureGroup {
 #[cfg(test)]
 mod test {
     use super::*;
+    use hex_literal::hex;
 
     const CERTS: &str = include_str!("../../testdata/authcerts2.txt");
     const CONSENSUS: &str = include_str!("../../testdata/mdconsensus1.txt");
@@ -1242,6 +1243,7 @@ mod test {
 
     #[test]
     fn parse_and_validate() -> Result<()> {
+        use std::net::SocketAddr;
         use tor_checkable::{SelfSigned, Timebound};
         let mut certs = Vec::new();
         for cert in AuthCert::parse_multiple(CERTS) {
@@ -1251,10 +1253,31 @@ mod test {
 
         assert_eq!(certs.len(), 3);
 
-        let _consensus = MDConsensus::parse(CONSENSUS)?
+        let consensus = MDConsensus::parse(CONSENSUS)?
             .dangerously_assume_timely()
-            .set_n_authorities(3)
-            .check_signature(&certs)?;
+            .set_n_authorities(3);
+
+        let consensus = consensus.check_signature(&certs)?;
+
+        assert_eq!(6, consensus.routers().len());
+        let r0 = &consensus.routers()[0];
+        assert_eq!(
+            r0.md_digest(),
+            &hex!("73dabe0a0468f4f7a67810a18d11e36731bb1d2ec3634db459100609f3b3f535")
+        );
+        assert_eq!(
+            r0.rsa_identity().as_bytes(),
+            &hex!("0a3057af2910415794d8ea430309d9ac5f5d524b")
+        );
+        assert_eq!(r0.weight().is_measured(), false);
+        assert_eq!(r0.weight().is_nonzero(), false);
+        let pv = r0.protovers().as_ref().unwrap();
+        assert!(pv.supports_subver("HSDir", 2));
+        assert!(!pv.supports_subver("HSDir", 3));
+        let ip4 = "127.0.0.1:5002".parse::<SocketAddr>().unwrap();
+        let ip6 = "[::1]:5002".parse::<SocketAddr>().unwrap();
+        assert!(r0.orport_addrs().any(|a| a == &ip4));
+        assert!(r0.orport_addrs().any(|a| a == &ip6));
 
         Ok(())
     }
