@@ -101,6 +101,7 @@ pub struct RouterDesc {
 }
 
 /// Description of the software a relay is running.
+#[derive(Debug, Clone, PartialEq)]
 pub enum RelayPlatform {
     /// Software advertised to be some version of Tor, on some platform.
     Tor(TorVersion, String),
@@ -313,9 +314,9 @@ impl RouterDesc {
     /// yourself before you can do the output.
     pub fn parse(s: &str) -> Result<UncheckedRouterDesc> {
         let mut reader = crate::parse::tokenize::NetDocReader::new(s);
-        let result = Self::parse_internal(&mut reader).map_err(|e| e.within(s));
-        reader.should_be_exhausted()?;
-        result
+        let result = Self::parse_internal(&mut reader).map_err(|e| e.within(s))?;
+        reader.should_be_exhausted().map_err(|e| e.within(s))?;
+        Ok(result)
     }
 
     /// Helper: parse a router descriptor from `s`.
@@ -679,6 +680,17 @@ mod test {
     use super::*;
     const TESTDATA: &str = include_str!("../../testdata/routerdesc1.txt");
 
+    fn read_bad(fname: &str) -> String {
+        use std::fs;
+        use std::path::PathBuf;
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("testdata");
+        path.push("bad-routerdesc");
+        path.push(fname);
+
+        fs::read_to_string(path).unwrap()
+    }
+
     #[test]
     fn parse_arbitrary() -> Result<()> {
         use tor_checkable::{SelfSigned, Timebound};
@@ -694,5 +706,95 @@ mod test {
         //assert_eq!(rd.platform.unwrap(), "Tor 0.4.2.6 on Linux");
 
         Ok(())
+    }
+
+    #[test]
+    fn test_bad() {
+        use crate::types::policy::PolicyError;
+        use crate::Pos;
+        fn check(fname: &str, e: Error) {
+            let text = read_bad(fname);
+            let rd = RouterDesc::parse(&text);
+            assert!(rd.is_err());
+            assert_eq!(rd.err().unwrap(), e);
+        }
+
+        check(
+            "bad-sig-order",
+            Error::UnexpectedToken("router-sig-ed25519", Pos::from_line(50, 1)),
+        );
+        check(
+            "bad-start1",
+            Error::MisplacedToken("identity-ed25519", Pos::from_line(1, 1)),
+        );
+        check("bad-start2", Error::MissingToken("identity-ed25519"));
+        check(
+            "mismatched-fp",
+            Error::BadArgument(
+                Pos::from_line(12, 1),
+                "fingerprint does not match RSA identity".into(),
+            ),
+        );
+        check("no-ed-sk", Error::MissingToken("identity-ed25519"));
+
+        check(
+            "bad-cc-sign",
+            Error::BadArgument(Pos::from_line(34, 26), "not 0 or 1".into()),
+        );
+        check(
+            "bad-ipv6policy",
+            Error::BadPolicy(Pos::from_line(43, 1), PolicyError::InvalidPolicy),
+        );
+    }
+
+    #[test]
+    fn parse_multiple_annotated() {
+        use crate::AllowAnnotations;
+        let mut s = read_bad("bad-cc-sign");
+        s += "\
+@uploaded-at 2020-09-26 18:15:41
+@source \"127.0.0.1\"
+";
+        s += TESTDATA;
+        s += "\
+@uploaded-at 2020-09-26 18:15:41
+@source \"127.0.0.1\"
+";
+        s += &read_bad("mismatched-fp");
+
+        let rd = RouterReader::new(&s, AllowAnnotations::AnnotationsAllowed);
+        let v: Vec<_> = rd.collect();
+        assert!(v[0].is_err());
+        assert!(v[1].is_ok());
+        assert_eq!(
+            v[1].as_ref().unwrap().ann.source,
+            Some("\"127.0.0.1\"".to_string())
+        );
+        assert!(v[2].is_err());
+    }
+
+    #[test]
+    fn test_platform() {
+        let p = "Tor 0.4.4.4-alpha on a flying bison".parse::<RelayPlatform>();
+        assert!(p.is_ok());
+        assert_eq!(
+            p.unwrap(),
+            RelayPlatform::Tor(
+                "0.4.4.4-alpha".parse().unwrap(),
+                "a flying bison".to_string()
+            )
+        );
+
+        let p = "Tor 0.4.4.4-alpha on".parse::<RelayPlatform>();
+        assert!(p.is_ok());
+
+        let p = "Tor 0.4.4.4-alpha ".parse::<RelayPlatform>();
+        assert!(p.is_ok());
+        let p = "Tor 0.4.4.4-alpha".parse::<RelayPlatform>();
+        assert!(p.is_ok());
+
+        let p = "arti 0.0.0".parse::<RelayPlatform>();
+        assert!(p.is_ok());
+        assert_eq!(p.unwrap(), RelayPlatform::Other("arti 0.0.0".to_string()));
     }
 }

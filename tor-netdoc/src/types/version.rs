@@ -45,7 +45,7 @@ use crate::{Error, Pos};
 /// a release candidate (rc), or stable.
 ///
 /// We accept unrecognized tags, and store them as "Other".
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 #[repr(u8)]
 enum TorVerStatus {
     /// An unknown release status
@@ -75,7 +75,7 @@ impl TorVerStatus {
 }
 
 /// A parsed Tor version number.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TorVersion {
     major: u8,
     minor: u8,
