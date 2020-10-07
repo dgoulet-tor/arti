@@ -1257,6 +1257,13 @@ mod test {
             .dangerously_assume_timely()
             .set_n_authorities(3);
 
+        let missing = consensus.key_is_correct(&[]).err().unwrap();
+        assert_eq!(3, missing.len());
+        assert!(consensus.key_is_correct(&certs).is_ok());
+        let missing = consensus.key_is_correct(&certs[0..1]).err().unwrap();
+        assert_eq!(2, missing.len());
+
+        assert!(consensus.key_is_correct(&certs).is_ok());
         let consensus = consensus.check_signature(&certs)?;
 
         assert_eq!(6, consensus.routers().len());
@@ -1321,4 +1328,8 @@ mod test {
         );
         check("wrong-version", Error::BadDocumentVersion(10));
     }
+
+    // TODO: test for parsing weights
+    // TODO: test for parsing networkstatus parameters.
+    // TODO:
 }
