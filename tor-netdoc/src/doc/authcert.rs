@@ -62,6 +62,7 @@ lazy_static! {
 
 /// A single authority certificate
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct AuthCert {
     // These fields are taken right from the certificate.
     address: Option<net::SocketAddrV4>,

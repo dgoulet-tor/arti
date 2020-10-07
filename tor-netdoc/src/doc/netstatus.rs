@@ -80,6 +80,13 @@ pub struct NetParams<T> {
     params: HashMap<String, T>,
 }
 
+impl<T> NetParams<T> {
+    /// Retrieve a given network parameter, if it is present.
+    pub fn get<A: AsRef<str>>(&self, v: A) -> Option<&T> {
+        self.params.get(v.as_ref())
+    }
+}
+
 /// A list of subprotocol versions that implementors should/must provide.
 #[allow(dead_code)]
 pub struct ProtoStatus {
@@ -1263,6 +1270,15 @@ mod test {
         let missing = consensus.key_is_correct(&certs[0..1]).err().unwrap();
         assert_eq!(2, missing.len());
 
+        // here is a trick that had better not work.
+        let mut same_three_times = Vec::new();
+        same_three_times.push(certs[0].clone());
+        same_three_times.push(certs[0].clone());
+        same_three_times.push(certs[0].clone());
+        let missing = consensus.key_is_correct(&same_three_times).err().unwrap();
+        assert_eq!(2, missing.len());
+        assert!(consensus.is_well_signed(&same_three_times).is_err());
+
         assert!(consensus.key_is_correct(&certs).is_ok());
         let consensus = consensus.check_signature(&certs)?;
 
@@ -1329,7 +1345,77 @@ mod test {
         check("wrong-version", Error::BadDocumentVersion(10));
     }
 
-    // TODO: test for parsing weights
-    // TODO: test for parsing networkstatus parameters.
-    // TODO:
+    fn gettok(s: &str) -> Result<Item<'_, NetstatusKW>> {
+        let mut reader = NetDocReader::new(s);
+        let it = reader.iter();
+        let tok = it.next().unwrap();
+        assert!(it.next().is_none());
+        tok
+    }
+
+    #[test]
+    fn test_weight() {
+        let w = gettok("w Unmeasured=1 Bandwidth=6\n").unwrap();
+        let w = RouterWeight::from_item(&w).unwrap();
+        assert!(!w.is_measured());
+        assert!(w.is_nonzero());
+
+        let w = gettok("w Bandwidth=10\n").unwrap();
+        let w = RouterWeight::from_item(&w).unwrap();
+        assert!(w.is_measured());
+        assert!(w.is_nonzero());
+
+        let w = RouterWeight::default();
+        assert!(!w.is_measured());
+        assert!(!w.is_nonzero());
+
+        let w = gettok("w Mustelid=66 Cheato=7 Unmeasured=1\n").unwrap();
+        let w = RouterWeight::from_item(&w).unwrap();
+        assert!(!w.is_measured());
+        assert!(!w.is_nonzero());
+
+        let w = gettok("r foo\n").unwrap();
+        let w = RouterWeight::from_item(&w);
+        assert!(w.is_err());
+
+        let w = gettok("r Bandwidth=6 Unmeasured=Frog\n").unwrap();
+        let w = RouterWeight::from_item(&w);
+        assert!(w.is_err());
+
+        let w = gettok("r Bandwidth=6 Unmeasured=3\n").unwrap();
+        let w = RouterWeight::from_item(&w);
+        assert!(w.is_err());
+    }
+
+    #[test]
+    fn test_netparam() {
+        let p = "Hello=600 Goodbye=5 Fred=7"
+            .parse::<NetParams<u32>>()
+            .unwrap();
+        assert_eq!(p.get("Hello"), Some(&600_u32));
+
+        let p = "Hello=Goodbye=5 Fred=7".parse::<NetParams<u32>>();
+        assert!(p.is_err());
+
+        let p = "Hello=Goodbye Fred=7".parse::<NetParams<u32>>();
+        assert!(p.is_err());
+    }
+
+    #[test]
+    fn test_sharedrand() {
+        let sr =
+            gettok("shared-rand-previous-value 9 5LodY4yWxFhTKtxpV9wAgNA9N8flhUCH0NqQv1/05y4\n")
+                .unwrap();
+        let sr = SharedRandVal::from_item(&sr).unwrap();
+
+        assert_eq!(sr.n_reveals, 9);
+        assert_eq!(
+            sr.value,
+            hex!("e4ba1d638c96c458532adc6957dc0080d03d37c7e5854087d0da90bf5ff4e72e")
+        );
+
+        let sr = gettok("foo bar\n").unwrap();
+        let sr = SharedRandVal::from_item(&sr);
+        assert!(sr.is_err());
+    }
 }
