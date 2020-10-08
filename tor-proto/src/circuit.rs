@@ -37,7 +37,10 @@ mod streammap;
 
 use crate::channel::Channel;
 use crate::circuit::reactor::{CtrlMsg, CtrlResult};
-use crate::crypto::cell::{ClientCrypt, ClientLayer, CryptInit, HopNum, RelayCellBody};
+use crate::crypto::cell::{
+    ClientLayer, CryptInit, HopNum, InboundClientCrypt, InboundClientLayer, OutboundClientCrypt,
+    OutboundClientLayer, RelayCellBody,
+};
 use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
 use crate::stream::{DataStream, TorStream};
 use crate::{Error, Result};
@@ -81,10 +84,14 @@ struct ClientCircImpl {
     /// The channel that this circuit uses to send its cells to the
     /// next hop.
     channel: Channel,
-    /// The cryptographic state for this circuit.  This object is divided
-    /// into multiple layers, each of which is shared with one hop of the
-    /// circuit
-    crypto: ClientCrypt,
+    /// The cryptographic state for this circuit for outbound cells.
+    /// This object is divided into multiple layers, each of which is
+    /// shared with one hop of the circuit
+    crypto_out: OutboundClientCrypt,
+    /// The cryptographic state for this circuit for inbound cells.
+    /// This object is divided into multiple layers, each of which is
+    /// shared with one hop of the circuit
+    crypto_in: InboundClientCrypt,
     /// Per-hop circuit information.
     ///
     /// Note that hops.len() must be the same as crypto.n_layers().
@@ -185,7 +192,7 @@ impl ClientCirc {
     /// goes along with the handshake, and the `linkspecs` are the
     /// link specifiers to include in the EXTEND cell to tell the
     /// current last hop which relay to connect to.
-    async fn extend_impl<R, L, H>(
+    async fn extend_impl<R, L, FWD, REV, H>(
         &mut self,
         rng: &mut R,
         handshake_id: u16,
@@ -195,7 +202,9 @@ impl ClientCirc {
     ) -> Result<()>
     where
         R: Rng + CryptoRng,
-        L: CryptInit + ClientLayer + 'static + Send,
+        L: CryptInit + ClientLayer<FWD, REV>,
+        FWD: OutboundClientLayer + 'static + Send,
+        REV: InboundClientLayer + 'static + Send,
         H: ClientHandshake,
         H::KeyGen: KeyGenerator,
     {
@@ -211,7 +220,7 @@ impl ClientCirc {
         // Now send the EXTEND2 cell to the the last hop...
         let hop = {
             let mut c = self.c.lock().await;
-            let hop = ((c.crypto.n_layers() - 1) as u8).into();
+            let hop = ((c.crypto_out.n_layers() - 1) as u8).into();
 
             // Send the message to the last hop...
             c.send_relay_cell(
@@ -259,7 +268,9 @@ impl ClientCirc {
             let mut c = self.c.lock().await;
             let hop = CircHop::new(supports_flowctrl_1);
             c.hops.push(hop);
-            c.crypto.add_layer(Box::new(layer));
+            let (layer_fwd, layer_back) = layer.split();
+            c.crypto_out.add_layer(Box::new(layer_fwd));
+            c.crypto_in.add_layer(Box::new(layer_back));
         }
         Ok(())
     }
@@ -281,7 +292,7 @@ impl ClientCirc {
         let supports_flowctrl_1 = target
             .protovers()
             .supports_known_subver(tor_protover::ProtoKind::FlowCtrl, 1);
-        self.extend_impl::<R, Tor1RelayCrypto, NtorClient>(
+        self.extend_impl::<R, Tor1RelayCrypto, _, _, NtorClient>(
             rng,
             0x0002,
             &key,
@@ -454,7 +465,7 @@ impl ClientCircImpl {
     async fn send_relay_cell(&mut self, hop: HopNum, early: bool, cell: RelayCell) -> Result<()> {
         let c_t_w = cell.counts_towards_circuit_windows();
         let mut body: RelayCellBody = cell.encode(&mut thread_rng())?.into();
-        let tag = self.crypto.encrypt(&mut body, hop)?;
+        let tag = self.crypto_out.encrypt(&mut body, hop)?;
         let msg = chancell::msg::Relay::from_raw(body.into());
         let msg = if early {
             ChanMsg::RelayEarly(msg)
@@ -492,7 +503,8 @@ impl PendingClientCirc {
         createdreceiver: oneshot::Receiver<ChanMsg>,
         input: mpsc::Receiver<ChanMsg>,
     ) -> (PendingClientCirc, reactor::Reactor) {
-        let crypto = ClientCrypt::new();
+        let crypto_out = OutboundClientCrypt::new();
+        let crypto_in = InboundClientCrypt::new();
         let (sendclosed, recvclosed) = oneshot::channel::<CtrlMsg>();
         // Should this be bounded, really? XXX
         let (sendctrl, recvctrl) = mpsc::channel::<CtrlResult>(128);
@@ -501,7 +513,8 @@ impl PendingClientCirc {
         let circuit_impl = ClientCircImpl {
             id,
             channel,
-            crypto,
+            crypto_out,
+            crypto_in,
             hops,
             control: sendctrl,
             sendshutdown: Cell::new(Some(sendclosed)),
@@ -524,7 +537,7 @@ impl PendingClientCirc {
     /// build the right kind of create cell, a handshake object to perform
     /// the cryptographic cryptographic handshake, and a layer type to
     /// handle relay crypto after this hop is built.
-    async fn create_impl<R, L, H, W>(
+    async fn create_impl<R, L, FWD, REV, H, W>(
         self,
         rng: &mut R,
         wrap: &W,
@@ -533,7 +546,9 @@ impl PendingClientCirc {
     ) -> Result<ClientCirc>
     where
         R: Rng + CryptoRng,
-        L: CryptInit + ClientLayer + 'static + Send,
+        L: CryptInit + ClientLayer<FWD, REV> + 'static + Send, // need all this?XXXX
+        FWD: OutboundClientLayer + 'static + Send,
+        REV: InboundClientLayer + 'static + Send,
         H: ClientHandshake,
         W: CreateHandshakeWrap,
         H::KeyGen: KeyGenerator,
@@ -559,7 +574,9 @@ impl PendingClientCirc {
             let mut c = circ.c.lock().await;
             let hop = CircHop::new(supports_flowctrl_1);
             c.hops.push(hop);
-            c.crypto.add_layer(Box::new(layer));
+            let (layer_fwd, layer_back) = layer.split();
+            c.crypto_out.add_layer(Box::new(layer_fwd));
+            c.crypto_in.add_layer(Box::new(layer_back));
         }
         Ok(circ)
     }
@@ -577,7 +594,7 @@ impl PendingClientCirc {
         use crate::crypto::cell::Tor1RelayCrypto;
         use crate::crypto::handshake::fast::CreateFastClient;
         let wrap = CreateFastWrap;
-        self.create_impl::<R, Tor1RelayCrypto, CreateFastClient, _>(rng, &wrap, &(), false)
+        self.create_impl::<R, Tor1RelayCrypto, _, _, CreateFastClient, _>(rng, &wrap, &(), false)
             .await
     }
 
@@ -601,8 +618,13 @@ impl PendingClientCirc {
         let supports_flowctrl_1 = target
             .protovers()
             .supports_known_subver(tor_protover::ProtoKind::FlowCtrl, 1);
-        self.create_impl::<R, Tor1RelayCrypto, NtorClient, _>(rng, &wrap, &key, supports_flowctrl_1)
-            .await
+        self.create_impl::<R, Tor1RelayCrypto, _, _, NtorClient, _>(
+            rng,
+            &wrap,
+            &key,
+            supports_flowctrl_1,
+        )
+        .await
     }
 }
 

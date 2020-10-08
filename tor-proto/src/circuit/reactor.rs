@@ -35,7 +35,7 @@ pub(super) enum CtrlMsg {
     CloseStream(HopNum, StreamID),
 }
 
-/// Type returned by a oneshot channel for a ctonrolmsg.  For convenience,
+/// Type returned by a oneshot channel for a controlmsg.  For convenience,
 /// we also use this as the type for the control mpsc channel, so we can
 /// join them.
 pub(super) type CtrlResult = std::result::Result<CtrlMsg, oneshot::Canceled>;
@@ -192,7 +192,7 @@ impl ReactorCore {
 
         // Decrypt the cell. If it's recognized, then find the
         // corresponding hop.
-        let (hopnum, tag) = circ.crypto.decrypt(&mut body)?;
+        let (hopnum, tag) = circ.crypto_in.decrypt(&mut body)?;
         // Make a copy of the authentication tag. TODO: I'd rather not
         // copy it, but I don't see a way around it right now.
         let tag = {

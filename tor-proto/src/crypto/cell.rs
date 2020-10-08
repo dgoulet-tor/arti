@@ -54,6 +54,20 @@ pub(crate) trait CryptInit: Sized {
     }
 }
 
+/// A paired object containing an inbound client layer and an outbound
+/// client layer.
+///
+/// TODO: Maybe we should fold this into CryptInit.
+pub(crate) trait ClientLayer<F, B>
+where
+    F: OutboundClientLayer,
+    B: InboundClientLayer,
+{
+    /// Consume this ClientLayer and return a paired forward and reverse
+    /// crypto layer.
+    fn split(self) -> (F, B);
+}
+
 /// Represents a relay's view of the crypto state on a given circuit.
 pub(crate) trait RelayCrypt {
     /// Prepare a RelayCellBody to be sent towards the client.
@@ -66,8 +80,9 @@ pub(crate) trait RelayCrypt {
     fn decrypt_outbound(&mut self, cell: &mut RelayCellBody) -> bool;
 }
 
-/// A client's view of the crypto state shared with a single relay.
-pub(crate) trait ClientLayer {
+/// A client's view of the crypto state shared with a single relay, as
+/// used for outbound cells.
+pub(crate) trait OutboundClientLayer {
     /// Prepare a RelayCellBody to be sent to the relay at this layer, and
     /// encrypt it.
     ///
@@ -75,6 +90,11 @@ pub(crate) trait ClientLayer {
     fn originate_for(&mut self, cell: &mut RelayCellBody) -> &[u8];
     /// Encrypt a RelayCellBody to be decrypted by this layer.
     fn encrypt_outbound(&mut self, cell: &mut RelayCellBody);
+}
+
+/// A client's view of the crypto state shared with a single relay, as
+/// used for inbound cells.
+pub(crate) trait InboundClientLayer {
     /// Decrypt a CellBopdy that passed through this layer.
     ///
     /// Return an authentication tag if this layer is the originator.
@@ -112,15 +132,21 @@ impl std::fmt::Display for HopNum {
 }
 
 /// A client's view of the cryptographic state for an entire
-/// constructed circuit.
-pub(crate) struct ClientCrypt {
-    layers: Vec<Box<dyn ClientLayer + Send>>,
+/// constructed circuit, as used for sending cells.
+pub(crate) struct OutboundClientCrypt {
+    layers: Vec<Box<dyn OutboundClientLayer + Send>>,
 }
 
-impl ClientCrypt {
-    /// Return a new (empty) ClientCrypt.
+/// A client's view of the cryptographic state for an entire
+/// constructed circuit, as used for receiving cells.
+pub(crate) struct InboundClientCrypt {
+    layers: Vec<Box<dyn InboundClientLayer + Send>>,
+}
+
+impl OutboundClientCrypt {
+    /// Return a new (empty) OutboundClientCrypt.
     pub fn new() -> Self {
-        ClientCrypt { layers: Vec::new() }
+        OutboundClientCrypt { layers: Vec::new() }
     }
     /// Prepare a cell body to sent away from the client.
     ///
@@ -143,6 +169,26 @@ impl ClientCrypt {
         }
         Ok(tag)
     }
+
+    /// Add a new layer to this OutboundClientCrypt
+    pub fn add_layer(&mut self, layer: Box<dyn OutboundClientLayer + Send>) {
+        assert!(self.layers.len() < std::u8::MAX as usize);
+        self.layers.push(layer);
+    }
+
+    /// Return the number of layers configured on this OutoubndClientCrypt.
+    ///
+    /// TODO: use HopNum
+    pub fn n_layers(&self) -> usize {
+        self.layers.len()
+    }
+}
+
+impl InboundClientCrypt {
+    /// Return a new (empty) InboundClientCrypt.
+    pub fn new() -> Self {
+        InboundClientCrypt { layers: Vec::new() }
+    }
     /// Decrypt an incoming cell that is coming to the client.
     ///
     /// On success, return which hop was the originator of the cell.
@@ -156,15 +202,16 @@ impl ClientCrypt {
         }
         Err(Error::BadCellAuth)
     }
-    /// Add a new layer to this ClientCrypt
-    pub fn add_layer(&mut self, layer: Box<dyn ClientLayer + Send>) {
+    /// Add a new layer to this InboundClientCrypt
+    pub fn add_layer(&mut self, layer: Box<dyn InboundClientLayer + Send>) {
         assert!(self.layers.len() < std::u8::MAX as usize);
         self.layers.push(layer);
     }
 
-    /// Return the number of layers configured on this ClientCrypt.
+    /// Return the number of layers configured on this InboundClientCrypt.
     ///
     /// TODO: use HopNum
+    #[allow(dead_code)]
     pub fn n_layers(&self) -> usize {
         self.layers.len()
     }
@@ -172,7 +219,7 @@ impl ClientCrypt {
 
 /// Standard Tor relay crypto, as instantiated for RELAY cells.
 pub(crate) type Tor1RelayCrypto =
-    tor1::CryptState<tor_llcrypto::cipher::aes::Aes128Ctr, tor_llcrypto::d::Sha1>;
+    tor1::CryptStatePair<tor_llcrypto::cipher::aes::Aes128Ctr, tor_llcrypto::d::Sha1>;
 
 /// Incomplete untested implementation of Tor's current cell crypto.
 pub(crate) mod tor1 {
@@ -188,15 +235,19 @@ pub(crate) mod tor1 {
     /// circuits will use AES-128-CTR and SHA1, but v3 onion services
     /// use AES-256-CTR and SHA-3.
     pub struct CryptState<SC: StreamCipher, D: Digest + Clone> {
-        f_c: SC,
-        b_c: SC,
-        f_d: D,
-        b_d: D,
-        last_sent_digest: GenericArray<u8, D::OutputSize>,
-        last_rcvd_digest: GenericArray<u8, D::OutputSize>,
+        cipher: SC,
+        digest: D,
+        last_digest_val: GenericArray<u8, D::OutputSize>,
     }
 
-    impl<SC: StreamCipher + NewStreamCipher, D: Digest + Clone> CryptInit for CryptState<SC, D> {
+    /// A pair of CryptStates, one for the forward (away from client)
+    /// direction, and one for the reverse (towards client) direction.
+    pub struct CryptStatePair<SC: StreamCipher, D: Digest + Clone> {
+        fwd: CryptState<SC, D>,
+        back: CryptState<SC, D>,
+    }
+
+    impl<SC: StreamCipher + NewStreamCipher, D: Digest + Clone> CryptInit for CryptStatePair<SC, D> {
         fn seed_len() -> usize {
             SC::KeySize::to_usize() * 2 + D::OutputSize::to_usize() * 2
         }
@@ -208,45 +259,62 @@ pub(crate) mod tor1 {
             let bdinit = &seed[dlen..dlen * 2];
             let fckey = &seed[dlen * 2..dlen * 2 + keylen];
             let bckey = &seed[dlen * 2 + keylen..dlen * 2 + keylen * 2];
-            CryptState {
-                f_c: SC::new(fckey.try_into().expect("Wrong length"), &Default::default()),
-                b_c: SC::new(bckey.try_into().expect("Wrong length"), &Default::default()),
-                f_d: D::new().chain(fdinit),
-                b_d: D::new().chain(bdinit),
-                last_sent_digest: GenericArray::default(),
-                last_rcvd_digest: GenericArray::default(),
-            }
+            let fwd = CryptState {
+                cipher: SC::new(fckey.try_into().expect("Wrong length"), &Default::default()),
+                digest: D::new().chain(fdinit),
+                last_digest_val: GenericArray::default(),
+            };
+            let back = CryptState {
+                cipher: SC::new(bckey.try_into().expect("Wrong length"), &Default::default()),
+                digest: D::new().chain(bdinit),
+                last_digest_val: GenericArray::default(),
+            };
+            CryptStatePair { fwd, back }
         }
     }
 
-    impl<SC: StreamCipher, D: Digest + Clone> RelayCrypt for CryptState<SC, D> {
+    impl<SC, D> ClientLayer<CryptState<SC, D>, CryptState<SC, D>> for CryptStatePair<SC, D>
+    where
+        SC: StreamCipher,
+        D: Digest + Clone,
+    {
+        /// DOCDOC
+        fn split(self) -> (CryptState<SC, D>, CryptState<SC, D>) {
+            (self.fwd, self.back)
+        }
+    }
+
+    impl<SC: StreamCipher, D: Digest + Clone> RelayCrypt for CryptStatePair<SC, D> {
         fn originate(&mut self, cell: &mut RelayCellBody) {
             let mut d_ignored = GenericArray::default();
-            cell.set_digest(&mut self.b_d, &mut d_ignored);
+            cell.set_digest(&mut self.back.digest, &mut d_ignored);
         }
         fn encrypt_inbound(&mut self, cell: &mut RelayCellBody) {
-            self.b_c.encrypt(cell.as_mut());
+            self.back.cipher.encrypt(cell.as_mut());
         }
         fn decrypt_outbound(&mut self, cell: &mut RelayCellBody) -> bool {
-            self.f_c.decrypt(cell.as_mut());
+            self.fwd.cipher.decrypt(cell.as_mut());
             let mut d_ignored = GenericArray::default();
-            cell.recognized(&mut self.f_d, &mut d_ignored)
+            cell.recognized(&mut self.fwd.digest, &mut d_ignored)
         }
     }
 
-    impl<SC: StreamCipher, D: Digest + Clone> ClientLayer for CryptState<SC, D> {
+    impl<SC: StreamCipher, D: Digest + Clone> OutboundClientLayer for CryptState<SC, D> {
         fn originate_for(&mut self, cell: &mut RelayCellBody) -> &[u8] {
-            cell.set_digest(&mut self.f_d, &mut self.last_sent_digest);
+            cell.set_digest(&mut self.digest, &mut self.last_digest_val);
             self.encrypt_outbound(cell);
-            &self.last_sent_digest
+            &self.last_digest_val
         }
         fn encrypt_outbound(&mut self, cell: &mut RelayCellBody) {
-            self.f_c.encrypt(&mut cell.0[..])
+            self.cipher.encrypt(&mut cell.0[..])
         }
+    }
+
+    impl<SC: StreamCipher, D: Digest + Clone> InboundClientLayer for CryptState<SC, D> {
         fn decrypt_inbound(&mut self, cell: &mut RelayCellBody) -> Option<&[u8]> {
-            self.b_c.decrypt(&mut cell.0[..]);
-            if cell.recognized(&mut self.b_d, &mut self.last_rcvd_digest) {
-                Some(&self.last_rcvd_digest)
+            self.cipher.decrypt(&mut cell.0[..]);
+            if cell.recognized(&mut self.digest, &mut self.last_digest_val) {
+                Some(&self.last_digest_val)
             } else {
                 None
             }
@@ -324,6 +392,16 @@ mod test {
     use crate::SecretBytes;
     use rand::RngCore;
 
+    fn add_layers(
+        cc_out: &mut OutboundClientCrypt,
+        cc_in: &mut InboundClientCrypt,
+        pair: Tor1RelayCrypto,
+    ) {
+        let (outbound, inbound) = pair.split();
+        cc_out.add_layer(Box::new(outbound));
+        cc_in.add_layer(Box::new(inbound));
+    }
+
     #[test]
     fn roundtrip() {
         // Take canned keys and make sure we can do crypto correctly.
@@ -338,16 +416,14 @@ mod test {
         let seed2 = s(b"free to speak, to free ourselves");
         let seed3 = s(b"free to hide no more");
 
-        let mut cc = ClientCrypt::new();
-        cc.add_layer(Box::new(
-            Tor1RelayCrypto::construct(KGen::new(seed1.clone().into())).unwrap(),
-        ));
-        cc.add_layer(Box::new(
-            Tor1RelayCrypto::construct(KGen::new(seed2.clone().into())).unwrap(),
-        ));
-        cc.add_layer(Box::new(
-            Tor1RelayCrypto::construct(KGen::new(seed3.clone().into())).unwrap(),
-        ));
+        let mut cc_out = OutboundClientCrypt::new();
+        let mut cc_in = InboundClientCrypt::new();
+        let pair = Tor1RelayCrypto::construct(KGen::new(seed1.clone().into())).unwrap();
+        add_layers(&mut cc_out, &mut cc_in, pair);
+        let pair = Tor1RelayCrypto::construct(KGen::new(seed2.clone().into())).unwrap();
+        add_layers(&mut cc_out, &mut cc_in, pair);
+        let pair = Tor1RelayCrypto::construct(KGen::new(seed3.clone().into())).unwrap();
+        add_layers(&mut cc_out, &mut cc_in, pair);
 
         let mut r1 = Tor1RelayCrypto::construct(KGen::new(seed1.into())).unwrap();
         let mut r2 = Tor1RelayCrypto::construct(KGen::new(seed2.into())).unwrap();
@@ -361,7 +437,7 @@ mod test {
             rng.fill_bytes(&mut cell_orig[..]);
             (&mut cell).copy_from_slice(&cell_orig[..]);
             let mut cell = cell.into();
-            let _tag = cc.encrypt(&mut cell, 2.into());
+            let _tag = cc_out.encrypt(&mut cell, 2.into());
             assert_ne!(&cell.as_ref()[9..], &cell_orig.as_ref()[9..]);
             assert_eq!(false, r1.decrypt_outbound(&mut cell));
             assert_eq!(false, r2.decrypt_outbound(&mut cell));
@@ -380,7 +456,7 @@ mod test {
             r3.encrypt_inbound(&mut cell);
             r2.encrypt_inbound(&mut cell);
             r1.encrypt_inbound(&mut cell);
-            let (layer, _tag) = cc.decrypt(&mut cell).unwrap();
+            let (layer, _tag) = cc_in.decrypt(&mut cell).unwrap();
             assert_eq!(layer, 2.into());
             assert_eq!(&cell.as_ref()[9..], &cell_orig.as_ref()[9..]);
 
@@ -407,10 +483,14 @@ mod test {
         // These test vectors were generated from Tor.
         let data: &[(usize, &str)] = &include!("../../testdata/cell_crypt.data");
 
-        let mut cc = ClientCrypt::new();
-        cc.add_layer(Box::new(Tor1RelayCrypto::initialize(&K1[..])));
-        cc.add_layer(Box::new(Tor1RelayCrypto::initialize(&K2[..])));
-        cc.add_layer(Box::new(Tor1RelayCrypto::initialize(&K3[..])));
+        let mut cc_out = OutboundClientCrypt::new();
+        let mut cc_in = InboundClientCrypt::new();
+        let pair = Tor1RelayCrypto::initialize(&K1[..]);
+        add_layers(&mut cc_out, &mut cc_in, pair);
+        let pair = Tor1RelayCrypto::initialize(&K2[..]);
+        add_layers(&mut cc_out, &mut cc_in, pair);
+        let pair = Tor1RelayCrypto::initialize(&K3[..]);
+        add_layers(&mut cc_out, &mut cc_in, pair);
 
         let mut xof = tor_llcrypto::d::Shake256::default();
         xof.update(&SEED[..]);
@@ -426,7 +506,7 @@ mod test {
             stream.read(&mut body[11..]);
 
             let mut cell = body.into();
-            let _ = cc.encrypt(&mut cell, 2.into());
+            let _ = cc_out.encrypt(&mut cell, 2.into());
 
             if cellno == data[j].0 {
                 let expected = hex::decode(data[j].1).unwrap();
