@@ -30,6 +30,11 @@ use bytes::BytesMut;
 /// ```
 pub struct ChannelCodec {
     #[allow(dead_code)] // We don't support any link versions where this matters
+    /// The link protocol version being used for this channel.
+    ///
+    /// (We don't currently support any versions of the link protocol
+    /// where this version matters, but for some older versions, it would
+    /// affect the length of the circuit ID.)
     link_version: u16,
 }
 

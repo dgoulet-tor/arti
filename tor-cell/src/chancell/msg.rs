@@ -186,6 +186,7 @@ impl Readable for Padding {
 /// The correct response to a padding cell is to drop it and do nothing.
 #[derive(Clone, Debug)]
 pub struct VPadding {
+    /// How much padding to send in this cell's body.
     len: u16,
 }
 impl VPadding {
@@ -305,7 +306,9 @@ impl CreatedFast {
 /// handshake of a given type; the relay responds with a Created2 cell.
 #[derive(Clone, Debug)]
 pub struct Create2 {
+    /// Identifier for what kind of handshake this is.
     handshake_type: u16,
+    /// Body of the handshake.
     handshake: Vec<u8>,
 }
 impl Body for Create2 {
@@ -347,6 +350,7 @@ impl Create2 {
 /// Response to a Create2 cell
 #[derive(Clone, Debug)]
 pub struct Created2 {
+    /// Body of the handshake reply
     handshake: Vec<u8>,
 }
 impl Created2 {
@@ -390,10 +394,11 @@ impl Readable for Created2 {
 /// intermediate hops.
 ///
 /// A different protocol is defined over the relay cells; it is implemented
-/// XXXX.
+/// in the relaycell module.
 #[derive(Clone)]
 pub struct Relay {
     // XXXX either this shouldn't be boxed, or RelayCellBody should be boxed!
+    /// The contents of the relay cell as encoded for transfer.
     body: Box<RawCellBody>,
 }
 impl Relay {
@@ -454,6 +459,7 @@ impl Readable for Relay {
 /// down the circuit to later/earlier nodes on the circuit (if any).
 #[derive(Clone, Debug)]
 pub struct Destroy {
+    /// Reason code given for tearing down this circuit
     reason: u8,
 }
 impl Destroy {
@@ -488,8 +494,12 @@ impl Readable for Destroy {
 /// channel and sending data.
 #[derive(Clone, Debug)]
 pub struct Netinfo {
+    /// Time when this cell was sent, or 0 if this cell is sent by
+    /// a client.
     timestamp: u32,
+    /// Observed address for party that did not send the netinfo cell.
     their_addr: IpAddr,
+    /// Canonical addresses for the party that did send the netinfo cell.
     my_addr: Vec<IpAddr>,
 }
 /// helper: encode a single address in the form that netinfo messages expect
@@ -593,6 +603,7 @@ impl Readable for Netinfo {
 /// [assuming a non-obsolete version is negotiated].
 #[derive(Clone, Debug)]
 pub struct Versions {
+    /// List of supported link protocol versions
     versions: Vec<u16>,
 }
 impl Versions {
@@ -658,8 +669,13 @@ impl Readable for Versions {
 /// Used to negotiate channel padding
 #[derive(Clone, Debug)]
 pub struct PaddingNegotiate {
+    /// Whether to start or stop padding
     command: u8,
+    /// Suggested lower-bound value for inter-packet timeout in msec.
+    // XXXX is that right?
     ito_low_ms: u16,
+    /// Suggested upper-bound value for inter-packet timeout in msec.
+    // XXXX is that right?
     ito_high_ms: u16,
 }
 impl Body for PaddingNegotiate {
@@ -698,14 +714,18 @@ impl Readable for PaddingNegotiate {
 /// most common.
 #[derive(Clone, Debug)]
 struct TorCert {
+    /// Type code for this certificate.
     certtype: u8,
+    /// Encoded certificate
     cert: Vec<u8>,
 }
+/// encode a single TorCert `c` onto a Writer `w`.
 fn enc_one_tor_cert<W: Writer + ?Sized>(w: &mut W, c: &TorCert) {
     w.write_u8(c.certtype);
     w.write_u16(c.cert.len() as u16); // XXXX overflow?
     w.write_all(&c.cert[..]);
 }
+/// Try to extract a TorCert from the reader `r`.
 fn take_one_tor_cert(r: &mut Reader<'_>) -> Result<TorCert> {
     let certtype = r.take_u8()?;
     let certlen = r.take_u16()?;
@@ -725,6 +745,7 @@ fn take_one_tor_cert(r: &mut Reader<'_>) -> Result<TorCert> {
 /// send them.
 #[derive(Clone, Debug)]
 pub struct Certs {
+    /// The certificates in this cell
     certs: Vec<TorCert>,
 }
 impl Certs {
@@ -794,6 +815,9 @@ impl Readable for Certs {
     }
 }
 
+/// Length of the body for an authentication challenge
+const CHALLENGE_LEN: usize = 32;
+
 /// Part of negotiation: sent by responders to initiators.
 ///
 /// The AuthChallenge cell is used to ensure that some unpredictable material
@@ -803,7 +827,9 @@ impl Readable for Certs {
 /// Clients can safely ignore this message: they don't need to authenticate.
 #[derive(Clone, Debug)]
 pub struct AuthChallenge {
-    challenge: Vec<u8>,
+    /// Random challenge to be used in generating response
+    challenge: [u8; CHALLENGE_LEN],
+    /// List of permitted authentication methods
     methods: Vec<u16>,
 }
 impl AuthChallenge {
@@ -811,7 +837,7 @@ impl AuthChallenge {
     /// value (chosen randomly) and a set of acceptable authentication methods.
     pub fn new<B, M>(challenge: B, methods: M) -> Self
     where
-        B: Into<Vec<u8>>,
+        B: Into<[u8; CHALLENGE_LEN]>,
         M: Into<Vec<u16>>,
     {
         AuthChallenge {
@@ -821,7 +847,6 @@ impl AuthChallenge {
     }
 }
 
-const CHALLENGE_LEN: usize = 32;
 impl Body for AuthChallenge {
     fn as_message(self) -> ChanMsg {
         ChanMsg::AuthChallenge(self)
@@ -837,7 +862,8 @@ impl Body for AuthChallenge {
 }
 impl Readable for AuthChallenge {
     fn take_from(r: &mut Reader<'_>) -> Result<Self> {
-        let challenge = r.take(CHALLENGE_LEN)?.into();
+        //let challenge = r.take(CHALLENGE_LEN)?.into();
+        let challenge = r.extract()?;
         let n_methods = r.take_u16()?;
         let mut methods = Vec::new();
         for _ in 0..n_methods {
@@ -855,7 +881,9 @@ impl Readable for AuthChallenge {
 /// Clients do not use this.
 #[derive(Clone, Debug)]
 pub struct Authenticate {
+    /// Authentication method in use
     authtype: u16,
+    /// Encoded authentication object
     auth: Vec<u8>,
 }
 impl Authenticate {
@@ -893,6 +921,7 @@ impl Readable for Authenticate {
 /// The Authorize cell type is not yet used.
 #[derive(Clone, Debug)]
 pub struct Authorize {
+    /// The cell's content, which isn't really specified yet.
     content: Vec<u8>,
 }
 impl Authorize {
@@ -927,9 +956,13 @@ impl Readable for Authorize {
 /// like this.
 #[derive(Clone, Debug)]
 pub struct Unrecognized {
+    /// The channel command that we got with this cell
     cmd: ChanCmd,
+    /// The contents of the cell
     content: Vec<u8>,
 }
+/// Take an unrecognized cell's body from a reader `r`, and apply
+/// the given command to it.
 fn unrecognized_with_cmd(cmd: ChanCmd, r: &mut Reader<'_>) -> Result<Unrecognized> {
     let mut u = Unrecognized::take_from(r)?;
     u.cmd = cmd;
@@ -944,6 +977,7 @@ impl Unrecognized {
         let content = content.into();
         Unrecognized { cmd, content }
     }
+    /// Return the command from this cell.
     fn cmd(&self) -> ChanCmd {
         self.cmd
     }

@@ -69,12 +69,17 @@ caret_int! {
 
 /// Possible requirements on stream IDs for a relay command.
 enum StreamIDReq {
+    /// Can only be used with a stream ID of 0
     WantZero,
+    /// Can only be used with a stream ID that isn't 0
     WantNonZero,
+    /// Can be used with any stream ID
     Any,
 }
 
 impl RelayCmd {
+    /// Check whether this command requires a certain kind of
+    /// StreamID, and return a corresponding StreamIDReq.
     fn expects_streamid(self) -> StreamIDReq {
         match self {
             RelayCmd::BEGIN
@@ -152,7 +157,9 @@ impl StreamID {
 /// A parsed relay cell.
 #[derive(Debug)]
 pub struct RelayCell {
+    /// The stream ID for the stream that this cell corresponds to.
     streamid: StreamID,
+    /// The relay message for this cell.
     msg: msg::RelayMsg,
 }
 
@@ -178,6 +185,8 @@ impl RelayCell {
     pub fn encode<R: Rng + CryptoRng>(self, rng: &mut R) -> crate::Result<RawCellBody> {
         // always this many zero-values bytes before padding.
         // XXXX We should specify this value more exactly, to avoid fingerprinting
+        /// We skip this much space before adding any random padding to the
+        /// end of the cell
         const MIN_SPACE_BEFORE_PADDING: usize = 4;
 
         // TODO: This implementation is inefficient; it copies too much.

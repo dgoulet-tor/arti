@@ -101,8 +101,11 @@ caret_int! {
 
 /// Possible requirements on circuit IDs for a channel command.
 enum CircIDReq {
+    /// indicates a command that only takes a zero-valued circuit ID
     WantZero,
+    /// indicates a command that only takes a nonzero-valued circuit ID
     WantNonZero,
+    /// indicates a command that can take any circuit ID
     Any,
 }
 
@@ -152,7 +155,9 @@ impl ChanCmd {
 /// A decoded channel cell, to be sent or received on a channel.
 #[derive(Debug)]
 pub struct ChanCell {
+    /// Circuit ID associated with this cell
     circid: CircID,
+    /// Underlying message in this cell
     msg: msg::ChanMsg,
 }
 

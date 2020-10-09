@@ -17,6 +17,7 @@
 //! probably reflects the most naive understranding of Rust.
 
 #![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
 
 pub mod chancell;
 mod err;

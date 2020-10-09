@@ -139,8 +139,11 @@ impl RelayMsg {
 /// Message to create a enw stream
 #[derive(Debug, Clone)]
 pub struct Begin {
+    /// Ascii string describing target address
     addr: Vec<u8>,
+    /// Target port
     port: u16,
+    /// Flags that describe how to resolve the address
     flags: u32,
 }
 impl Begin {
@@ -218,6 +221,7 @@ impl Body for Begin {
 /// Data on a stream
 #[derive(Debug, Clone)]
 pub struct Data {
+    /// Contents of the cell, to be sent on a specific stream
     body: Vec<u8>,
 }
 impl Data {
@@ -255,13 +259,20 @@ impl Body for Data {
     }
 }
 
-/// Closing a stream
+/// Tells the other end of the circuit to close a stream.
 #[derive(Debug, Clone)]
 pub struct End {
+    /// Reason for closing the stream
     reason: u8,
+    /// If the reason is EXITPOLICY, this holds the resolved address an
+    /// associated TTL.
     addr: Option<(IpAddr, u32)>,
 }
+/// Closing a stream because of an unspecified reason.
+///
+/// This is the only END reason that clients send.
 const REASON_MISC: u8 = 1;
+/// Closing a stream because of an exit-policy violation.
 const REASON_EXITPOLICY: u8 = 4;
 impl End {
     /// Make a new END_REASON_MISC message.
@@ -336,6 +347,7 @@ impl Body for End {
 /// Successful response to a Begin message
 #[derive(Debug, Clone)]
 pub struct Connected {
+    /// Resolved address and TTL (time to live) in seconds
     addr: Option<(IpAddr, u32)>,
 }
 impl Connected {
@@ -392,6 +404,7 @@ impl Body for Connected {
 /// Used for flow control to increase flow control window
 #[derive(Debug, Clone)]
 pub struct Sendme {
+    /// A tag value authenticating the previously received data.
     digest: Option<Vec<u8>>,
 }
 impl Sendme {
@@ -451,11 +464,17 @@ impl Body for Sendme {
 }
 
 /// Obsolete circuit extension message
+///
+/// This format only handled IPv4 addresses and the TAP handshake.
 #[derive(Debug, Clone)]
 pub struct Extend {
+    /// Where to extend to (address)
     addr: Ipv4Addr,
+    /// Where to extend to (port)
     port: u16,
+    /// A TAP handshake to send
     handshake: Vec<u8>,
+    /// The RSA identity of the target relay
     rsaid: RSAIdentity,
 }
 impl Extend {
@@ -496,6 +515,7 @@ impl Body for Extend {
 /// Obsolete circuit extension message (reply)
 #[derive(Debug, Clone)]
 pub struct Extended {
+    /// Contents of the handshake sent in response to the EXTEND
     handshake: Vec<u8>,
 }
 impl Extended {
@@ -517,11 +537,18 @@ impl Body for Extended {
     }
 }
 
-/// Extend the circuit to a new hop
+/// Tell the last relay in a circuit to extend the circuit to a new hop
 #[derive(Debug, Clone)]
 pub struct Extend2 {
+    /// A vector of "link specifiers"
+    ///
+    /// These link specifiers describe where to find the target relay
+    /// that the recipient should extend to.  They include things like
+    /// IP addresses and identity keys.
     linkspec: Vec<LinkSpec>,
+    /// Type of handshake to be sent in a CREATE2 cell
     handshake_type: u16,
+    /// Body of the handshake to be sent in a CREATE2 cell
     handshake: Vec<u8>,
 }
 impl Extend2 {
@@ -569,6 +596,8 @@ impl Body for Extend2 {
 /// Successful reply to an Extend2
 #[derive(Debug, Clone)]
 pub struct Extended2 {
+    /// Contents of the CREATED2 cell that the new final hop sent in
+    /// response
     handshake: Vec<u8>,
 }
 impl Extended2 {
@@ -602,6 +631,7 @@ impl Body for Extended2 {
 /// The remaining hops of this circuit have gone away
 #[derive(Debug, Clone)]
 pub struct Truncated {
+    /// Reason for which this circuit was truncated.
     reason: u8,
 }
 impl Truncated {
@@ -629,6 +659,7 @@ impl Body for Truncated {
 /// Launch a DNS lookup
 #[derive(Debug, Clone)]
 pub struct Resolve {
+    /// Ascii-encoded address to resolve
     query: Vec<u8>,
 }
 impl Resolve {
@@ -705,6 +736,8 @@ const RES_ERR_NONTRANSIENT: u8 = 0xF1;
 
 impl Readable for ResolvedVal {
     fn take_from(r: &mut Reader<'_>) -> Result<Self> {
+        /// Helper: return the expected length of a resolved answer with
+        /// a given type, if there is a particular expected length.
         fn res_len(tp: u8) -> Option<usize> {
             match tp {
                 RES_IPV4 => Some(4),
@@ -778,6 +811,7 @@ impl Writeable for ResolvedVal {
 /// Response to a Resolve message
 #[derive(Debug, Clone)]
 pub struct Resolved {
+    /// List of addresses and their associated time-to-live values.
     answers: Vec<(ResolvedVal, u32)>,
 }
 impl Resolved {
@@ -830,7 +864,9 @@ impl Body for Resolved {
 /// A relay message that we didn't recognize
 #[derive(Debug, Clone)]
 pub struct Unrecognized {
+    /// Command that we didn't recognize
     cmd: RelayCmd,
+    /// Body associated with that command
     body: Vec<u8>,
 }
 
