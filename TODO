@@ -40,7 +40,7 @@ MILESTONE 3: Clean and tidy
    - Make sure that circuit Destroys are handled and sent correctly.
      Use ideas from circuit module.
    - Complete testing in tor-proto crate.
-   - Better solution for deadlock in lock on sendwindow.
+   o Better solution for deadlock in lock on sendwindow.
    - Ed25519 needs to have an "identity" non-parsed version, maybe.
    - Add a state for streams _we_ have closed where we haven't got an end
      from the other side.  Treat unexpected stream data as fatal.
