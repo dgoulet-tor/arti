@@ -203,7 +203,10 @@ fn main() -> Result<()> {
         let chan = connect(&guard).await?;
 
         let (pendcirc, reactor) = chan.new_circ(&mut rng).await?;
-        async_std::task::spawn(async { reactor.run().await });
+        async_std::task::spawn(async {
+            let x = reactor.run().await;
+            eprintln!("Reactor exited and said {:?}", x);
+        });
 
         // let mut circ = pendcirc.create_firsthop_fast(&mut rng).await?;
         // info!("fast handshake with first hop was successful.");
