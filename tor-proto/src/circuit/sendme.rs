@@ -16,6 +16,9 @@ use futures::lock::Mutex;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use tor_cell::relaycell::msg::RelayMsg;
+use tor_cell::relaycell::RelayCell;
+
 // XXXX Three problems with this tag:
 // XXXX - First, we need to support unauthenticated flow control.
 // XXXX - Second, this tag type could be different for each layer, if we
@@ -234,4 +237,16 @@ impl<P: WindowParams> RecvWindow<P> {
     pub fn put(&mut self) {
         self.window = self.window.checked_add(P::increment()).unwrap();
     }
+}
+
+/// Return true if this message is counted by flow-control windows.
+pub(crate) fn msg_counts_towards_windows(msg: &RelayMsg) -> bool {
+    // TODO Instead of looking at !sendme, tor looks at data. We
+    // should document and  make the spec conform.
+    !matches!(msg, RelayMsg::Sendme(_))
+}
+
+/// Return true if this message is counted by flow-control windows.
+pub(crate) fn cell_counts_towards_windows(cell: &RelayCell) -> bool {
+    msg_counts_towards_windows(cell.msg())
 }

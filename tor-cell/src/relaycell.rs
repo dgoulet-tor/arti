@@ -173,14 +173,6 @@ impl RelayCell {
     pub fn msg(&self) -> &msg::RelayMsg {
         &self.msg
     }
-    /// Return true if this cell counts to the circuit-level sendme
-    /// window.
-    pub fn counts_towards_circuit_windows(&self) -> bool {
-        // According to the spec, a stream-level sendme counts towards
-        // circuit windows, but a circuit-level sendme doesn't.  But tor seems
-        // not to believe that.  XXXX correct the spec.
-        self.msg.counts_towards_windows()
-    }
     /// Consume this relay message and encode it as a 509-byte padded cell
     /// body.
     pub fn encode<R: Rng + CryptoRng>(self, rng: &mut R) -> crate::Result<RawCellBody> {

@@ -63,7 +63,7 @@ impl TorStream {
 
         // Possibly decrement the window for the cell we just received, and
         // send a SENDME if doing so took us under the threshold.
-        if msg.counts_towards_windows() {
+        if sendme::msg_counts_towards_windows(&msg) {
             match self.recvwindow.take() {
                 Some(true) => self.send_sendme().await?,
                 Some(false) => {}

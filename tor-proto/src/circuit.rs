@@ -510,7 +510,7 @@ impl ClientCircImpl {
     ///
     /// Does not check whether the cell is well-formed or reasonable.
     async fn send_relay_cell(&mut self, hop: HopNum, early: bool, cell: RelayCell) -> Result<()> {
-        let c_t_w = cell.counts_towards_circuit_windows();
+        let c_t_w = sendme::cell_counts_towards_windows(&cell);
         let mut body: RelayCellBody = cell.encode(&mut thread_rng())?.into();
         let tag = self.crypto_out.encrypt(&mut body, hop)?;
         let msg = chancell::msg::Relay::from_raw(body.into());
@@ -730,7 +730,7 @@ impl StreamTarget {
     /// right hop, but will not validate that the message is well-formed
     /// or meaningful in context.
     pub(crate) async fn send(&mut self, msg: RelayMsg) -> Result<()> {
-        if msg.counts_towards_windows() {
+        if sendme::msg_counts_towards_windows(&msg) {
             // Decrement the stream window (and block if it's empty)
             self.window.take(&()).await;
         }

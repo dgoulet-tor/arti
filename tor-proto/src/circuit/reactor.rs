@@ -275,7 +275,7 @@ impl ReactorCore {
 
         // Decrement the circuit sendme windows, and see if we need to
         // send a sendme cell.
-        let send_circ_sendme = if msg.counts_towards_circuit_windows() {
+        let send_circ_sendme = if sendme::cell_counts_towards_windows(&msg) {
             // XXXX unwrap is yucky.
             match self.get_hop_mut(hopnum).unwrap().recvwindow.take() {
                 Some(true) => true,

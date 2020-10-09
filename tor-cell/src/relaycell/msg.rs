@@ -134,13 +134,6 @@ impl RelayMsg {
             Unrecognized(b) => b.encode_onto(w),
         }
     }
-
-    /// Return true if this message is counted by flow-control windows.
-    pub fn counts_towards_windows(&self) -> bool {
-        // TODO Instead of looking at !sendme, tor looks at data. We
-        // should document and  make the spec conform.
-        !matches!(self, RelayMsg::Sendme(_))
-    }
 }
 
 /// Message to create a enw stream
