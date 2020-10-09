@@ -7,8 +7,8 @@
 //! it should just not exist.
 
 use super::streammap::StreamEnt;
-use crate::circuit::ClientCirc;
-use crate::crypto::cell::HopNum;
+use crate::circuit::{sendme, streammap, ClientCirc};
+use crate::crypto::cell::{HopNum, InboundClientCrypt, InboundClientLayer};
 use crate::{Error, Result};
 use tor_cell::chancell::{msg::ChanMsg, msg::Relay};
 use tor_cell::relaycell::msg::{End, RelayMsg, Sendme};
@@ -33,6 +33,20 @@ pub(super) enum CtrlMsg {
     Register(oneshot::Receiver<CtrlMsg>),
     /// Tell the reactor that a given stream has gone away.
     CloseStream(HopNum, StreamID),
+    /// Ask the reactor for a new stream ID, and allocate a circuit for it.
+    AddStream(
+        HopNum,
+        mpsc::Sender<RelayMsg>,
+        sendme::StreamSendWindow,
+        oneshot::Sender<Result<StreamID>>,
+    ),
+    /// Tell the reactor to add a new hop to its view of the circuit, and
+    /// then tell us when it has done so.
+    AddHop(
+        InboundHop,
+        Box<dyn InboundClientLayer + Send>,
+        oneshot::Sender<()>,
+    ),
 }
 
 /// Type returned by a oneshot channel for a controlmsg.  For convenience,
@@ -41,6 +55,28 @@ pub(super) enum CtrlMsg {
 pub(super) type CtrlResult = std::result::Result<CtrlMsg, oneshot::Canceled>;
 
 type OneshotStream = stream::SelectAll<stream::Once<oneshot::Receiver<CtrlMsg>>>;
+
+/// Represents the reactor's view of a single hop.
+pub(super) struct InboundHop {
+    /// Map from stream IDs to streams.
+    ///
+    /// We store this with the reactor instead of the circuit, since the
+    /// reactor needs it for every incoming cell on a stream, whereas
+    /// the circuit only needs it when allocating new streams.
+    map: streammap::StreamMap,
+    /// Window used to say how many cells we can receive.
+    recvwindow: sendme::CircRecvWindow,
+}
+
+impl InboundHop {
+    /// Create a new hop.
+    pub(super) fn new() -> Self {
+        InboundHop {
+            map: streammap::StreamMap::new(),
+            recvwindow: sendme::CircRecvWindow::new(1000),
+        }
+    }
+}
 
 /// Object to handle incoming cells on a circuit
 ///
@@ -66,9 +102,21 @@ pub struct Reactor {
 }
 
 /// This is a separate; we use it when handling cells.
+///
+/// Why is this type separate, exactly?
 struct ReactorCore {
     /// Reference to the circuit.
     circuit: ClientCirc,
+    /// The cryptographic state for this circuit for inbound cells.
+    /// This object is divided into multiple layers, each of which is
+    /// shared with one hop of the circuit.
+    ///
+    /// We keep this separately from the state for outbound cells, since
+    /// it is convenient for the reactor to be able to use this without
+    /// locking the circuit.
+    crypto_in: InboundClientCrypt,
+    /// List of hops state objects used by the reactor
+    hops: Vec<InboundHop>,
 }
 
 impl Reactor {
@@ -79,7 +127,11 @@ impl Reactor {
         closeflag: oneshot::Receiver<CtrlMsg>,
         input: mpsc::Receiver<ChanMsg>,
     ) -> Self {
-        let core = ReactorCore { circuit };
+        let core = ReactorCore {
+            circuit,
+            crypto_in: InboundClientCrypt::new(),
+            hops: Vec::new(),
+        };
 
         let mut oneshots = stream::SelectAll::new();
         oneshots.push(stream::once(closeflag));
@@ -131,6 +183,22 @@ impl Reactor {
             CtrlMsg::Shutdown => panic!(), // was handled in reactor loop.
             CtrlMsg::CloseStream(hop, id) => self.close_stream(hop, id).await?,
             CtrlMsg::Register(ch) => self.register(ch),
+            CtrlMsg::AddStream(hop, sink, window, sender) => {
+                let hop = self.core.get_hop_mut(hop);
+                if let Some(hop) = hop {
+                    let r = hop.map.add_ent(sink, window);
+                    // XXXX not sure if this is right to ignore
+                    let _ignore = sender.send(r);
+                }
+                // If there was no hop with this index, dropping the sender
+                // will cancel the attempt to add the stream.
+            }
+            CtrlMsg::AddHop(hop, layer, sender) => {
+                self.core.hops.push(hop);
+                self.core.crypto_in.add_layer(layer);
+                // XXXX not sure if this is right to ignore
+                let _ignore = sender.send(());
+            }
         }
         Ok(())
     }
@@ -141,13 +209,16 @@ impl Reactor {
     /// If we have not already received an END cell on this stream, send one.
     async fn close_stream(&mut self, hopnum: HopNum, id: StreamID) -> Result<()> {
         // Mark the stream as closing.
-        let mut circ = self.core.circuit.c.lock().await;
-        let hop = &mut circ.hops[Into::<usize>::into(hopnum)];
+        let hop = self.core.get_hop_mut(hopnum).ok_or_else(|| {
+            Error::InternalError("Tried to close a stream on a hop that wasn't there?".into())
+        })?;
+
         let should_send_end = hop.map.remove(id);
         // TODO: I am about 80% sure that we only send an END cell if
         // we didn't already get an END cell.  But I should double-check!
         if should_send_end {
             let end_cell = RelayCell::new(id, End::new_misc().into());
+            let mut circ = self.core.circuit.c.lock().await;
             circ.send_relay_cell(hopnum, false, end_cell).await?;
         }
         Ok(())
@@ -187,12 +258,10 @@ impl ReactorCore {
     /// React to a Relay or RelayEarly cell.
     async fn handle_relay_cell(&mut self, cell: Relay) -> Result<()> {
         let mut body = cell.into_relay_body().into();
-        // XXX I don't like locking the whole circuit
-        let mut circ = self.circuit.c.lock().await;
 
         // Decrypt the cell. If it's recognized, then find the
         // corresponding hop.
-        let (hopnum, tag) = circ.crypto_in.decrypt(&mut body)?;
+        let (hopnum, tag) = self.crypto_in.decrypt(&mut body)?;
         // Make a copy of the authentication tag. TODO: I'd rather not
         // copy it, but I don't see a way around it right now.
         let tag = {
@@ -208,7 +277,7 @@ impl ReactorCore {
         // send a sendme cell.
         let send_circ_sendme = if msg.counts_towards_circuit_windows() {
             // XXXX unwrap is yucky.
-            match circ.get_hop_mut(hopnum).unwrap().recvwindow.take() {
+            match self.get_hop_mut(hopnum).unwrap().recvwindow.take() {
                 Some(true) => true,
                 Some(false) => false,
                 None => {
@@ -224,8 +293,11 @@ impl ReactorCore {
         if send_circ_sendme {
             let sendme = Sendme::new_tag(tag);
             let cell = RelayCell::new(0.into(), sendme.into());
-            circ.send_relay_cell(hopnum, false, cell).await?;
-            circ.get_hop_mut(hopnum).unwrap().recvwindow.put();
+            {
+                let mut circ = self.circuit.c.lock().await;
+                circ.send_relay_cell(hopnum, false, cell).await?;
+            }
+            self.get_hop_mut(hopnum).unwrap().recvwindow.put();
         }
 
         // Break the message apart into its streamID and message.
@@ -244,11 +316,12 @@ impl ReactorCore {
         // If this has a reasonable streamID value of 0, it's a meta cell,
         // not meant for a particualr stream.
         if streamid.is_zero() {
+            let mut circ = self.circuit.c.lock().await;
             return circ.handle_meta_cell(hopnum, msg).await;
         }
 
         //XXXX this is still an unwrap, and still risky.
-        let hop = circ.get_hop_mut(hopnum).unwrap();
+        let hop = self.get_hop_mut(hopnum).unwrap();
         if let Some(StreamEnt::Open(s, w)) = hop.map.get_mut(streamid) {
             // The stream for this message exists, and is open.
 
@@ -269,14 +342,6 @@ impl ReactorCore {
 
             // XXXX reject cells that should never go to a client,
             // XXXX like BEGIN.
-
-            // XXXXXXXXXXXXXXXXXXXXX
-            // XXXXX If possible we should try to stop holding the mutex
-            // XXXXX for this:
-            // XXXXX This send() operation can deadlock if the queue
-            // XXXXX is full and the other side is trying to send a sendme.
-            // XXXXX That's why I've chosen a really high queue length.
-            // XXXXX I should fix that.
             let result = s
                 .send(msg)
                 .await
@@ -298,5 +363,10 @@ impl ReactorCore {
     fn handle_destroy_cell(&mut self) -> Result<()> {
         // XXXX anything more to do here?
         Ok(())
+    }
+
+    /// Return the hop corresponding to `hopnum`, if there is one.
+    fn get_hop_mut(&mut self, hopnum: HopNum) -> Option<&mut InboundHop> {
+        self.hops.get_mut(Into::<usize>::into(hopnum))
     }
 }

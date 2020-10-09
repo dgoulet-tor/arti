@@ -38,8 +38,8 @@ mod streammap;
 use crate::channel::Channel;
 use crate::circuit::reactor::{CtrlMsg, CtrlResult};
 use crate::crypto::cell::{
-    ClientLayer, CryptInit, HopNum, InboundClientCrypt, InboundClientLayer, OutboundClientCrypt,
-    OutboundClientLayer, RelayCellBody,
+    ClientLayer, CryptInit, HopNum, InboundClientLayer, OutboundClientCrypt, OutboundClientLayer,
+    RelayCellBody,
 };
 use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
 use crate::stream::{DataStream, TorStream};
@@ -88,10 +88,6 @@ struct ClientCircImpl {
     /// This object is divided into multiple layers, each of which is
     /// shared with one hop of the circuit
     crypto_out: OutboundClientCrypt,
-    /// The cryptographic state for this circuit for inbound cells.
-    /// This object is divided into multiple layers, each of which is
-    /// shared with one hop of the circuit
-    crypto_in: InboundClientCrypt,
     /// Per-hop circuit information.
     ///
     /// Note that hops.len() must be the same as crypto.n_layers().
@@ -129,23 +125,18 @@ pub(crate) struct StreamTarget {
 
 /// Information about a single hop of a client circuit.
 struct CircHop {
-    map: streammap::StreamMap,
     auth_sendme_optional: bool,
     /// Window used to say how many cells we can send.
     sendwindow: sendme::CircSendWindow,
-    /// Window used to say how many cells we can receive.
-    recvwindow: sendme::CircRecvWindow,
 }
 
 impl CircHop {
     fn new(auth_sendme_optional: bool) -> Self {
         CircHop {
-            map: streammap::StreamMap::new(),
             auth_sendme_optional,
             // TODO: this value should come from the consensus and not be
             // hardcoded.
             sendwindow: sendme::CircSendWindow::new(1000),
-            recvwindow: sendme::CircRecvWindow::new(1000),
         }
     }
 }
@@ -264,13 +255,48 @@ impl ClientCirc {
         let layer = L::construct(keygen)?;
 
         // If we get here, it succeeded.  Add a new hop to the circuit.
+        let (layer_fwd, layer_back) = layer.split();
+        self.add_hop(
+            supports_flowctrl_1,
+            Box::new(layer_fwd),
+            Box::new(layer_back),
+        )
+        .await
+    }
+
+    /// Add a hop to the end of this circuit.
+    ///
+    /// This function is a bit tricky, since we need to add the
+    /// hop to our own structures, and tell the reactor to add it to the
+    /// reactor's structures as well, and wait for the reactor to tell us
+    /// that it did.
+    async fn add_hop(
+        &self,
+        supports_flowctrl_1: bool,
+        fwd: Box<dyn OutboundClientLayer + 'static + Send>,
+        rev: Box<dyn InboundClientLayer + 'static + Send>,
+    ) -> Result<()> {
+        let inbound_hop = crate::circuit::reactor::InboundHop::new();
+        let (snd, rcv) = oneshot::channel();
+        {
+            let mut c = self.c.lock().await;
+            c.control
+                .send(Ok(CtrlMsg::AddHop(inbound_hop, rev, snd)))
+                .await
+                .map_err(|_| Error::InternalError("Can't queue AddHop request".into()))?;
+        }
+
+        // XXXX need to do something make sure that we aren't trying to add
+        // two hops at once.
+
+        rcv.await
+            .map_err(|_| Error::InternalError("AddHop request cancelled".into()))?;
+
         {
             let mut c = self.c.lock().await;
             let hop = CircHop::new(supports_flowctrl_1);
             c.hops.push(hop);
-            let (layer_fwd, layer_back) = layer.split();
-            c.crypto_out.add_layer(Box::new(layer_fwd));
-            c.crypto_in.add_layer(Box::new(layer_back));
+            c.crypto_out.add_layer(fwd);
         }
         Ok(())
     }
@@ -314,23 +340,44 @@ impl ClientCirc {
         // assuming it's the last hop.
 
         // XXXX Both a bound and a lack of bound are scary here :/
+        let (sender, receiver) = mpsc::channel(128);
 
-        // XXXX This bound is far too high, but without it we can deadlock.
-        // XXXX See note in ReactorCore::handle_relay_cell.
-        let (sender, receiver) = mpsc::channel(1024);
-
-        let mut c = self.c.lock().await;
-        let hopnum = c.hops.len() - 1;
-        let window = sendme::StreamSendWindow::new(StreamTarget::SEND_WINDOW_INIT);
-        let id = c.hops[hopnum].map.add_ent(sender, window.new_ref())?;
-        let relaycell = RelayCell::new(id, begin_msg);
-        let hopnum = (hopnum as u8).into();
         let (send_close, recv_close) = oneshot::channel::<CtrlMsg>();
-        c.send_relay_cell(hopnum, false, relaycell).await?;
-        c.control
-            .send(Ok(CtrlMsg::Register(recv_close)))
+        let window = sendme::StreamSendWindow::new(StreamTarget::SEND_WINDOW_INIT);
+
+        let (id_snd, id_rcv) = oneshot::channel();
+        let hopnum;
+        {
+            let mut c = self.c.lock().await;
+            let h = c.hops.len() - 1;
+            hopnum = (h as u8).into();
+
+            c.control
+                .send(Ok(CtrlMsg::AddStream(
+                    hopnum,
+                    sender,
+                    window.new_ref(),
+                    id_snd,
+                )))
+                .await
+                .map_err(|_| Error::InternalError("Can't queue new-stream request.".into()))?;
+        }
+
+        let id = id_rcv
             .await
-            .map_err(|_| Error::InternalError("Can't queue stream closer".into()))?;
+            .map_err(|_| Error::InternalError("Didn't receive a stream ID.".into()))?;
+        let id = id?;
+
+        let relaycell = RelayCell::new(id, begin_msg);
+
+        {
+            let mut c = self.c.lock().await;
+            c.send_relay_cell(hopnum, false, relaycell).await?;
+            c.control
+                .send(Ok(CtrlMsg::Register(recv_close)))
+                .await
+                .map_err(|_| Error::InternalError("Can't queue stream closer".into()))?;
+        }
 
         let target = StreamTarget {
             circ: self.clone(),
@@ -504,7 +551,6 @@ impl PendingClientCirc {
         input: mpsc::Receiver<ChanMsg>,
     ) -> (PendingClientCirc, reactor::Reactor) {
         let crypto_out = OutboundClientCrypt::new();
-        let crypto_in = InboundClientCrypt::new();
         let (sendclosed, recvclosed) = oneshot::channel::<CtrlMsg>();
         // Should this be bounded, really? XXX
         let (sendctrl, recvctrl) = mpsc::channel::<CtrlResult>(128);
@@ -514,7 +560,6 @@ impl PendingClientCirc {
             id,
             channel,
             crypto_out,
-            crypto_in,
             hops,
             control: sendctrl,
             sendshutdown: Cell::new(Some(sendclosed)),
@@ -569,15 +614,13 @@ impl PendingClientCirc {
         let keygen = H::client2(state, server_handshake)?;
 
         let layer = L::construct(keygen)?;
-
-        {
-            let mut c = circ.c.lock().await;
-            let hop = CircHop::new(supports_flowctrl_1);
-            c.hops.push(hop);
-            let (layer_fwd, layer_back) = layer.split();
-            c.crypto_out.add_layer(Box::new(layer_fwd));
-            c.crypto_in.add_layer(Box::new(layer_back));
-        }
+        let (layer_fwd, layer_back) = layer.split();
+        circ.add_hop(
+            supports_flowctrl_1,
+            Box::new(layer_fwd),
+            Box::new(layer_back),
+        )
+        .await?;
         Ok(circ)
     }
 
@@ -692,8 +735,6 @@ impl StreamTarget {
             self.window.take(&()).await;
         }
         let cell = RelayCell::new(self.stream_id, msg);
-        // XXXX This can deadlock if the reactor is blocked;.
-        // XXXX See note in ReactorCore::handle_relay_cell.
         let mut c = self.circ.c.lock().await;
         c.send_relay_cell(self.hop, false, cell).await
     }
