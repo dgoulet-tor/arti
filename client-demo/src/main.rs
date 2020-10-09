@@ -37,6 +37,9 @@ struct Args {
     /// where to find a chutney directory.
     #[argh(option)]
     chutney_dir: Option<PathBuf>,
+    /// how many times to repeat the test
+    #[argh(option, default = "1")]
+    n: usize,
     /// try doing a flooding test (to 127.0.0.1:9999)? Requires chutney.
     #[argh(switch)]
     flood: bool,
@@ -222,12 +225,14 @@ fn main() -> Result<()> {
 
         info!("Built a three-hop circuit.");
 
-        if args.flood {
-            test_cat(circ).await?;
-        } else if args.dl {
-            test_dl(circ).await?;
-        } else {
-            test_http(circ).await?;
+        for _ in 0..args.n {
+            if args.flood {
+                test_cat(circ.clone()).await?;
+            } else if args.dl {
+                test_dl(circ.clone()).await?;
+            } else {
+                test_http(circ.clone()).await?;
+            }
         }
         Ok(())
     })
