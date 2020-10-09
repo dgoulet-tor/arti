@@ -175,11 +175,11 @@ impl RelayCell {
     }
     /// Return true if this cell counts to the circuit-level sendme
     /// window.
-    ///
-    /// (A stream-level sendme counts towards circuit windows, but
-    /// a circuit-level sendme doesn't.)
     pub fn counts_towards_circuit_windows(&self) -> bool {
-        !self.streamid.is_zero() || self.msg.counts_towards_windows()
+        // According to the spec, a stream-level sendme counts towards
+        // circuit windows, but a circuit-level sendme doesn't.  But tor seems
+        // not to believe that.  XXXX correct the spec.
+        self.msg.counts_towards_windows()
     }
     /// Consume this relay message and encode it as a 509-byte padded cell
     /// body.
