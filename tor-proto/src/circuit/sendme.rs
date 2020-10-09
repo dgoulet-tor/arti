@@ -138,15 +138,15 @@ where
         loop {
             let wait_on = {
                 let mut w = self.w.lock().await;
-                let oldval = w.window;
-                if oldval % P::increment() == 0 && oldval != P::maximum() {
-                    // We record this tag.
-                    // TODO: I'm not saying that this cell in particular
-                    // matches the spec, but Tor seems to like it.
-                    w.tags.push_back(tag.clone());
-                }
                 if let Some(val) = w.window.checked_sub(1) {
                     w.window = val;
+                    if w.window % P::increment() == 0 {
+                        // We record this tag.
+                        // TODO: I'm not saying that this cell in particular
+                        // matches the spec, but Tor seems to like it.
+                        w.tags.push_back(tag.clone());
+                    }
+
                     return val;
                 }
 
@@ -221,13 +221,12 @@ impl<P: WindowParams> RecvWindow<P> {
     /// Returns None if we should not have sent the cell, and we just
     /// violated the window.
     pub fn take(&mut self) -> Option<bool> {
-        let oldval = self.window;
         let v = self.window.checked_sub(1);
         if let Some(x) = v {
             self.window = x;
             // TODO: same note as in SendWindow.take(). I don't know if
-            // this truly matches the spec, but Tot tor accepts it.
-            Some(oldval % P::increment() == 0 && oldval != P::maximum())
+            // this truly matches the spec, but tor accepts it.
+            Some(x % P::increment() == 0)
         } else {
             None
         }
@@ -241,9 +240,7 @@ impl<P: WindowParams> RecvWindow<P> {
 
 /// Return true if this message is counted by flow-control windows.
 pub(crate) fn msg_counts_towards_windows(msg: &RelayMsg) -> bool {
-    // TODO Instead of looking at !sendme, tor looks at data. We
-    // should document and  make the spec conform.
-    !matches!(msg, RelayMsg::Sendme(_))
+    matches!(msg, RelayMsg::Data(_))
 }
 
 /// Return true if this message is counted by flow-control windows.
