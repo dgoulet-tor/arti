@@ -37,6 +37,12 @@ struct Args {
     /// where to find a chutney directory.
     #[argh(option)]
     chutney_dir: Option<PathBuf>,
+    /// try doing a flooding test (to 127.0.0.1:9999)? Requires chutney.
+    #[argh(switch)]
+    flood: bool,
+    /// try doing a download test (to 127.0.0.1:9999)? Requires chutney.
+    #[argh(switch)]
+    dl: bool,
 }
 
 /// Launch an authenticated channel to a relay.
@@ -79,7 +85,6 @@ async fn connect<C: ChanTarget>(target: &C) -> Result<Channel> {
     Ok(chan)
 }
 
-#[allow(unused)]
 async fn test_cat(mut circ: ClientCirc) -> Result<()> {
     let mut stream = circ.begin_stream("127.0.0.1", 9999).await?;
     for x in 1..2000 {
@@ -87,10 +92,10 @@ async fn test_cat(mut circ: ClientCirc) -> Result<()> {
         stream.write_bytes(&one_k[..]).await?;
         dbg!(x);
     }
+    dbg!("done");
     Ok(())
 }
 
-#[allow(unused)]
 async fn test_dl(mut circ: ClientCirc) -> Result<()> {
     let mut stream = circ.begin_stream("127.0.0.1", 9999).await?;
     let mut n_read = 0;
@@ -155,7 +160,14 @@ fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
 fn main() -> Result<()> {
     simple_logging::log_to_stderr(LevelFilter::Debug);
 
-    let dir = get_netdir(&argh::from_env())?;
+    let args: Args = argh::from_env();
+
+    if args.chutney_dir.is_none() && (args.flood || args.dl) {
+        eprintln!("--flood and --dl both require --chutney-dir.");
+        return Ok(());
+    }
+
+    let dir = get_netdir(&args)?;
     // TODO CONFORMANCE: we should stop now if there are required
     // protovers we don't support.
 
@@ -207,7 +219,13 @@ fn main() -> Result<()> {
 
         info!("Built a three-hop circuit.");
 
-        test_http(circ).await?;
+        if args.flood {
+            test_cat(circ).await?;
+        } else if args.dl {
+            test_dl(circ).await?;
+        } else {
+            test_http(circ).await?;
+        }
         Ok(())
     })
 }
