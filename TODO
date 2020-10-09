@@ -30,64 +30,72 @@ MILESTONE 2: Working streams
    o Make SENDMEs work
    o Make authenticated sendmes work.
    o Make sendme authentication optional.
-   - Circuit reactor shutdown needs to make writes fail; protocol
-     failures on circuits/streams need to kill off the circuit.
+   - Circuit reactor shutdown needs to make stream reads fail (_/0.1)
+   - Circuit reactor shutdown needs to make stream writes fail (_/0.5)
+   - protocol failures on circuits/streams need to kill off the circuit. (_/0.5)
    - Improve testing
+     - coverage on important parts of netdir (_/0.5)
+     - coverage on most of tor-proto (_/1)
    - Improve documentation
-   - Make sure readme is right
+     - forbid private-docs everywhere (_/0.3)
+     - expand documentation in proto, netdir, cell. (_/0.2)
+   - Make sure readme is right (_/0)
 
 MILESTONE 3: Clean and tidy
    - Make sure that circuit Destroys are handled and sent correctly.
-     Use ideas from circuit module.
-   - Complete testing in tor-proto crate.
+     Use ideas from circuit module. (1)
+   - Complete testing in tor-proto crate. (1)
    o Better solution for deadlock in lock on sendwindow.
    - Ed25519 needs to have an "identity" non-parsed version, maybe.
    - Add a state for streams _we_ have closed where we haven't got an end
      from the other side.  Treat unexpected stream data as fatal.
-     (Defend against DropMark attack from 25573)
-   - Less copying, esp around Box<RawCellBody>.  Consider bytes crate.
-   - Is this "reactor" business a sensible design?  Is there a better one?
-   - Use better types for cases when only a few messages are possible.
-   - Get a data-oriented stream API
-   - Make all APIs conform to best practices
-   - Figure out which consensus method we require, and say so.
-   - Make a plan for what closes when
-   - Make sure everything closes when it is supposed to.
+     (Defend against DropMark attack from 25573) (1)
+   - Add other "partially-closed" states for streams and circuits (1)
+   - Less copying, esp around Box<RawCellBody>.  Consider bytes crate. (1)
+   - Is this "reactor" business a sensible design?  Is there a better one? (??)
+   - Use better types for cases when only a few messages are possible. (0.3)
+   - Get a data-oriented stream API (1)
+   - Make all APIs conform to best practices (1)
+   - Figure out which consensus method we require, and say so. (0.2)
+   - Audit closing-stuff code (1)
+       - Make a plan for what closes when
+       - Make sure everything closes when it is supposed to.
    - Refactor XXXX and TODO code; make sure everything is tested and
      documented.
 
 
 MILESTONE A: Experimental client use
-   - Build circuits on demand
-   - Downloading directory information, using compression and diffs.
-   - Minimal stable API.
-   - Optionally, expose a socks port
-   - Begin using semver.
+   - Make connections on demand (1)
+   - Build circuits on demand (2)
+   - Downloading directory information, using compression and diffs. (3)
+   - Minimal stable API. (2)
+   - Optionally, expose a socks port (0.5)
+   - Begin using semver. (0.1)
 
 MILESTONE B: Secure minimal client
-   - Correct path selection
+   - Correct path selection (2)
    - Timeouts
-      - Circuit timeout logic
-      - Connection timeout logic.
+      - Circuit timeout logic (2??)
+      - Connection timeout logic. (2??)
       - What other kinds of timeouts?
-   - Connection padding (link protocol 5)
-   - Circuit padding (with padding machines)
-   - Build preemptive circuits
-   - Guard nodes
-   - Change behavior depending on network parameters
-   - CBT logic?
-   - Pathbias logic
+   - Connection padding (link protocol 5) (2)
+   - Circuit padding (with padding machines) (4???)
+   - Build preemptive circuits (2)
+   - Guard nodes (3)
+   - Change behavior depending on network parameters (3???)
+   - CBT logic? (4???)
+   - Pathbias logic (4???)
    - Figure out where to put a specific async executor and/or TLS
-     implementation in our stack.
+     implementation in our stack. (3???)
 
 MILESTONE C: Client feature parity
-   - V3 onion services
-   - Fairness on circuits/streams?
-   - Support for using bridges
-   - Pluggable transport support
-   - Controller API?
-   - Dormant mode?
-   - Transparent proxy mode(s)
+   - V3 onion services (10)
+   - Fairness on circuits/streams? (5??)
+   - Support for using bridges (2??)
+   - Pluggable transport support (5??)
+   - Controller API? (10???)
+   - Dormant mode? (2???)
+   - Transparent proxy mode(s) (???)
 
 
 MILESTONE H:
