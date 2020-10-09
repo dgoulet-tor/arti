@@ -118,7 +118,6 @@ async fn test_dl(mut circ: ClientCirc) -> Result<()> {
     Ok(())
 }
 
-#[allow(unused)]
 async fn test_http(mut circ: ClientCirc) -> Result<()> {
     let mut stream = circ.begin_stream("www.torproject.org", 80).await?;
 

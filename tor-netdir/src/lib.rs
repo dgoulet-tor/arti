@@ -86,7 +86,6 @@ enum WeightFn {
 
 /// A view of the Tor directory, suitable for use in building
 /// circuits.
-#[allow(unused)]
 pub struct NetDir {
     /// A microdescriptor consensus that lists the members of the network,
     /// and maps each one to a 'microdescriptor' that has more information
