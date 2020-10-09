@@ -22,6 +22,7 @@
 //! TODO: this crate needs far more tests!
 
 #![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
 
 #[macro_use]
 pub(crate) mod parse;

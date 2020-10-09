@@ -1,5 +1,6 @@
-/// Implements address policies, based on a series of accept/reject
-/// rules.
+//! Implements address policies, based on a series of accept/reject
+//! rules.
+
 use std::fmt::Display;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::str::FromStr;
@@ -10,6 +11,11 @@ use super::{PolicyError, PortRange};
 /// matches.
 #[derive(Clone, Debug)]
 pub struct AddrPolicy {
+    /// A list of rules to apply to find out whether an address is
+    /// contained by this policy.
+    ///
+    /// The rules apply in order; the first one to match determines
+    /// whether the address is accepted or rejected.
     rules: Vec<AddrPolicyRule>,
 }
 
@@ -112,7 +118,9 @@ impl Display for AddrPolicyRule {
 /// ```
 #[derive(Clone, Debug)]
 pub struct AddrPortPattern {
+    /// A pattern to match somewhere between zero and all IP addresses.
     pattern: IpPattern,
+    /// A pattern to match a range of ports.
     ports: PortRange,
 }
 

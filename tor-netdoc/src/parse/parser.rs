@@ -24,6 +24,14 @@ use crate::{Error, Result};
 /// rules::TokenFmt.
 #[derive(Clone)]
 pub struct SectionRules<T: Keyword> {
+    /// A set of rules for decoding a series of tokens into a Section
+    /// object.  Each element of this array corresponds to the
+    /// token with the corresponding index values.
+    ///
+    /// When an array element is None, the corresponding keyword is
+    /// not allowed in this kind section.  Otherwise, the array
+    /// element is a TokenFmt describing how many of the corresponding
+    /// token may appear, and what they need to look like.
     rules: Vec<Option<TokenFmt<T>>>,
 }
 
@@ -87,7 +95,11 @@ impl<'a, K: Keyword> TokVal<'a, K> {
 pub struct Section<'a, T: Keyword> {
     /// Map from Keyword index to TokVal
     v: Vec<TokVal<'a, T>>,
+    /// The keyword that appeared first in this section.  This will
+    /// be set if `v` is nonempty.
     first: Option<T>,
+    /// The keyword that appeared last in this section.  This will
+    /// be set if `v` is nonempty.
     last: Option<T>,
 }
 

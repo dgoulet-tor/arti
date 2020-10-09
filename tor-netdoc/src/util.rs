@@ -1,4 +1,5 @@
-/// Helper functions and types for use in parsing
+//! Misc helper functions and types for use in parsing network documents
+
 use std::iter::Peekable;
 
 /// An iterator adaptor that pauses when a given predicate is true.
@@ -9,7 +10,9 @@ use std::iter::Peekable;
 /// We guarantee that the predicate is called no more than once for
 /// each item.
 pub struct PauseAt<'a, I: Iterator, F: FnMut(&I::Item) -> bool> {
+    /// An underlying iterator that we should take items from
     peek: &'a mut Peekable<I>,
+    /// A predicate telling us which items mean that we should pause
     pred: F,
     /// Memoized value of self.pred(self.peek()), so we never
     /// calculate it more than once.
@@ -17,6 +20,8 @@ pub struct PauseAt<'a, I: Iterator, F: FnMut(&I::Item) -> bool> {
 }
 
 impl<'a, I: Iterator, F: FnMut(&I::Item) -> bool> PauseAt<'a, I, F> {
+    /// Construct a PauseAt that will pause the iterator `peek` when the
+    /// predicate `pred` is about to be true.
     pub fn from_peekable(peek: &'a mut Peekable<I>, pred: F) -> Self
     where
         F: FnMut(&I::Item) -> bool,
@@ -34,6 +39,7 @@ impl<'a, I: Iterator, F: FnMut(&I::Item) -> bool> PauseAt<'a, I, F> {
     {
         PauseAt::from_peekable(self.peek, pred)
     }
+    /// Unwrap this PauseAt, returning its underlying Peekable.
     #[allow(unused)]
     pub fn remaining(self) -> &'a mut Peekable<I> {
         self.peek

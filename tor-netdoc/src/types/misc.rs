@@ -14,17 +14,25 @@ pub use fingerprint::*;
 pub use rsa::*;
 pub use timeimpl::*;
 
+/// Describes a value that van be decoded from a bunch of bytes.
+///
+/// Used for decoding the objects between BEGIN and END tags.
 pub trait FromBytes: Sized {
+    /// Try to parse a value of this type from a byte slice
     fn from_bytes(b: &[u8], p: crate::Pos) -> crate::Result<Self>;
+    /// Try to parse a value of this type from a vector of bytes,
+    /// and consume that value
     fn from_vec(v: Vec<u8>, p: crate::Pos) -> crate::Result<Self> {
         Self::from_bytes(&v[..], p)
     }
 }
 
+/// Types for decoding base64-encoded values.
 mod b64impl {
     use crate::{Error, Pos, Result};
     use std::ops::RangeBounds;
 
+    /// A byte array, encoded in base64 with optional padding.
     pub struct B64(Vec<u8>);
 
     impl std::str::FromStr for B64 {
@@ -37,9 +45,12 @@ mod b64impl {
     }
 
     impl B64 {
+        /// Return the byte array from this object.
         pub fn as_bytes(&self) -> &[u8] {
             &self.0[..]
         }
+        /// Return this object if its length is within the provided bounds
+        /// object, or an error otherwise.
         pub fn check_len<B: RangeBounds<usize>>(self, bounds: B) -> Result<Self> {
             if bounds.contains(&self.0.len()) {
                 Ok(self)
@@ -61,9 +72,11 @@ mod b64impl {
 
 // ============================================================
 
+/// Types for decoding hex-encoded values.
 mod b16impl {
     use crate::{Error, Pos, Result};
 
+    /// A byte array encoded in hexadecimal.
     pub struct B16(Vec<u8>);
 
     impl std::str::FromStr for B16 {
@@ -76,6 +89,7 @@ mod b16impl {
     }
 
     impl B16 {
+        /// Return the underlying byte array.
         pub fn as_bytes(&self) -> &[u8] {
             &self.0[..]
         }
@@ -89,12 +103,14 @@ mod b16impl {
 
 // ============================================================
 
+/// Types for decoding curve25519 keys
 mod curve25519impl {
     use super::B64;
     use crate::{Error, Pos, Result};
     use std::convert::TryInto;
     use tor_llcrypto::pk::curve25519::PublicKey;
 
+    /// A Curve25519 public key, encoded in base64 with optional padding
     pub struct Curve25519Public(PublicKey);
 
     impl std::str::FromStr for Curve25519Public {
@@ -116,11 +132,14 @@ mod curve25519impl {
 }
 
 // ============================================================
+
+/// Types for decoding ed25519 keys
 mod ed25519impl {
     use super::B64;
     use crate::{Error, Pos, Result};
     use tor_llcrypto::pk::ed25519::PublicKey;
 
+    /// A ed25519 public key, encoded in base64 with optional padding
     pub struct Ed25519Public(PublicKey);
 
     impl std::str::FromStr for Ed25519Public {
@@ -148,10 +167,15 @@ mod ed25519impl {
 
 // ============================================================
 
+/// Types for decoding times and dates
 mod timeimpl {
     use crate::{Error, Pos, Result};
     use std::time::SystemTime;
 
+    /// A wall-clock time, encoded in ISO8601 format with an intervening
+    /// space between the date and time.
+    ///
+    /// (Example: "2020-10-09 17:38:12")
     pub struct ISO8601TimeSp(SystemTime);
 
     impl std::str::FromStr for ISO8601TimeSp {
@@ -172,6 +196,7 @@ mod timeimpl {
     }
 }
 
+/// Types for decoding RSA keys
 mod rsa {
     use crate::{Error, Pos, Result};
     use std::ops::RangeBounds;
@@ -203,7 +228,8 @@ mod rsa {
                 Err(Error::BadObjectVal(self.1, "invalid RSA exponent".into()))
             }
         }
-        /// Give an error if the exponent of this key is not contained in 'bounds'
+        /// Give an error if the length of of this key's modulus, in
+        /// bits, is not contained in 'bounds'
         pub fn check_len<B: RangeBounds<usize>>(self, bounds: B) -> Result<Self> {
             if bounds.contains(&self.0.bits()) {
                 Ok(self)
@@ -211,12 +237,15 @@ mod rsa {
                 Err(Error::BadObjectVal(self.1, "invalid RSA length".into()))
             }
         }
+        /// Give an error if the length of of this key's modulus, in
+        /// bits, is not exactly `n`.
         pub fn check_len_eq(self, n: usize) -> Result<Self> {
             self.check_len(n..=n)
         }
     }
 }
 
+/// Types for decoding Ed25519 certificates
 mod edcert {
     use crate::{Error, Pos, Result};
     use tor_cert::{CertType, Ed25519Cert, KeyUnknownCert};
@@ -259,12 +288,14 @@ mod edcert {
             }
             Ok(self)
         }
+        /// Consume this object and return the inner Ed25519 certificate.
         pub fn into_unchecked(self) -> KeyUnknownCert {
             self.0
         }
     }
 }
 
+/// Types for decoding RSA fingerprints
 mod fingerprint {
     use crate::{Error, Pos, Result};
     use tor_llcrypto::pk::rsa::RSAIdentity;
@@ -296,6 +327,7 @@ mod fingerprint {
         }
     }
 
+    /// Helper: parse an identity from a hexadecimal string
     fn parse_hex_ident(s: &str) -> Result<RSAIdentity> {
         let bytes = hex::decode(s).map_err(|_| {
             Error::BadArgument(Pos::at(s), "invalid hexadecimal in fingerprint".into())

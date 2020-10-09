@@ -45,9 +45,15 @@ fn b64check(s: &str) -> Result<()> {
 /// a buffer to hold the data before it's needed.
 #[derive(Clone, Copy, Debug)]
 pub struct Object<'a> {
+    /// Reference to the "tag" string (the 'foo') in the BEGIN line.
     tag: &'a str,
-    data: &'a str,    // not yet guaranteed to be base64.
-    endline: &'a str, // used to get position.
+    /// Reference to the allegedly base64-encoded data.  This may or
+    /// may not actually be base64 at this point.
+    data: &'a str,
+    /// Reference to the END line for this object.  This doesn't
+    /// need to be parsed, but it's used to find where this object
+    /// ends.
+    endline: &'a str,
 }
 
 /// A single part of a directory object.
@@ -59,12 +65,22 @@ pub struct Object<'a> {
 /// containing string.
 #[derive(Clone, Debug)]
 pub struct Item<'a, K: Keyword> {
+    /// The keyword that determinds the type of this item.
     kwd: K,
+    /// A reference to the actual string that defines the keyword for
+    /// this item.
     kwd_str: &'a str,
+    /// Reference to the arguments that appear in the same line after the
+    /// keyword.  Does not include the terminating newline or the
+    /// space that separates the keyword for its arguments.
     args: &'a str,
     /// The arguments, split by whitespace.  This vector is contructed
     /// as needed, using interior mutability.
     split_args: RefCell<Option<Vec<&'a str>>>,
+    /// If present, a base-64-encoded object that appeared at the end
+    /// of this item.
+    // TODO: we need to make sure that every base64-encoded object eventually
+    // gets decoded, if only to check the validity of the base 64.
     object: Option<Object<'a>>,
 }
 
@@ -168,9 +184,13 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
     /// found, Ok(None) if no object is found, and Err only if a
     /// corrupt object is found.
     fn object(&mut self) -> Result<Option<Object<'a>>> {
+        /// indicates the start of an object
         const BEGIN_STR: &str = "-----BEGIN ";
+        /// indicates the end of an object
         const END_STR: &str = "-----END ";
+        /// indicates the end of a begin or end tag.
         const TAG_END: &str = "-----";
+
         let pos = self.off;
         if !self.starts_with(BEGIN_STR) {
             return Ok(None);
@@ -236,6 +256,7 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
 ///
 /// (Only allow annotations if `anno_ok` is true.`
 fn keyword_ok(mut s: &str, anno_ok: bool) -> bool {
+    /// Helper: return true if this character can appear in keywords.
     fn kwd_char_ok(c: char) -> bool {
         match c {
             'A'..='Z' => true,
@@ -437,21 +458,25 @@ impl<'a, K: Keyword> Item<'a, K> {
 /// Represents an Item that might not be present, whose arguments we
 /// want to inspect.  If the Item is there, this acts like a proxy to the
 /// item; otherwise, it treats the item as having no arguments.
-
 pub struct MaybeItem<'a, 'b, K: Keyword>(Option<&'a Item<'b, K>>);
 
 // All methods here are as for Item.
 impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
+    /// Return the position of this item, if it has one.
     fn pos(&self) -> Pos {
         match self.0 {
             Some(item) => item.pos(),
             None => Pos::None,
         }
     }
+    /// Construct a MaybeItem from an Option reference to an item.
     pub fn from_option(opt: Option<&'a Item<'b, K>>) -> Self {
         MaybeItem(opt)
     }
 
+    /// If this item is present, parse its argument at position `idx`.
+    /// Treat the absence or malformedness of the argument as an error,
+    /// but treat the absence of this item as acceptable.
     pub fn parse_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
     where
         Error: From<V::Err>,
@@ -461,12 +486,15 @@ impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
                 Ok(v) => Ok(Some(v)),
                 Err(e) => Err(e.or_at_pos(self.pos())),
             },
-            None => Ok(None), // XXXX is this correct?
+            None => Ok(None),
         }
     }
+    /// If this item is present, return its arguments as a single stirng.
     pub fn args_as_str(&self) -> Option<&str> {
         self.0.map(|item| item.args_as_str())
     }
+    /// If this item is present, parse all of its arguments as a
+    /// single string.
     pub fn parse_args_as_str<V: FromStr>(&self) -> Result<Option<V>>
     where
         Error: From<V::Err>,
@@ -484,6 +512,8 @@ impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
     }
 }
 
+/// Extension trait for Result<Item> -- makes it convenient to implement
+/// PauseAt predicates
 pub trait ItemResult<K: Keyword> {
     /// Return true if this is an ok result with an annotation.
     fn is_ok_with_annotation(&self) -> bool;
@@ -531,7 +561,9 @@ impl<'a, K: Keyword> ItemResult<K> for Result<Item<'a, K>> {
 pub struct NetDocReader<'a, K: Keyword> {
     // TODO: I wish there were some way around having this string
     // reference, since we already need one inside NetDocReaderBase.
+    /// The underlying string being parsed.
     s: &'a str,
+    /// A stream of tokens being parsed by this NetDocReader.
     tokens: std::iter::Peekable<NetDocReaderBase<'a, K>>,
 }
 

@@ -77,11 +77,21 @@ impl TorVerStatus {
 /// A parsed Tor version number.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TorVersion {
+    /// Major version number.  This has been zero since Tor was created.
     major: u8,
+    /// Minor version number.
     minor: u8,
+    /// Micro version number.  The major, minor, and micro version numbers
+    /// together constitute a "release series" that starts as an alpha
+    /// and eventually becomes stable.
     micro: u8,
+    /// Patchlevel within a release series
     patch: u8,
+    /// Status of a given release
     status: TorVerStatus,
+    /// True if this version is given the "-dev" tag to indicate that it
+    /// isn't a real Tor release, but rather indicates the state of Tor
+    /// within some git repository.
     dev: bool,
 }
 

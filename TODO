@@ -38,7 +38,7 @@ MILESTONE 2: Working streams
      - coverage on important parts of netdir (_/0.5)
      - coverage on most of tor-proto (_/1)
    - Improve documentation
-     - forbid private-docs everywhere (_/0.3)
+     . forbid private-docs everywhere (_/0.3) [1.5h so far]
      - expand documentation in proto, netdir, cell. (_/0.2)
    - Make sure readme is right (_/0)
 

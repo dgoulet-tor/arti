@@ -1,3 +1,5 @@
+//! Declaration for the Keyword trait.
+
 use crate::parse::rules;
 use std::hash::Hash;
 

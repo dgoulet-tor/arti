@@ -1,3 +1,5 @@
+//! Declares macros to help implementing parsers.
+
 /// Macro for declaring a keyword enumeration to help parse a document.
 ///
 /// A keyword enumber implements the Keyword trait.
