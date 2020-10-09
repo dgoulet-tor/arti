@@ -139,7 +139,7 @@ impl RelayMsg {
     pub fn counts_towards_windows(&self) -> bool {
         // TODO Instead of looking at !sendme, tor looks at data. We
         // should document and  make the spec conform.
-        matches!(self, RelayMsg::Sendme(_))
+        !matches!(self, RelayMsg::Sendme(_))
     }
 }
 
