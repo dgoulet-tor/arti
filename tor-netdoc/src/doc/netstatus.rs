@@ -69,14 +69,26 @@ use lazy_static::lazy_static;
 #[allow(dead_code)]
 #[derive(Clone)]
 pub struct Lifetime {
+    /// Time at which the document becomes valid
     valid_after: time::SystemTime,
+    /// Time after which there is expected to be a better version
+    /// of this consensus
     fresh_until: time::SystemTime,
+    /// Time after which this consensus is expired.
+    ///
+    /// (In practice, Tor clients will keep using documents for a while
+    /// after this expiration time, if no better one can be found.)
     valid_until: time::SystemTime,
 }
 
 /// A set of named network parameters.
+///
+/// These are used to describe current settings for the Tor network,
+/// current weighting parameters for path selection, and so on.  They're
+/// encoded with a space-separated K=V format.
 #[allow(dead_code)]
 pub struct NetParams<T> {
+    /// Map from keys to values.
     params: HashMap<String, T>,
 }
 
@@ -90,30 +102,51 @@ impl<T> NetParams<T> {
 /// A list of subprotocol versions that implementors should/must provide.
 #[allow(dead_code)]
 pub struct ProtoStatus {
+    /// Set of protocols that are recommended; if we're missing a protocol
+    /// in this list we should warn the user.
     recommended: Protocols,
+    /// Set of protocols that are required; if we're missing a protocol
+    /// in this list we should refuse to start.
     required: Protocols,
 }
 
 /// The signature of a single directory authority on a networkstatus document.
 #[allow(dead_code)]
 pub struct Signature {
+    /// The name of the digest algorithm used to make the signature.
+    ///
+    /// Currently sha1 and sh256 are recognized.  Here we only support
+    /// sha256.
     digestname: String,
+    /// Fingerprint of the identity key for the authority that made
+    /// this signature.
     id_fingerprint: RSAIdentity,
+    /// Fingerprint of the signing key used to make this signature.
     sk_fingerprint: RSAIdentity,
+    /// The signature itself.
     signature: Vec<u8>,
 }
 
 /// A collection of signatures that can be checked on a networkstatus document
 #[allow(dead_code)]
 pub struct SignatureGroup {
+    /// The sha256 of the document itself
     sha256: [u8; 32],
+    /// The signatures listed on the document.
     signatures: Vec<Signature>,
 }
 
 /// A shared-random value produced by the directory authorities.
 #[allow(dead_code)]
 struct SharedRandVal {
+    /// How many authorities revealed shares that contributed to this value.
     n_reveals: u8,
+    /// The current random value.
+    ///
+    /// The properties of the secure shared-random system guarantee
+    /// that this value isn't predictable before it first becomes
+    /// live, and that a hostile party could not have forced it to
+    /// have any more than a small number of possible random values.
     value: Vec<u8>,
 }
 
@@ -123,22 +156,42 @@ struct SharedRandVal {
 /// votes or only in consensuses, even though we don't implement votes yet.
 #[allow(dead_code)]
 struct CommonHeader {
+    /// What kind of consensus document is this?  Absent in votes and
+    /// in ns-flavored consensuses. Currently "microdesc" and "ns" are
+    /// the recognized flavors.
     flavor: Option<String>,
+    /// Over what time is this consensus valid?  (For votes, this is
+    /// the time over which the voted-upon consensus should be valid.)
     lifetime: Lifetime,
+    /// List of recommended Tor client versions.
     client_versions: Vec<String>,
+    /// List of recommended Tor relay versions.
     relay_versions: Vec<String>,
+    /// Lists of recommended and required subprotocol versions for clients
     client_protos: ProtoStatus,
+    /// Lists of recommended and required subprotocol versions for relays
     relay_protos: ProtoStatus,
+    /// Declared parameters for tunable settings about how to the
+    /// network should operator. Some of these adjust timeouts and
+    /// whatnot; some features things on and off.
     params: NetParams<u32>,
+    /// How long should voters wait for votes and consensuses to
+    /// propagate?
     voting_delay: Option<(u32, u32)>,
 }
 
 /// The header of a consensus networkstatus.
 #[allow(dead_code)]
 struct ConsensusHeader {
+    /// Header fields common to votes and consensuses
     hdr: CommonHeader,
+    /// What "method" was used to produce this consensus?  (A
+    /// consensus method is a version number used by authorities to
+    /// upgrade the consensus algorithm.)
     consensus_method: u32,
+    /// Global shared-random value for the previous shared-random period.
     shared_rand_prev: Option<SharedRandVal>,
+    /// Global shared-random value for the current shared-random period.
     shared_rand_cur: Option<SharedRandVal>,
 }
 
@@ -147,31 +200,69 @@ struct ConsensusHeader {
 /// (Corresponds to a dir-source line.)
 #[allow(dead_code)]
 struct DirSource {
+    /// human-readable nickname for this authority.
     nickname: String,
+    /// DOCDOC -- I forget.  Is this the identity fingerprint for the
+    /// authority identity key, or for the identity key of the authority
+    /// when it's runnign as a relay?
     identity: RSAIdentity,
+    /// Address of the authority in string form.
+    // XXXX why do we have this _and_ IP?
     address: String,
+    /// IP address for the authority
     ip: net::IpAddr,
+    /// HTTP directory port for this authoirty
     dir_port: u16,
+    /// OR port for this authority.
     or_port: u16,
 }
 
-/// A set of known flags on a single router.
+/// A set of known flags on a single relay
 ///
 /// TODO: This should have a more compact representation.  Right now it's
 /// using 8 bits per boolean.
 #[allow(dead_code)]
 struct RouterFlags {
+    /// Is this a directory authority?
     authority: bool,
+    /// Is this relay marked as a bad exit?
+    ///
+    /// Bad exits can be used as intermediate relays, but not to
+    /// deliver traffic.
     bad_exit: bool,
+    /// Is this relay marked as an exit for weighting purposes?
     exit: bool,
+    /// Is this relay considered "fast" above a certain threshold?
     fast: bool,
+    /// Is this relay suitable for use as a guard node?
+    ///
+    /// Clients choose their their initial relays from among the set
+    /// of Guard nodes.
     guard: bool,
+    /// Does this relay participate on the hidden service directory
+    /// ring?
     hsdir: bool,
+    /// If set, there is no consensus for the ed25519 key for this relay.
+    // XXXX use this field.
     no_ed_consensus: bool,
+    /// Is this relay considerd "stable" enough for long-lived circuits.
     stable: bool,
+    /// Set if the authorities are requesting a fresh descriptor for
+    /// this relay.
     stale_desc: bool,
+    /// Set if this relay is currently running.
+    ///
+    /// This flag can appear in votes, but in consensuses, every relay
+    /// is assumed to be running.
     running: bool,
+    /// Set if this relay is considered "valid" -- allowed to be on
+    /// the network.
+    ///
+    /// This flag can appear in votes, but in consensuses, every relay
+    /// is assumed to be running.
     valid: bool,
+    /// Set if this relay supports a currently recognized version of the
+    /// directory protocol.
     v2dir: bool,
 }
 
@@ -201,19 +292,38 @@ impl RouterWeight {
     }
 }
 
-/// A single relay's status as represented in a microdesc consensus.
+/// A single relay's status, as represented in a microdesc consensus.
 #[allow(dead_code)]
 pub struct MDConsensusRouterStatus {
+    /// The nickname for this relay.
+    ///
+    /// Nicknames can be used for convenience purpose, but no more:
+    /// there is no mechanism to enforce their uniqueness.
     nickname: String,
+    /// Fingerprint of the old-style RSA identity for this relay.
     identity: RSAIdentity,
+    /// Declared time at which the router descriptor for this relay
+    /// was published.
+    ///
+    /// This value should be ignored for all purposes; see
+    /// [proposal 275](https://gitlab.torproject.org/tpo/core/torspec/-/blob/master/proposals/275-md-published-time-is-silly.txt).
     published: time::SystemTime,
+    /// A list of address:port values where this relay can be reached.
     addrs: Vec<net::SocketAddr>,
+    /// Declared OR port for this relay.
     or_port: u16,
+    /// Declared directory port for this relay.
     dir_port: u16,
+    /// Digest of the microdescriptor for this relay.
     md_digest: crate::doc::microdesc::MDDigest,
+    /// Flags applied by the authorities to this relay.
     flags: RouterFlags,
+    /// Version of the software that this relay is running.
     version: Option<String>,
+    /// List of subprotocol versions supported by this relay.
     protos: Option<Protocols>,
+    /// Information about how to weight this relay when choosing a
+    /// relay at random.
     weight: RouterWeight,
 }
 
@@ -249,14 +359,23 @@ impl MDConsensusRouterStatus {
 /// All information about a single authority, as represented in a consensus
 #[allow(dead_code)]
 struct ConsensusVoterInfo {
+    /// Contents of the dirsource line about an authority
     dir_source: DirSource,
+    /// Human-readable contact information about the authority
     contact: String,
+    /// Digest of the vote that the auuthority cast to contribute to
+    /// this consensus.
     vote_digest: Vec<u8>,
 }
 
 /// The signed footer of a consensus netstatus.
 #[allow(dead_code)]
 struct Footer {
+    /// Weights to be applied to certain classes of relays when choosing
+    /// for different roles.
+    ///
+    /// For example, we want to avoid choosing exits for non-exit
+    /// roles when overall the proportion of exits is small.
     weights: NetParams<i32>,
 }
 
@@ -266,9 +385,13 @@ struct Footer {
 /// votes and ns consensuses.
 #[allow(dead_code)]
 pub struct MDConsensus {
+    /// Part of the header shared by all consensus types.
     header: ConsensusHeader,
+    /// List of voters whose votes contributed to this consensus.
     voters: Vec<ConsensusVoterInfo>,
+    /// A list of the relays on the network, with one entry per relay.
     routers: Vec<MDConsensusRouterStatus>,
+    /// Footer for the consensus object.
     footer: Footer,
 }
 
@@ -464,11 +587,13 @@ lazy_static! {
 }
 
 impl ProtoStatus {
+    /// Construct a ProtoStatus from two chosen keywords in a section.
     fn from_section(
         sec: &Section<'_, NetstatusKW>,
         recommend_token: NetstatusKW,
         required_token: NetstatusKW,
     ) -> Result<ProtoStatus> {
+        /// Helper: extract a Protocols entry from an item's arguments.
         fn parse(t: Option<&Item<'_, NetstatusKW>>) -> Result<Protocols> {
             if let Some(item) = t {
                 item.args_as_str()
@@ -495,6 +620,7 @@ where
 {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
+        /// Helper: parse a single K=V pair.
         fn parse_pair<U>(p: &str) -> Result<(String, U)>
         where
             U: std::str::FromStr,
@@ -523,6 +649,7 @@ where
 }
 
 impl CommonHeader {
+    /// Extract the CommonHeader members from a single header section.
     fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<CommonHeader> {
         use NetstatusKW::*;
 
@@ -611,6 +738,8 @@ impl CommonHeader {
 }
 
 impl SharedRandVal {
+    /// Parse a current or previous shared rand value from a given
+    /// SharedRandPreviousValue or SharedRandCurrentValue.
     fn from_item(item: &Item<'_, NetstatusKW>) -> Result<Self> {
         match item.kwd() {
             NetstatusKW::SHARED_RAND_PREVIOUS_VALUE | NetstatusKW::SHARED_RAND_CURRENT_VALUE => (),
@@ -624,6 +753,7 @@ impl SharedRandVal {
 }
 
 impl ConsensusHeader {
+    /// Parse the ConsensusHeader members from a provided section.
     fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<ConsensusHeader> {
         use NetstatusKW::*;
 
@@ -658,6 +788,7 @@ impl ConsensusHeader {
 }
 
 impl DirSource {
+    /// Parse a "dir-source" item
     fn from_item(item: &Item<'_, NetstatusKW>) -> Result<Self> {
         if item.kwd() != NetstatusKW::DIR_SOURCE {
             return Err(Error::Internal(item.pos()));
@@ -681,6 +812,7 @@ impl DirSource {
 }
 
 impl ConsensusVoterInfo {
+    /// Parse a single ConsensusVoterInfo from a voter info section.
     fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<ConsensusVoterInfo> {
         use NetstatusKW::*;
         if sec.first_item().unwrap().kwd() != DIR_SOURCE {
@@ -701,6 +833,7 @@ impl ConsensusVoterInfo {
 }
 
 impl RouterFlags {
+    /// Parse a router-flags entry from an "s" line.
     fn from_item(item: &Item<'_, NetstatusKW>) -> Result<RouterFlags> {
         if item.kwd() != NetstatusKW::RS_S {
             return Err(Error::Internal(item.pos()));
@@ -771,6 +904,7 @@ impl Default for RouterWeight {
 }
 
 impl RouterWeight {
+    /// Parse a routerweight from a "w" line.
     fn from_item(item: &Item<'_, NetstatusKW>) -> Result<RouterWeight> {
         if item.kwd() != NetstatusKW::RS_W {
             return Err(Error::Internal(item.pos()));
@@ -798,6 +932,7 @@ impl RouterWeight {
 }
 
 impl MDConsensusRouterStatus {
+    /// Parse a single routerstatus section onto an MDConsensusRouterStatus.
     fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<MDConsensusRouterStatus> {
         use NetstatusKW::*;
         // R line
@@ -886,6 +1021,7 @@ impl MDConsensusRouterStatus {
 }
 
 impl Footer {
+    /// Parse a directory footer from a footer section.
     fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<Footer> {
         use NetstatusKW::*;
         sec.required(DIRECTORY_FOOTER)?;
@@ -902,12 +1038,18 @@ impl Footer {
 
 /// Result of checking a single authority signature.
 enum SigCheckResult {
+    /// The signature checks out.  Great!
     Valid,
+    /// The signature is invalid; no additional information could make it
+    /// valid.
     Invalid,
+    /// We can't check the signatuer because we don't have a
+    /// certificate with the right signing key.
     MissingCert,
 }
 
 impl Signature {
+    /// Parse a Signature from a directory-signature section
     fn from_item(item: &Item<'_, NetstatusKW>) -> Result<Signature> {
         if item.kwd() != NetstatusKW::DIRECTORY_SIGNATURE {
             return Err(Error::Internal(item.pos()));
@@ -936,11 +1078,15 @@ impl Signature {
         })
     }
 
+    /// Return true if this signature has the identity key and signing key
+    /// that match a given cert.
     fn matches_cert(&self, cert: &AuthCert) -> bool {
         cert.id_fingerprint() == &self.id_fingerprint
             && cert.sk_fingerprint() == &self.sk_fingerprint
     }
 
+    /// If possible, find the right certificate for checking this signature
+    /// from among a slice of certificates.
     fn find_cert<'a>(&self, certs: &'a [AuthCert]) -> Option<&'a AuthCert> {
         for c in certs {
             if self.matches_cert(c) {
@@ -950,6 +1096,9 @@ impl Signature {
         None
     }
 
+    /// Try to check whether this signature is a valid signature of a
+    /// provided digest, given a slice of certificates that might contain
+    /// its signing key.
     fn check_signature(&self, signed_digest: &[u8], certs: &[AuthCert]) -> SigCheckResult {
         match self.find_cert(certs) {
             None => SigCheckResult::MissingCert,
@@ -974,6 +1123,8 @@ impl MDConsensus {
         let mut reader = NetDocReader::new(s);
         Self::parse_from_reader(&mut reader).map_err(|e| e.within(s))
     }
+    /// Extract a voter-info section from the reader; return
+    /// Ok(None) when we are out of voter-info sections.
     fn take_voterinfo(r: &mut NetDocReader<'_, NetstatusKW>) -> Result<Option<ConsensusVoterInfo>> {
         use NetstatusKW::*;
 
@@ -1006,6 +1157,7 @@ impl MDConsensus {
         Ok(Some(voter))
     }
 
+    /// Extract the footer (but not signatures) from the reader.
     fn take_footer(r: &mut NetDocReader<'_, NetstatusKW>) -> Result<Footer> {
         use NetstatusKW::*;
         let mut p = r.pause_at(|i| i.is_ok_with_kwd_in(&[DIRECTORY_SIGNATURE]));
@@ -1014,6 +1166,8 @@ impl MDConsensus {
         Ok(footer)
     }
 
+    /// Extract a routerstatus from the reader.  Return Ok(None) if we're
+    /// out of routerstatus entries.
     fn take_routerstatus(
         r: &mut NetDocReader<'_, NetstatusKW>,
     ) -> Result<Option<(Pos, MDConsensusRouterStatus)>> {
@@ -1046,6 +1200,7 @@ impl MDConsensus {
         Ok(Some((pos, rs)))
     }
 
+    /// Extract an entire UncheckedMDConsensus from a reader.
     fn parse_from_reader(r: &mut NetDocReader<'_, NetstatusKW>) -> Result<UncheckedMDConsensus> {
         use NetstatusKW::*;
         let (header, start_pos) = {
@@ -1126,9 +1281,21 @@ impl MDConsensus {
 }
 
 /// A Microdesc consensus whose signatures have not yet been checked.
+///
+/// To validate this object, call set_n_authorities() on it, then call
+/// check_siganture() on that result with the set of certs that you
+/// have.  Make sure only to provide authority certificates representing
+/// real authorities!
 pub struct UnvalidatedMDConsensus {
+    /// The consensus object. We don't want to expose this until it's
+    /// validated.
     consensus: MDConsensus,
+    /// The signatures that need to be validated before we can call
+    /// this consensus valid.
     siggroup: SignatureGroup,
+    /// The total number of authorities that we believe in.  We need
+    /// this information in order to validate the signatures, since it
+    /// determines how many signatures we need to find valid in `siggroup`.
     n_authorities: Option<u16>,
 }
 

@@ -60,19 +60,29 @@ lazy_static! {
     };
 }
 
-/// A single authority certificate
+/// A single authority certificate.
+///
+/// Authority certificates bind a long-term RSA identity key from a
+/// directory authority to a medium-term signing key.  The signing
+/// keys are the ones used to sign votes and consensuses; the identity
+/// keys can be kept offline.
 #[allow(dead_code)]
 #[derive(Clone)]
 pub struct AuthCert {
-    // These fields are taken right from the certificate.
+    /// An IPv4 address for this authority.
     address: Option<net::SocketAddrV4>,
+    /// The long-term RSA identity key for this authority
     identity_key: rsa::PublicKey,
+    /// The medium-term RSA signing key for this authority
     signing_key: rsa::PublicKey,
+    /// Declared time when this certificate was published
     published: time::SystemTime,
+    /// Declared time when this certificate expires.
     expires: time::SystemTime,
 
-    // These fields are derived.
+    /// Derived field: fingerprint of identity key
     id_fingerprint: rsa::RSAIdentity,
+    /// Derived field: fingerprint of signing key
     sk_fingerprint: rsa::RSAIdentity,
 }
 
@@ -274,6 +284,8 @@ impl AuthCert {
     }
 }
 
+/// Iterator type to read a series of concatenated certificates from a
+/// string.
 struct AuthCertIterator<'a>(NetDocReader<'a, AuthCertKW>);
 
 impl<'a> Iterator for AuthCertIterator<'a> {

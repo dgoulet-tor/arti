@@ -48,15 +48,20 @@ use signature::Signature;
 /// A router descriptor, with possible annotations.
 #[allow(dead_code)]
 pub struct AnnotatedRouterDesc {
+    /// Annotation for this router; possibly empty.
     ann: RouterAnnotation,
+    /// Underlying router descriptor; signatures not checked yet.
     router: UncheckedRouterDesc,
 }
 
 /// Annotations about a router descriptor, as stored on disc.
 #[allow(dead_code)] // don't warn about fields not getting read.
 pub struct RouterAnnotation {
+    /// Description of where we got this router descriptor
     source: Option<String>,
+    /// When this descriptor was first downloaded.
     downloaded: Option<time::SystemTime>,
+    /// Description of what we're willing to use this descriptor for.
     purpose: Option<String>,
 }
 
@@ -75,28 +80,58 @@ pub struct RouterAnnotation {
 /// it is valid, using is_expired_at().
 #[allow(dead_code)] // don't warn about fields not getting read.
 pub struct RouterDesc {
+    /// Human-readable nickname for this router.
+    ///
+    /// This is not secure, and not guaranteed to be unique.
     nickname: String,
+    /// IPv4 address for this router.
     ipv4addr: Option<net::Ipv4Addr>,
+    /// IPv4 ORPort for this router
     orport: u16,
-    ipv6addr: Option<(net::Ipv6Addr, u16)>, // we don't use a socketaddrv6 because we don't care about the flow and scope fields.
+    /// IPv6 address and port for this router.
+    // TODO: we don't use a socketaddrv6 because we don't care about
+    // the flow and scope fields.  We should decide whether that's a
+    // good idea.
+    ipv6addr: Option<(net::Ipv6Addr, u16)>,
+    /// Directory port for contacting this router for HTTP directory downloads.
     dirport: u16,
+    /// Declared uptime for this router in seconds.
     uptime: Option<u64>,
+    /// Time when this router descriptor was published.
     published: time::SystemTime,
+    /// Ed25519 identity certificate (identity key authenticating a
+    /// signing key)
     identity_cert: tor_cert::Ed25519Cert,
+    /// RSA identity for this relay. (Deprecated; never use this without
+    /// the ed25519 identity as well).
     rsa_identity: ll::pk::rsa::PublicKey,
+    /// Key for extending a circuit to this relay using the ntor protocol.
     ntor_onion_key: ll::pk::curve25519::PublicKey,
+    /// Key for extending a circuit to this relay using the
+    /// (deprecated) TAP protocol.
     tap_onion_key: ll::pk::rsa::PublicKey,
+    /// List of subprotocol versions supported by this relay.
     proto: tor_protover::Protocols,
+    /// True if this relay says it's a directory cache.
     is_dircache: bool,
+    /// True if this relay says it can be a hidden service directory.
     is_hsdir: bool,
+    /// True if this relay says that it caches extrainfo documents.
     is_extrainfo_cache: bool,
+    /// Declared family members for this relay.  If two relays are in the
+    /// same family, they shouldn't be used in the same circuit.
     // TODO: these families can get bulky. Perhaps we should de-duplicate
     // them in a cache, like Tor does.
     family: Option<RelayFamily>,
+    /// Software and version that this relay says it's running.
     platform: Option<RelayPlatform>,
+    /// A complete address-level policy for which IPv4 addresses this relay
+    /// says it supports.
     // TODO: these polices can get bulky too. Perhaps we should
     // de-duplicate them too.
     ipv4_policy: AddrPolicy,
+    /// A summary of which ports this relay is willing to connect to
+    /// on IPv6.
     ipv6_policy: PortPolicy,
 }
 
@@ -250,6 +285,7 @@ impl Default for RouterAnnotation {
 }
 
 impl RouterAnnotation {
+    /// Extract a single RouterAnnotation (possibly empty) from a reader.
     fn take_from_reader(reader: &mut NetDocReader<'_, RouterKW>) -> Result<RouterAnnotation> {
         use RouterKW::*;
         let mut items = reader.pause_at(|item| item.is_ok_with_non_annotation());
@@ -274,8 +310,11 @@ impl RouterAnnotation {
 /// may or may not be invalid.
 pub type UncheckedRouterDesc = signed::SignatureGated<timed::TimerangeBound<RouterDesc>>;
 
+/// How long after its published time is a router descriptor officially
+/// supposed to be usable?
 const ROUTER_EXPIRY_SECONDS: u64 = 5 * 86400;
 
+/// How long before its published time is a router descriptor usable?
 // XXXX use the correct value.  Is it specified?
 const ROUTER_PRE_VALIDITY_SECONDS: u64 = 86400;
 
@@ -593,10 +632,16 @@ impl RouterDesc {
 // TODO: This is largely copy-pasted from MicrodescReader. Can/should they
 // be merged?
 pub struct RouterReader<'a> {
+    /// True iff we accept annotations
     annotated: bool,
+    /// Reader that we're extracting items from.
     reader: NetDocReader<'a, RouterKW>,
 }
 
+/// Skip this reader forward until the next thing it reads looks like the
+/// start of a router descriptor.
+///
+/// Used to recover from errors.
 fn advance_to_next_routerdesc(reader: &mut NetDocReader<'_, RouterKW>, annotated: bool) {
     use RouterKW::*;
     let iter = reader.iter();
@@ -628,6 +673,7 @@ impl<'a> RouterReader<'a> {
         RouterReader { annotated, reader }
     }
 
+    /// Extract an annotation from this reader.
     fn take_annotation(&mut self) -> Result<RouterAnnotation> {
         if self.annotated {
             RouterAnnotation::take_from_reader(&mut self.reader)
@@ -636,12 +682,18 @@ impl<'a> RouterReader<'a> {
         }
     }
 
+    /// Extract an annotated router descriptor from this reader
+    ///
+    /// (internal helper; does not clean up on failures.)
     fn take_annotated_routerdesc_raw(&mut self) -> Result<AnnotatedRouterDesc> {
         let ann = self.take_annotation()?;
         let router = RouterDesc::parse_internal(&mut self.reader)?;
         Ok(AnnotatedRouterDesc { router, ann })
     }
 
+    /// Extract an annotated router descriptor from this reader
+    ///
+    /// Ensure that at least one token is consumed
     fn take_annotated_routerdesc(&mut self) -> Result<AnnotatedRouterDesc> {
         let pos_orig = self.reader.pos();
         let result = self.take_annotated_routerdesc_raw();

@@ -29,6 +29,8 @@ use std::time;
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct MicrodescAnnotation {
+    /// A time at which this microdescriptor was last listed in some
+    /// consensus document.
     last_listed: Option<time::SystemTime>,
 }
 
@@ -39,14 +41,24 @@ pub type MDDigest = [u8; 32];
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Microdesc {
+    /// The SHA256 digest of the text of this microdescriptor.  This
+    /// value is used to identify the microdescriptor when downloading
+    /// it, and when listing it in a consensus document.
     // TODO: maybe this belongs somewhere else. Once it's used to store
     // correlate the microdesc to a consensus, it's never used again.
     sha256: MDDigest,
+    /// Public key used for the deprecated TAP circuit extension protocol.
     tap_onion_key: rsa::PublicKey,
+    /// Public key used for the ntor circuit extension protocol.
     ntor_onion_key: curve25519::PublicKey,
+    /// Declared family for this relay.
     family: RelayFamily,
+    /// List of IPv4 ports to which this relay will exit
     ipv4_policy: PortPolicy,
+    /// List of IPv6 ports to which this relay will exit
     ipv6_policy: PortPolicy,
+    /// Ed25519 identity for this relay
+    // TODO: this shouldn't really be optional any more
     // TODO: this is redundant.
     ed25519_id: Option<ed25519::PublicKey>,
     // addr is obsolete and doesn't go here any more
@@ -82,7 +94,9 @@ impl Microdesc {
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct AnnotatedMicrodesc {
+    /// The microdescriptor
     md: Microdesc,
+    /// The annotations for the microdescriptor
     ann: MicrodescAnnotation,
 }
 
@@ -142,6 +156,8 @@ impl Default for MicrodescAnnotation {
 }
 
 impl MicrodescAnnotation {
+    /// Extract a (possibly empty) microdescriptor annotation from a
+    /// reader.
     #[allow(dead_code)]
     fn parse_from_reader(
         reader: &mut NetDocReader<'_, MicrodescKW>,
@@ -307,7 +323,9 @@ fn advance_to_next_microdesc(reader: &mut NetDocReader<'_, MicrodescKW>, annotat
 /// microdescriptors from a string.
 #[derive(Debug)]
 pub struct MicrodescReader<'a> {
+    /// True if we accept annotations; false otherwise.
     annotated: bool,
+    /// An underlying reader to give us Items for the microdescriptors
     reader: NetDocReader<'a, MicrodescKW>,
 }
 

@@ -30,7 +30,7 @@ MILESTONE 2: Working streams
    o Make SENDMEs work
    o Make authenticated sendmes work.
    o Make sendme authentication optional.
-   o Solve SENDME bug with doubled flood/dl tests. (0.06/0.5)
+   o Solve SENDME bug with doubled flood/dl tests. (0.5) (40 min)
    - Circuit reactor shutdown needs to make stream reads fail (_/0.1)
    - Circuit reactor shutdown needs to make stream writes fail (_/0.5)
    - protocol failures on circuits/streams need to kill off the circuit. (_/0.5)
@@ -38,7 +38,9 @@ MILESTONE 2: Working streams
      - coverage on important parts of netdir (_/0.5)
      - coverage on most of tor-proto (_/1)
    - Improve documentation
-     . forbid private-docs everywhere (_/0.3) [1.5h so far]
+     o forbid missing private-docs everywhere (0.2) [2h 10m]
+     - forbid missing private docs in tor-proto (0.2)
+     - forbid missing private docs in tor-proto (0.2)
      - expand documentation in proto, netdir, cell. (_/0.2)
    - Make sure readme is right (_/0)
 
