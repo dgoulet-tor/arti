@@ -18,7 +18,7 @@ pub(super) enum StreamEnt {
     Open(mpsc::Sender<RelayMsg>, sendme::StreamSendWindow),
     /// A stream for which we have received an END cell, but not yet
     /// had the stream object get dropped.
-    Closing,
+    EndReceived,
 }
 
 /// A map from stream IDs to stream entries. Each circuit has one for each
@@ -77,10 +77,10 @@ impl StreamMap {
     ///
     /// Returns true if there was really a stream there.
     pub(super) fn mark_closing(&mut self, id: StreamID) -> bool {
-        let old = self.m.insert(id, StreamEnt::Closing);
+        let old = self.m.insert(id, StreamEnt::EndReceived);
         match old {
             None => false,
-            Some(StreamEnt::Closing) => false,
+            Some(StreamEnt::EndReceived) => false,
             Some(StreamEnt::Open(_, _)) => true,
         }
     }
@@ -91,7 +91,7 @@ impl StreamMap {
         let old = self.m.remove(&id);
         match old {
             None => false,
-            Some(StreamEnt::Closing) => false,
+            Some(StreamEnt::EndReceived) => false,
             Some(StreamEnt::Open(_, _)) => true,
         }
     }
