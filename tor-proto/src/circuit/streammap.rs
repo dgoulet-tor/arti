@@ -73,26 +73,33 @@ impl StreamMap {
         self.m.get_mut(&id)
     }
 
-    /// Marks the stream with `id` as closing.
+    /// Note that we received an END cell on the stream with `id`.
     ///
     /// Returns true if there was really a stream there.
-    pub(super) fn mark_closing(&mut self, id: StreamID) -> bool {
+    pub(super) fn end_received(&mut self, id: StreamID) -> Result<()> {
         let old = self.m.insert(id, StreamEnt::EndReceived);
         match old {
-            None => false,
-            Some(StreamEnt::EndReceived) => false,
-            Some(StreamEnt::Open(_, _)) => true,
+            None => Err(Error::CircProto(
+                "Received END cell on nonexistent stream".into(),
+            )),
+            Some(StreamEnt::EndReceived) => Err(Error::CircProto(
+                "Received two END cells on same stream".into(),
+            )),
+            Some(StreamEnt::Open(_, _)) => Ok(()),
         }
     }
 
-    /// Remove the entry with `id`, if there is one.  Return true if the
-    /// stream was open.
-    pub(super) fn remove(&mut self, id: StreamID) -> bool {
+    /// Handle a termination of the stream with `id` from this side of
+    /// the circuit. Return true if the stream was open and an END
+    /// ought to be sent.
+    pub(super) fn terminate(&mut self, id: StreamID) -> Result<bool> {
         let old = self.m.remove(&id);
         match old {
-            None => false,
-            Some(StreamEnt::EndReceived) => false,
-            Some(StreamEnt::Open(_, _)) => true,
+            None => Err(Error::InternalError(
+                "Somehow we terminated a nonexistent connection‽".into(),
+            )),
+            Some(StreamEnt::EndReceived) => Ok(false),
+            Some(StreamEnt::Open(_, _)) => Ok(true), // in this case, it's endsent.
         }
     }
 

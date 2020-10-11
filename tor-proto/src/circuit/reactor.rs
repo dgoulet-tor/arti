@@ -213,7 +213,7 @@ impl Reactor {
             Error::InternalError("Tried to close a stream on a hop that wasn't there?".into())
         })?;
 
-        let should_send_end = hop.map.remove(id);
+        let should_send_end = hop.map.terminate(id)?;
         // TODO: I am about 80% sure that we only send an END cell if
         // we didn't already get an END cell.  But I should double-check!
         if should_send_end {
@@ -348,7 +348,7 @@ impl ReactorCore {
                 // XXXX I think this shouldn't be possible?
                 .map_err(|_| Error::InternalError("Can't queue cell for open stream?".into()));
             if end_cell {
-                hop.map.mark_closing(streamid);
+                hop.map.end_received(streamid)?;
             }
             result
         } else {
