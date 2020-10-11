@@ -19,6 +19,11 @@ pub(super) enum StreamEnt {
     /// A stream for which we have received an END cell, but not yet
     /// had the stream object get dropped.
     EndReceived,
+    /// A stream for which we have sent an END cell but not yet received
+    /// an END cell.
+    ///
+    /// XXXX Can we ever throw this out? Do we really get END cells for these?
+    EndSent(sendme::StreamRecvWindow),
 }
 
 /// A map from stream IDs to stream entries. Each circuit has one for each
@@ -77,7 +82,8 @@ impl StreamMap {
     ///
     /// Returns true if there was really a stream there.
     pub(super) fn end_received(&mut self, id: StreamID) -> Result<()> {
-        let old = self.m.insert(id, StreamEnt::EndReceived);
+        // TODO: can we refactor this to use HashMap::Entry?
+        let old = self.m.get(&id);
         match old {
             None => Err(Error::CircProto(
                 "Received END cell on nonexistent stream".into(),
@@ -85,21 +91,41 @@ impl StreamMap {
             Some(StreamEnt::EndReceived) => Err(Error::CircProto(
                 "Received two END cells on same stream".into(),
             )),
-            Some(StreamEnt::Open(_, _)) => Ok(()),
+            Some(StreamEnt::EndSent(_)) => {
+                // We got an END, and we already sent an END. Great!
+                // we can forget about this stream.
+                self.m.remove(&id);
+                Ok(())
+            }
+            Some(StreamEnt::Open(_, _)) => {
+                self.m.insert(id, StreamEnt::EndReceived);
+                Ok(())
+            }
         }
     }
 
     /// Handle a termination of the stream with `id` from this side of
     /// the circuit. Return true if the stream was open and an END
     /// ought to be sent.
-    pub(super) fn terminate(&mut self, id: StreamID) -> Result<bool> {
-        let old = self.m.remove(&id);
+    pub(super) fn terminate(&mut self, id: StreamID, w: sendme::StreamRecvWindow) -> Result<bool> {
+        // TODO: can we refactor this to use HashMap::Entry?
+        let old = self.m.get(&id);
         match old {
             None => Err(Error::InternalError(
                 "Somehow we terminated a nonexistent connection‽".into(),
             )),
-            Some(StreamEnt::EndReceived) => Ok(false),
-            Some(StreamEnt::Open(_, _)) => Ok(true), // in this case, it's endsent.
+            Some(StreamEnt::EndReceived) => {
+                self.m.remove(&id);
+                Ok(false)
+            }
+            Some(StreamEnt::Open(_, _)) => {
+                // TODO: use the actual window from the stream.
+                self.m.insert(id, StreamEnt::EndSent(w));
+                Ok(true)
+            }
+            Some(StreamEnt::EndSent(_)) => {
+                panic!("Hang on! We're sending an END on a stream where we alerady sent an END‽");
+            }
         }
     }
 

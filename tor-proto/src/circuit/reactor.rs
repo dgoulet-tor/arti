@@ -32,7 +32,7 @@ pub(super) enum CtrlMsg {
     /// require the sender to .await.
     Register(oneshot::Receiver<CtrlMsg>),
     /// Tell the reactor that a given stream has gone away.
-    CloseStream(HopNum, StreamID),
+    CloseStream(HopNum, StreamID, sendme::StreamRecvWindow),
     /// Ask the reactor for a new stream ID, and allocate a circuit for it.
     AddStream(
         HopNum,
@@ -181,7 +181,9 @@ impl Reactor {
     async fn handle_control(&mut self, msg: CtrlMsg) -> Result<()> {
         match msg {
             CtrlMsg::Shutdown => panic!(), // was handled in reactor loop.
-            CtrlMsg::CloseStream(hop, id) => self.close_stream(hop, id).await?,
+            CtrlMsg::CloseStream(hop, id, recvwindow) => {
+                self.close_stream(hop, id, recvwindow).await?
+            }
             CtrlMsg::Register(ch) => self.register(ch),
             CtrlMsg::AddStream(hop, sink, window, sender) => {
                 let hop = self.core.get_hop_mut(hop);
@@ -207,13 +209,18 @@ impl Reactor {
     /// dropped.
     ///
     /// If we have not already received an END cell on this stream, send one.
-    async fn close_stream(&mut self, hopnum: HopNum, id: StreamID) -> Result<()> {
+    async fn close_stream(
+        &mut self,
+        hopnum: HopNum,
+        id: StreamID,
+        window: sendme::StreamRecvWindow,
+    ) -> Result<()> {
         // Mark the stream as closing.
         let hop = self.core.get_hop_mut(hopnum).ok_or_else(|| {
             Error::InternalError("Tried to close a stream on a hop that wasn't there?".into())
         })?;
 
-        let should_send_end = hop.map.terminate(id)?;
+        let should_send_end = hop.map.terminate(id, window)?;
         // TODO: I am about 80% sure that we only send an END cell if
         // we didn't already get an END cell.  But I should double-check!
         if should_send_end {
@@ -322,40 +329,57 @@ impl ReactorCore {
 
         //XXXX this is still an unwrap, and still risky.
         let hop = self.get_hop_mut(hopnum).unwrap();
-        if let Some(StreamEnt::Open(s, w)) = hop.map.get_mut(streamid) {
-            // The stream for this message exists, and is open.
+        match hop.map.get_mut(streamid) {
+            Some(StreamEnt::Open(s, w)) => {
+                // The stream for this message exists, and is open.
 
-            if let RelayMsg::Sendme(_) = msg {
-                // We need to handle sendmes here, not in the stream's
-                // recv() method, or else we'd never notice them if the
-                // stream isn't reading.
-                w.put(Some(())).await;
-                return Ok(());
+                if let RelayMsg::Sendme(_) = msg {
+                    // We need to handle sendmes here, not in the stream's
+                    // recv() method, or else we'd never notice them if the
+                    // stream isn't reading.
+                    w.put(Some(())).await;
+                    return Ok(());
+                }
+
+                // Remember whether this was an end cell: if so we should
+                // close the stream.
+                let end_cell = matches!(msg, RelayMsg::End(_));
+
+                // XXXX handle errors better. Does this one mean that the
+                // the stream is closed?
+
+                // XXXX reject cells that should never go to a client,
+                // XXXX like BEGIN.
+                let result = s
+                    .send(msg)
+                    .await
+                    // XXXX I think this shouldn't be possible?
+                    .map_err(|_| Error::InternalError("Can't queue cell for open stream?".into()));
+                if end_cell {
+                    hop.map.end_received(streamid)?;
+                }
+                result
             }
+            Some(StreamEnt::EndSent(window)) => {
+                // We sent an end but maybe the other side hasn't heard.
 
-            // Remember whether this was an end cell: if so we should
-            // close the stream.
-            let end_cell = matches!(msg, RelayMsg::End(_));
-
-            // XXXX handle errors better. Does this one mean that the
-            // the stream is closed?
-
-            // XXXX reject cells that should never go to a client,
-            // XXXX like BEGIN.
-            let result = s
-                .send(msg)
-                .await
-                // XXXX I think this shouldn't be possible?
-                .map_err(|_| Error::InternalError("Can't queue cell for open stream?".into()));
-            if end_cell {
-                hop.map.end_received(streamid)?;
+                // XXXX need to reject more cell types here, like BEGIN etc
+                if matches!(msg, RelayMsg::End(_)) {
+                    hop.map.end_received(streamid)
+                } else if window.take().is_none() {
+                    Err(Error::CircProto(
+                        "Impossibly many cells sent to a closed stream!".into(),
+                    ))
+                } else {
+                    Ok(())
+                }
             }
-            result
-        } else {
-            // No stream wants this message.
-
-            // XXXX what do we do with unrecognized cells?
-            Ok(())
+            _ => {
+                // No stream wants this message.
+                Err(Error::CircProto(
+                    "Cell received on nonexistent stream!?".into(),
+                ))
+            }
         }
     }
 

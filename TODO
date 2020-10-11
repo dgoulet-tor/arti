@@ -3,6 +3,7 @@ KEY:
 . Partially done
 o complete
 X Won't do.
+? Did this happen?
 
 
 MILESTONE 0: Build a circuit and use it
@@ -31,7 +32,7 @@ MILESTONE 2: Working streams
    o Make authenticated sendmes work.
    o Make sendme authentication optional.
    o Solve SENDME bug with doubled flood/dl tests. (0.5) (40 min)
-   - Circuit reactor shutdown needs to make stream reads fail (_/0.1)
+   ? Circuit reactor shutdown needs to make stream reads fail (_/0.1)
    - Circuit reactor shutdown needs to make stream writes fail (_/0.5)
    - protocol failures on circuits/streams need to kill off the circuit. (_/0.5)
    - Improve testing
@@ -50,9 +51,9 @@ MILESTONE 3: Clean and tidy
    - Complete testing in tor-proto crate. (1)
    o Better solution for deadlock in lock on sendwindow.
    - Ed25519 needs to have an "identity" non-parsed version, maybe.
-   - Add a state for streams _we_ have closed where we haven't got an end
+   . Add a state for streams _we_ have closed where we haven't got an end
      from the other side.  Treat unexpected stream data as fatal.
-     (Defend against DropMark attack from 25573) (1)
+     (Defend against DropMark attack from 25573) (1) [1h so far]
    - Add other "partially-closed" states for streams and circuits (1)
    - Less copying, esp around Box<RawCellBody>.  Consider bytes crate. (1)
    - Is this "reactor" business a sensible design?  Is there a better one? (??)

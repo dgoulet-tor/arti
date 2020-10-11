@@ -80,6 +80,7 @@ pub trait WindowParams {
     /// Increment for this window.
     fn increment() -> u16;
 }
+#[derive(Clone)]
 pub struct CircParams;
 impl WindowParams for CircParams {
     fn maximum() -> u16 {
@@ -89,6 +90,7 @@ impl WindowParams for CircParams {
         100
     }
 }
+#[derive(Clone)]
 pub struct StreamParams;
 impl WindowParams for StreamParams {
     fn maximum() -> u16 {
@@ -201,6 +203,7 @@ where
 }
 
 /// Structure to track when we need to send SENDME cells for incoming data.
+#[derive(Clone)]
 pub struct RecvWindow<P: WindowParams> {
     window: u16,
     _dummy: std::marker::PhantomData<P>,

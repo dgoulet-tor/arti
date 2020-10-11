@@ -121,6 +121,12 @@ pub(crate) struct StreamTarget {
     circ: ClientCirc,
     window: sendme::StreamSendWindow,
     stream_closed: Cell<Option<oneshot::Sender<CtrlMsg>>>,
+    /// Window to track incoming cells and SENDMEs.
+    // XXXX Putting this field here in this object means that this
+    // object isn't really so much a "target", since a "target"
+    // doesn't know how to receive.  Maybe we should rename it to be
+    // some kind of a "handle" or something?
+    pub(crate) recvwindow: sendme::StreamRecvWindow,
 }
 
 /// Information about a single hop of a client circuit.
@@ -379,11 +385,14 @@ impl ClientCirc {
                 .map_err(|_| Error::InternalError("Can't queue stream closer".into()))?;
         }
 
+        const STREAM_RECV_INIT: u16 = 500;
+
         let target = StreamTarget {
             circ: self.clone(),
             stream_id: id,
             hop: hopnum,
             window,
+            recvwindow: sendme::StreamRecvWindow::new(STREAM_RECV_INIT),
             stream_closed: Cell::new(Some(send_close)),
         };
 
@@ -752,8 +761,14 @@ impl Drop for ClientCircImpl {
 impl Drop for StreamTarget {
     fn drop(&mut self) {
         if let Some(sender) = self.stream_closed.take() {
-            // ignore the error, since it can only be canceled.
-            let _ = sender.send(CtrlMsg::CloseStream(self.hop, self.stream_id));
+            // This "clone" call is a bit dangerous: it means that we might
+            // allow the other side to send a couple of cells that get
+            // decremented from self.recvwindow but don't get reflected
+            // in the circuit-owned view of the window.
+            let window = self.recvwindow.clone();
+            let _ = sender.send(CtrlMsg::CloseStream(self.hop, self.stream_id, window));
         }
+        // If there's an error, no worries: it's hard-cancel, and we
+        // can just ignore it. XXXX (I hope?)
     }
 }

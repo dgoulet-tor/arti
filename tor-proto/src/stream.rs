@@ -26,8 +26,6 @@ pub struct TorStream {
     ///
     /// TODO: do something similar with circuits?
     target: StreamTarget,
-    /// Window to track incoming cells and SENDMEs.
-    recvwindow: sendme::StreamRecvWindow,
     /// A Stream over which we receive relay messages.  Only relay messages
     /// that can be associated with a stream ID will be received.
     receiver: mpsc::Receiver<RelayMsg>,
@@ -37,14 +35,11 @@ pub struct TorStream {
 }
 
 impl TorStream {
-    const RECV_INIT: u16 = 500;
-
     /// Internal: build a new TorStream.
     pub(crate) fn new(target: StreamTarget, receiver: mpsc::Receiver<RelayMsg>) -> Self {
         TorStream {
             target,
             receiver,
-            recvwindow: sendme::StreamRecvWindow::new(Self::RECV_INIT),
             received_end: None,
         }
     }
@@ -64,7 +59,7 @@ impl TorStream {
         // Possibly decrement the window for the cell we just received, and
         // send a SENDME if doing so took us under the threshold.
         if sendme::msg_counts_towards_windows(&msg) {
-            match self.recvwindow.take() {
+            match self.target.recvwindow.take() {
                 Some(true) => self.send_sendme().await?,
                 Some(false) => {}
                 None => return Err(Error::StreamProto("stream violated SENDME window".into())),
@@ -83,7 +78,7 @@ impl TorStream {
     async fn send_sendme(&mut self) -> Result<()> {
         let sendme = Sendme::new_empty();
         self.target.send(sendme.into()).await?;
-        self.recvwindow.put();
+        self.target.recvwindow.put();
         Ok(())
     }
 }
