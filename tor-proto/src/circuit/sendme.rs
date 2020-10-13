@@ -235,6 +235,19 @@ impl<P: WindowParams> RecvWindow<P> {
         }
     }
 
+    /// Reduce this window by `n`; give an error if this is not possible.
+    pub fn decrement_n(&mut self, n: u16) -> crate::Result<()> {
+        let v = self.window.checked_sub(n);
+        if let Some(x) = v {
+            self.window = x;
+            Ok(())
+        } else {
+            Err(crate::Error::CircProto(
+                "Received too many cells on a stream".into(),
+            ))
+        }
+    }
+
     /// Called when we've just send a SENDME.
     pub fn put(&mut self) {
         self.window = self.window.checked_add(P::increment()).unwrap();

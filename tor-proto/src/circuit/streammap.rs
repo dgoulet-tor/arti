@@ -15,7 +15,13 @@ use rand::Rng;
 pub(super) enum StreamEnt {
     /// An open stream: any relay cells tagged for this stream should get
     /// sent over the mpsc::Sender.
-    Open(mpsc::Sender<RelayMsg>, sendme::StreamSendWindow),
+    ///
+    /// The StreamSendWindow is used to make sure that incoming SENDME
+    /// cells; the u16 is a count of cells that we have dropped due to
+    /// the stream disappearing before we can transform this into an
+    /// EndSent.
+    // TODO: is this the  best way?
+    Open(mpsc::Sender<RelayMsg>, sendme::StreamSendWindow, u16),
     /// A stream for which we have received an END cell, but not yet
     /// had the stream object get dropped.
     EndReceived,
@@ -55,7 +61,7 @@ impl StreamMap {
         sink: mpsc::Sender<RelayMsg>,
         window: sendme::StreamSendWindow,
     ) -> Result<StreamID> {
-        let stream_ent = StreamEnt::Open(sink, window);
+        let stream_ent = StreamEnt::Open(sink, window, 0);
         // This seems too aggressive, but it's what tor does
         for _ in 1..=65536 {
             let id: StreamID = self.next_stream_id.into();
@@ -97,7 +103,7 @@ impl StreamMap {
                 self.m.remove(&id);
                 Ok(())
             }
-            Some(StreamEnt::Open(_, _)) => {
+            Some(StreamEnt::Open(_, _, _)) => {
                 self.m.insert(id, StreamEnt::EndReceived);
                 Ok(())
             }
@@ -107,7 +113,11 @@ impl StreamMap {
     /// Handle a termination of the stream with `id` from this side of
     /// the circuit. Return true if the stream was open and an END
     /// ought to be sent.
-    pub(super) fn terminate(&mut self, id: StreamID, w: sendme::StreamRecvWindow) -> Result<bool> {
+    pub(super) fn terminate(
+        &mut self,
+        id: StreamID,
+        mut w: sendme::StreamRecvWindow,
+    ) -> Result<bool> {
         // TODO: can we refactor this to use HashMap::Entry?
         let old = self.m.get(&id);
         match old {
@@ -118,8 +128,8 @@ impl StreamMap {
                 self.m.remove(&id);
                 Ok(false)
             }
-            Some(StreamEnt::Open(_, _)) => {
-                // TODO: use the actual window from the stream.
+            Some(StreamEnt::Open(_, _, n)) => {
+                w.decrement_n(*n)?;
                 self.m.insert(id, StreamEnt::EndSent(w));
                 Ok(true)
             }

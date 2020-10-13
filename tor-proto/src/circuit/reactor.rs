@@ -280,9 +280,11 @@ impl ReactorCore {
         // Decode the cell.
         let msg = RelayCell::decode(body.into())?;
 
+        let c_t_w = sendme::cell_counts_towards_windows(&msg);
+
         // Decrement the circuit sendme windows, and see if we need to
         // send a sendme cell.
-        let send_circ_sendme = if sendme::cell_counts_towards_windows(&msg) {
+        let send_circ_sendme = if c_t_w {
             // XXXX unwrap is yucky.
             match self.get_hop_mut(hopnum).unwrap().recvwindow.take() {
                 Some(true) => true,
@@ -330,7 +332,7 @@ impl ReactorCore {
         //XXXX this is still an unwrap, and still risky.
         let hop = self.get_hop_mut(hopnum).unwrap();
         match hop.map.get_mut(streamid) {
-            Some(StreamEnt::Open(s, w)) => {
+            Some(StreamEnt::Open(s, w, ref mut dropped)) => {
                 // The stream for this message exists, and is open.
 
                 if let RelayMsg::Sendme(_) = msg {
@@ -350,15 +352,16 @@ impl ReactorCore {
 
                 // XXXX reject cells that should never go to a client,
                 // XXXX like BEGIN.
-                let result = s
-                    .send(msg)
-                    .await
-                    // XXXX I think this shouldn't be possible?
-                    .map_err(|_| Error::InternalError("Can't queue cell for open stream?".into()));
+                let result = s.send(msg).await;
+                if result.is_err() && c_t_w {
+                    // the other side of the stream has gone away; remember
+                    // that we received a cell that we couldn't queue for it.
+                    *dropped += 1;
+                }
                 if end_cell {
                     hop.map.end_received(streamid)?;
                 }
-                result
+                Ok(())
             }
             Some(StreamEnt::EndSent(window)) => {
                 // We sent an end but maybe the other side hasn't heard.
