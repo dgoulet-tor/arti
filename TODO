@@ -36,28 +36,24 @@ MILESTONE 2: Working streams
    o Circuit reactor shutdown needs to make stream writes fail (_/0.5) 30m
    o protocol failures on circuits/streams need to kill off the
      circuit. (_/0.5) 30m
-   - Improve testing
-     - coverage on important parts of netdir (_/0.5)
-     - coverage on more of tor-proto (_/1)
-   . Improve documentation
-     o forbid missing private-docs everywhere (0.2) [2h 10m]
-     o forbid missing private docs in tor-proto (0.2) [40m]
-     - expand documentation in proto, netdir, cell. (_/0.2)
-   - Make sure readme is right (_/0)
+   o Improve documentation
+     o forbid missing private-docs everywhere (0.2) [2h 50m]
+        o forbid missing private docs in tor-proto
+   o Make sure readme is right (_/0) [10m]
+   o Better solution for deadlock in lock on sendwindow.
+   o Add a state for streams _we_ have closed where we haven't got an end
+     from the other side.  Treat unexpected stream data as fatal.
+     (Defend against DropMark attack from 25573) (1) (2:20h)
 
 MILESTONE 3: Clean and tidy
    - Make sure that circuit Destroys are handled and sent correctly.
      Use ideas from circuit module. (1)
-   - Complete testing in tor-proto crate. (1)
-   o Better solution for deadlock in lock on sendwindow.
-   - Ed25519 needs to have an "identity" non-parsed version, maybe.
-   o Add a state for streams _we_ have closed where we haven't got an end
-     from the other side.  Treat unexpected stream data as fatal.
-     (Defend against DropMark attack from 25573) (1) [1h so far]
+   - Ed25519 needs to have an "identity" non-parsed version, maybe. (0.2)
    - Add other "partially-closed" states for streams and circuits? (1)
    - Less copying, esp around Box<RawCellBody>.  Consider bytes crate. (1)
    - Is this "reactor" business a sensible design?  Is there a better one? (??)
    - Use better types for cases when only a few messages are possible. (0.3)
+   - Audit all cell handling: unexpected cells mean kill the circuit [0.5]
    - Get a data-oriented stream API (1)
    - Make all APIs conform to best practices (1)
    - Figure out which consensus method we require, and say so. (0.2)
@@ -65,15 +61,20 @@ MILESTONE 3: Clean and tidy
        - Make a plan for what closes when
        - Make sure everything closes when it is supposed to.
    - Refactor XXXX and TODO code; make sure everything is tested and
-     documented.
+     documented. (1-4??)
+   - Improve testing
+     - coverage on important parts of netdir (0.5)
+     - complete coverage on tor-proto (2)
+   - expand documentation in proto, netdir, cell. (0.5)
 
-
-MILESTONE A: Experimental client use
+MILESTONE A1: Dogfooding a socksport
    - Make connections on demand (1)
    - Build circuits on demand (2)
    - Downloading directory information, using compression and diffs. (3)
-   - Minimal stable API. (2)
    - Optionally, expose a socks port (0.5)
+
+MILESTONE A2: Experimental embedded client use
+   - Minimal stable API. (2)
    - Begin using semver. (0.1)
 
 MILESTONE B: Secure minimal client

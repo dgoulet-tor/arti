@@ -9,12 +9,12 @@ also short for "artifact".   It has nothing to do with the
 
 ## Is this the future of Tor??!?11?!?
 
-No, this started out as a fun a fun side project I've been doing on weekends
-and to learn Rust.
+It's not the future yet! ;)
 
-Maybe if it turns out great, we can turn it into something official,
-but right now nobody's working on it but me, and it's not part of my
-official job.
+I'm hoping that with time I can turn this code into a minimal Tor
+client, and then we'll see what the situation is, and whether we should
+keep on working on it.  See the TODO file for other milestones that
+we're considering.
 
 ## What the demo can do if you run it.
 
@@ -113,7 +113,6 @@ There is a list of features that I wish other crates had in
 
 Please hold off on opening tickets unless you are pretty sure that you're
 reporting a problem I don't know about. :)
-
 
 ## Caveat haxxor: what to watch out for
 
