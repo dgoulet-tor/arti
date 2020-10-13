@@ -47,30 +47,39 @@ MILESTONE 2: Working streams
 
 MILESTONE 3: Clean and tidy
    - Make sure that circuit Destroys are handled and sent correctly.
-     Use ideas from circuit module. (1)
-   - Ed25519 needs to have an "identity" non-parsed version, maybe. (0.2)
-   - Add other "partially-closed" states for streams and circuits? (1)
-   - Less copying, esp around Box<RawCellBody>.  Consider bytes crate. (1)
-   - Is this "reactor" business a sensible design?  Is there a better one? (??)
-   - Use better types for cases when only a few messages are possible. (0.3)
-   - Audit all cell handling: unexpected cells mean kill the circuit [0.5]
-   - Get a data-oriented stream API (1)
-   - Make all APIs conform to best practices (1)
-   - Figure out which consensus method we require, and say so. (0.2)
-   - Audit closing-stuff code (1)
+     Use ideas from circuit module. arti#5 (1)
+   - Ed25519 needs to have an "identity" non-parsed version, maybe. arti#6
+     (0.2)
+   X Add other "partially-closed" states for streams and circuits? (1)
+        - Audit to make sure Tor has no such things. (0.1)
+   - Less copying, esp around Box<RawCellBody>.  Consider bytes crate. arti#7
+     (1)
+   - Use better types for cases when only a few messages are
+     possible. arti#11 (0.3)
+   - Audit all cell handling: unexpected cells mean kill the circuit arti#12
+     [0.5]
+   - Get a data-oriented stream API. arti#10 (1)
+   - Make all APIs conform to best practices. arti#9 (1)
+   - Figure out which consensus method we require, and say so. arti#8 (0.2)
+   - Audit lifetime and locking code arti#14 (1)
        - Make a plan for what closes when
        - Make sure everything closes when it is supposed to.
-   - Refactor XXXX and TODO code; make sure everything is tested and
-     documented. (1-4??)
+       - What is locked?  What _could_ deadlock?  What prevents it?
    - Improve testing
-     - coverage on important parts of netdir (0.5)
-     - complete coverage on tor-proto (2)
-   - expand documentation in proto, netdir, cell. (0.5)
+       - complete coverage on tor-proto arti#13 (2)
+   - Refactor XXXX and TODO code; make sure everything is tested and
+     documented.  (1-4??)
+        - [arti#15 to make a list of these]
+   - expand documentation in tor-proto, tor-netdir, tor-netdoc,
+     tor-cell. arti#16 (0.5)
+   - Is this "reactor" business a sensible design?  Is there a better one?
+     What else would a rustacean object to?  arti#17 (??)
 
 MILESTONE A1: Dogfooding a socksport
    - Make connections on demand (1)
    - Build circuits on demand (2)
    - Downloading directory information, using compression and diffs. (3)
+   - coverage on important parts of netdir (0.5)
    - Optionally, expose a socks port (0.5)
 
 MILESTONE A2: Experimental embedded client use
