@@ -32,8 +32,8 @@ MILESTONE 2: Working streams
    o Make authenticated sendmes work.
    o Make sendme authentication optional.
    o Solve SENDME bug with doubled flood/dl tests. (0.5) (40 min)
-   ? Circuit reactor shutdown needs to make stream reads fail (_/0.1)
-   - Circuit reactor shutdown needs to make stream writes fail (_/0.5)
+   o Circuit reactor shutdown needs to make stream reads fail (_/0.1) 5m to test
+   o Circuit reactor shutdown needs to make stream writes fail (_/0.5) 30m
    - protocol failures on circuits/streams need to kill off the circuit. (_/0.5)
    - Improve testing
      - coverage on important parts of netdir (_/0.5)

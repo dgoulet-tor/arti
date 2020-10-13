@@ -77,6 +77,10 @@ pub struct PendingClientCirc {
     circ: ClientCirc,
 }
 
+/// A result type used to tell a circuit about some a "meta-cell"
+/// (like extended, intro_established, etc).
+type MetaResult = Result<(HopNum, RelayMsg)>;
+
 /// The implementation type for this circuit.
 struct ClientCircImpl {
     /// This circuit's ID on the upstream channel.
@@ -88,6 +92,9 @@ struct ClientCircImpl {
     /// This object is divided into multiple layers, each of which is
     /// shared with one hop of the circuit
     crypto_out: OutboundClientCrypt,
+    /// This circuit can't be used because it has been closed, locally
+    /// or remotely.
+    closed: bool,
     /// Per-hop circuit information.
     ///
     /// Note that hops.len() must be the same as crypto.n_layers().
@@ -101,7 +108,7 @@ struct ClientCircImpl {
     ///
     /// For the purposes of this implementation, a "meta" cell
     /// is a RELAY cell with a stream ID value of 0.
-    sendmeta: Cell<Option<oneshot::Sender<(HopNum, RelayMsg)>>>,
+    sendmeta: Cell<Option<oneshot::Sender<MetaResult>>>,
 }
 // XXXX TODO: need to send a destroy cell on drop, and tell the reactor to
 // XXXX shut down.
@@ -164,7 +171,7 @@ impl ClientCirc {
     ///
     /// Note that you should register a meta handler _before_ you send whatever
     /// cell you're waiting a response to, or you might miss the response.
-    async fn register_meta_handler(&mut self) -> Result<oneshot::Receiver<(HopNum, RelayMsg)>> {
+    async fn register_meta_handler(&mut self) -> Result<oneshot::Receiver<MetaResult>> {
         let (sender, receiver) = oneshot::channel();
 
         let circ = self.c.lock().await;
@@ -234,7 +241,7 @@ impl ClientCirc {
         // ... and now we wait for a response.
         let (from_hop, msg) = receiver.await.map_err(|_| {
             Error::CircDestroy("Circuit closed while waiting for extended cell".into())
-        })?;
+        })??;
 
         // XXXX If two EXTEND cells are of these are launched on the
         // same circuit at once, could they collide in this part of
@@ -465,7 +472,7 @@ impl ClientCircImpl {
         if let Some(sender) = self.sendmeta.take() {
             // Somebody was waiting for a message -- maybe this message
             sender
-                .send((hopnum, msg))
+                .send(Ok((hopnum, msg)))
                 // I think this means that the channel got closed.
                 .map_err(|_| Error::CircuitClosed)
         } else {
@@ -519,6 +526,9 @@ impl ClientCircImpl {
     ///
     /// Does not check whether the cell is well-formed or reasonable.
     async fn send_relay_cell(&mut self, hop: HopNum, early: bool, cell: RelayCell) -> Result<()> {
+        if self.closed {
+            return Err(Error::CircuitClosed);
+        }
         let c_t_w = sendme::cell_counts_towards_windows(&cell);
         let mut body: RelayCellBody = cell.encode(&mut thread_rng())?.into();
         let tag = self.crypto_out.encrypt(&mut body, hop)?;
@@ -570,6 +580,7 @@ impl PendingClientCirc {
             channel,
             crypto_out,
             hops,
+            closed: false,
             control: sendctrl,
             sendshutdown: Cell::new(Some(sendclosed)),
             sendmeta: Cell::new(None),
@@ -751,6 +762,7 @@ impl StreamTarget {
 
 impl Drop for ClientCircImpl {
     fn drop(&mut self) {
+        self.closed = true;
         if let Some(sender) = self.sendshutdown.take() {
             // ignore the error, since it can only be canceled.
             let _ = sender.send(CtrlMsg::Shutdown);

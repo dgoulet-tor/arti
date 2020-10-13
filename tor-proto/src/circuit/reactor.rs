@@ -146,6 +146,25 @@ impl Reactor {
     /// Launch the reactor, and run until the circuit closes or we
     /// encounter an error.
     pub async fn run(mut self) -> Result<()> {
+        {
+            let circ = self.core.circuit.c.lock().await;
+            if circ.closed {
+                return Err(Error::CircuitClosed);
+            }
+        }
+        let result = self.run_impl().await;
+        {
+            let mut circ = self.core.circuit.c.lock().await;
+            circ.closed = true;
+            if let Some(sender) = circ.sendmeta.take() {
+                let _ignore_err = sender.send(Err(Error::CircuitClosed));
+            }
+        }
+        result
+    }
+
+    /// Helper for run: doesn't mark the circuit closed on finish.
+    async fn run_impl(&mut self) -> Result<()> {
         loop {
             // What's next to do?
             let item = select_biased! {
