@@ -31,6 +31,7 @@
 //!
 //! XXXX We don't send DESTROY cells when we should, or handle them well.
 
+mod halfstream;
 pub(crate) mod reactor;
 pub(crate) mod sendme;
 mod streammap;

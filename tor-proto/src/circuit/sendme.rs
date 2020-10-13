@@ -186,6 +186,7 @@ where
     ///
     /// On failure, return None: the caller should close the stream
     /// or circuit with a protocol error.
+    #[must_use]
     pub async fn put(&mut self, tag: Option<T>) -> Option<u16> {
         let mut w = self.w.lock().await;
 
@@ -234,6 +235,7 @@ impl<P: WindowParams> RecvWindow<P> {
     ///
     /// Returns None if we should not have sent the cell, and we just
     /// violated the window.
+    #[must_use]
     pub fn take(&mut self) -> Option<bool> {
         let v = self.window.checked_sub(1);
         if let Some(x) = v {

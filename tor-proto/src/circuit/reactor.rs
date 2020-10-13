@@ -388,18 +388,13 @@ impl ReactorCore {
                 }
                 Ok(())
             }
-            Some(StreamEnt::EndSent(window)) => {
+            Some(StreamEnt::EndSent(halfstream)) => {
                 // We sent an end but maybe the other side hasn't heard.
 
-                // XXXX need to reject more cell types here, like BEGIN etc
                 if matches!(msg, RelayMsg::End(_)) {
                     hop.map.end_received(streamid)
-                } else if window.take().is_none() {
-                    Err(Error::CircProto(
-                        "Impossibly many cells sent to a closed stream!".into(),
-                    ))
                 } else {
-                    Ok(())
+                    halfstream.handle_msg(&msg).await
                 }
             }
             _ => {

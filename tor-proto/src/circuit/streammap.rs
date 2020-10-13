@@ -1,5 +1,6 @@
 //! Types and code for mapping StreamIDs to streams on a circuit.
 
+use crate::circuit::halfstream::HalfStream;
 use crate::circuit::sendme;
 use crate::{Error, Result};
 /// Mapping from stream ID to streams.
@@ -31,7 +32,7 @@ pub(super) enum StreamEnt {
     /// an END cell.
     ///
     /// XXXX Can we ever throw this out? Do we really get END cells for these?
-    EndSent(sendme::StreamRecvWindow),
+    EndSent(HalfStream),
 }
 
 /// A map from stream IDs to stream entries. Each circuit has one for each
@@ -107,6 +108,7 @@ impl StreamMap {
                 "Received two END cells on same stream".into(),
             )),
             Some(StreamEnt::EndSent(_)) => {
+                dbg!("Actually got an end cell on a half-closed stream!");
                 // We got an END, and we already sent an END. Great!
                 // we can forget about this stream.
                 self.m.remove(&id);
@@ -125,7 +127,7 @@ impl StreamMap {
     pub(super) fn terminate(
         &mut self,
         id: StreamID,
-        mut w: sendme::StreamRecvWindow,
+        mut recvw: sendme::StreamRecvWindow,
     ) -> Result<bool> {
         // TODO: can we refactor this to use HashMap::Entry?
         let old = self.m.get(&id);
@@ -137,9 +139,13 @@ impl StreamMap {
                 self.m.remove(&id);
                 Ok(false)
             }
-            Some(StreamEnt::Open(_, _, n)) => {
-                w.decrement_n(*n)?;
-                self.m.insert(id, StreamEnt::EndSent(w));
+            Some(StreamEnt::Open(_, sendw, n)) => {
+                recvw.decrement_n(*n)?;
+                // TODO: would be nice to avoid new_ref.
+                // XXXX: We should set connected_ok properly.
+                let connected_ok = true;
+                let halfstream = HalfStream::new(sendw.new_ref(), recvw, connected_ok);
+                self.m.insert(id, StreamEnt::EndSent(halfstream));
                 Ok(true)
             }
             Some(StreamEnt::EndSent(_)) => {

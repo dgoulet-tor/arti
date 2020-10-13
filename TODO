@@ -51,10 +51,10 @@ MILESTONE 3: Clean and tidy
    - Complete testing in tor-proto crate. (1)
    o Better solution for deadlock in lock on sendwindow.
    - Ed25519 needs to have an "identity" non-parsed version, maybe.
-   . Add a state for streams _we_ have closed where we haven't got an end
+   o Add a state for streams _we_ have closed where we haven't got an end
      from the other side.  Treat unexpected stream data as fatal.
      (Defend against DropMark attack from 25573) (1) [1h so far]
-   - Add other "partially-closed" states for streams and circuits (1)
+   - Add other "partially-closed" states for streams and circuits? (1)
    - Less copying, esp around Box<RawCellBody>.  Consider bytes crate. (1)
    - Is this "reactor" business a sensible design?  Is there a better one? (??)
    - Use better types for cases when only a few messages are possible. (0.3)
