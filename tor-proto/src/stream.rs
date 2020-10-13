@@ -89,13 +89,19 @@ impl TorStream {
 /// A DataStream is a wrapper around a TorStream for byte-oriented IO.
 /// It's suitable for use with BEGIN or BEGIN_DIR streams.
 pub struct DataStream {
+    /// The underlying TorStream object.
     s: TorStream,
+    /// If present, data that we received on this stream but have not
+    /// been able to send to the caller yet.
     pending: Option<Vec<u8>>, // bad design, but okay I guess.
 }
 
 // TODO: I'd like this to implement AsyncRead and AsyncWrite.
 
 impl DataStream {
+    /// Wrap a TorStream as a DataStream.
+    ///
+    /// Call only after a CONNECTED cell has been received.
     pub(crate) fn new(s: TorStream) -> Self {
         DataStream { s, pending: None }
     }
@@ -123,6 +129,10 @@ impl DataStream {
     //
     // AsyncRead would be better.
     pub async fn read_bytes(&mut self, buf: &mut [u8]) -> Result<usize> {
+        /// Helper: pull as many bytes as possible out of `v` (from
+        /// the front), and store them into `buf`.  Return a tuple
+        /// containing the number of bytes transferred, and the
+        /// remainder of `v` (if nonempty).
         fn split_and_write(buf: &mut [u8], mut v: Vec<u8>) -> (usize, Option<Vec<u8>>) {
             if v.len() > buf.len() {
                 let remainder = v.split_off(buf.len());
@@ -177,10 +187,14 @@ impl DataStream {
 /// A ResolveStream represents a pending DNS request made with a RESOLVE
 /// cell.
 pub struct ResolveStream {
+    /// The underlying TorStream.
     s: TorStream,
 }
 
 impl ResolveStream {
+    /// Wrap a TorStream into a ResolveStream.
+    ///
+    /// Call only after sending a RESOLVE cell.
     #[allow(dead_code)] // need to implement a caller for this.
     pub(crate) fn new(s: TorStream) -> Self {
         ResolveStream { s }

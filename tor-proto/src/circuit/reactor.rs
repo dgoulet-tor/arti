@@ -54,6 +54,12 @@ pub(super) enum CtrlMsg {
 /// join them.
 pub(super) type CtrlResult = std::result::Result<CtrlMsg, oneshot::Canceled>;
 
+/// A stream to multiplex over a bunch of oneshot CtrlMsg replies.
+///
+/// We use oneshot channels to handle stream shutdowns, since oneshot
+/// senders can be sent from within a non-async function.  We wrap
+/// them in stream::Once so we can treat them as streams, and wrap
+/// _those_ in a SelectAll so we can learn about them as they fire.
 type OneshotStream = stream::SelectAll<stream::Once<oneshot::Receiver<CtrlMsg>>>;
 
 /// Represents the reactor's view of a single hop.

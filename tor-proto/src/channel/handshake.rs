@@ -24,6 +24,10 @@ static LINK_PROTOCOLS: &[u16] = &[4];
 
 /// A raw client channel on which nothing has been done.
 pub struct OutboundClientHandshake<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+    /// Underlying TLS stream.
+    ///
+    /// (We don't enforce that this is actually TLS, but if it isn't, the
+    /// connection won't be secure.)
     tls: T,
 }
 

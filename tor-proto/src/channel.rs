@@ -48,14 +48,15 @@ use rand::Rng;
 // reexport
 pub use handshake::{OutboundClientHandshake, UnverifiedChannel, VerifiedChannel};
 
-// Type alias: A Sink and Stream that transforms a TLS connection into
-// a cell-based communication mechanism.
+/// Type alias: A Sink and Stream that transforms a TLS connection into
+/// a cell-based communication mechanism.
 type CellFrame<T> = futures_codec::Framed<T, crate::channel::codec::ChannelCodec>;
 
 /// An open client channel, ready to send and receive Tor cells.
 ///
 /// A channel is a direct connection to a Tor relay, implemented using TLS.
 pub struct Channel {
+    /// reference-counted locked wrapper around the channel object
     inner: Arc<Mutex<ChannelImpl>>,
 }
 

@@ -39,10 +39,9 @@ MILESTONE 2: Working streams
    - Improve testing
      - coverage on important parts of netdir (_/0.5)
      - coverage on more of tor-proto (_/1)
-   - Improve documentation
+   . Improve documentation
      o forbid missing private-docs everywhere (0.2) [2h 10m]
-     - forbid missing private docs in tor-proto (0.2)
-     - forbid missing private docs in tor-____? (0.2)
+     o forbid missing private docs in tor-proto (0.2) [40m]
      - expand documentation in proto, netdir, cell. (_/0.2)
    - Make sure readme is right (_/0)
 

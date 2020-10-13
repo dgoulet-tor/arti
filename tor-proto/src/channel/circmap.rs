@@ -1,3 +1,5 @@
+//! Types and code to map circuit IDs to circuits.
+
 // NOTE: This is a work in progress and I bet I'll refactor it a lot;
 // it needs to stay opaque!
 
@@ -69,7 +71,9 @@ pub(super) enum CircEnt {
 
 /// A map from circuit IDs to circuit entries. Each channel has one.
 pub(super) struct CircMap {
+    /// Map from circuit IDs to entries
     m: HashMap<CircID, CircEnt>,
+    /// Rule for allocating new circuit IDs.
     range: CircIDRange,
 }
 
@@ -92,6 +96,8 @@ impl CircMap {
         createdsink: oneshot::Sender<ChanMsg>,
         sink: mpsc::Sender<ChanMsg>,
     ) -> Result<CircID> {
+        /// How many times do we probe for a random circuit ID before
+        /// we assume that the range is fully populated?
         const N_ATTEMPTS: usize = 16;
         let iter = (&mut self.range).sample_iter(rng).take(N_ATTEMPTS);
         let circ_ent = CircEnt::Opening(createdsink, sink);

@@ -27,18 +27,28 @@ pub trait KDF {
 }
 
 /// A legacy KDF, for use with TAP.
+///
+/// This KDF is based on SHA1.  Don't use this for anything new.
 pub struct LegacyKDF {
-    // Starting idx.  should always be 1.
+    /// Starting index value for the TAP kdf.  should always be 1.
     idx: u8,
 }
 
 /// A parameterized KDF, for use with ntor.
+///
+/// This KDF is based on HKDF-SHA256.
 pub struct Ntor1KDF<'a, 'b> {
+    /// A constant for parameterizing the kdf, during the key extraction
+    /// phase.
     t_key: &'a [u8],
+    /// Another constant for parameterizing the kdf, during the key
+    /// expansion phase.
     m_expand: &'b [u8],
 }
 
 /// A modern KDF, for use with v3 onion services.
+///
+/// This KDF is based on SHAKE256
 pub struct ShakeKDF();
 
 impl LegacyKDF {

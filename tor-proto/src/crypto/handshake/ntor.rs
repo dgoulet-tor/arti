@@ -56,18 +56,27 @@ impl super::ServerHandshake for NtorServer {
 /// A set of public keys used by a client to initiate an ntor handshake.
 #[derive(Clone)]
 pub struct NtorPublicKey {
+    /// Public RSA identity fingerprint for the relay; used in authentication
+    /// calculation.
     pub id: RSAIdentity,
+    /// Public curve25519 ntor key for the relay.
     pub pk: PublicKey,
 }
 
 /// A secret key used by a relay to answer an ntor request
 pub struct NtorSecretKey {
+    /// Public key components; must match those held by the client.
     pk: NtorPublicKey,
+    /// Secret curve25519 ntor key for the relay; must correspond to
+    /// the public key in pk.pk.
     sk: StaticSecret,
 }
 
 use subtle::{Choice, ConstantTimeEq};
 impl NtorSecretKey {
+    /// Return true if the curve25519 public key in `self` matches `pk`.
+    ///
+    /// Used for looking up keys in an array.
     fn matches_pk(&self, pk: &PublicKey) -> Choice {
         self.pk.pk.as_bytes().ct_eq(pk.as_bytes())
     }
@@ -75,15 +84,22 @@ impl NtorSecretKey {
 
 /// Client state for an ntor handshake.
 pub struct NtorHandshakeState {
+    /// The relay's public key.  We need to remember this since it is
+    /// used to finish the handshake.
     relay_public: NtorPublicKey,
+    /// The temporary curve25519 secret (x) that we've generated for
+    /// this handshake.
     // We'd like to EphemeralSecret here, but we can't since we need
     // to use it twice.
     my_sk: StaticSecret,
+    /// The public key `X` corresponding to my_sk.
     my_public: PublicKey,
 }
 
 /// KeyGenerator for use with ntor circuit handshake.
 pub struct NtorHKDFKeyGenerator {
+    /// Secret key information derived from the handshake, used as input
+    /// to HKDF
     seed: SecretBytes,
 }
 
@@ -103,6 +119,7 @@ impl KeyGenerator for NtorHKDFKeyGenerator {
     }
 }
 
+/// Alias for an HMAC output, used to validate correctness of a handshake.
 type Authcode = crypto_mac::Output<hmac::Hmac<d::Sha256>>;
 
 /// Perform a client handshake, generating an onionskin and a state object

@@ -1,3 +1,5 @@
+//! Types and code for mapping StreamIDs to streams on a circuit.
+
 use crate::circuit::sendme;
 use crate::{Error, Result};
 /// Mapping from stream ID to streams.
@@ -35,7 +37,11 @@ pub(super) enum StreamEnt {
 /// A map from stream IDs to stream entries. Each circuit has one for each
 /// hop.
 pub(super) struct StreamMap {
+    /// Map from StreamID to StreamEnt.  If there is no entry for a
+    /// StreamID, that stream doesn't exist.
     m: HashMap<StreamID, StreamEnt>,
+    /// The next StreamID that we should use for a newly allocated
+    /// circuit.  (0 is not a valid streamID).
     next_stream_id: u16,
 }
 
@@ -62,7 +68,10 @@ impl StreamMap {
         window: sendme::StreamSendWindow,
     ) -> Result<StreamID> {
         let stream_ent = StreamEnt::Open(sink, window, 0);
-        // This seems too aggressive, but it's what tor does
+        // This "65536" seems too aggressive, but it's what tor does.
+        //
+        // Also, going around in a loop here is (sadly) needed in order
+        // to look like Tor clients.
         for _ in 1..=65536 {
             let id: StreamID = self.next_stream_id.into();
             self.next_stream_id = self.next_stream_id.wrapping_add(1);

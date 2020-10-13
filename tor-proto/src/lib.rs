@@ -18,6 +18,7 @@
 //! pretty kludgy.
 
 #![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
 
 pub mod channel;
 pub mod circuit;

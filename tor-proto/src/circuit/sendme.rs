@@ -54,7 +54,9 @@ where
     // TODO could use a bilock if that becomes non-experimental.
     // TODO I wish we could do this without locking; we could make a bunch
     // of these functions non-async if that happened.
+    /// Actual SendWindow object.
     w: Arc<Mutex<SendWindowInner<T>>>,
+    /// Marker type to tell the compiler that the P type is used.
     _dummy: std::marker::PhantomData<P>,
 }
 
@@ -80,6 +82,9 @@ pub trait WindowParams {
     /// Increment for this window.
     fn increment() -> u16;
 }
+
+/// Parameters used for SENDME windows on circuits: limit at 1000 cells,
+/// and each SENDME adjusts by 100.
 #[derive(Clone)]
 pub struct CircParams;
 impl WindowParams for CircParams {
@@ -90,6 +95,9 @@ impl WindowParams for CircParams {
         100
     }
 }
+
+/// Parameters used for SENDME windows on streams: limit at 500 cells,
+/// and each SENDME adjusts by 50.
 #[derive(Clone)]
 pub struct StreamParams;
 impl WindowParams for StreamParams {
@@ -205,7 +213,10 @@ where
 /// Structure to track when we need to send SENDME cells for incoming data.
 #[derive(Clone)]
 pub struct RecvWindow<P: WindowParams> {
+    /// Number of cells that we'd be willing to receive on this window
+    /// before sending a SENDME.
     window: u16,
+    /// Marker type to tell the compiler that the P type is used.
     _dummy: std::marker::PhantomData<P>,
 }
 

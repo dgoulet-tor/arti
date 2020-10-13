@@ -48,6 +48,12 @@ pub trait ServerHandshake {
     type KeyType;
     /// The returned key generator type.
     type KeyGen;
+
+    /// Perform the server handshake.  Take as input a strong PRNG in `rng`,
+    /// a slice of all our private onion keys, and the client's message.
+    ///
+    /// On success, return a key generator and a server handshake message
+    /// to send in reply.
     fn server<R: RngCore + CryptoRng, T: AsRef<[u8]>>(
         rng: &mut R,
         key: &[Self::KeyType],
@@ -67,7 +73,10 @@ pub trait KeyGenerator {
 }
 
 /// Generates keys based on the KDF-TOR function.
+///
+/// This is deprecated and shouldn't be used for new keys.
 pub struct TAPKeyGenerator {
+    /// Seed for the TAP KDF.
     seed: SecretBytes,
 }
 
@@ -87,6 +96,7 @@ impl KeyGenerator for TAPKeyGenerator {
 
 /// Generates keys based on SHAKE-256.
 pub struct ShakeKeyGenerator {
+    /// Seed for the key generator
     seed: SecretBytes,
 }
 

@@ -62,6 +62,7 @@ use rand::{thread_rng, CryptoRng, Rng};
 /// A circuit that we have constructed over the Tor network.
 #[derive(Clone)]
 pub struct ClientCirc {
+    /// Reference-counted locked reference to the inner circuit object.
     c: Arc<Mutex<ClientCircImpl>>,
 }
 
@@ -121,12 +122,18 @@ struct ClientCircImpl {
 /// When this object is dropped, the reactor will be told to close the stream.
 // XXXX TODO: rename this
 pub(crate) struct StreamTarget {
+    /// The stream ID for this stream on its circuit.
     stream_id: StreamID,
+    /// Which hop on this circuit is this stream built from?
     // XXXX Using 'hop' by number here will cause bugs if circuits can get
     // XXXX truncated and then re-extended.
     hop: HopNum,
+    /// Reference to the circuit that this stream is on.
     circ: ClientCirc,
+    /// Window for sending cells on this circuit.
     window: sendme::StreamSendWindow,
+    /// One-shot sender that should get a message once this stream
+    /// is dropped.
     stream_closed: Cell<Option<oneshot::Sender<CtrlMsg>>>,
     /// Window to track incoming cells and SENDMEs.
     // XXXX Putting this field here in this object means that this
@@ -136,14 +143,20 @@ pub(crate) struct StreamTarget {
     pub(crate) recvwindow: sendme::StreamRecvWindow,
 }
 
-/// Information about a single hop of a client circuit.
+/// Information about a single hop of a client circuit, from the sender-side
+/// point of view.
+///
+/// (see also circuit::reactor::InboundHop)
 struct CircHop {
+    /// If true, this hop is using an older link protocol and we
+    /// shouldn't expect good authenticated SENDMEs from it.
     auth_sendme_optional: bool,
     /// Window used to say how many cells we can send.
     sendwindow: sendme::CircSendWindow,
 }
 
 impl CircHop {
+    /// Construct a new (sender-side) view of a circuit hop.
     fn new(auth_sendme_optional: bool) -> Self {
         CircHop {
             auth_sendme_optional,
@@ -333,6 +346,7 @@ impl ClientCirc {
             pk: *target.ntor_onion_key(),
         };
         let linkspecs = target.linkspecs();
+        // FlowCtrl=1 means that this hop supports authenticated SENDMEs
         let supports_flowctrl_1 = target
             .protovers()
             .supports_known_subver(tor_protover::ProtoKind::FlowCtrl, 1);
@@ -397,6 +411,7 @@ impl ClientCirc {
                 .map_err(|_| Error::InternalError("Can't queue stream closer".into()))?;
         }
 
+        /// Initial value for inbound flow-control window on streams.
         const STREAM_RECV_INIT: u16 = 500;
 
         let target = StreamTarget {
@@ -453,6 +468,8 @@ impl ClientCirc {
 }
 
 impl ClientCircImpl {
+    /// Return a mutable reference to the nth hop of this circuit, if one
+    /// exists.
     fn get_hop_mut(&mut self, hopnum: HopNum) -> Option<&mut CircHop> {
         self.hops.get_mut(Into::<usize>::into(hopnum))
     }
@@ -701,6 +718,7 @@ impl PendingClientCirc {
             id: target.rsa_identity().clone(),
             pk: *target.ntor_onion_key(),
         };
+        // FlowCtrl=1 means that this hop supports authenticated SENDMEs
         let supports_flowctrl_1 = target
             .protovers()
             .supports_known_subver(tor_protover::ProtoKind::FlowCtrl, 1);
@@ -765,6 +783,7 @@ impl CreateHandshakeWrap for Create2Wrap {
 }
 
 impl StreamTarget {
+    /// Initial value for outbound flow-control window on streams.
     const SEND_WINDOW_INIT: u16 = 500;
 
     /// Deliver a relay message for the stream that owns this StreamTarget.
