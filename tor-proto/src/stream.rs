@@ -62,7 +62,10 @@ impl TorStream {
             match self.target.recvwindow.take() {
                 Some(true) => self.send_sendme().await?,
                 Some(false) => {}
-                None => return Err(Error::StreamProto("stream violated SENDME window".into())),
+                None => {
+                    self.target.protocol_error().await;
+                    return Err(Error::StreamProto("stream violated SENDME window".into()));
+                }
             }
         }
 
@@ -160,10 +163,13 @@ impl DataStream {
                 // TODO: Hang on, is this a good inteface?
                 Err(Error::StreamClosed("received an end cell"))
             }
-            Ok(m) => Err(Error::StreamProto(format!(
-                "Unexpected {} cell on steam",
-                m.cmd()
-            ))),
+            Ok(m) => {
+                self.s.target.protocol_error().await;
+                Err(Error::StreamProto(format!(
+                    "Unexpected {} cell on steam",
+                    m.cmd()
+                )))
+            }
         }
     }
 }
@@ -187,10 +193,13 @@ impl ResolveStream {
         match cell {
             RelayMsg::End(_) => Err(Error::StreamClosed("Received end cell on resolve stream")),
             RelayMsg::Resolved(r) => Ok(r),
-            m => Err(Error::StreamProto(format!(
-                "Unexpected {} on resolve stream",
-                m.cmd()
-            ))),
+            m => {
+                self.s.target.protocol_error().await;
+                Err(Error::StreamProto(format!(
+                    "Unexpected {} on resolve stream",
+                    m.cmd()
+                )))
+            }
         }
     }
 }

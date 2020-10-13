@@ -249,6 +249,7 @@ impl ClientCirc {
 
         // Did we get the right response?
         if from_hop != hop || msg.cmd() != RelayCmd::EXTENDED2 {
+            self.c.lock().await.shutdown();
             return Err(Error::CircProto(format!(
                 "wanted EXTENDED2 from {}; got {} from {}",
                 hop,
@@ -256,6 +257,10 @@ impl ClientCirc {
                 from_hop
             )));
         }
+
+        // ???? Do we need to shutdown the circuit for the remaining error
+        // ???? cases in this function?
+
         let msg = match msg {
             RelayMsg::Extended2(e) => e,
             _ => return Err(Error::InternalError("Body didn't match cmd".into())),
@@ -420,6 +425,7 @@ impl ClientCirc {
         } else if response.cmd() == RelayCmd::END {
             Err(Error::StreamClosed("end cell when waiting for connection"))
         } else {
+            self.c.lock().await.shutdown();
             Err(Error::StreamProto(format!(
                 "Received {} while waiting for connection",
                 response.cmd()
@@ -443,7 +449,6 @@ impl ClientCirc {
     pub async fn begin_dir_stream(&mut self) -> Result<DataStream> {
         self.begin_data_stream(RelayMsg::BeginDir).await
     }
-
     // XXXX Add a RESOLVE implementation, it will be simple.
 }
 
@@ -476,7 +481,8 @@ impl ClientCircImpl {
                 // I think this means that the channel got closed.
                 .map_err(|_| Error::CircuitClosed)
         } else {
-            // Nobody wanted this.
+            // No need to call shutdown here, since this error will
+            // propagate to the reactor shut it down.
             Err(Error::CircProto(format!(
                 "Unexpected {} cell on client circuit",
                 msg.cmd()
@@ -486,6 +492,8 @@ impl ClientCircImpl {
 
     /// Handle a RELAY_SENDME cell on this circuit with stream ID 0.
     async fn handle_sendme(&mut self, hopnum: HopNum, msg: Sendme) -> Result<()> {
+        // No need to call "shutdown" on errors in this function;
+        // it's called from the reactor task and errors will propagate there.
         let hop = self.get_hop_mut(hopnum).unwrap(); // XXXX risky
         let auth: Option<[u8; 20]> = match msg.into_tag() {
             Some(v) if v.len() == 20 => {
@@ -494,10 +502,10 @@ impl ClientCircImpl {
                 (&mut tag).copy_from_slice(&v[..]);
                 Some(tag)
             }
-            Some(_) => return Err(Error::StreamProto("malformed tag on circuit sendme".into())),
+            Some(_) => return Err(Error::CircProto("malformed tag on circuit sendme".into())),
             None => {
                 if !hop.auth_sendme_optional {
-                    return Err(Error::StreamProto("missing tag on circuit sendme".into()));
+                    return Err(Error::CircProto("missing tag on circuit sendme".into()));
                 } else {
                     None
                 }
@@ -505,7 +513,7 @@ impl ClientCircImpl {
         };
         match hop.sendwindow.put(auth).await {
             Some(_) => Ok(()),
-            None => Err(Error::StreamProto("bad auth tag on circuit sendme".into())),
+            None => Err(Error::CircProto("bad auth tag on circuit sendme".into())),
         }
     }
 
@@ -554,6 +562,17 @@ impl ClientCircImpl {
                 .await;
         }
         self.send_msg(msg).await
+    }
+
+    /// Shut down this circuit's reactor and mark the circuit as closed.
+    ///
+    /// This is idempotent and safe to call more than once.
+    fn shutdown(&mut self) {
+        self.closed = true;
+        if let Some(sender) = self.sendshutdown.take() {
+            // ignore the error, since it can only be canceled.
+            let _ = sender.send(CtrlMsg::Shutdown);
+        }
     }
 }
 
@@ -618,6 +637,10 @@ impl PendingClientCirc {
         W: CreateHandshakeWrap,
         H::KeyGen: KeyGenerator,
     {
+        // We don't need to shut down the circuit on failure here, since this
+        // function consumes the PendingClientCirc and only returns
+        // a ClientCirc on success.
+
         let PendingClientCirc { circ, recvcreated } = self;
         let (state, msg) = H::client1(rng, &key)?;
         let create_cell = wrap.to_chanmsg(msg);
@@ -628,7 +651,7 @@ impl PendingClientCirc {
 
         let reply = recvcreated
             .await
-            .map_err(|_| Error::CircProto("Circuit closed, I think".into()))?;
+            .map_err(|_| Error::CircProto("Circuit closed while waiting".into()))?;
 
         let server_handshake = wrap.from_chanmsg(reply)?;
         let keygen = H::client2(state, server_handshake)?;
@@ -758,15 +781,18 @@ impl StreamTarget {
         let mut c = self.circ.c.lock().await;
         c.send_relay_cell(self.hop, false, cell).await
     }
+
+    /// Called when a circuit-level protocol error has occured and the
+    /// circuit needs to shut down.
+    pub(crate) async fn protocol_error(&mut self) {
+        let mut c = self.circ.c.lock().await;
+        c.shutdown();
+    }
 }
 
 impl Drop for ClientCircImpl {
     fn drop(&mut self) {
-        self.closed = true;
-        if let Some(sender) = self.sendshutdown.take() {
-            // ignore the error, since it can only be canceled.
-            let _ = sender.send(CtrlMsg::Shutdown);
-        }
+        self.shutdown();
     }
 }
 
