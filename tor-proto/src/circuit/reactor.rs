@@ -7,7 +7,7 @@
 //! it should just not exist.
 
 use super::streammap::StreamEnt;
-use crate::circuit::{sendme, streammap, ClientCirc};
+use crate::circuit::{sendme, streammap};
 use crate::crypto::cell::{HopNum, InboundClientCrypt, InboundClientLayer};
 use crate::{Error, Result};
 use tor_cell::chancell::{msg::ChanMsg, msg::Relay};
@@ -15,9 +15,12 @@ use tor_cell::relaycell::msg::{End, RelayMsg, Sendme};
 use tor_cell::relaycell::{RelayCell, StreamID};
 
 use futures::channel::{mpsc, oneshot};
+use futures::lock::Mutex;
 use futures::select_biased;
 use futures::sink::SinkExt;
 use futures::stream::{self, StreamExt};
+
+use std::sync::{Arc, Weak};
 
 /// A message telling the reactor to do something.
 pub(super) enum CtrlMsg {
@@ -112,7 +115,7 @@ pub struct Reactor {
 /// Why is this type separate, exactly?
 struct ReactorCore {
     /// Reference to the circuit.
-    circuit: ClientCirc,
+    circuit: Weak<Mutex<super::ClientCircImpl>>,
     /// The cryptographic state for this circuit for inbound cells.
     /// This object is divided into multiple layers, each of which is
     /// shared with one hop of the circuit.
@@ -128,13 +131,13 @@ struct ReactorCore {
 impl Reactor {
     /// Construct a new Reactor.
     pub(super) fn new(
-        circuit: ClientCirc,
+        circuit: Arc<Mutex<super::ClientCircImpl>>,
         control: mpsc::Receiver<CtrlResult>,
         closeflag: oneshot::Receiver<CtrlMsg>,
         input: mpsc::Receiver<ChanMsg>,
     ) -> Self {
         let core = ReactorCore {
-            circuit,
+            circuit: Arc::downgrade(&circuit),
             crypto_in: InboundClientCrypt::new(),
             hops: Vec::new(),
         };
@@ -152,15 +155,17 @@ impl Reactor {
     /// Launch the reactor, and run until the circuit closes or we
     /// encounter an error.
     pub async fn run(mut self) -> Result<()> {
-        {
-            let circ = self.core.circuit.c.lock().await;
+        if let Some(circ) = self.core.circuit.upgrade() {
+            let circ = circ.lock().await;
             if circ.closed {
                 return Err(Error::CircuitClosed);
             }
+        } else {
+            return Err(Error::CircuitClosed);
         }
         let result = self.run_impl().await;
-        {
-            let mut circ = self.core.circuit.c.lock().await;
+        if let Some(circ) = self.core.circuit.upgrade() {
+            let mut circ = circ.lock().await;
             circ.closed = true;
             if let Some(sender) = circ.sendmeta.take() {
                 let _ignore_err = sender.send(Err(Error::CircuitClosed));
@@ -250,8 +255,12 @@ impl Reactor {
         // we didn't already get an END cell.  But I should double-check!
         if should_send_end {
             let end_cell = RelayCell::new(id, End::new_misc().into());
-            let mut circ = self.core.circuit.c.lock().await;
-            circ.send_relay_cell(hopnum, false, end_cell).await?;
+            if let Some(circ) = self.core.circuit.upgrade() {
+                let mut circ = circ.lock().await;
+                circ.send_relay_cell(hopnum, false, end_cell).await?;
+            } else {
+                return Err(Error::CircuitClosed);
+            }
         }
         Ok(())
     }
@@ -327,9 +336,11 @@ impl ReactorCore {
         if send_circ_sendme {
             let sendme = Sendme::new_tag(tag);
             let cell = RelayCell::new(0.into(), sendme.into());
-            {
-                let mut circ = self.circuit.c.lock().await;
+            if let Some(circ) = self.circuit.upgrade() {
+                let mut circ = circ.lock().await;
                 circ.send_relay_cell(hopnum, false, cell).await?;
+            } else {
+                return Err(Error::CircuitClosed);
             }
             self.get_hop_mut(hopnum).unwrap().recvwindow.put();
         }
@@ -350,8 +361,12 @@ impl ReactorCore {
         // If this has a reasonable streamID value of 0, it's a meta cell,
         // not meant for a particualr stream.
         if streamid.is_zero() {
-            let mut circ = self.circuit.c.lock().await;
-            return circ.handle_meta_cell(hopnum, msg).await;
+            if let Some(circ) = self.circuit.upgrade() {
+                let mut circ = circ.lock().await;
+                return circ.handle_meta_cell(hopnum, msg).await;
+            } else {
+                return Err(Error::CircuitClosed);
+            }
         }
 
         //XXXX this is still an unwrap, and still risky.
