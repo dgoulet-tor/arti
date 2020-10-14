@@ -19,7 +19,7 @@ use futures::select_biased;
 use futures::sink::SinkExt;
 use futures::stream::{self, SplitStream, StreamExt};
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use log::trace;
 
@@ -79,7 +79,7 @@ struct ReactorCore {
     circs: Arc<Mutex<CircMap>>,
 
     /// Channel pointer -- used to send DESTROY cells.
-    channel: Arc<Mutex<super::ChannelImpl>>,
+    channel: Weak<Mutex<super::ChannelImpl>>,
 }
 
 impl<T> Reactor<T>
@@ -99,7 +99,7 @@ where
         input: SplitStream<CellFrame<T>>,
     ) -> Self {
         let core = ReactorCore {
-            channel,
+            channel: Arc::downgrade(&channel),
             circs: circmap,
         };
 
@@ -292,8 +292,10 @@ impl ReactorCore {
             // TODO: use a constant for DESTROY_REASON_NONE.
             let destroy = Destroy::new(0).into();
             let cell = ChanCell::new(id, destroy);
-            let mut chan = self.channel.lock().await;
-            chan.send_cell(cell).await?;
+            if let Some(chan) = self.channel.upgrade() {
+                let mut chan = chan.lock().await;
+                chan.send_cell(cell).await?;
+            }
         }
 
         Ok(())
