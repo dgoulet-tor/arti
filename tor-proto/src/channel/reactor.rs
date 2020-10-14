@@ -9,20 +9,42 @@
 use super::circmap::{CircEnt, CircMap};
 use super::CellFrame;
 use crate::{Error, Result};
+use tor_cell::chancell::msg::Destroy;
 use tor_cell::chancell::{msg::ChanMsg, ChanCell, CircID};
 
-use futures::channel::oneshot;
-use futures::future::Fuse;
+use futures::channel::{mpsc, oneshot};
 use futures::io::AsyncRead;
 use futures::lock::Mutex;
 use futures::select_biased;
 use futures::sink::SinkExt;
 use futures::stream::{self, SplitStream, StreamExt};
-use futures::FutureExt;
 
 use std::sync::Arc;
 
 use log::trace;
+
+/// A message telling the channel reactor to do something.
+pub(super) enum CtrlMsg {
+    /// Shut down the reactor.
+    Shutdown,
+    /// Register a new one-shot receiver that can send a CtrlMsg to the
+    /// reactor.
+    Register(oneshot::Receiver<CtrlMsg>),
+    /// Tell the reactor that a given circuit has gone away.
+    CloseCircuit(CircID),
+}
+
+/// Type returned by a oneshot channel for a CtrlMsg.
+///
+/// TODO: copy documentation from circuit::reactor if we don't unify
+/// these types somehow.
+pub(super) type CtrlResult = std::result::Result<CtrlMsg, oneshot::Canceled>;
+
+/// A stream to multiplex over a bunch of oneshot CtrlMsg replies.
+///
+/// TODO: copy documentation from circuit::reactor if we don't unify
+/// these types somehow.
+type OneshotStream = stream::SelectAll<stream::Once<oneshot::Receiver<CtrlMsg>>>;
 
 /// Object to handle incoming cells on a channel.
 ///
@@ -33,9 +55,12 @@ pub struct Reactor<T>
 where
     T: AsyncRead + Unpin,
 {
-    /// A future that will fire if we're told to shut down the
-    /// reactor.
-    closeflag: Fuse<oneshot::Receiver<()>>,
+    /// A stream of oneshot receivers that this reactor can use to get
+    /// control messages.
+    ///
+    /// TODO: copy documentation from circuit::reactor if we don't unify
+    /// these types somehow.
+    control: stream::Fuse<stream::Select<mpsc::Receiver<CtrlResult>, OneshotStream>>,
     /// A Stream from which we can read ChanCells.  This should be backed
     /// by a TLS connection.
     input: stream::Fuse<SplitStream<CellFrame<T>>>,
@@ -52,6 +77,9 @@ struct ReactorCore {
     // the reactor about new circuits?
     /// A map from circuit ID to Sinks on which we can deliver cells.
     circs: Arc<Mutex<CircMap>>,
+
+    /// Channel pointer -- used to send DESTROY cells.
+    channel: Arc<Mutex<super::ChannelImpl>>,
 }
 
 impl<T> Reactor<T>
@@ -64,13 +92,22 @@ where
     ///
     /// When closeflag fires, the reactor should shut down.
     pub(super) fn new(
+        channel: Arc<Mutex<super::ChannelImpl>>,
         circmap: Arc<Mutex<CircMap>>,
-        closeflag: oneshot::Receiver<()>,
+        control: mpsc::Receiver<CtrlResult>,
+        closeflag: oneshot::Receiver<CtrlMsg>,
         input: SplitStream<CellFrame<T>>,
     ) -> Self {
-        let core = ReactorCore { circs: circmap };
+        let core = ReactorCore {
+            channel,
+            circs: circmap,
+        };
+
+        let mut oneshots = stream::SelectAll::new();
+        oneshots.push(stream::once(closeflag));
+        let control = stream::select(control, oneshots);
         Reactor {
-            closeflag: closeflag.fuse(),
+            control: control.fuse(),
             input: input.fuse(),
             core,
         }
@@ -79,14 +116,21 @@ where
     /// Launch the reactor, and run until the channel closes or we
     /// encounter an error.
     pub async fn run(mut self) -> Result<()> {
-        let mut close_future = self.closeflag;
         loop {
             // Let's see what's next: maybe we got a cell, maybe the TLS
             // connection got closed, or maybe we've been told to shut
             // down.
             let item = select_biased! {
-                // we were asked to shut down.
-                _ = close_future => return Ok(()),
+                // we got a control message!
+                ctrl = self.control.next() => {
+                    match ctrl {
+                        Some(Ok(CtrlMsg::Shutdown)) => return Ok(()),
+                        Some(Ok(msg)) => self.handle_control(msg).await?,
+                        Some(Err(_)) => (), // sender cancelled; ignore.
+                        None => panic!() // should be impossible.
+                    }
+                    continue;
+                }
                 // we got a cell or a close.
                 item = self.input.next() => item,
             };
@@ -97,6 +141,22 @@ where
 
             self.core.handle_cell(item).await?;
         }
+    }
+
+    /// Handle a CtrlMsg other than Shutdown.
+    async fn handle_control(&mut self, msg: CtrlMsg) -> Result<()> {
+        match msg {
+            CtrlMsg::Shutdown => panic!(), // was handled in reactor loop.
+            CtrlMsg::Register(ch) => self.register(ch),
+            CtrlMsg::CloseCircuit(id) => self.core.outbound_destroy_circ(id).await?,
+        }
+        Ok(())
+    }
+
+    /// Ensure that we get a message on self.control when `ch` fires.
+    fn register(&mut self, ch: oneshot::Receiver<CtrlMsg>) {
+        let (_, select_all) = self.control.get_mut().get_mut();
+        select_all.push(stream::once(ch));
     }
 }
 
@@ -214,5 +274,28 @@ impl ReactorCore {
             // XXXX do more?
             None => Ok(()),
         }
+    }
+
+    /// Called when a circuit goes away: sends a DESTROY cell and removes
+    /// the circuit.
+    async fn outbound_destroy_circ(&mut self, id: CircID) -> Result<()> {
+        {
+            let mut map = self.circs.lock().await;
+            // Remove the circuit's entry from the map: nothing more
+            // can be done with it.
+            let _old_entry = map.remove(id);
+
+            // TODO: should we remember that there was a circuit with this ID,
+            // so we can recognize junk cells?
+        }
+        {
+            // TODO: use a constant for DESTROY_REASON_NONE.
+            let destroy = Destroy::new(0).into();
+            let cell = ChanCell::new(id, destroy);
+            let mut chan = self.channel.lock().await;
+            chan.send_cell(cell).await?;
+        }
+
+        Ok(())
     }
 }

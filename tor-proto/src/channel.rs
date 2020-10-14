@@ -29,9 +29,10 @@ mod codec;
 mod handshake;
 mod reactor;
 
+use crate::channel::reactor::{CtrlMsg, CtrlResult};
 use crate::circuit;
 use crate::{Error, Result};
-use tor_cell::chancell::{msg, ChanCell};
+use tor_cell::chancell::{msg, ChanCell, CircID};
 
 use futures::channel::{mpsc, oneshot};
 use futures::io::{AsyncRead, AsyncWrite};
@@ -77,8 +78,10 @@ struct ChannelImpl {
     // the circmap when we're making a new circuit, the reactor needs
     // it all the time.
     circmap: Arc<Mutex<circmap::CircMap>>,
+    /// A stream used to send control messages to the Reactor.
+    sendctrl: mpsc::Sender<CtrlResult>,
     /// A oneshot sender used to tell the Reactor task to shut down.
-    sendclosed: Cell<Option<oneshot::Sender<()>>>,
+    sendclosed: Cell<Option<oneshot::Sender<CtrlMsg>>>,
 }
 
 /// Launch a new client handshake over a TLS stream.
@@ -110,20 +113,20 @@ impl Channel {
 
         let (sink, stream) = tls.split();
 
-        let (sendclosed, recvclosed) = oneshot::channel::<()>();
+        let (sendctrl, recvctrl) = mpsc::channel::<CtrlResult>(128);
+        let (sendclosed, recvclosed) = oneshot::channel::<CtrlMsg>();
 
         let inner = ChannelImpl {
             tls: Box::new(sink),
             link_protocol,
             circmap: circmap.clone(),
+            sendctrl,
             sendclosed: Cell::new(Some(sendclosed)),
         };
+        let inner = Arc::new(Mutex::new(inner));
+        let reactor = reactor::Reactor::new(inner.clone(), circmap, recvctrl, recvclosed, stream);
 
-        let reactor = reactor::Reactor::new(circmap, recvclosed, stream);
-
-        let channel = Channel {
-            inner: Arc::new(Mutex::new(inner)),
-        };
+        let channel = Channel { inner };
 
         (channel, reactor)
     }
@@ -150,11 +153,9 @@ impl Channel {
     pub async fn send_cell(&self, cell: ChanCell) -> Result<()> {
         trace!("Sending {} on {}", cell.msg().cmd(), cell.circid());
         self.check_cell(&cell)?;
-        let sink = &mut self.inner.lock().await.tls;
+        let inner = &mut self.inner.lock().await;
+        inner.send_cell(cell).await
         // XXXX I don't like holding the lock here. :(
-        sink.send(cell).await?;
-
-        Ok(())
     }
 
     /// Return a newly allocated PendingClientCirc object with
@@ -171,17 +172,26 @@ impl Channel {
         // TODO: blocking is risky, but so is unbounded.
         let (sender, receiver) = mpsc::channel(128);
         let (createdsender, createdreceiver) = oneshot::channel::<msg::ChanMsg>();
+        let (send_circ_destroy, recv_circ_destroy) = oneshot::channel();
 
         let id = {
-            let inner = self.inner.lock().await;
+            let mut inner = self.inner.lock().await;
+            inner
+                .sendctrl
+                .send(Ok(CtrlMsg::Register(recv_circ_destroy)))
+                .await
+                .map_err(|_| Error::InternalError("Can't queue circuit closer".into()))?;
             let mut cmap = inner.circmap.lock().await;
             cmap.add_ent(rng, createdsender, sender)?
         };
+
+        let destroy_handle = CircDestroyHandle::new(id, send_circ_destroy);
 
         Ok(circuit::PendingClientCirc::new(
             id,
             self.clone(),
             createdreceiver,
+            destroy_handle,
             receiver,
         ))
     }
@@ -198,7 +208,42 @@ impl Clone for Channel {
 impl Drop for ChannelImpl {
     fn drop(&mut self) {
         if let Some(sender) = self.sendclosed.take() {
-            let _ignore = sender.send(());
+            let _ignore = sender.send(CtrlMsg::Shutdown);
+        }
+    }
+}
+
+impl ChannelImpl {
+    pub async fn send_cell(&mut self, cell: ChanCell) -> Result<()> {
+        self.tls.send(cell).await?;
+        Ok(())
+    }
+}
+
+/// Helper structure: when this is dropped, the reactor is told to kill
+/// the circuit.
+pub(crate) struct CircDestroyHandle {
+    /// The circuit ID in question
+    id: CircID,
+    /// A oneshot sender to tell the reactor.  This has to be a oneshot,
+    /// so that we can send to it on drop.
+    sender: Cell<Option<oneshot::Sender<CtrlMsg>>>,
+}
+
+impl CircDestroyHandle {
+    /// Create a new CircDestroyHandle
+    fn new(id: CircID, sender: oneshot::Sender<CtrlMsg>) -> Self {
+        CircDestroyHandle {
+            id,
+            sender: Cell::new(Some(sender)),
+        }
+    }
+}
+
+impl Drop for CircDestroyHandle {
+    fn drop(&mut self) {
+        if let Some(s) = self.sender.take() {
+            let _ignore_cancel = s.send(CtrlMsg::CloseCircuit(self.id));
         }
     }
 }

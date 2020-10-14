@@ -36,7 +36,7 @@ pub(crate) mod reactor;
 pub(crate) mod sendme;
 mod streammap;
 
-use crate::channel::Channel;
+use crate::channel::{Channel, CircDestroyHandle};
 use crate::circuit::reactor::{CtrlMsg, CtrlResult};
 use crate::crypto::cell::{
     ClientLayer, CryptInit, HopNum, InboundClientLayer, OutboundClientCrypt, OutboundClientLayer,
@@ -97,6 +97,10 @@ struct ClientCircImpl {
     /// This circuit can't be used because it has been closed, locally
     /// or remotely.
     closed: bool,
+    /// When this is dropped, the channel reactor is told to send a DESTROY
+    /// cell.
+    #[allow(unused)]
+    circ_closed: CircDestroyHandle,
     /// Per-hop circuit information.
     ///
     /// Note that hops.len() must be the same as crypto.n_layers().
@@ -604,6 +608,7 @@ impl PendingClientCirc {
         id: CircID,
         channel: Channel,
         createdreceiver: oneshot::Receiver<ChanMsg>,
+        circ_closed: CircDestroyHandle,
         input: mpsc::Receiver<ChanMsg>,
     ) -> (PendingClientCirc, reactor::Reactor) {
         let crypto_out = OutboundClientCrypt::new();
@@ -618,6 +623,7 @@ impl PendingClientCirc {
             crypto_out,
             hops,
             closed: false,
+            circ_closed,
             control: sendctrl,
             sendshutdown: Cell::new(Some(sendclosed)),
             sendmeta: Cell::new(None),
