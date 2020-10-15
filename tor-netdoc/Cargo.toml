@@ -13,14 +13,14 @@ tor-cert = { path="../tor-cert", version="*" }
 tor-protover = { path="../tor-protover", version= "*" }
 tor-checkable = { path="../tor-checkable", version= "*" }
 
-base64 = "0.12.3"
-chrono = "0.4.18"
+base64 = "0.13.0"
+chrono = "0.4.19"
 digest = "0.9.0"
 hex = "0.4.2"
 lazy_static = "1.4.0"
 phf = { version = "0.8.0", features = ["macros"] }
 signature = "1.2.2"
-thiserror = "1.0.20"
+thiserror = "1.0.21"
 
 [dev-dependencies]
 hex-literal = "0.3.1"
