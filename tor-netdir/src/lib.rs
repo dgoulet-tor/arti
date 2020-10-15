@@ -114,6 +114,8 @@ pub struct Relay<'a> {
     rs: &'a netstatus::MDConsensusRouterStatus,
     /// A microdescriptor for this relay.
     md: Option<&'a Microdesc>,
+    /// Memoized expanded Ed25519 public key.
+    ed_identity: Option<ll::pk::ed25519::PublicKey>,
 }
 
 impl NetDirConfig {
@@ -334,7 +336,12 @@ impl NetDir {
     /// microdescriptor (if any).
     fn relay_from_rs<'a>(&'a self, rs: &'a netstatus::MDConsensusRouterStatus) -> Relay<'a> {
         let md = self.mds.get(rs.md_digest());
-        Relay { rs, md }
+        let ed_identity = md.map(|m| m.get_opt_ed25519_id()).flatten();
+        Relay {
+            rs,
+            md,
+            ed_identity,
+        }
     }
     /// Return an iterator over all Relay objects, including invalid ones
     /// that we can't use.
@@ -400,7 +407,7 @@ impl<'a> Relay<'a> {
     /// Return the Ed25519 ID for this relay, assuming it has one.
     // TODO: This should always succeed.
     pub fn id(&self) -> Option<&ll::pk::ed25519::PublicKey> {
-        self.md?.get_opt_ed25519_id().as_ref()
+        self.ed_identity.as_ref()
     }
     /// Return the RSAIdentity for this relay.
     pub fn rsa_id(&self) -> &RSAIdentity {

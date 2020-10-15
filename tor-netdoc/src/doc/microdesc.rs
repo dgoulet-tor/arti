@@ -22,6 +22,7 @@ use tor_llcrypto::pk::{curve25519, ed25519, rsa};
 use digest::Digest;
 use lazy_static::lazy_static;
 
+use std::convert::TryInto;
 use std::time;
 
 /// Annotations prepended to a microdescriptor that has been stored to
@@ -60,7 +61,7 @@ pub struct Microdesc {
     /// Ed25519 identity for this relay
     // TODO: this shouldn't really be optional any more
     // TODO: this is redundant.
-    ed25519_id: Option<ed25519::PublicKey>,
+    ed25519_id: Option<ed25519::Ed25519Identity>,
     // addr is obsolete and doesn't go here any more
     // pr is obsolete and doesn't go here any more.
 }
@@ -83,8 +84,11 @@ impl Microdesc {
         &self.ipv6_policy
     }
     /// Return the ed25519 identity for this microdesc (if any)
-    pub fn get_opt_ed25519_id(&self) -> &Option<ed25519::PublicKey> {
-        &self.ed25519_id
+    pub fn get_opt_ed25519_id(&self) -> Option<ed25519::PublicKey> {
+        self.ed25519_id
+            .as_ref()
+            .map(|id| id.try_into().ok())
+            .flatten()
     }
 }
 

@@ -3,6 +3,7 @@
 //! Eventually this should probably be replaced with a wrapper that
 //! uses the ed25519 trait and the Signature trait.
 
+use arrayref::array_ref;
 use std::convert::TryInto;
 use std::fmt::{self, Debug, Display, Formatter};
 use subtle::*;
@@ -27,16 +28,24 @@ impl Ed25519Identity {
     ///
     /// let bytes = b"klsadjfkladsfjklsdafkljasdfsdsd!";
     /// let id = Ed25519Identity::new(*bytes);
-    /// let pk: Result<PublicKey,_> = id.try_into();
+    /// let pk: Result<PublicKey,_> = (&id).try_into();
     /// assert!(pk.is_ok());
     ///
     /// let bytes = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     /// let id = Ed25519Identity::new(*bytes);
-    /// let pk: Result<PublicKey,_> = id.try_into();
+    /// let pk: Result<PublicKey,_> = (&id).try_into();
     /// assert!(pk.is_err());
     /// ```
     pub fn new(id: [u8; 32]) -> Self {
         Ed25519Identity { id }
+    }
+    /// If `id` is of the correct length, wrap it in an Ed25519Identity.
+    pub fn from_slice(id: &[u8]) -> Option<Self> {
+        if id.len() == 32 {
+            Some(Ed25519Identity::new(*array_ref!(id, 0, 32)))
+        } else {
+            None
+        }
     }
     /// Return a reference to the bytes in this key.
     pub fn as_bytes(&self) -> &[u8] {
@@ -50,7 +59,7 @@ impl From<[u8; 32]> for Ed25519Identity {
     }
 }
 
-impl TryInto<PublicKey> for Ed25519Identity {
+impl TryInto<PublicKey> for &Ed25519Identity {
     type Error = ed25519_dalek::SignatureError;
     fn try_into(self) -> Result<PublicKey, Self::Error> {
         PublicKey::from_bytes(&self.id[..])

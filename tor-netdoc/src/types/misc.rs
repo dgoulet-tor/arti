@@ -137,10 +137,11 @@ mod curve25519impl {
 mod ed25519impl {
     use super::B64;
     use crate::{Error, Pos, Result};
-    use tor_llcrypto::pk::ed25519::PublicKey;
+    use tor_llcrypto::pk::ed25519::Ed25519Identity;
 
-    /// A ed25519 public key, encoded in base64 with optional padding
-    pub struct Ed25519Public(PublicKey);
+    /// An alleged ed25519 public key, encoded in base64 with optional
+    /// padding.
+    pub struct Ed25519Public(Ed25519Identity);
 
     impl std::str::FromStr for Ed25519Public {
         type Err = Error;
@@ -152,14 +153,15 @@ mod ed25519impl {
                     "bad length for ed25519 key.".into(),
                 ));
             }
-            let key = PublicKey::from_bytes(b64.as_bytes())
-                .map_err(|_| Error::BadArgument(Pos::at(s), "bad value for ed25519 key.".into()))?;
+            let key = Ed25519Identity::from_slice(b64.as_bytes()).ok_or_else(|| {
+                Error::BadArgument(Pos::at(s), "bad value for ed25519 key.".into())
+            })?;
             Ok(Ed25519Public(key))
         }
     }
 
-    impl From<Ed25519Public> for PublicKey {
-        fn from(pk: Ed25519Public) -> PublicKey {
+    impl From<Ed25519Public> for Ed25519Identity {
+        fn from(pk: Ed25519Public) -> Ed25519Identity {
             pk.0
         }
     }
@@ -423,13 +425,13 @@ mod test {
 
     #[test]
     fn ed25519() -> Result<()> {
-        use tor_llcrypto::pk::ed25519::PublicKey;
+        use tor_llcrypto::pk::ed25519::Ed25519Identity;
         let k1 = "WVIPQ8oArAqLY4XzkcpIOI6U8KsUJHBQhG8SC57qru0";
         let k2 = hex::decode("59520f43ca00ac0a8b6385f391ca48388e94f0ab14247050846f120b9eeaaeed")
             .unwrap();
 
-        let k1: PublicKey = k1.parse::<Ed25519Public>()?.into();
-        assert_eq!(k1, PublicKey::from_bytes(&k2).unwrap());
+        let k1: Ed25519Identity = k1.parse::<Ed25519Public>()?.into();
+        assert_eq!(k1, Ed25519Identity::from_slice(&k2).unwrap());
 
         assert!("WVIPQ8oArAqLY4Xzk0!!!!8KsUJHBQhG8SC57qru"
             .parse::<Curve25519Public>()

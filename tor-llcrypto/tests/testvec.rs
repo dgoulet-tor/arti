@@ -74,7 +74,7 @@ fn tv_ed25519() {
         format!("{:?}", pk_as_id),
         "Ed25519Identity { 11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo }"
     );
-    let pk_again: PublicKey = pk_as_id.try_into().unwrap();
+    let pk_again: PublicKey = (&pk_as_id).try_into().unwrap();
     assert_eq!(pk_again, pk);
 
     let kp = Keypair {
