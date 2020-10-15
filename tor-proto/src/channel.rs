@@ -31,6 +31,7 @@ mod reactor;
 
 use crate::channel::reactor::{CtrlMsg, CtrlResult};
 use crate::circuit;
+use crate::circuit::celltypes::CreateResponse;
 use crate::{Error, Result};
 use tor_cell::chancell::{msg, ChanCell, CircID};
 
@@ -174,7 +175,7 @@ impl Channel {
     ) -> Result<(circuit::PendingClientCirc, circuit::reactor::Reactor)> {
         // TODO: blocking is risky, but so is unbounded.
         let (sender, receiver) = mpsc::channel(128);
-        let (createdsender, createdreceiver) = oneshot::channel::<msg::ChanMsg>();
+        let (createdsender, createdreceiver) = oneshot::channel::<CreateResponse>();
         let (send_circ_destroy, recv_circ_destroy) = oneshot::channel();
 
         let id = {

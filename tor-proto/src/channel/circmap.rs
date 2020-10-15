@@ -7,6 +7,8 @@ use crate::{Error, Result};
 use tor_cell::chancell::msg::ChanMsg;
 use tor_cell::chancell::CircID;
 
+use crate::circuit::celltypes::CreateResponse;
+
 use futures::channel::{mpsc, oneshot};
 
 use rand::distributions::Distribution;
@@ -60,7 +62,7 @@ pub(super) enum CircEnt {
     ///
     /// Once that's done, the mpsc sender will be used to send subsequent
     /// cells to the circuit.
-    Opening(oneshot::Sender<ChanMsg>, mpsc::Sender<ChanMsg>),
+    Opening(oneshot::Sender<CreateResponse>, mpsc::Sender<ChanMsg>),
 
     /// A circuit that is open and can be given relay cells.
     ///
@@ -93,7 +95,7 @@ impl CircMap {
     pub(super) fn add_ent<R: Rng>(
         &mut self,
         rng: &mut R,
-        createdsink: oneshot::Sender<ChanMsg>,
+        createdsink: oneshot::Sender<CreateResponse>,
         sink: mpsc::Sender<ChanMsg>,
     ) -> Result<CircID> {
         /// How many times do we probe for a random circuit ID before
@@ -118,7 +120,10 @@ impl CircMap {
 
     /// See whether 'id' is an opening circuit.  If so, mark it "open" and
     /// return a oneshot::Sender that is waiting for its create cell.
-    pub(super) fn advance_from_opening(&mut self, id: CircID) -> Option<oneshot::Sender<ChanMsg>> {
+    pub(super) fn advance_from_opening(
+        &mut self,
+        id: CircID,
+    ) -> Option<oneshot::Sender<CreateResponse>> {
         // TODO: there should be a better way to do
         // this. hash_map::Entry seems like it could be better.
         let ok = matches!(self.m.get(&id), Some(CircEnt::Opening(_, _)));

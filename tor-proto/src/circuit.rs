@@ -31,12 +31,14 @@
 //!
 //! XXXX We don't send DESTROY cells when we should, or handle them well.
 
+pub(crate) mod celltypes;
 mod halfstream;
 pub(crate) mod reactor;
 pub(crate) mod sendme;
 mod streammap;
 
 use crate::channel::{Channel, CircDestroyHandle};
+use crate::circuit::celltypes::*;
 use crate::circuit::reactor::{CtrlMsg, CtrlResult};
 use crate::crypto::cell::{
     ClientLayer, CryptInit, HopNum, InboundClientLayer, OutboundClientCrypt, OutboundClientLayer,
@@ -74,7 +76,7 @@ pub struct ClientCirc {
 pub struct PendingClientCirc {
     /// A oneshot receiver on which we'll receive a CREATED* cell,
     /// or a DESTROY cell.
-    recvcreated: oneshot::Receiver<ChanMsg>,
+    recvcreated: oneshot::Receiver<CreateResponse>,
     /// The ClientCirc object that we can expose on success.
     circ: ClientCirc,
 }
@@ -607,7 +609,7 @@ impl PendingClientCirc {
     pub(crate) fn new(
         id: CircID,
         channel: Channel,
-        createdreceiver: oneshot::Receiver<ChanMsg>,
+        createdreceiver: oneshot::Receiver<CreateResponse>,
         circ_closed: CircDestroyHandle,
         input: mpsc::Receiver<ChanMsg>,
     ) -> (PendingClientCirc, reactor::Reactor) {
@@ -746,7 +748,7 @@ trait CreateHandshakeWrap {
     fn to_chanmsg(&self, bytes: Vec<u8>) -> ChanMsg;
     /// Decode a ChanMsg to an appropriate handshake value, checking
     /// its type.
-    fn from_chanmsg(&self, msg: ChanMsg) -> Result<Vec<u8>>;
+    fn from_chanmsg(&self, msg: CreateResponse) -> Result<Vec<u8>>;
 }
 
 /// A CreateHandshakeWrap that generates CREATE_FAST and handles CREATED_FAST.
@@ -756,10 +758,11 @@ impl CreateHandshakeWrap for CreateFastWrap {
     fn to_chanmsg(&self, bytes: Vec<u8>) -> ChanMsg {
         chancell::msg::CreateFast::new(bytes).into()
     }
-    fn from_chanmsg(&self, msg: ChanMsg) -> Result<Vec<u8>> {
+    fn from_chanmsg(&self, msg: CreateResponse) -> Result<Vec<u8>> {
+        use CreateResponse::*;
         match msg {
-            ChanMsg::CreatedFast(m) => Ok(m.into_body()),
-            ChanMsg::Destroy(_) => Err(Error::CircExtend(
+            CreatedFast(m) => Ok(m.into_body()),
+            Destroy(_) => Err(Error::CircExtend(
                 "Relay replied to CREATE_FAST with DESTROY.",
             )),
             _ => Err(Error::CircExtend(
@@ -778,10 +781,11 @@ impl CreateHandshakeWrap for Create2Wrap {
     fn to_chanmsg(&self, bytes: Vec<u8>) -> ChanMsg {
         chancell::msg::Create2::new(self.handshake_type, bytes).into()
     }
-    fn from_chanmsg(&self, msg: ChanMsg) -> Result<Vec<u8>> {
+    fn from_chanmsg(&self, msg: CreateResponse) -> Result<Vec<u8>> {
+        use CreateResponse::*;
         match msg {
-            ChanMsg::Created2(m) => Ok(m.into_body()),
-            ChanMsg::Destroy(_) => Err(Error::CircExtend("Relay replied to CREATE2 with DESTROY.")),
+            Created2(m) => Ok(m.into_body()),
+            Destroy(_) => Err(Error::CircExtend("Relay replied to CREATE2 with DESTROY.")),
             _ => Err(Error::CircExtend(
                 "Relay replied to CREATE2 with unexpected cell.",
             )),

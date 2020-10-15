@@ -19,6 +19,7 @@ use futures::select_biased;
 use futures::sink::SinkExt;
 use futures::stream::{self, SplitStream, StreamExt};
 
+use std::convert::TryInto;
 use std::sync::{Arc, Weak};
 
 use log::trace;
@@ -242,11 +243,12 @@ impl ReactorCore {
     async fn deliver_created(&mut self, circid: CircID, msg: ChanMsg) -> Result<()> {
         let mut map = self.circs.lock().await;
         if let Some(target) = map.advance_from_opening(circid) {
+            let created = msg.try_into()?;
             // XXXX handle errors better.
             // XXXX should we really be holding the mutex for this?
             // XXXX I think that this one actually means the other side
             // is closed
-            target.send(msg).map_err(|_| {
+            target.send(created).map_err(|_| {
                 Error::InternalError(
                     "Circuit queue rejected created message. Is it closing? XXX".into(),
                 )
@@ -270,7 +272,7 @@ impl ReactorCore {
             // won't get one.
             Some(CircEnt::Opening(oneshot, _)) => {
                 oneshot
-                    .send(msg)
+                    .send(msg.try_into()?)
                     // XXXX I think that this one actually means the other side
                     // is closed
                     .map_err(|_| {
