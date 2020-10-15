@@ -3,7 +3,83 @@
 //! Eventually this should probably be replaced with a wrapper that
 //! uses the ed25519 trait and the Signature trait.
 
+use std::convert::TryInto;
+use std::fmt::{self, Debug, Display, Formatter};
+use subtle::*;
+
 pub use ed25519_dalek::{ExpandedSecretKey, Keypair, PublicKey, SecretKey, Signature};
+
+/// A relay's identity, as an unchecked, unvalidated Ed25519 key.
+#[derive(Clone)]
+pub struct Ed25519Identity {
+    /// A raw unchecked Ed25519 public key.
+    id: [u8; 32],
+}
+
+impl Ed25519Identity {
+    /// Construct a new Ed25519 identity from a 32-byte sequence.
+    ///
+    /// This might or might not actually be a valid Ed25519 public key.
+    ///
+    /// ```
+    /// use tor_llcrypto::pk::ed25519::{Ed25519Identity, PublicKey};
+    /// use std::convert::TryInto;
+    ///
+    /// let bytes = b"klsadjfkladsfjklsdafkljasdfsdsd!";
+    /// let id = Ed25519Identity::new(*bytes);
+    /// let pk: Result<PublicKey,_> = id.try_into();
+    /// assert!(pk.is_ok());
+    ///
+    /// let bytes = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    /// let id = Ed25519Identity::new(*bytes);
+    /// let pk: Result<PublicKey,_> = id.try_into();
+    /// assert!(pk.is_err());
+    /// ```
+    pub fn new(id: [u8; 32]) -> Self {
+        Ed25519Identity { id }
+    }
+    /// Return a reference to the bytes in this key.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.id[..]
+    }
+}
+
+impl From<[u8; 32]> for Ed25519Identity {
+    fn from(id: [u8; 32]) -> Self {
+        Ed25519Identity::new(id)
+    }
+}
+
+impl TryInto<PublicKey> for Ed25519Identity {
+    type Error = ed25519_dalek::SignatureError;
+    fn try_into(self) -> Result<PublicKey, Self::Error> {
+        PublicKey::from_bytes(&self.id[..])
+    }
+}
+
+impl PartialEq<Ed25519Identity> for Ed25519Identity {
+    fn eq(&self, rhs: &Ed25519Identity) -> bool {
+        self.id.ct_eq(&rhs.id).unwrap_u8() == 1
+    }
+}
+
+impl Eq for Ed25519Identity {}
+
+impl Display for Ed25519Identity {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            base64::encode_config(self.id, base64::STANDARD_NO_PAD)
+        )
+    }
+}
+
+impl Debug for Ed25519Identity {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "Ed25519Identity {{ {} }}", self)
+    }
+}
 
 /// An ed25519 signature, plus the document that it signs and its
 /// public key.

@@ -3,6 +3,8 @@ use hex_literal::hex;
 use stream_cipher::*;
 use tor_llcrypto as ll;
 
+use std::convert::TryInto;
+
 #[test]
 fn tv_curve25519() {
     use ll::pk::curve25519::*;
@@ -58,15 +60,22 @@ fn tv_ed25519() {
     ))
     .expect("Bad value");
 
+    let pk_bytes = hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a");
     let pk: PublicKey = (&sk).into();
 
+    assert_eq!(pk.as_bytes(), &pk_bytes);
+
+    let pk_as_id = Ed25519Identity::new(pk_bytes);
     assert_eq!(
-        pk.as_bytes(),
-        &hex!(
-            "d75a980182b10ab7d54bfed3c964073a
-                      0ee172f3daa62325af021a68f707511a"
-        )
+        format!("{}", pk_as_id),
+        "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo"
     );
+    assert_eq!(
+        format!("{:?}", pk_as_id),
+        "Ed25519Identity { 11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo }"
+    );
+    let pk_again: PublicKey = pk_as_id.try_into().unwrap();
+    assert_eq!(pk_again, pk);
 
     let kp = Keypair {
         public: pk,
