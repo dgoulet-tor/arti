@@ -35,3 +35,29 @@ impl TryFrom<ChanMsg> for CreateResponse {
         }
     }
 }
+
+/// A subclass of ChanMsg that can correctly arrive on a live client
+/// circuit (one where a CREATED* has been received).
+pub(crate) enum ClientCircChanMsg {
+    /// A relay cell telling us some kind of remote command from some
+    /// party on the circuit.
+    Relay(chanmsg::Relay),
+    /// A cell telling us to destroy the circuit.
+    Destroy(chanmsg::Destroy),
+    // Note: RelayEarly is not valid for clients!
+}
+
+impl TryFrom<ChanMsg> for ClientCircChanMsg {
+    type Error = crate::Error;
+
+    fn try_from(m: ChanMsg) -> Result<ClientCircChanMsg> {
+        match m {
+            ChanMsg::Destroy(m) => Ok(ClientCircChanMsg::Destroy(m)),
+            ChanMsg::Relay(m) => Ok(ClientCircChanMsg::Relay(m)),
+            _ => Err(Error::ChanProto(format!(
+                "Got a {} cell on an open circuit",
+                m.cmd()
+            ))),
+        }
+    }
+}

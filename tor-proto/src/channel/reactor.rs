@@ -229,7 +229,7 @@ impl ReactorCore {
             // XXXX should we really be holding the mutex for this?
             // XXXX I think that this one actually means the other side
             // is closed
-            s.send(msg).await.map_err(|_| {
+            s.send(msg.try_into()?).await.map_err(|_| {
                 Error::InternalError("Circuit queue rejected message. Is it closing? XXX".into())
             })
         } else {
@@ -283,7 +283,7 @@ impl ReactorCore {
             }
             // It's an open circuit: tell it that it got a DESTROY cell.
             Some(CircEnt::Open(mut sink)) => sink
-                .send(msg)
+                .send(msg.try_into()?)
                 .await
                 // XXXX I think that this one actually means the other side
                 // is closed

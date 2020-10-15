@@ -4,10 +4,9 @@
 // it needs to stay opaque!
 
 use crate::{Error, Result};
-use tor_cell::chancell::msg::ChanMsg;
 use tor_cell::chancell::CircID;
 
-use crate::circuit::celltypes::CreateResponse;
+use crate::circuit::celltypes::{ClientCircChanMsg, CreateResponse};
 
 use futures::channel::{mpsc, oneshot};
 
@@ -62,13 +61,13 @@ pub(super) enum CircEnt {
     ///
     /// Once that's done, the mpsc sender will be used to send subsequent
     /// cells to the circuit.
-    Opening(oneshot::Sender<CreateResponse>, mpsc::Sender<ChanMsg>),
+    Opening(
+        oneshot::Sender<CreateResponse>,
+        mpsc::Sender<ClientCircChanMsg>,
+    ),
 
     /// A circuit that is open and can be given relay cells.
-    ///
-    /// RELAY cells and DESTROY cells can be sent to the circuit;
-    /// everything else is an error.
-    Open(mpsc::Sender<ChanMsg>),
+    Open(mpsc::Sender<ClientCircChanMsg>),
 }
 
 /// A map from circuit IDs to circuit entries. Each channel has one.
@@ -96,7 +95,7 @@ impl CircMap {
         &mut self,
         rng: &mut R,
         createdsink: oneshot::Sender<CreateResponse>,
-        sink: mpsc::Sender<ChanMsg>,
+        sink: mpsc::Sender<ClientCircChanMsg>,
     ) -> Result<CircID> {
         /// How many times do we probe for a random circuit ID before
         /// we assume that the range is fully populated?

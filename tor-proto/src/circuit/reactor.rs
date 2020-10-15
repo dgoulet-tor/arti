@@ -7,10 +7,11 @@
 //! it should just not exist.
 
 use super::streammap::StreamEnt;
+use crate::circuit::celltypes::ClientCircChanMsg;
 use crate::circuit::{sendme, streammap};
 use crate::crypto::cell::{HopNum, InboundClientCrypt, InboundClientLayer};
 use crate::{Error, Result};
-use tor_cell::chancell::{msg::ChanMsg, msg::Relay};
+use tor_cell::chancell::msg::Relay;
 use tor_cell::relaycell::msg::{End, RelayMsg, Sendme};
 use tor_cell::relaycell::{RelayCell, StreamID};
 
@@ -105,7 +106,7 @@ pub struct Reactor {
     /// Input Stream, on which we receive ChanMsg objects from this circuit's
     /// channel.
     // TODO: could use a SPSC channel here instead.
-    input: stream::Fuse<mpsc::Receiver<ChanMsg>>,
+    input: stream::Fuse<mpsc::Receiver<ClientCircChanMsg>>,
     /// The main implementation of the reactor.
     core: ReactorCore,
 }
@@ -134,7 +135,7 @@ impl Reactor {
         circuit: Arc<Mutex<super::ClientCircImpl>>,
         control: mpsc::Receiver<CtrlResult>,
         closeflag: oneshot::Receiver<CtrlMsg>,
-        input: mpsc::Receiver<ChanMsg>,
+        input: mpsc::Receiver<ClientCircChanMsg>,
     ) -> Self {
         let core = ReactorCore {
             circuit: Arc::downgrade(&circuit),
@@ -277,10 +278,10 @@ impl ReactorCore {
     /// or rejected; a few get delivered to circuits.
     ///
     /// Return true if we should exit.
-    async fn handle_cell(&mut self, cell: ChanMsg) -> Result<bool> {
-        use ChanMsg::*;
+    async fn handle_cell(&mut self, cell: ClientCircChanMsg) -> Result<bool> {
+        use ClientCircChanMsg::*;
         match cell {
-            Relay(r) | RelayEarly(r) => {
+            Relay(r) => {
                 self.handle_relay_cell(r).await?;
                 Ok(false)
             }
@@ -288,11 +289,6 @@ impl ReactorCore {
                 self.handle_destroy_cell()?;
                 Ok(true)
             }
-            // TODO: It would be better for this channel to instead
-            // carry only good cell types.
-            _ => Err(Error::InternalError(
-                "Unsupported cell type on circuit.".into(),
-            )),
         }
     }
 

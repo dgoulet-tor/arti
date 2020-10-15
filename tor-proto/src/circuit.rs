@@ -611,7 +611,7 @@ impl PendingClientCirc {
         channel: Channel,
         createdreceiver: oneshot::Receiver<CreateResponse>,
         circ_closed: CircDestroyHandle,
-        input: mpsc::Receiver<ChanMsg>,
+        input: mpsc::Receiver<ClientCircChanMsg>,
     ) -> (PendingClientCirc, reactor::Reactor) {
         let crypto_out = OutboundClientCrypt::new();
         let (sendclosed, recvclosed) = oneshot::channel::<CtrlMsg>();
