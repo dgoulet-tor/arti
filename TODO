@@ -54,8 +54,8 @@ MILESTONE 3: Clean and tidy
         - Audit to make sure Tor has no such things. (0.1)
    - Less copying, esp around Box<RawCellBody>.  Consider bytes crate. arti#7
      (1)
-   - Use better types for cases when only a few messages are
-     possible. arti#11 (0.3)
+   o Use better types for cases when only a few messages are
+     possible. arti#11 (0.3) (1:45h)
    - Audit all cell handling: unexpected cells mean kill the circuit arti#12
      [0.5]
    - Get a data-oriented stream API. arti#10 (1)
