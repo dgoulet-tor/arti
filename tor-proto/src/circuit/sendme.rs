@@ -186,7 +186,7 @@ where
     ///
     /// On failure, return None: the caller should close the stream
     /// or circuit with a protocol error.
-    #[must_use]
+    #[must_use = "didn't check whether SENDME tag was right."]
     pub async fn put(&mut self, tag: Option<T>) -> Option<u16> {
         let mut w = self.w.lock().await;
 

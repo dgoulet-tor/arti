@@ -635,7 +635,7 @@ impl PendingClientCirc {
             recvcreated: createdreceiver,
             circ: circuit.clone(),
         };
-        let reactor = reactor::Reactor::new(circuit.c.clone(), recvctrl, recvclosed, input);
+        let reactor = reactor::Reactor::new(circuit.c, recvctrl, recvclosed, input);
         (pending, reactor)
     }
 
