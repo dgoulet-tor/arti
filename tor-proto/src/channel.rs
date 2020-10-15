@@ -41,7 +41,7 @@ use futures::sink::{Sink, SinkExt};
 use futures::stream::StreamExt;
 
 use std::cell::Cell;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use log::trace;
 use rand::Rng;
@@ -76,10 +76,10 @@ struct ChannelImpl {
     /// The ChannelImpl side of this object only needs to use this
     /// when creating circuits; it's shared with the reactor, which uses
     /// it for dispatch.
-    // This uses a separate mutex from the circmap, since we only need
+    // This uses a separate mutex from the channel, since we only need
     // the circmap when we're making a new circuit, the reactor needs
     // it all the time.
-    circmap: Arc<Mutex<circmap::CircMap>>,
+    circmap: Weak<Mutex<circmap::CircMap>>,
     /// A stream used to send control messages to the Reactor.
     sendctrl: mpsc::Sender<CtrlResult>,
     /// A oneshot sender used to tell the Reactor task to shut down.
@@ -122,7 +122,7 @@ impl Channel {
             tls: Box::new(sink),
             link_protocol,
             closed: false,
-            circmap: circmap.clone(),
+            circmap: Arc::downgrade(&circmap),
             sendctrl,
             sendclosed: Cell::new(Some(sendclosed)),
         };
@@ -187,8 +187,12 @@ impl Channel {
                 .send(Ok(CtrlMsg::Register(recv_circ_destroy)))
                 .await
                 .map_err(|_| Error::InternalError("Can't queue circuit closer".into()))?;
-            let mut cmap = inner.circmap.lock().await;
-            cmap.add_ent(rng, createdsender, sender)?
+            if let Some(circmap) = inner.circmap.upgrade() {
+                let mut cmap = circmap.lock().await;
+                cmap.add_ent(rng, createdsender, sender)?
+            } else {
+                return Err(Error::ChannelClosed);
+            }
         };
 
         let destroy_handle = CircDestroyHandle::new(id, send_circ_destroy);
@@ -220,6 +224,7 @@ impl Drop for ChannelImpl {
 }
 
 impl ChannelImpl {
+    /// Try to send `cell` on this channel.
     async fn send_cell(&mut self, cell: ChanCell) -> Result<()> {
         if self.closed {
             return Err(Error::ChannelClosed);
