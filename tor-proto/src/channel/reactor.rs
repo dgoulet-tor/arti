@@ -116,6 +116,24 @@ where
     /// Launch the reactor, and run until the channel closes or we
     /// encounter an error.
     pub async fn run(mut self) -> Result<()> {
+        if let Some(chan) = self.core.channel.upgrade() {
+            let chan = chan.lock().await;
+            if chan.closed {
+                return Err(Error::ChannelClosed);
+            }
+        } else {
+            return Err(Error::ChannelClosed);
+        }
+        let result = self.run_impl().await;
+        if let Some(chan) = self.core.channel.upgrade() {
+            let mut chan = chan.lock().await;
+            chan.closed = true;
+        }
+        result
+    }
+
+    /// Helper for run(): doesn't mark the channel closed on finish.
+    async fn run_impl(&mut self) -> Result<()> {
         loop {
             // Let's see what's next: maybe we got a cell, maybe the TLS
             // connection got closed, or maybe we've been told to shut

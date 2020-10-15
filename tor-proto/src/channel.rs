@@ -69,6 +69,8 @@ struct ChannelImpl {
     /// The underlying channel, as a Sink of ChanCell.  Writing
     /// a ChanCell onto this sink sends it over the TLS channel.
     tls: Box<dyn Sink<ChanCell, Error = tor_cell::Error> + Send + Unpin + 'static>,
+    /// If true, this channel is closing.
+    closed: bool,
     /// A circuit map, to translate circuit IDs into circuits.
     ///
     /// The ChannelImpl side of this object only needs to use this
@@ -119,6 +121,7 @@ impl Channel {
         let inner = ChannelImpl {
             tls: Box::new(sink),
             link_protocol,
+            closed: false,
             circmap: circmap.clone(),
             sendctrl,
             sendclosed: Cell::new(Some(sendclosed)),
@@ -176,6 +179,9 @@ impl Channel {
 
         let id = {
             let mut inner = self.inner.lock().await;
+            if inner.closed {
+                return Err(Error::ChannelClosed);
+            }
             inner
                 .sendctrl
                 .send(Ok(CtrlMsg::Register(recv_circ_destroy)))
@@ -214,7 +220,10 @@ impl Drop for ChannelImpl {
 }
 
 impl ChannelImpl {
-    pub async fn send_cell(&mut self, cell: ChanCell) -> Result<()> {
+    async fn send_cell(&mut self, cell: ChanCell) -> Result<()> {
+        if self.closed {
+            return Err(Error::ChannelClosed);
+        }
         self.tls.send(cell).await?;
         Ok(())
     }

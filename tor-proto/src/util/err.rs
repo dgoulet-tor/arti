@@ -47,6 +47,9 @@ pub enum Error {
     /// Circuit destroyed or channel closed.
     #[error("circuit destroyed: {0}")]
     CircDestroy(String),
+    /// Channel is closed.
+    #[error("channel closed")]
+    ChannelClosed,
     /// Circuit is closed.
     #[error("circuit closed")]
     CircuitClosed,
