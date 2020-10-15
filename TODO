@@ -46,8 +46,8 @@ MILESTONE 2: Working streams
      (Defend against DropMark attack from 25573) (1) (2:20h)
 
 MILESTONE 3: Clean and tidy
-   - Make sure that circuit Destroys are handled and sent correctly.
-     Use ideas from circuit module. arti#5 (1)
+   o Make sure that circuit Destroys are handled and sent correctly.
+     Use ideas from circuit module. arti#5 (1) (2:30h)
    - Ed25519 needs to have an "identity" non-parsed version, maybe. arti#6
      (0.2)
    X Add other "partially-closed" states for streams and circuits? (1)
