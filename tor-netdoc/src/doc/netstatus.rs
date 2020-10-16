@@ -542,7 +542,7 @@ lazy_static! {
         rules.add(RS_A.rule().may_repeat().args(1..));
         rules.add(RS_S.rule().required());
         rules.add(RS_V.rule());
-        rules.add(RS_PR.rule().args(0..));
+        rules.add(RS_PR.rule().required());
         rules.add(RS_W.rule());
         rules.add(RS_P.rule().args(2..));
         rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());

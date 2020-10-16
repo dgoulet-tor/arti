@@ -114,8 +114,6 @@ pub struct RouterDesc {
     proto: tor_protover::Protocols,
     /// True if this relay says it's a directory cache.
     is_dircache: bool,
-    /// True if this relay says it can be a hidden service directory.
-    is_hsdir: bool,
     /// True if this relay says that it caches extrainfo documents.
     is_extrainfo_cache: bool,
     /// Declared family members for this relay.  If two relays are in the
@@ -176,7 +174,6 @@ decl_keyword! {
         "family" => FAMILY,
         "fingerprint" => FINGERPRINT,
         "hibernating" => HIBERNATING,
-        "hidden-service-dir" => HIDDEN_SERVICE_DIR,
         "identity-ed25519" => IDENTITY_ED25519,
         "ipv6-policy" => IPV6_POLICY,
         "master-key-ed25519" => MASTER_KEY_ED25519,
@@ -219,8 +216,6 @@ lazy_static! {
 
         let mut rules = SectionRules::new();
         rules.add(ROUTER.rule().required().args(5..));
-        // IDENTITY_ED25519 is not yet required as of this writing;
-        // I'm assuming that proposal 315 will get accepted.
         rules.add(IDENTITY_ED25519.rule().required().no_args().obj_required());
         rules
     };
@@ -230,24 +225,23 @@ lazy_static! {
         use RouterKW::*;
 
         let mut rules = SectionRules::new();
-        rules.add(MASTER_KEY_ED25519.rule().args(1..));
+        rules.add(MASTER_KEY_ED25519.rule().required().args(1..));
         rules.add(PLATFORM.rule());
         rules.add(PUBLISHED.rule().required());
         rules.add(FINGERPRINT.rule());
         rules.add(UPTIME.rule().args(1..));
         rules.add(ONION_KEY.rule().no_args().required().obj_required());
-        rules.add(ONION_KEY_CROSSCERT.rule().no_args().obj_required());
-        rules.add(NTOR_ONION_KEY.rule().args(1..));
-        rules.add(NTOR_ONION_KEY_CROSSCERT.rule().args(1..=1).obj_required());
+        rules.add(ONION_KEY_CROSSCERT.rule().required().no_args().obj_required());
+        rules.add(NTOR_ONION_KEY.rule().required().args(1..));
+        rules.add(NTOR_ONION_KEY_CROSSCERT.rule().required().args(1..=1).obj_required());
         rules.add(SIGNING_KEY.rule().no_args().required().obj_required());
         rules.add(POLICY.rule().may_repeat().args(1..));
         rules.add(IPV6_POLICY.rule().args(2..));
         rules.add(FAMILY.rule().args(1..));
         rules.add(CACHES_EXTRA_INFO.rule().no_args());
-        rules.add(HIDDEN_SERVICE_DIR.rule());
         rules.add(OR_ADDRESS.rule().may_repeat().args(1..));
         rules.add(TUNNELLED_DIR_SERVER.rule());
-        rules.add(PROTO.rule().args(1..));
+        rules.add(PROTO.rule().required().args(1..));
         rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
         // TODO: these aren't parsed yet.  Only authorities use them.
         {
@@ -268,8 +262,8 @@ lazy_static! {
         use RouterKW::*;
 
         let mut rules = SectionRules::new();
-        rules.add(ROUTER_SIG_ED25519.rule().args(1..));
-        rules.add(ROUTER_SIGNATURE.rule().no_args().obj_required());
+        rules.add(ROUTER_SIG_ED25519.rule().required().args(1..));
+        rules.add(ROUTER_SIGNATURE.rule().required().no_args().obj_required());
         rules
     };
 }
@@ -515,9 +509,6 @@ impl RouterDesc {
         // tunneled-dir-server
         let is_dircache = (dirport != 0) || body.get(TUNNELLED_DIR_SERVER).is_some();
 
-        // hidden-service-dir
-        let is_hsdir = body.get(HIDDEN_SERVICE_DIR).is_some();
-
         // caches-extra-info
         let is_extrainfo_cache = body.get(CACHES_EXTRA_INFO).is_some();
 
@@ -611,7 +602,6 @@ impl RouterDesc {
             tap_onion_key,
             proto,
             is_dircache,
-            is_hsdir,
             is_extrainfo_cache,
             family,
             platform,
