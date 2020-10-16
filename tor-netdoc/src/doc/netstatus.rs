@@ -321,7 +321,7 @@ pub struct MDConsensusRouterStatus {
     /// Version of the software that this relay is running.
     version: Option<String>,
     /// List of subprotocol versions supported by this relay.
-    protos: Option<Protocols>,
+    protos: Protocols,
     /// Information about how to weight this relay when choosing a
     /// relay at random.
     weight: RouterWeight,
@@ -351,7 +351,7 @@ impl MDConsensusRouterStatus {
         &self.addrs[..]
     }
     /// Return the protovers that this routerstatus says it implements.
-    pub fn protovers(&self) -> &Option<Protocols> {
+    pub fn protovers(&self) -> &Protocols {
         &self.protos
     }
 }
@@ -972,14 +972,11 @@ impl MDConsensusRouterStatus {
         let version = sec.maybe(RS_V).args_as_str().map(str::to_string);
 
         // PR line
-        let protos = if let Some(tok) = sec.get(RS_PR) {
-            Some(
-                tok.args_as_str()
-                    .parse::<Protocols>()
-                    .map_err(|e| Error::BadArgument(tok.pos(), e.to_string()))?,
-            )
-        } else {
-            None
+        let protos = {
+            let tok = sec.required(RS_PR)?;
+            tok.args_as_str()
+                .parse::<Protocols>()
+                .map_err(|e| Error::BadArgument(tok.pos(), e.to_string()))?
         };
 
         // W line
@@ -1461,7 +1458,7 @@ mod test {
         );
         assert_eq!(r0.weight().is_measured(), false);
         assert_eq!(r0.weight().is_nonzero(), false);
-        let pv = r0.protovers().as_ref().unwrap();
+        let pv = &r0.protovers();
         assert!(pv.supports_subver("HSDir", 2));
         assert!(!pv.supports_subver("HSDir", 3));
         let ip4 = "127.0.0.1:5002".parse::<SocketAddr>().unwrap();

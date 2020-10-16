@@ -458,6 +458,6 @@ impl<'a> tor_linkspec::CircTarget for Relay<'a> {
     /// Return the subprotocols implemented by this relay.
     fn protovers(&self) -> &tor_protover::Protocols {
         // XXXX unwrap might fail if is_usable is false
-        self.rs.protovers().as_ref().unwrap()
+        self.rs.protovers()
     }
 }

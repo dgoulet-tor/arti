@@ -225,6 +225,7 @@ lazy_static! {
         use RouterKW::*;
 
         let mut rules = SectionRules::new();
+        // TODO: check MASTER_KEY_ED25519 for consistency with cert.
         rules.add(MASTER_KEY_ED25519.rule().required().args(1..));
         rules.add(PLATFORM.rule());
         rules.add(PUBLISHED.rule().required());
@@ -456,12 +457,10 @@ impl RouterDesc {
             .into();
 
         // ntor key
-        // XXXX technically this isn't "required"
         let ntor_onion_key: Curve25519Public = body.required(NTOR_ONION_KEY)?.parse_arg(0)?;
         let ntor_onion_key: ll::pk::curve25519::PublicKey = ntor_onion_key.into();
         // ntor crosscert
         let crosscert_cert: tor_cert::UncheckedCert = {
-            // Technically required? XXXX
             let cc = body.required(NTOR_ONION_KEY_CROSSCERT)?;
             let sign: u8 = cc.parse_arg(0)?;
             if sign != 0 && sign != 1 {
@@ -488,7 +487,6 @@ impl RouterDesc {
 
         // TAP crosscert
         let tap_crosscert_sig = {
-            // not offically required yet xxxx
             let cc_tok = body.required(ONION_KEY_CROSSCERT)?;
             let cc_val = cc_tok.obj("CROSSCERT")?;
             let mut signed = Vec::new();
@@ -497,7 +495,7 @@ impl RouterDesc {
             ll::pk::rsa::ValidatableRSASignature::new(&tap_onion_key, &cc_val, &signed)
         };
 
-        // Protocols: treat these as required. (XXXX)
+        // List of subprotocol versions
         let proto = {
             let proto_tok = body.required(PROTO)?;
             proto_tok
