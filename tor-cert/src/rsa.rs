@@ -81,7 +81,6 @@ impl ExternallySigned<TimerangeBound<RSACrosscert>> for UncheckedRSACrosscert {
 
     fn is_well_signed(&self, k: &Self::Key) -> Result<(), Self::Error> {
         k.verify(&self.0.digest[..], &self.0.signature[..])
-            // XXXX poor choice of error type
             .map_err(|_| {
                 tor_bytes::Error::BadMessage("Invalid signature on RSA->Ed identity crosscert")
             })?;

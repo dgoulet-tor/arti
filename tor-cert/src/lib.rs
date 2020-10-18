@@ -344,7 +344,9 @@ impl Ed25519Cert {
         let exp_hours = r.take_u32()?;
         let mut cert_key_type = r.take_u8()?.into();
 
-        // XXXX This is a workaround for a tor bug: the key type is wrong.
+        // This is a workaround for a tor bug: the key type is
+        // wrong. It was fixed in tor#40124, which got merged into Tor
+        // 0.4.5.x and later.
         if cert_type == CertType::SIGNING_V_TLS_CERT && cert_key_type == KeyType::ED25519_KEY {
             cert_key_type = KeyType::SHA256_OF_X509;
         }
