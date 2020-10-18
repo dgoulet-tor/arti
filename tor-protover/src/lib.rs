@@ -393,15 +393,16 @@ fn dumpmask(mut mask: u64) -> String {
         let zeros = mask.trailing_zeros();
         mask >>= zeros;
         shift += zeros;
-        // We'd like to do it this way, but trailing_ones() is not yet
-        // in stable Rust. (TODO)
+        // TODO: We'd like to do it this way, but trailing_ones() is
+        // not yet in enough versions of stable Rust.  (It landed in
+        // Rust 1.46.)
         //    let ones = mask.trailing_ones();
         let ones = (!mask).trailing_zeros();
         append(&mut result, shift, shift + ones - 1);
         shift += ones;
         if ones == 64 {
             // We have to do this check to avoid overflow when formatting
-            // the range 0-63.  XXXX (It's a bit ugly, isn't it?)
+            // the range `0-63`.
             break;
         }
         mask >>= ones;
