@@ -11,8 +11,6 @@ use tor_llcrypto::pk::ed25519;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
 /// A piece of information about a relay and how to connect to it.
-///
-/// TODO: move this. It's used in a bunch of other places.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum LinkSpec {
