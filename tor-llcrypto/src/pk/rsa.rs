@@ -146,9 +146,14 @@ impl PublicKey {
         use simple_asn1::{ASN1Block, BigInt};
         /// Helper: convert a BigUInt to signed asn1.
         fn to_asn1_int(x: &BigUint) -> ASN1Block {
+            // We stick a "0" on the front so that we can used
+            // from_signed_bytes_be.  The 0 guarantees that we'll
+            // have a positive value.
             let mut bytes = vec![0];
             bytes.extend(x.to_bytes_be());
-            // XXXX Signed?? Really? Explain why if so.
+            // We use from_signed_bytes_be() here because simple_asn1
+            // exposes BigInt but not Sign, so we can't call
+            // its version of from_signed_bytes().
             let bigint = BigInt::from_signed_bytes_be(&bytes);
             ASN1Block::Integer(0, bigint)
         }

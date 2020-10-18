@@ -60,7 +60,7 @@ MILESTONE 3: Clean and tidy
      [0.5]
    - Get a data-oriented stream API. arti#10 (1)
    - Make all APIs conform to best practices. arti#9 (1)
-   - Figure out which consensus method we require, and say so. arti#8 (0.2)
+   o Figure out which consensus method we require, and say so. arti#8 (0.2) (45m)
    - Audit lifetime and locking code arti#14 (1)
        - Make a plan for what closes when
        - Make sure everything closes when it is supposed to.
