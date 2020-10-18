@@ -16,6 +16,9 @@ client, and then we'll see what the situation is, and whether we should
 keep on working on it.  See the TODO file for other milestones that
 we're considering.
 
+There are absolutely no guarantees about stability.  Future versions of
+Tor might break this; no users should expect source compatibility.
+
 ## What the demo can do if you run it.
 
 There is a demo program that takes the location of a chutney directory or a
@@ -134,6 +137,11 @@ We do not ever plan to support these:
   * ❌ `LinkAuth=1` (only used by RSA-only relays)
   * ❌ `Microdesc=1` (obsolete format)
   * ❌ `Padding=1` (deprecated)
+
+We presume that these proposals will be accepted and merged into Tor:
+  * [ ] 285 (Directory documents should be standardized as utf-8, tor#40131)
+  * [ ] 315 (Make some directory fields "required", tor#40132)
+  * [ ] 318 (Limit protovers to 0-63, tor#40133)
 
 ## What can I do with this?
 
