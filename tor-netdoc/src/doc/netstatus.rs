@@ -243,7 +243,7 @@ struct RouterFlags {
     /// ring?
     hsdir: bool,
     /// If set, there is no consensus for the ed25519 key for this relay.
-    // XXXX use this field.
+    // XXXXM3 use this field or else the ed25519 key isn't reliable.
     no_ed_consensus: bool,
     /// Is this relay considerd "stable" enough for long-lived circuits.
     stable: bool,
@@ -1132,7 +1132,7 @@ impl MDConsensus {
         };
 
         let mut first_dir_source = true;
-        // TODO: Extract this pattern into a "parse at second"???
+        // TODO: Extract this pattern into a "pause at second"???
         // Pause at the first 'r', or the second 'dir-source'.
         let mut p = r.pause_at(|i| match i {
             Err(_) => false,

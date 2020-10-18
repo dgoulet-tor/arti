@@ -182,7 +182,7 @@ impl OutboundClientCrypt {
 
     /// Return the number of layers configured on this OutoubndClientCrypt.
     ///
-    /// TODO: use HopNum
+    /// TODO: use HopNum? XXXXM3
     pub fn n_layers(&self) -> usize {
         self.layers.len()
     }

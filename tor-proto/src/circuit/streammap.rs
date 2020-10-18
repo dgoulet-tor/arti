@@ -142,7 +142,7 @@ impl StreamMap {
             Some(StreamEnt::Open(_, sendw, n)) => {
                 recvw.decrement_n(*n)?;
                 // TODO: would be nice to avoid new_ref.
-                // XXXX: We should set connected_ok properly.
+                // XXXXM3: We should set connected_ok properly.
                 let connected_ok = true;
                 let halfstream = HalfStream::new(sendw.new_ref(), recvw, connected_ok);
                 self.m.insert(id, StreamEnt::EndSent(halfstream));

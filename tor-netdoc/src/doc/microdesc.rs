@@ -273,7 +273,7 @@ impl Microdesc {
             let args = body.last_item().unwrap().args_as_str();
             // unwrap is safe because we are parsing these items from s.
             // XXXX we should use the end_pos() method here; this is wrong
-            // XXXX if we have an object.
+            // XXXX if we have an object.  XXXXM3
             let args_pos = util::str_offset(s, args).unwrap();
             // unwrap is safe because we do not accept a line that doesn't
             // end with a newline.

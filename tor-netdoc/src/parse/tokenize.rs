@@ -80,7 +80,7 @@ pub struct Item<'a, K: Keyword> {
     /// If present, a base-64-encoded object that appeared at the end
     /// of this item.
     // TODO: we need to make sure that every base64-encoded object eventually
-    // gets decoded, if only to check the validity of the base 64.
+    // gets decoded, if only to check the validity of the base 64.XXXXM3
     object: Option<Object<'a>>,
 }
 

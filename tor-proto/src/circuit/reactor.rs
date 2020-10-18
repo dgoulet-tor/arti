@@ -186,7 +186,7 @@ impl Reactor {
                         Some(Ok(CtrlMsg::Shutdown)) => return Ok(()),
                         Some(Ok(msg)) => self.handle_control(msg).await?,
                         Some(Err(_)) => (), // sender was cancelled; ignore.
-                        None => panic!(), // impossible, right? XXXX
+                        None => panic!(), // impossible, right? XXXXM3
                     }
                     continue;
                 }
@@ -202,7 +202,6 @@ impl Reactor {
 
             let exit = self.core.handle_cell(item).await?;
             if exit {
-                // XXXX does this really shutdown?
                 return Ok(());
             }
         }
@@ -254,6 +253,7 @@ impl Reactor {
         let should_send_end = hop.map.terminate(id, window)?;
         // TODO: I am about 80% sure that we only send an END cell if
         // we didn't already get an END cell.  But I should double-check!
+        // XXXXM3
         if should_send_end {
             let end_cell = RelayCell::new(id, End::new_misc().into());
             if let Some(circ) = self.core.circuit.upgrade() {
@@ -303,7 +303,7 @@ impl ReactorCore {
         // copy it, but I don't see a way around it right now.
         let tag = {
             let mut tag_copy = [0u8; 20];
-            // XXXX could crash if length changes.
+            // XXXXM3 could crash if length changes.
             (&mut tag_copy).copy_from_slice(tag);
             tag_copy
         };
@@ -315,7 +315,7 @@ impl ReactorCore {
         // Decrement the circuit sendme windows, and see if we need to
         // send a sendme cell.
         let send_circ_sendme = if c_t_w {
-            // XXXX unwrap is yucky.
+            // XXXXM3 unwrap is yucky.
             match self.get_hop_mut(hopnum).unwrap().recvwindow.take() {
                 Some(true) => true,
                 Some(false) => false,
@@ -365,7 +365,7 @@ impl ReactorCore {
             }
         }
 
-        //XXXX this is still an unwrap, and still risky.
+        //XXXXM3 this is still an unwrap, and still risky.
         let hop = self.get_hop_mut(hopnum).unwrap();
         match hop.map.get_mut(streamid) {
             Some(StreamEnt::Open(s, w, ref mut dropped)) => {
@@ -383,10 +383,10 @@ impl ReactorCore {
                 // close the stream.
                 let end_cell = matches!(msg, RelayMsg::End(_));
 
-                // XXXX handle errors better. Does this one mean that the
+                // XXXXM3 handle errors better. Does this one mean that the
                 // the stream is closed?
 
-                // XXXX reject cells that should never go to a client,
+                // XXXXM3 reject cells that should never go to a client,
                 // XXXX like BEGIN.
                 let result = s.send(msg).await;
                 if result.is_err() && c_t_w {
@@ -419,7 +419,7 @@ impl ReactorCore {
 
     /// Helper: process a destroy cell.
     fn handle_destroy_cell(&mut self) -> Result<()> {
-        // XXXX anything more to do here?
+        // XXXXM3 anything more to do here?
         Ok(())
     }
 

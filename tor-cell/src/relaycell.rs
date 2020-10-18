@@ -63,7 +63,7 @@ caret_int! {
         /// HS: Response to INTRODUCE1 from introduction point to client
         INTRODUCE_ACK = 40,
 
-        // TODO: 41 and 42 are used for padding.
+        // TODO: 41 and 42 are used for padding.  XXXXM3
     }
 }
 

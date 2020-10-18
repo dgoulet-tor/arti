@@ -11,7 +11,7 @@ use tor_llcrypto::pk;
 /// channel.
 pub trait ChanTarget {
     /// Return the addresses at which you can connect to this relay
-    // TODO: bad API
+    // TODO: bad API  XXXXM3 return an iterator
     fn addrs(&self) -> &[SocketAddr];
     /// Return the ed25519 identity for this relay.
     fn ed_identity(&self) -> &pk::ed25519::PublicKey;
@@ -25,7 +25,7 @@ pub trait ChanTarget {
 /// identity of a relay for the purposes of extending a circuit.
 pub trait CircTarget: ChanTarget {
     /// Return a new vector of link specifiers for this relay.
-    // TODO: bad API
+    // TODO: bad API  XXXXM3 return an iterator
     fn linkspecs(&self) -> Vec<crate::LinkSpec> {
         let mut result = Vec::new();
         result.push(self.ed_identity().clone().into());

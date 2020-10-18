@@ -76,7 +76,7 @@ impl PortPolicy {
     fn push_policy(&mut self, item: PortRange) -> Result<(), PolicyError> {
         if let Some(prev) = self.allowed.last() {
             if prev.hi >= item.lo {
-                // Or should this be ">"? TODO XXXX
+                // Or should this be ">"? TODO XXXXM3
                 return Err(PolicyError::InvalidPolicy);
             } else if prev.hi == item.lo - 1 {
                 // We compress a-b,(b+1)-c into a-c.

@@ -164,12 +164,12 @@ where
                 let (send, recv) = oneshot::channel::<()>();
 
                 let old = w.unblock.replace(send);
-                assert!(old.is_none()); // XXXX can this happen?
+                assert!(old.is_none()); // XXXXM3 can this happen?
                 recv
             };
             // Wait on this receiver while _not_ holding the lock.
 
-            // XXXX Danger: can this unwrap fail? I think it can't, since
+            // XXXXM3 Danger: can this unwrap fail? I think it can't, since
             // the sender can't be cancelled as long as there's a refcount
             // to it.
             wait_on.await.unwrap()
@@ -203,7 +203,7 @@ where
 
         if let Some(send) = w.unblock.take() {
             // if we get a failure, nothing cares about this window any more.
-            // XXXX is that true?
+            // XXXXM3 is that true?
             let _ignore = send.send(());
         }
 

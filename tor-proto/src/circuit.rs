@@ -28,8 +28,6 @@
 //! it to process a cell, and streams need to hold it to send.
 //!
 //! XXXX There is no flow-control or rate-limiting or fairness.
-//!
-//! XXXX We don't send DESTROY cells when we should, or handle them well.
 
 pub(crate) mod celltypes;
 mod halfstream;
@@ -101,7 +99,7 @@ struct ClientCircImpl {
     closed: bool,
     /// When this is dropped, the channel reactor is told to send a DESTROY
     /// cell.
-    #[allow(unused)]
+    #[allow(unused)] // XXXX This is probably an antipattern.
     circ_closed: CircDestroyHandle,
     /// Per-hop circuit information.
     ///
@@ -118,8 +116,6 @@ struct ClientCircImpl {
     /// is a RELAY cell with a stream ID value of 0.
     sendmeta: Cell<Option<oneshot::Sender<MetaResult>>>,
 }
-// XXXX TODO: need to send a destroy cell on drop, and tell the reactor to
-// XXXX shut down.
 
 /// A handle to a circuit as held by a stream. Used to send cells.
 ///
@@ -168,7 +164,7 @@ impl CircHop {
         CircHop {
             auth_sendme_optional,
             // TODO: this value should come from the consensus and not be
-            // hardcoded.
+            // hardcoded. XXXXA1
             sendwindow: sendme::CircSendWindow::new(1000),
         }
     }
@@ -265,7 +261,7 @@ impl ClientCirc {
 
         // XXXX If two EXTEND cells are of these are launched on the
         // same circuit at once, could they collide in this part of
-        // the function?
+        // the function? XXXXM3
 
         // Did we get the right response?
         if from_hop != hop || msg.cmd() != RelayCmd::EXTENDED2 {
@@ -325,7 +321,7 @@ impl ClientCirc {
         }
 
         // XXXX need to do something make sure that we aren't trying to add
-        // two hops at once.
+        // two hops at once. XXXXM3
 
         rcv.await
             .map_err(|_| Error::InternalError("AddHop request cancelled".into()))?;
@@ -440,7 +436,7 @@ impl ClientCirc {
         let response = stream.recv().await?;
 
         // XXXXX We need to remove the stream if we get an END cell or
-        // a weird cell.
+        // a weird cell. XXXXM3
 
         if response.cmd() == RelayCmd::CONNECTED {
             Ok(DataStream::new(stream))

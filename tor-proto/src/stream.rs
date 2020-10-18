@@ -145,7 +145,7 @@ impl DataStream {
         }
 
         if self.s.received_end.is_some() {
-            return Ok(0); // XXXX NO! This is closed!
+            return Ok(0); // XXXXM3 NO! This is closed!
         }
 
         if let Some(pending) = self.pending.take() {
@@ -170,7 +170,7 @@ impl DataStream {
             }
             Err(_) | Ok(RelayMsg::End(_)) => {
                 self.s.received_end = Some(cell);
-                // TODO: Hang on, is this a good inteface?
+                // TODO: Hang on, is this a good inteface? XXXXM3
                 Err(Error::StreamClosed("received an end cell"))
             }
             Ok(m) => {

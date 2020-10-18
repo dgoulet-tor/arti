@@ -230,7 +230,7 @@ impl Data {
 
     /// Construct a new data cell.
     pub fn new(inp: &[u8]) -> Self {
-        // XXXX check length!
+        // XXXX check length!  XXXXM3
         Data { body: inp.into() }
     }
 }
@@ -286,7 +286,7 @@ impl End {
     }
     /// Make a new END message with the provided end reason.
     ///
-    /// TODO: reason should be an enum-like thing.
+    /// TODO: reason should be an enum-like thing.  XXXXM3
     pub fn new_with_reason(reason: u8) -> Self {
         End { reason, addr: None }
     }
@@ -305,7 +305,7 @@ impl Body for End {
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         if r.remaining() == 0 {
-            // XXXX Or is this an error?
+            // XXXX Or is this an error?  XXXXM3
             return Ok(End {
                 reason: REASON_MISC,
                 addr: None,
@@ -318,7 +318,7 @@ impl Body for End {
                 20 => IpAddr::V6(r.extract()?),
                 _ => {
                     // Ignores other message lengths
-                    // XXXX or is this an error?
+                    // XXXX or is this an error?  XXXXM3
                     return Ok(End { reason, addr: None });
                 }
             };
@@ -373,7 +373,7 @@ impl Body for Connected {
         let ipv4 = r.take_u32()?;
         let addr = if ipv4 == 0 {
             if r.take_u8()? != 6 {
-                // XXXX or is this an error?
+                // XXXX or is this an error?  XXXXM3
                 return Ok(Connected { addr: None });
             }
             IpAddr::V6(r.extract()?)
@@ -637,7 +637,7 @@ pub struct Truncated {
 impl Truncated {
     /// Construct a new truncated message.
     ///
-    /// TODO: add an enum for reasons.
+    /// TODO: add an enum for reasons.  XXXXM3
     pub fn new(reason: u8) -> Self {
         Truncated { reason }
     }

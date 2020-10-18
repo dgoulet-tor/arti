@@ -199,13 +199,13 @@ macro_rules! caret_enum {
             }
         }
         impl std::convert::TryFrom<$numtype> for $name {
-            type Error = &'static str; // this is not the best error type XXXX
+            type Error = &'static str; // this is not the best error type XXXXM3
             fn try_from(val: $numtype) -> std::result::Result<Self, Self::Error> {
                 $name::from_int(val).ok_or("Unrecognized value")
             }
         }
         impl std::str::FromStr for $name {
-            type Err = &'static str; // this is not the best error type XXXX
+            type Err = &'static str; // this is not the best error type XXXXM3
             fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
                 $name::from_string(s).ok_or("Unrecognized value")
             }

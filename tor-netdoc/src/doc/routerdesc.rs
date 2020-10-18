@@ -225,7 +225,7 @@ lazy_static! {
         use RouterKW::*;
 
         let mut rules = SectionRules::new();
-        // TODO: check MASTER_KEY_ED25519 for consistency with cert.
+        // TODO: check MASTER_KEY_ED25519 for consistency with cert. XXXXM3
         rules.add(MASTER_KEY_ED25519.rule().required().args(1..));
         rules.add(PLATFORM.rule());
         rules.add(PUBLISHED.rule().required());

@@ -225,15 +225,15 @@ impl ReactorCore {
 
         if let Some(CircEnt::Open(s)) = map.get_mut(circid) {
             // There's an open circuit; we can give it the RELAY cell.
-            // XXXX handle errors better.
-            // XXXX should we really be holding the mutex for this?
-            // XXXX I think that this one actually means the other side
+            // XXXXM3 handle errors better.
+            // XXXXM3 should we really be holding the mutex for this?
+            // XXXXM3 I think that this one actually means the other side
             // is closed
             s.send(msg.try_into()?).await.map_err(|_| {
                 Error::InternalError("Circuit queue rejected message. Is it closing? XXX".into())
             })
         } else {
-            // XXXX handle this case better; don't just drop the cell.
+            // XXXXM3 handle this case better; don't just drop the cell.
             Ok(())
         }
     }
@@ -261,7 +261,7 @@ impl ReactorCore {
     /// Handle a DESTROY cell by removing the corresponding circuit
     /// from the map, and pasing the destroy cell onward to the circuit.
     async fn deliver_destroy(&mut self, circid: CircID, msg: ChanMsg) -> Result<()> {
-        // XXXX TODO: do we need to put a dummy entry in the map until
+        // XXXXM3 TODO: do we need to put a dummy entry in the map until
         // the other side of the circuit object is gone?
 
         let mut map = self.circs.lock().await;
@@ -291,7 +291,7 @@ impl ReactorCore {
                     Error::InternalError("circuit wan't interested in destroy cell?".into())
                 }),
             // Got a DESTROY cell for a circuit we don't have.
-            // XXXX do more?
+            // XXXXM3 do more?
             None => Ok(()),
         }
     }
@@ -306,10 +306,10 @@ impl ReactorCore {
             let _old_entry = map.remove(id);
 
             // TODO: should we remember that there was a circuit with this ID,
-            // so we can recognize junk cells?
+            // so we can recognize junk cells? XXXXM3
         }
         {
-            // TODO: use a constant for DESTROY_REASON_NONE.
+            // TODO: use a constant for DESTROY_REASON_NONE. XXXXM3
             let destroy = Destroy::new(0).into();
             let cell = ChanCell::new(id, destroy);
             if let Some(chan) = self.channel.upgrade() {
