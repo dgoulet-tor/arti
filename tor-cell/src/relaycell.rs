@@ -183,8 +183,6 @@ impl RelayCell {
     /// Consume this relay message and encode it as a 509-byte padded cell
     /// body.
     pub fn encode<R: Rng + CryptoRng>(self, rng: &mut R) -> crate::Result<RawCellBody> {
-        // always this many zero-values bytes before padding.
-        // XXXX We should specify this value more exactly, to avoid fingerprinting
         /// We skip this much space before adding any random padding to the
         /// end of the cell
         const MIN_SPACE_BEFORE_PADDING: usize = 4;
