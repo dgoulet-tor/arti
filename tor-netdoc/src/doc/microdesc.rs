@@ -59,9 +59,7 @@ pub struct Microdesc {
     /// List of IPv6 ports to which this relay will exit
     ipv6_policy: PortPolicy,
     /// Ed25519 identity for this relay
-    // TODO: this shouldn't really be optional any more
-    // TODO: this is redundant.
-    ed25519_id: Option<ed25519::Ed25519Identity>,
+    ed25519_id: ed25519::Ed25519Identity,
     // addr is obsolete and doesn't go here any more
     // pr is obsolete and doesn't go here any more.
 }
@@ -83,12 +81,10 @@ impl Microdesc {
     pub fn ipv6_policy(&self) -> &PortPolicy {
         &self.ipv6_policy
     }
-    /// Return the ed25519 identity for this microdesc (if any)
+    /// Return the ed25519 identity for this microdesc, if its
+    /// Ed25519 identity is well-formed.
     pub fn get_opt_ed25519_id(&self) -> Option<ed25519::PublicKey> {
-        self.ed25519_id
-            .as_ref()
-            .map(|id| id.try_into().ok())
-            .flatten()
+        (&self.ed25519_id).try_into().ok()
     }
 }
 
@@ -264,8 +260,10 @@ impl Microdesc {
                 .iter()
                 .find(|item| item.arg(0) == Some("ed25519"));
             match id_tok {
-                None => None,
-                Some(tok) => Some(tok.parse_arg::<Ed25519Public>(1)?.into()),
+                None => {
+                    return Err(Error::MissingToken("id ed25519"));
+                }
+                Some(tok) => tok.parse_arg::<Ed25519Public>(1)?.into(),
             }
         };
 
