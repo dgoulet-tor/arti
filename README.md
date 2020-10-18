@@ -45,7 +45,7 @@ So far the code has untested or under-tested implementations of:
   * link authentication (client->server type)
   * building circuits from chosen hops
   * a slightly wonky circuit abstraction
-  * a slightly stream abstraction
+  * a slightly wonky stream abstraction
 
 Before I share it more broadly, I think it needs more work on:
 
@@ -77,6 +77,63 @@ There is no support yet for:
 I do not plan to implement full versions of any of those before I
 share this code for more comment, though I might do a little.  Who
 knows?
+
+## Protocol support
+
+Here's a checklist of Tor sub-protocol versions that we currently have
+client-side support for:
+
+  * [x] `Cons=2` [^1]
+  * [x] `Desc=2`
+  * [ ] `DirCache=2`
+  * [x] `FlowCtrl=0`
+  * [x] `FlowCtrl=1`
+  * [ ] `HSDir=2`
+  * [ ] `HSIntro=4` (maybe?)
+  * [ ] `HSIntro=5`
+  * [ ] `HSRend=2`
+  * [x] `Link=4`
+  * [ ] `Link=5`
+  * [x] `Microdesc=2` [^1]
+  * [ ] `Padding=2`
+  * [x] `Relay=2`
+  * [ ] `Relay=3` (not sure whether we're compliant with this client-side)
+
+[^1]: If a consensus method before 28 is used, we won't find IPv6 addresses
+correctly. All such consensus methods are currently obsolete, though, and
+authorities won't negotiate them any more.
+
+There is no relay-side support for anything right now. If there were, we'd
+want to support:
+
+  * [ ] `Cons=2`
+  * [ ] `Desc=2`
+  * [ ] `DirCache=2`
+  * [ ] `FlowCtrl=0`
+  * [ ] `FlowCtrl=1`
+  * [ ] `HSDir=2`
+  * [ ] `HSIntro=4` (maybe)
+  * [ ] `HSIntro=5`
+  * [ ] `HSRend=2`
+  * [ ] `Link=4`
+  * [ ] `Link=5`
+  * [ ] `LinkAuth=3`
+  * [ ] `Microdesc=2`
+  * [ ] `Padding=2`
+  * [ ] `Relay=2`
+  * [ ] `Relay=3`
+
+We do not ever plan to support these:
+
+  * ❌ `Cons=1` (obsolete format)
+  * ❌ `Desc=1` (obsolete format)
+  * ❌ `DirCache=1` (no relays still support this)
+  * ❌ `HSDir=2`
+  * ❌ `HSIntro=3` (will be obsolete in 2021)
+  * ❌ `HSRend=1` (will be obsolete in 2021)
+  * ❌ `LinkAuth=1` (only used by RSA-only relays)
+  * ❌ `Microdesc=1` (obsolete format)
+  * ❌ `Padding=1` (deprecated)
 
 ## What can I do with this?
 
