@@ -225,7 +225,6 @@ lazy_static! {
         use RouterKW::*;
 
         let mut rules = SectionRules::new();
-        // TODO: check MASTER_KEY_ED25519 for consistency with cert. XXXXM3
         rules.add(MASTER_KEY_ED25519.rule().required().args(1..));
         rules.add(PLATFORM.rule());
         rules.add(PUBLISHED.rule().required());
@@ -385,6 +384,20 @@ impl RouterDesc {
             let sk = *sk;
             (cert, sk)
         };
+
+        // master-key-ed25519: required, and should match certificate.
+        {
+            let master_key_tok = body.required(MASTER_KEY_ED25519)?;
+            let ed_id: Ed25519Public = master_key_tok.parse_arg(0)?;
+            let ed_id: ll::pk::ed25519::Ed25519Identity = ed_id.into();
+            #[cfg(not(fuzzing))]
+            if ed_id != identity_cert.peek_signing_key().into() {
+                return Err(Error::BadObjectVal(
+                    master_key_tok.pos(),
+                    "master-key-ed25519 does not match key in identity-ed25519".into(),
+                ));
+            }
+        }
 
         // Legacy RSA identity
         let rsa_identity: ll::pk::rsa::PublicKey = body
