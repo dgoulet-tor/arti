@@ -231,7 +231,7 @@ impl Data {
 
     /// Construct a new data cell.
     pub fn new(inp: &[u8]) -> Self {
-        // XXXX check length!  XXXXM3
+        assert!(inp.len() <= Data::MAXLEN);
         Data { body: inp.into() }
     }
 }
@@ -266,7 +266,7 @@ pub struct End {
     /// Reason for closing the stream
     reason: EndReason,
     /// If the reason is EXITPOLICY, this holds the resolved address an
-    /// associated TTL.
+    /// associated TTL.  The TTL is set to MAX if none was given.
     addr: Option<(IpAddr, u32)>,
 }
 
@@ -317,8 +317,6 @@ impl End {
         }
     }
     /// Make a new END message with the provided end reason.
-    ///
-    /// TODO: reason should be an enum-like thing.  XXXXM3
     pub fn new_with_reason(reason: EndReason) -> Self {
         End { reason, addr: None }
     }
@@ -337,7 +335,7 @@ impl Body for End {
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         if r.remaining() == 0 {
-            // XXXX Or is this an error?  XXXXM3
+            // TODO SPEC Document this behavior; tor does it too.
             return Ok(End {
                 reason: EndReason::MISC,
                 addr: None,
@@ -346,15 +344,19 @@ impl Body for End {
         let reason = r.take_u8()?.into();
         if reason == EndReason::EXITPOLICY {
             let addr = match r.remaining() {
-                8 => IpAddr::V4(r.extract()?),
-                20 => IpAddr::V6(r.extract()?),
+                4 | 8 => IpAddr::V4(r.extract()?),
+                16 | 20 => IpAddr::V6(r.extract()?),
                 _ => {
-                    // Ignores other message lengths
-                    // XXXX or is this an error?  XXXXM3
+                    // TODO SPEC document this behavior.
+                    // Ignores other message lengths.
                     return Ok(End { reason, addr: None });
                 }
             };
-            let ttl = r.take_u32()?;
+            let ttl = if r.remaining() == 4 {
+                r.take_u32()?
+            } else {
+                u32::MAX
+            };
             Ok(End {
                 reason,
                 addr: Some((addr, ttl)),
@@ -405,8 +407,7 @@ impl Body for Connected {
         let ipv4 = r.take_u32()?;
         let addr = if ipv4 == 0 {
             if r.take_u8()? != 6 {
-                // XXXX or is this an error?  XXXXM3
-                return Ok(Connected { addr: None });
+                return Err(Error::BadMessage("Invalid address type in CONNECTED cell"));
             }
             IpAddr::V6(r.extract()?)
         } else {
