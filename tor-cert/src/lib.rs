@@ -50,25 +50,45 @@ caret_int! {
     /// whereas "X_CC_Y" means "key X cros-certifying key Y".  In both
     /// cases, X is the key that is doing the signing, and Y is the key
     /// or object that is getting signed.
+    ///
+    /// Not every one of these types is valid for an Ed25519
+    /// certificate.  Some are for X.509 certs in a CERTS cell; some
+    /// are for RSA->Ed crosscerts in a CERTS cell.
     pub struct CertType(u8) {
-        // 00 through 03 are reserved.
+        /// TLS link key, signed with RSA identity. X.509 format. (Obsolete)
+        TLS_LINK_X509 = 0x01,
+        /// Self-signed RSA identity certificate. X.509 format. (Legacy)
+        RSA_ID_X509 = 0x02,
+        /// RSA lnk authentication key signed with RSA identity
+        /// key. X.509 format. (Obsolete)
+        LINK_AUTH_X509 = 0x03,
 
         /// Identity verifying a signing key, directly.
         IDENTITY_V_SIGNING = 0x04,
+
         /// Signing key verifying a TLS certificate by digest.
         SIGNING_V_TLS_CERT = 0x05,
+
         /// Signing key verifying a link authentication key.
         SIGNING_V_LINK_AUTH = 0x06,
 
-        // 07 reserved for RSA cross-certification
+        /// RSA identity key certifying an Ed25519 identity key. RSA
+        /// crosscert format. (Legacy)
+        RSA_ID_V_IDENTITY = 0x07,
 
-        // 08 through 09 are for onion services.
+        /// For onion services: short-term signing key authenticated with
+        /// blinded service identity.
+        HS_BLINDED_ID_V_SIGNING = 0x08,
+
+        /// For onion services: to be documented.
+        HS_IP_V_SIGNING = 0x09,
 
         /// An ntor key converted to a ed25519 key, cross-certifying an
         /// identity key.
         NTOR_CC_IDENTITY = 0x0A,
 
-        // 0B is for onion services.
+        /// For onion services: to be documented.
+        HS_IP_CC_SIGNING = 0x0B,
     }
 }
 

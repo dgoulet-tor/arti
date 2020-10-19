@@ -249,7 +249,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         // (We don't actually check this self-signed certificate, and we use
         // a kludge to extract the RSA key)
         let pkrsa = c
-            .cert_body(2.into()) // XXXXM3 use a constant.
+            .cert_body(CertType::RSA_ID_X509)
             .map(ll::util::x509_extract_rsa_subject_kludge)
             .flatten()
             .ok_or_else(|| Error::ChanProto("Couldn't find RSA identity key".into()))?;
@@ -260,7 +260,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         // the Ed key does not vouch for the RSA key: The RSA key is too
         // weak.
         let rsa_cert = c
-            .cert_body(7.into()) // XXXXM3 use a constant
+            .cert_body(CertType::RSA_ID_V_IDENTITY)
             .ok_or_else(|| Error::ChanProto("No RSA->Ed crosscert".into()))?;
         let rsa_cert = tor_cert::rsa::RSACrosscert::decode(rsa_cert)?
             .check_signature(&pkrsa)
