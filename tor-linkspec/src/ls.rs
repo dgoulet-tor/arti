@@ -19,7 +19,7 @@ pub enum LinkSpec {
     /// The RSA identity fingerprint of the relay
     RSAId(RSAIdentity),
     /// The Ed25519 identity of the relay
-    Ed25519Id(ed25519::PublicKey),
+    Ed25519Id(ed25519::Ed25519Identity),
     /// A link specifier that we didn't recognize
     Unrecognized(u8, Vec<u8>),
 }
@@ -118,9 +118,14 @@ impl From<RSAIdentity> for LinkSpec {
         LinkSpec::RSAId(id)
     }
 }
-impl From<ed25519::PublicKey> for LinkSpec {
-    fn from(id: ed25519::PublicKey) -> Self {
+impl From<ed25519::Ed25519Identity> for LinkSpec {
+    fn from(id: ed25519::Ed25519Identity) -> Self {
         LinkSpec::Ed25519Id(id)
+    }
+}
+impl From<ed25519::PublicKey> for LinkSpec {
+    fn from(pk: ed25519::PublicKey) -> Self {
+        LinkSpec::Ed25519Id(pk.into())
     }
 }
 
@@ -182,7 +187,8 @@ mod test {
         let key = ed25519::PublicKey::from_bytes(&hex!(
             "B440EEDB32D5C89EF21D6B16BE85A658774CE5992355737411678EE1041BDFBA"
         ))
-        .unwrap();
+        .unwrap()
+        .into();
         t(
             &hex!("03 20 B440EEDB32D5C89EF21D6B16BE85A658774CE5992355737411678EE1041BDFBA"),
             &LinkSpec::Ed25519Id(key),

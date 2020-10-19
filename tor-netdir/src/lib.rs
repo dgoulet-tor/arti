@@ -103,19 +103,21 @@ pub struct NetDir {
 /// A view of a relay on the Tor network, suitable for building circuits.
 // TODO: This should probably be a more specific struct, with a trait
 // that implements it.
-//
-// XXXX: invalid instances of this object are possible.  Some Relay
-// functions will panic if it has no ed25519 key, or if its md is None.
-// We should clean that up so that we never construct invalid
-// instances of this.
 #[allow(unused)]
 pub struct Relay<'a> {
     /// A router descriptor for this relay.
     rs: &'a netstatus::MDConsensusRouterStatus,
     /// A microdescriptor for this relay.
+    md: &'a Microdesc,
+}
+
+/// A relay that we haven't checked for validity or usability in
+/// routing.
+struct UncheckedRelay<'a> {
+    /// A router descriptor for this relay.
+    rs: &'a netstatus::MDConsensusRouterStatus,
+    /// A microdescriptor for this relay, if there is one.
     md: Option<&'a Microdesc>,
-    /// Memoized expanded Ed25519 public key.
-    ed_identity: Option<ll::pk::ed25519::PublicKey>,
 }
 
 impl NetDirConfig {
@@ -334,18 +336,16 @@ impl Default for NetDirConfig {
 impl NetDir {
     /// Construct a (possibly invalid) Relay object from a routerstatus and its
     /// microdescriptor (if any).
-    fn relay_from_rs<'a>(&'a self, rs: &'a netstatus::MDConsensusRouterStatus) -> Relay<'a> {
+    fn relay_from_rs<'a>(
+        &'a self,
+        rs: &'a netstatus::MDConsensusRouterStatus,
+    ) -> UncheckedRelay<'a> {
         let md = self.mds.get(rs.md_digest());
-        let ed_identity = md.map(|m| m.get_opt_ed25519_id()).flatten();
-        Relay {
-            rs,
-            md,
-            ed_identity,
-        }
+        UncheckedRelay { rs, md }
     }
     /// Return an iterator over all Relay objects, including invalid ones
     /// that we can't use.
-    fn all_relays(&self) -> impl Iterator<Item = Relay<'_>> {
+    fn all_relays(&self) -> impl Iterator<Item = UncheckedRelay<'_>> {
         self.consensus
             .routers()
             .iter()
@@ -353,7 +353,7 @@ impl NetDir {
     }
     /// Return an iterator over all usable Relays.
     pub fn relays(&self) -> impl Iterator<Item = Relay<'_>> {
-        self.all_relays().filter(Relay::is_usable)
+        self.all_relays().filter_map(UncheckedRelay::into_relay)
     }
     /// Heolper: Set self.weight_fn to the function we should use to find
     /// initial relay weights.
@@ -396,18 +396,31 @@ impl NetDir {
     }
 }
 
-impl<'a> Relay<'a> {
+impl<'a> UncheckedRelay<'a> {
     /// Return true if this relay is valid and usable.
     ///
     /// This function should return `true` for every Relay we expose
     /// to the user.
     fn is_usable(&self) -> bool {
-        self.md.is_some() && self.md.unwrap().get_opt_ed25519_id().is_some()
+        self.md.is_some()
     }
-    /// Return the Ed25519 ID for this relay, assuming it has one.
-    // TODO: This should always succeed.
-    pub fn id(&self) -> Option<&ll::pk::ed25519::PublicKey> {
-        self.ed_identity.as_ref()
+    /// If this is usable, return a corresponding Relay object.
+    fn into_relay(self) -> Option<Relay<'a>> {
+        if self.is_usable() {
+            Some(Relay {
+                rs: self.rs,
+                md: self.md.unwrap(),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> Relay<'a> {
+    /// Return the Ed25519 ID for this relay.
+    pub fn id(&self) -> &ll::pk::ed25519::Ed25519Identity {
+        self.md.ed25519_id()
     }
     /// Return the RSAIdentity for this relay.
     pub fn rsa_id(&self) -> &RSAIdentity {
@@ -422,7 +435,7 @@ impl<'a> Relay<'a> {
     /// Return true if this relay allows exiting to `port` on IPv4.
     // XXXX ipv4/ipv6
     pub fn supports_exit_port(&self, port: u16) -> bool {
-        self.md.unwrap().ipv4_policy().allows_port(port)
+        self.md.ipv4_policy().allows_port(port)
     }
     /// Return the weight of this Relay, according to `wf`.
     fn weight(&self, wf: WeightFn) -> u32 {
@@ -442,8 +455,8 @@ impl<'a> tor_linkspec::ChanTarget for Relay<'a> {
     fn addrs(&self) -> &[std::net::SocketAddr] {
         self.rs.addrs()
     }
-    fn ed_identity(&self) -> &ll::pk::ed25519::PublicKey {
-        self.id().unwrap()
+    fn ed_identity(&self) -> &ll::pk::ed25519::Ed25519Identity {
+        self.id()
     }
     fn rsa_identity(&self) -> &RSAIdentity {
         self.rsa_id()
@@ -452,12 +465,10 @@ impl<'a> tor_linkspec::ChanTarget for Relay<'a> {
 
 impl<'a> tor_linkspec::CircTarget for Relay<'a> {
     fn ntor_onion_key(&self) -> &ll::pk::curve25519::PublicKey {
-        // XXXX unwrap might fail if is_usable is false
-        self.md.unwrap().ntor_key()
+        self.md.ntor_key()
     }
     /// Return the subprotocols implemented by this relay.
     fn protovers(&self) -> &tor_protover::Protocols {
-        // XXXX unwrap might fail if is_usable is false
         self.rs.protovers()
     }
 }

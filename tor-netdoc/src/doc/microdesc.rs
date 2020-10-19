@@ -22,7 +22,6 @@ use tor_llcrypto::pk::{curve25519, ed25519, rsa};
 use digest::Digest;
 use lazy_static::lazy_static;
 
-use std::convert::TryInto;
 use std::time;
 
 /// Annotations prepended to a microdescriptor that has been stored to
@@ -83,8 +82,8 @@ impl Microdesc {
     }
     /// Return the ed25519 identity for this microdesc, if its
     /// Ed25519 identity is well-formed.
-    pub fn get_opt_ed25519_id(&self) -> Option<ed25519::PublicKey> {
-        (&self.ed25519_id).try_into().ok()
+    pub fn ed25519_id(&self) -> &ed25519::Ed25519Identity {
+        &self.ed25519_id
     }
 }
 
@@ -438,7 +437,7 @@ mod test {
         assert!(!mds[0].md().ipv4_policy().allows_port(25));
         assert!(!mds[0].md().ipv6_policy().allows_port(25));
         assert_eq!(
-            mds[0].md().get_opt_ed25519_id().unwrap().as_bytes(),
+            mds[0].md().ed25519_id().as_bytes(),
             &hex!("2d85fdc88e6c1bcfb46897fca1dba6d1354f93261d68a79e0b5bc170dd923084")
         );
 

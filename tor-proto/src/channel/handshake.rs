@@ -282,7 +282,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         // We do this _last_, since "this is the wrong peer" is
         // usually a different situation than "this peer couldn't even
         // identify itself right."
-        if identity_key != peer.ed_identity() {
+        if *peer.ed_identity() != (*identity_key).into() {
             return Err(Error::ChanProto("Peer ed25519 id not as expected".into()));
         }
 

@@ -170,6 +170,18 @@ mod ed25519_impls {
                 .map_err(|_| Error::BadMessage("Couldn't decode Ed25519 public key"))
         }
     }
+
+    impl Writeable for ed25519::Ed25519Identity {
+        fn write_onto<B: Writer + ?Sized>(&self, b: &mut B) {
+            b.write_all(self.as_bytes())
+        }
+    }
+    impl Readable for ed25519::Ed25519Identity {
+        fn take_from(b: &mut Reader<'_>) -> Result<Self> {
+            let bytes = b.take(32)?;
+            Ok(Self::new(*array_ref![bytes, 0, 32]))
+        }
+    }
     impl Writeable for ed25519::Signature {
         fn write_onto<B: Writer + ?Sized>(&self, b: &mut B) {
             b.write_all(&self.to_bytes()[..])

@@ -4,6 +4,8 @@
 use std::net::SocketAddr;
 use tor_llcrypto::pk;
 
+use std::convert::TryInto;
+
 /// Information about a Tor relay used to connect to it.
 ///
 /// Anything that implements 'ChanTarget' can be used as the
@@ -16,7 +18,13 @@ pub trait ChanTarget {
     // make defining the right associated types rather tricky.
     fn addrs(&self) -> &[SocketAddr];
     /// Return the ed25519 identity for this relay.
-    fn ed_identity(&self) -> &pk::ed25519::PublicKey;
+    fn ed_identity(&self) -> &pk::ed25519::Ed25519Identity;
+    /// Return the ed25519 identity key for this relay, if it is valid.
+    ///
+    /// This can be costly.
+    fn ed_identity_key(&self) -> Option<pk::ed25519::PublicKey> {
+        self.ed_identity().try_into().ok()
+    }
     /// Return the RSA identity for this relay.
     fn rsa_identity(&self) -> &pk::rsa::RSAIdentity;
 }
@@ -54,7 +62,7 @@ mod test {
 
     struct Example {
         addrs: Vec<SocketAddr>,
-        ed_id: pk::ed25519::PublicKey,
+        ed_id: pk::ed25519::Ed25519Identity,
         rsa_id: pk::rsa::RSAIdentity,
         ntor: pk::curve25519::PublicKey,
         pv: tor_protover::Protocols,
@@ -63,7 +71,7 @@ mod test {
         fn addrs(&self) -> &[SocketAddr] {
             &self.addrs[..]
         }
-        fn ed_identity(&self) -> &pk::ed25519::PublicKey {
+        fn ed_identity(&self) -> &pk::ed25519::Ed25519Identity {
             &self.ed_id
         }
         fn rsa_identity(&self) -> &pk::rsa::RSAIdentity {
@@ -90,7 +98,8 @@ mod test {
                 "fc51cd8e6218a1a38da47ed00230f058
                  0816ed13ba3303ac5deb911548908025"
             ))
-            .unwrap(),
+            .unwrap()
+            .into(),
             rsa_id: pk::rsa::RSAIdentity::from_bytes(&hex!(
                 "1234567890abcdef12341234567890abcdef1234"
             ))
@@ -114,6 +123,7 @@ mod test {
                      0816ed13ba3303ac5deb911548908025"
                 ))
                 .unwrap()
+                .into()
             )
         );
         assert_eq!(

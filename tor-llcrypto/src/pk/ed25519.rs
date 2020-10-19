@@ -59,6 +59,14 @@ impl From<[u8; 32]> for Ed25519Identity {
     }
 }
 
+impl From<PublicKey> for Ed25519Identity {
+    fn from(pk: PublicKey) -> Self {
+        // This unwrap is safe because the public key is always 32 bytes
+        // long.
+        Ed25519Identity::from_slice(pk.as_bytes()).unwrap()
+    }
+}
+
 impl TryInto<PublicKey> for &Ed25519Identity {
     type Error = ed25519_dalek::SignatureError;
     fn try_into(self) -> Result<PublicKey, Self::Error> {
