@@ -4,6 +4,8 @@ use super::{ChanCmd, RawCellBody, CELL_DATA_LEN};
 use std::net::{IpAddr, Ipv4Addr};
 use tor_bytes::{self, Error, Readable, Reader, Result, Writer};
 
+use caret::caret_int;
+
 /// Trait for the 'bodies' of channel messages.
 pub trait Body: Readable {
     /// Convert this type into a ChanMsg, wrapped as appropriate.
@@ -460,13 +462,11 @@ impl Readable for Relay {
 #[derive(Clone, Debug)]
 pub struct Destroy {
     /// Reason code given for tearing down this circuit
-    reason: u8,
+    reason: DestroyReason,
 }
 impl Destroy {
     /// Create a new destroy cell.
-    ///
-    /// TODO: make an enum-like thing for destroy reasons. XXXXM3
-    pub fn new(reason: u8) -> Self {
+    pub fn new(reason: DestroyReason) -> Self {
         Destroy { reason }
     }
 }
@@ -475,13 +475,47 @@ impl Body for Destroy {
         ChanMsg::Destroy(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
-        w.write_u8(self.reason)
+        w.write_u8(self.reason.into())
     }
 }
 impl Readable for Destroy {
     fn take_from(r: &mut Reader<'_>) -> Result<Self> {
-        let reason = r.take_u8()?;
+        let reason = r.take_u8()?.into();
         Ok(Destroy { reason })
+    }
+}
+
+caret_int! {
+    /// Declared reason for ending a circuit.
+    pub struct DestroyReason(u8) {
+        /// No reason given.
+        ///
+        /// (This is the only reason that clients send.
+        NONE = 0,
+        /// Protocol violation
+        PROTOCOL = 1,
+        /// Internal error.
+        INTERNAL = 2,
+        /// Client sent a TRUNCATE commant.
+        REQUESTED = 3,
+        /// Relay is hibernating and not accepting requests
+        HIBERNATING = 4,
+        /// Ran out of memory, sockets, or circuit IDs
+        RESOURCELIMIT = 5,
+        /// Couldn't connect to relay.
+        CONNECTFAILED = 6,
+        /// Connected to a relay, but its OR identity wasn't as requested.
+        OR_IDENTITY = 7,
+        /// The OR connection carrying this circuit died.
+        CHANNEL_CLOSED = 8,
+        /// Circuit expired for being too dirty or old
+        FINISHED = 9,
+        /// Circuit construction took too long
+        TIMEOUT = 10,
+        /// Circuit was destroyed w/o client truncate (?)
+        DESTROYED = 11,
+        /// Request for unknown hidden service
+        NOSUCHSERVICE = 12
     }
 }
 

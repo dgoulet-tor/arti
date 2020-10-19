@@ -195,8 +195,8 @@ fn test_destroy() {
     let cmd = ChanCmd::DESTROY;
     assert_eq!(Into::<u8>::into(cmd), 4_u8);
 
-    fbody(cmd, "04", &msg::Destroy::new(4).into());
-    fbody(cmd, "0000", &msg::Destroy::new(0).into());
+    fbody(cmd, "04", &msg::Destroy::new(4.into()).into());
+    fbody(cmd, "0000", &msg::Destroy::new(0.into()).into());
 }
 
 #[test]

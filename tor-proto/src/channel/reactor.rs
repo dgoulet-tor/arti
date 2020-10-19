@@ -9,7 +9,7 @@
 use super::circmap::{CircEnt, CircMap};
 use super::CellFrame;
 use crate::{Error, Result};
-use tor_cell::chancell::msg::Destroy;
+use tor_cell::chancell::msg::{Destroy, DestroyReason};
 use tor_cell::chancell::{msg::ChanMsg, ChanCell, CircID};
 
 use futures::channel::{mpsc, oneshot};
@@ -309,8 +309,7 @@ impl ReactorCore {
             // so we can recognize junk cells? XXXXM3
         }
         {
-            // TODO: use a constant for DESTROY_REASON_NONE. XXXXM3
-            let destroy = Destroy::new(0).into();
+            let destroy = Destroy::new(DestroyReason::NONE).into();
             let cell = ChanCell::new(id, destroy);
             if let Some(chan) = self.channel.upgrade() {
                 let mut chan = chan.lock().await;
