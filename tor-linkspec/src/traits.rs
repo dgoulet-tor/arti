@@ -11,7 +11,9 @@ use tor_llcrypto::pk;
 /// channel.
 pub trait ChanTarget {
     /// Return the addresses at which you can connect to this relay
-    // TODO: bad API  XXXXM3 return an iterator
+    // TODO: This is a questionable API. I'd rather return an iterator
+    // of addresses or references to addresses, but both of those options
+    // make defining the right associated types rather tricky.
     fn addrs(&self) -> &[SocketAddr];
     /// Return the ed25519 identity for this relay.
     fn ed_identity(&self) -> &pk::ed25519::PublicKey;
@@ -25,7 +27,9 @@ pub trait ChanTarget {
 /// identity of a relay for the purposes of extending a circuit.
 pub trait CircTarget: ChanTarget {
     /// Return a new vector of link specifiers for this relay.
-    // TODO: bad API  XXXXM3 return an iterator
+    // TODO: This is a questionable API. I'd rather return an iterator
+    // of link specifiers, but that's not so easy to do, since it seems
+    // doing so correctly would require default associated types.
     fn linkspecs(&self) -> Vec<crate::LinkSpec> {
         let mut result = Vec::new();
         result.push(self.ed_identity().clone().into());
