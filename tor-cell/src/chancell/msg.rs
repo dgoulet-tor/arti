@@ -601,7 +601,8 @@ impl Body for Netinfo {
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u32(self.timestamp);
         enc_one_netinfo_addr(w, &self.their_addr);
-        w.write_u8(self.my_addr.len() as u8); // XXXX overflow?  XXXXM3
+        assert!(self.my_addr.len() <= u8::MAX as usize);
+        w.write_u8(self.my_addr.len() as u8);
         for addr in self.my_addr.iter() {
             enc_one_netinfo_addr(w, &addr);
         }
@@ -756,7 +757,8 @@ struct TorCert {
 /// encode a single TorCert `c` onto a Writer `w`.
 fn enc_one_tor_cert<W: Writer + ?Sized>(w: &mut W, c: &TorCert) {
     w.write_u8(c.certtype);
-    w.write_u16(c.cert.len() as u16); // XXXX overflow?  XXXXM3
+    assert!(c.cert.len() <= u16::MAX as usize);
+    w.write_u16(c.cert.len() as u16);
     w.write_all(&c.cert[..]);
 }
 /// Try to extract a TorCert from the reader `r`.
@@ -832,7 +834,8 @@ impl Body for Certs {
         ChanMsg::Certs(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
-        w.write_u8(self.certs.len() as u8); //XXXXX overflow?  XXXXM3
+        assert!(self.certs.len() <= u8::MAX as usize);
+        w.write_u8(self.certs.len() as u8);
         for c in self.certs.iter() {
             enc_one_tor_cert(w, &c)
         }
