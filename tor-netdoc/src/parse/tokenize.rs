@@ -79,8 +79,6 @@ pub struct Item<'a, K: Keyword> {
     split_args: RefCell<Option<Vec<&'a str>>>,
     /// If present, a base-64-encoded object that appeared at the end
     /// of this item.
-    // TODO: we need to make sure that every base64-encoded object eventually
-    // gets decoded, if only to check the validity of the base 64.XXXXM3
     object: Option<Object<'a>>,
 }
 
@@ -391,15 +389,28 @@ impl<'a, K: Keyword> Item<'a, K> {
         self.object.map(|o| o.tag)
     }
     /// Try to decode the base64 contents of this Item's associated object.
-    pub fn obj(&self, want_tag: &str) -> Result<Vec<u8>> {
+    ///
+    /// On success, return the object's tag and decoded contents.
+    pub fn obj_raw(&self) -> Result<Option<(&'a str, Vec<u8>)>> {
         match self.object {
-            None => Err(Error::MissingObject("entry", self.end_pos())),
+            None => Ok(None),
             Some(obj) => {
-                if obj.tag != want_tag {
-                    Err(Error::WrongObject(Pos::at(obj.tag)))
+                let decoded = base64_decode_multiline(obj.data)
+                    .map_err(|_| Error::BadObjectBase64(Pos::at(obj.data)))?;
+                Ok(Some((obj.tag, decoded)))
+            }
+        }
+    }
+    /// Try to decode the base64 contents of this Item's associated object,
+    /// and make sure that its tag matches 'want_tag'.
+    pub fn obj(&self, want_tag: &str) -> Result<Vec<u8>> {
+        match self.obj_raw()? {
+            None => Err(Error::MissingObject(self.kwd.to_str(), self.end_pos())),
+            Some((tag, decoded)) => {
+                if tag != want_tag {
+                    Err(Error::WrongObject(Pos::at(tag)))
                 } else {
-                    base64_decode_multiline(obj.data)
-                        .map_err(|_| Error::BadObjectBase64(Pos::at(obj.data)))
+                    Ok(decoded)
                 }
             }
         }

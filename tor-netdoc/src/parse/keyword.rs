@@ -32,6 +32,10 @@ pub trait Keyword: Hash + Eq + PartialEq + Copy + Clone {
     fn idx(self) -> usize;
     /// Return the number of indices for this keyword.
     fn n_vals() -> usize;
+    /// Return the "UNRECOGNIZED" keyword.
+    fn unrecognized() -> Self;
+    /// Return the "ANN_UNRECOGNIZED" keyword.
+    fn ann_unrecognized() -> Self;
     /// Return true iff this keyword denotes an annotation.
     fn is_annotation(self) -> bool;
     /// Convert from an index to a human-readable string.

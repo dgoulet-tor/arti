@@ -265,6 +265,17 @@ impl<T: Keyword> SectionRules<T> {
         Ok(())
     }
 
+    /// Check all the base64-encoded objects on a given keyword.
+    ///
+    /// We use this to validate objects on unrecognized items, since
+    /// otherwise nothing would check that they are well-formed.
+    fn validate_objects<'a>(&self, s: &Section<'a, T>, kwd: T) -> Result<()> {
+        for item in s.slice(kwd).iter() {
+            let _ = item.obj_raw()?;
+        }
+        Ok(())
+    }
+
     /// Parse a stream of tokens into a validated section.
     pub fn parse<'a, I>(&self, tokens: &mut I) -> Result<Section<'a, T>>
     where
@@ -273,8 +284,8 @@ impl<T: Keyword> SectionRules<T> {
         let mut section = Section::new();
         self.parse_unverified(tokens, &mut section)?;
         self.validate(&section)?;
-        // TODO: unrecognized tokens with objects won't actually get their
-        // objects checked for valid base64 XXXXM3
+        self.validate_objects(&section, T::unrecognized())?;
+        self.validate_objects(&section, T::ann_unrecognized())?;
         Ok(section)
     }
 }

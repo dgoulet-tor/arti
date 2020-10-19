@@ -35,6 +35,8 @@ macro_rules! decl_keyword {
         impl $crate::parse::keyword::Keyword for $name {
             fn idx(self) -> usize { self as usize }
             fn n_vals() -> usize { ($name::ANN_UNRECOGNIZED as usize) + 1 }
+            fn unrecognized() -> Self { $name::UNRECOGNIZED }
+            fn ann_unrecognized() -> Self { $name::ANN_UNRECOGNIZED }
             fn from_str(s : &str) -> Self {
                 // Note usage of phf crate to create a perfect hash over
                 // the possible keywords.  It will be even better if someday
