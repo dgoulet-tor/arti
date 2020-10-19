@@ -270,15 +270,10 @@ impl Microdesc {
         let end_pos = {
             // unwrap here is safe because parsing would have failed
             // had there not been at least one item.
-            let args = body.last_item().unwrap().args_as_str();
-            // unwrap is safe because we are parsing these items from s.
-            // XXXX we should use the end_pos() method here; this is wrong
-            // XXXX if we have an object.  XXXXM3
-            let args_pos = util::str_offset(s, args).unwrap();
-            // unwrap is safe because we do not accept a line that doesn't
-            // end with a newline.
-            let nl_offset = &s[args_pos..].find('\n').unwrap();
-            args_pos + nl_offset + 1
+            let last_item = body.last_item().unwrap();
+            last_item
+                .offset_after(s)
+                .ok_or_else(|| Error::Internal(last_item.end_pos()))?
         };
 
         let sha256 = d::Sha256::digest(&s[start_pos..end_pos].as_bytes()).into();

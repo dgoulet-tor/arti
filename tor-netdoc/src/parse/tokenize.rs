@@ -447,7 +447,8 @@ impl<'a, K: Keyword> Item<'a, K> {
             self.last_arg_end_pos()
         }
     }
-    /// Return the position at the end of the last argument.
+    /// Return the position at the end of the last argument.  (This will
+    /// point to a newline.)
     fn last_arg_end_pos(&self) -> Pos {
         let args = self.args_as_vec();
         if args.len() >= 1 {
@@ -457,12 +458,18 @@ impl<'a, K: Keyword> Item<'a, K> {
             Pos::at_end_of(self.kwd_str)
         }
     }
-    /// Return the position of the end of this object.
-    fn end_pos(&self) -> Pos {
+    /// Return the position of the end of this object. (This will point to a
+    /// newline.)
+    pub fn end_pos(&self) -> Pos {
         match self.object {
             Some(o) => Pos::at_end_of(o.endline),
             None => self.last_arg_end_pos(),
         }
+    }
+    /// If this item occurs within s, return the byte offset
+    /// immediately after the end of this item.
+    pub fn offset_after(&self, s: &str) -> Option<usize> {
+        self.end_pos().offset_within(s).map(|nl_pos| nl_pos + 1)
     }
 }
 

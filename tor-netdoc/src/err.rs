@@ -89,6 +89,15 @@ impl Pos {
     pub fn from_line(line: usize, byte: usize) -> Self {
         Pos::PosInLine { line, byte }
     }
+    /// If this position appears within `s`, and has not yet been mapped to
+    /// a line-and-byte position, return its offset.
+    pub(crate) fn offset_within(&self, s: &str) -> Option<usize> {
+        match self {
+            Pos::Byte { off } => Some(*off),
+            Pos::Raw { ptr } => offset_in(*ptr, s),
+            _ => None,
+        }
+    }
     /// Given a position, if it was at a byte offset, convert it to a
     /// line-and-byte position within `s`.
     ///
@@ -101,23 +110,32 @@ impl Pos {
         match self {
             Pos::Byte { off } => Self::from_offset(s, off),
             Pos::Raw { ptr } => {
-                // We need to confirm that 'ptr' falls within 's' in order
-                // to subtract it meaningfully and find its offset.
-                // Otherwise, we'll get a bogus result.
-                //
-                // Fortunately, we _only_ get a bogus result: we don't
-                // hit unsafe behavior.
-                let ptr_u = ptr as usize;
-                let start_u = s.as_ptr() as usize;
-                let end_u = (s.as_ptr() as usize) + s.len();
-                if start_u <= ptr_u && ptr_u < end_u {
-                    Self::from_offset(s, ptr_u - start_u)
+                if let Some(off) = offset_in(ptr, s) {
+                    Self::from_offset(s, off)
                 } else {
                     self
                 }
             }
             _ => self,
         }
+    }
+}
+
+/// If `ptr` is within `s`, return its byte offset.
+fn offset_in(ptr: *const u8, s: &str) -> Option<usize> {
+    // We need to confirm that 'ptr' falls within 's' in order
+    // to subtract it meaningfully and find its offset.
+    // Otherwise, we'll get a bogus result.
+    //
+    // Fortunately, we _only_ get a bogus result: we don't
+    // hit unsafe behavior.
+    let ptr_u = ptr as usize;
+    let start_u = s.as_ptr() as usize;
+    let end_u = (s.as_ptr() as usize) + s.len();
+    if start_u <= ptr_u && ptr_u < end_u {
+        Some(ptr_u - start_u)
+    } else {
+        None
     }
 }
 
