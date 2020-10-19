@@ -69,7 +69,8 @@ MILESTONE 3: Clean and tidy
        - complete coverage on tor-proto arti#13 (2)
    - Refactor XXXX and TODO code; make sure everything is tested and
      documented.  (1-4??)
-        - [arti#15 to make a list of these]
+        o [arti#15 to make a list of these] (1h)
+        - [arti#24 to resolve them]
    - expand documentation in tor-proto, tor-netdir, tor-netdoc,
      tor-cell. arti#16 (0.5)
    - Is this "reactor" business a sensible design?  Is there a better one?
