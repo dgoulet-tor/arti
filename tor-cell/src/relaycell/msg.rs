@@ -4,7 +4,7 @@
 //! cells.
 
 use super::RelayCmd;
-use crate::chancell::msg::{TAP_C_HANDSHAKE_LEN, TAP_S_HANDSHAKE_LEN};
+use crate::chancell::msg::{DestroyReason, TAP_C_HANDSHAKE_LEN, TAP_S_HANDSHAKE_LEN};
 use crate::chancell::CELL_DATA_LEN;
 use caret::caret_int;
 use std::net::{IpAddr, Ipv4Addr};
@@ -664,13 +664,11 @@ impl Body for Extended2 {
 #[derive(Debug, Clone)]
 pub struct Truncated {
     /// Reason for which this circuit was truncated.
-    reason: u8,
+    reason: DestroyReason,
 }
 impl Truncated {
     /// Construct a new truncated message.
-    ///
-    /// TODO: add an enum for reasons.  XXXXM3
-    pub fn new(reason: u8) -> Self {
+    pub fn new(reason: DestroyReason) -> Self {
         Truncated { reason }
     }
 }
@@ -680,11 +678,11 @@ impl Body for Truncated {
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         Ok(Truncated {
-            reason: r.take_u8()?,
+            reason: r.take_u8()?.into(),
         })
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
-        w.write_u8(self.reason);
+        w.write_u8(self.reason.into());
     }
 }
 

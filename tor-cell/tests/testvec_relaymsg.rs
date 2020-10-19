@@ -197,7 +197,7 @@ fn test_truncated() {
     let cmd = RelayCmd::TRUNCATED;
     assert_eq!(Into::<u8>::into(cmd), 9_u8);
 
-    msg(cmd, "08", &msg::Truncated::new(8).into());
+    msg(cmd, "08", &msg::Truncated::new(8.into()).into());
 }
 
 /* For circuit padding:
