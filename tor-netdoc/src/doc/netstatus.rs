@@ -243,7 +243,6 @@ struct RouterFlags {
     /// ring?
     hsdir: bool,
     /// If set, there is no consensus for the ed25519 key for this relay.
-    // XXXXM3 use this field or else the ed25519 key isn't reliable.
     no_ed_consensus: bool,
     /// Is this relay considerd "stable" enough for long-lived circuits.
     stable: bool,
@@ -353,6 +352,11 @@ impl MDConsensusRouterStatus {
     /// Return the protovers that this routerstatus says it implements.
     pub fn protovers(&self) -> &Protocols {
         &self.protos
+    }
+    /// Return true if the ed25519 identity on this relay reflects a
+    /// true consensus among the authorities.
+    pub fn ed25519_id_is_usable(&self) -> bool {
+        !self.flags.no_ed_consensus
     }
 }
 

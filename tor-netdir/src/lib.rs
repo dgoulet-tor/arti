@@ -402,7 +402,7 @@ impl<'a> UncheckedRelay<'a> {
     /// This function should return `true` for every Relay we expose
     /// to the user.
     fn is_usable(&self) -> bool {
-        self.md.is_some()
+        self.md.is_some() && self.rs.ed25519_id_is_usable()
     }
     /// If this is usable, return a corresponding Relay object.
     fn into_relay(self) -> Option<Relay<'a>> {
