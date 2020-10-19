@@ -488,6 +488,7 @@ impl Body for Sendme {
             None => (),
             Some(mut x) => {
                 w.write_u8(1);
+                assert!(x.len() <= u16::MAX as usize);
                 w.write_u16(x.len() as u16);
                 w.append(&mut x)
             }
@@ -614,12 +615,12 @@ impl Body for Extend2 {
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
         assert!(self.linkspec.len() <= std::u8::MAX as usize);
-        assert!(self.handshake.len() <= std::u16::MAX as usize);
         w.write_u8(self.linkspec.len() as u8);
         for ls in self.linkspec.iter() {
             w.write(ls);
         }
         w.write_u16(self.handshake_type);
+        assert!(self.handshake.len() <= std::u16::MAX as usize);
         w.write_u16(self.handshake.len() as u16);
         w.write_all(&self.handshake[..]);
     }
