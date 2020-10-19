@@ -104,7 +104,7 @@ fn test_end() {
     assert_eq!(Into::<u8>::into(cmd), 3_u8);
 
     msg(cmd, "01", &msg::End::new_misc().into());
-    msg(cmd, "06", &msg::End::new_with_reason(6).into());
+    msg(cmd, "06", &msg::End::new_with_reason(6.into()).into());
 
     // hand-generated, for exit policy rejections
     let localhost = "127.0.0.7".parse::<IpAddr>().unwrap();

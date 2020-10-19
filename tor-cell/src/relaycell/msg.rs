@@ -6,6 +6,7 @@
 use super::RelayCmd;
 use crate::chancell::msg::{TAP_C_HANDSHAKE_LEN, TAP_S_HANDSHAKE_LEN};
 use crate::chancell::CELL_DATA_LEN;
+use caret::caret_int;
 use std::net::{IpAddr, Ipv4Addr};
 use tor_bytes::{Error, Result};
 use tor_bytes::{Readable, Reader, Writeable, Writer};
@@ -263,38 +264,69 @@ impl Body for Data {
 #[derive(Debug, Clone)]
 pub struct End {
     /// Reason for closing the stream
-    reason: u8,
+    reason: EndReason,
     /// If the reason is EXITPOLICY, this holds the resolved address an
     /// associated TTL.
     addr: Option<(IpAddr, u32)>,
 }
-/// Closing a stream because of an unspecified reason.
-///
-/// This is the only END reason that clients send.
-const REASON_MISC: u8 = 1;
-/// Closing a stream because of an exit-policy violation.
-const REASON_EXITPOLICY: u8 = 4;
+
+caret_int! {
+    /// A delcared reason for closing a stream
+    pub struct EndReason(u8) {
+        /// Closing a stream because of an unspecified reason.
+        ///
+        /// This is the only END reason that clients send.
+        MISC = 1,
+        /// Couldn't look up hostname.
+        RESOLVEFAILED = 2,
+        /// Remote host refused connection *
+        CONNECTREFUSED = 3,
+        /// Closing a stream because of an exit-policy violation.
+        EXITPOLICY = 4,
+        /// Circuit destroyed
+        DESTROY = 5,
+        /// TCP connection was closed
+        DONE = 6,
+        /// Connection timed out, or OR timed out while connecting
+        TIMEOUT = 7,
+        /// No route to target destination.
+        NOROUTE = 8,
+        /// OR is entering hibernation and not handling requests
+        HIBERNATING = 9,
+        /// Internal error at the OR
+        INTERNAL = 10,
+        /// Ran out of resources to fulfill requests
+        RESOURCELIMIT = 11,
+        /// Connection unexpectedly reset
+        CONNRESET = 12,
+        /// Tor protocol violation
+        TORPROTOCOL = 13,
+        /// BEGIN_DIR cell at a non-directory-cache.
+        NOTDIRECTORY = 14,
+    }
+}
+
 impl End {
     /// Make a new END_REASON_MISC message.
     ///
     /// Clients send this every time they decide to close a stream.
     pub fn new_misc() -> Self {
         End {
-            reason: REASON_MISC,
+            reason: EndReason::MISC,
             addr: None,
         }
     }
     /// Make a new END message with the provided end reason.
     ///
     /// TODO: reason should be an enum-like thing.  XXXXM3
-    pub fn new_with_reason(reason: u8) -> Self {
+    pub fn new_with_reason(reason: EndReason) -> Self {
         End { reason, addr: None }
     }
     /// Make a new END message with END_REASON_EXITPOLICY, and the
     /// provided address and ttl.
     pub fn new_exitpolicy(addr: IpAddr, ttl: u32) -> Self {
         End {
-            reason: REASON_EXITPOLICY,
+            reason: EndReason::EXITPOLICY,
             addr: Some((addr, ttl)),
         }
     }
@@ -307,12 +339,12 @@ impl Body for End {
         if r.remaining() == 0 {
             // XXXX Or is this an error?  XXXXM3
             return Ok(End {
-                reason: REASON_MISC,
+                reason: EndReason::MISC,
                 addr: None,
             });
         }
-        let reason = r.take_u8()?;
-        if reason == REASON_EXITPOLICY {
+        let reason = r.take_u8()?.into();
+        if reason == EndReason::EXITPOLICY {
             let addr = match r.remaining() {
                 8 => IpAddr::V4(r.extract()?),
                 20 => IpAddr::V6(r.extract()?),
@@ -332,8 +364,8 @@ impl Body for End {
         }
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
-        w.write_u8(self.reason);
-        if self.reason == REASON_EXITPOLICY && self.addr.is_some() {
+        w.write_u8(self.reason.into());
+        if self.reason == EndReason::EXITPOLICY && self.addr.is_some() {
             let (addr, ttl) = self.addr.unwrap();
             match addr {
                 IpAddr::V4(v4) => w.write(&v4),
