@@ -9,7 +9,7 @@
 
 /// A macro to implement string and int conversions for c-like enums.
 ///
-/// This crate defines a `caret_enum!` macro, that lets you describe
+/// The `caret_enum!` macro lets you describe
 /// "c-like" enumerations (ones with no data, only discriminators). It then
 /// then automatically builds functions to convert those enums to
 /// and from integer types, and to and from strings.
@@ -199,15 +199,15 @@ macro_rules! caret_enum {
             }
         }
         impl std::convert::TryFrom<$numtype> for $name {
-            type Error = &'static str; // this is not the best error type XXXXM3
+            type Error = $crate::Error;
             fn try_from(val: $numtype) -> std::result::Result<Self, Self::Error> {
-                $name::from_int(val).ok_or("Unrecognized value")
+                $name::from_int(val).ok_or($crate::Error::InvalidInteger)
             }
         }
         impl std::str::FromStr for $name {
-            type Err = &'static str; // this is not the best error type XXXXM3
+            type Err = $crate::Error;
             fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-                $name::from_string(s).ok_or("Unrecognized value")
+                $name::from_string(s).ok_or($crate::Error::InvalidString)
             }
         }
     };
@@ -216,6 +216,29 @@ macro_rules! caret_enum {
     [ @impl string_for $id:ident $str:literal ] => ( $str );
     [ @impl string_for $id:ident ] => ( stringify!($id) );
 }
+
+/// An error produced from type derived from type.  These errors can
+/// only occur when trying to convert to a type made with caret_enum!
+#[derive(Debug, Clone)]
+pub enum Error {
+    /// Tried to convert to an enumeration type from an integer that
+    /// didn't represent a member of that enumeration.
+    InvalidInteger,
+    /// Tried to convert to an enumeration type from a string that
+    /// didn't represent a member of that enumeration.
+    InvalidString,
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Error::InvalidInteger => write!(f, "Integer was not member of this enumeration"),
+            Error::InvalidString => write!(f, "String was not member of this enumeration"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 /// Declare an integer type with some named elements.
 ///
