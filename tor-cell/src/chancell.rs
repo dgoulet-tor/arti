@@ -33,9 +33,9 @@ impl From<u32> for CircID {
         Self(item)
     }
 }
-impl Into<u32> for CircID {
-    fn into(self) -> u32 {
-        self.0
+impl From<CircID> for u32 {
+    fn from(id: CircID) -> u32 {
+        id.0
     }
 }
 impl std::fmt::Display for CircID {

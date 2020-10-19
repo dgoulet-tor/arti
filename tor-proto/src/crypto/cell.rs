@@ -107,9 +107,9 @@ pub(crate) trait InboundClientLayer {
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub(crate) struct HopNum(u8);
 
-impl Into<u8> for HopNum {
-    fn into(self) -> u8 {
-        self.0
+impl From<HopNum> for u8 {
+    fn from(hop: HopNum) -> u8 {
+        hop.0
     }
 }
 
@@ -119,9 +119,9 @@ impl From<u8> for HopNum {
     }
 }
 
-impl Into<usize> for HopNum {
-    fn into(self) -> usize {
-        self.0 as usize
+impl From<HopNum> for usize {
+    fn from(hop: HopNum) -> usize {
+        hop.0 as usize
     }
 }
 

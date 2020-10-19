@@ -4,7 +4,7 @@
 //! uses the ed25519 trait and the Signature trait.
 
 use arrayref::array_ref;
-use std::convert::TryInto;
+use std::convert::TryFrom;
 use std::fmt::{self, Debug, Display, Formatter};
 use subtle::*;
 
@@ -73,10 +73,10 @@ impl From<&PublicKey> for Ed25519Identity {
     }
 }
 
-impl TryInto<PublicKey> for &Ed25519Identity {
+impl TryFrom<&Ed25519Identity> for PublicKey {
     type Error = ed25519_dalek::SignatureError;
-    fn try_into(self) -> Result<PublicKey, Self::Error> {
-        PublicKey::from_bytes(&self.id[..])
+    fn try_from(id: &Ed25519Identity) -> Result<PublicKey, Self::Error> {
+        PublicKey::from_bytes(&id.id[..])
     }
 }
 

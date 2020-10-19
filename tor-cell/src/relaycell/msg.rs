@@ -235,9 +235,9 @@ impl Data {
         Data { body: inp.into() }
     }
 }
-impl Into<Vec<u8>> for Data {
-    fn into(self) -> Vec<u8> {
-        self.body
+impl From<Data> for Vec<u8> {
+    fn from(data: Data) -> Vec<u8> {
+        data.body
     }
 }
 impl AsRef<[u8]> for Data {

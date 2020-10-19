@@ -135,9 +135,9 @@ impl From<u16> for StreamID {
     }
 }
 
-impl Into<u16> for StreamID {
-    fn into(self: StreamID) -> u16 {
-        self.0
+impl From<StreamID> for u16 {
+    fn from(id: StreamID) -> u16 {
+        id.0
     }
 }
 

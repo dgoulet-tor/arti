@@ -1042,15 +1042,14 @@ impl<B: Body> From<B> for ChanMsg {
     }
 }
 
-// XXXX should do From instead.
 // Helper: declare an Into implementation for cells that don't take a circid.
 macro_rules! msg_into_cell {
     ($body:ident) => {
-        impl Into<super::ChanCell> for $body {
-            fn into(self) -> super::ChanCell {
+        impl From<$body> for super::ChanCell {
+            fn from(body: $body) -> super::ChanCell {
                 super::ChanCell {
                     circid: 0.into(),
-                    msg: self.as_message(),
+                    msg: body.as_message(),
                 }
             }
         }
