@@ -63,7 +63,10 @@ caret_int! {
         /// HS: Response to INTRODUCE1 from introduction point to client
         INTRODUCE_ACK = 40,
 
-        // TODO: 41 and 42 are used for padding.  XXXXM3
+        /// Padding: declare what kind of padding we want
+        PADDING_NEGOTIATE = 41,
+        /// Padding: reply to a PADDING_NEGOTIATE
+        PADDING_NEGOTIATED = 42,
     }
 }
 
