@@ -219,7 +219,7 @@ macro_rules! caret_enum {
 
 /// An error produced from type derived from type.  These errors can
 /// only occur when trying to convert to a type made with caret_enum!
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     /// Tried to convert to an enumeration type from an integer that
     /// didn't represent a member of that enumeration.

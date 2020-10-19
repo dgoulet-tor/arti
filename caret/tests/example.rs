@@ -1,4 +1,4 @@
-use caret::caret_enum;
+use caret::{caret_enum, Error};
 use std::convert::TryInto;
 
 caret_enum! {
@@ -28,6 +28,12 @@ fn test_int_ops() {
     assert_eq!(Demo::from_int(2), None);
     let t: Result<Demo, _> = 6.try_into();
     assert!(t.is_err());
+    let err = t.unwrap_err();
+    assert_eq!(err, Error::InvalidInteger);
+    assert_eq!(
+        format!("{}", err),
+        "Integer was not member of this enumeration"
+    );
 }
 
 #[test]
@@ -47,4 +53,10 @@ fn test_str_ops() {
     assert_eq!(t, Demo::Dee);
     let t: Result<Demo, _> = "Foo".parse();
     assert!(t.is_err());
+    let err = t.unwrap_err();
+    assert_eq!(err, Error::InvalidString);
+    assert_eq!(
+        format!("{}", err),
+        "String was not member of this enumeration"
+    );
 }
