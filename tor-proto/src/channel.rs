@@ -2,7 +2,7 @@
 //!
 //! Right now, we only support connecting to a Tor relay as a client.
 //!
-//! To do so, launch a TLS connection, then call `start_client_handshake()`
+//! To do so, launch a TLS connection, then pass it to a ChannelBuilder.
 //!
 //! # Design
 //!
@@ -27,13 +27,17 @@
 mod circmap;
 mod codec;
 mod handshake;
+mod logid;
 mod reactor;
 
+pub(crate) use crate::channel::logid::LogId;
 use crate::channel::reactor::{CtrlMsg, CtrlResult};
 use crate::circuit;
 use crate::circuit::celltypes::CreateResponse;
 use crate::{Error, Result};
 use tor_cell::chancell::{msg, ChanCell, CircID};
+use tor_llcrypto::pk::ed25519::Ed25519Identity;
+use tor_llcrypto::pk::rsa::RSAIdentity;
 
 use futures::channel::{mpsc, oneshot};
 use futures::io::{AsyncRead, AsyncWrite};
@@ -85,20 +89,55 @@ struct ChannelImpl {
     sendctrl: mpsc::Sender<CtrlResult>,
     /// A oneshot sender used to tell the Reactor task to shut down.
     sendclosed: Cell<Option<oneshot::Sender<CtrlMsg>>>,
+
+    /// Logging identifier for this stream.  (Used for logging only.)
+    logid: LogId,
+    /*
+        /// Validated Ed25519 identity for this peer.
+        ed25519_id: Ed25519Identity,
+        /// Validated RSA identity for this peer.
+        rsa_id: RSAIdentity,
+    */
 }
 
-/// Launch a new client handshake over a TLS stream.
-///
-/// After calling this function, you'll need to call `connect()` on
-/// the result to start the handshake.  If that succeeds, you'll have
-/// authentication info from the relay: call `check()` on the result
-/// to check that.  Finally, to finish the handshake, call `finish()`
-/// on the result of _that_.
-pub fn start_client_handshake<T>(tls: T) -> OutboundClientHandshake<T>
-where
-    T: AsyncRead + AsyncWrite + Send + Unpin + 'static,
-{
-    handshake::OutboundClientHandshake::new(tls)
+/// Structure for building and launching a Tor channel.
+pub struct ChannelBuilder {
+    /// If present, a description of the address we're trying to connect to,
+    /// to be used in log messages.
+    ///
+    /// TODO: at some point, check this against the addresses in the
+    /// netinfo cell too.
+    target: Option<std::net::SocketAddr>,
+}
+
+impl ChannelBuilder {
+    /// Construct a new ChannelBuilder.
+    pub fn new() -> Self {
+        ChannelBuilder { target: None }
+    }
+
+    /// Set the declared target address of this channel.
+    ///
+    /// Note that nothing enforces the correctness of this address: it
+    /// doesn't have to match the real address target of the TLS
+    /// stream.  For now it is only used for logging.
+    pub fn set_declared_addr(&mut self, target: std::net::SocketAddr) {
+        self.target = Some(target);
+    }
+
+    /// Launch a new client handshake over a TLS stream.
+    ///
+    /// After calling this function, you'll need to call `connect()` on
+    /// the result to start the handshake.  If that succeeds, you'll have
+    /// authentication info from the relay: call `check()` on the result
+    /// to check that.  Finally, to finish the handshake, call `finish()`
+    /// on the result of _that_.
+    pub fn launch<T>(self, tls: T) -> OutboundClientHandshake<T>
+    where
+        T: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    {
+        handshake::OutboundClientHandshake::new(tls, self.target)
+    }
 }
 
 impl Channel {
@@ -107,7 +146,13 @@ impl Channel {
     /// Internal method, called to finalize the channel when we've
     /// sent our netinfo cell, received the peer's netinfo cell, and
     /// we're finally ready to create circuits.
-    fn new<T>(link_protocol: u16, tls: CellFrame<T>) -> (Self, reactor::Reactor<T>)
+    fn new<T>(
+        link_protocol: u16,
+        tls: CellFrame<T>,
+        logid: LogId,
+        _ed25519_id: Ed25519Identity,
+        _rsa_id: RSAIdentity,
+    ) -> (Self, reactor::Reactor<T>)
     where
         T: AsyncRead + AsyncWrite + Send + Unpin + 'static,
     {
@@ -126,9 +171,15 @@ impl Channel {
             circmap: Arc::downgrade(&circmap),
             sendctrl,
             sendclosed: Cell::new(Some(sendclosed)),
+            logid,
+            /*
+            ed25519_id,
+            rsa_id,
+             */
         };
         let inner = Arc::new(Mutex::new(inner));
-        let reactor = reactor::Reactor::new(inner.clone(), circmap, recvctrl, recvclosed, stream);
+        let reactor =
+            reactor::Reactor::new(inner.clone(), circmap, recvctrl, recvclosed, stream, logid);
 
         let channel = Channel { inner };
 
@@ -155,9 +206,18 @@ impl Channel {
 
     /// Transmit a single cell on a channel.
     pub async fn send_cell(&self, cell: ChanCell) -> Result<()> {
-        trace!("Sending {} on {}", cell.msg().cmd(), cell.circid());
+        use msg::ChanMsg::*;
         self.check_cell(&cell)?;
         let inner = &mut self.inner.lock().await;
+        match cell.msg() {
+            Relay(_) | Padding(_) | VPadding(_) => {} // too frequent to log.
+            _ => trace!(
+                "{}: Sending {} for {}",
+                inner.logid,
+                cell.msg().cmd(),
+                cell.circid()
+            ),
+        }
         inner.send_cell(cell).await
         // XXXX I don't like holding the lock here. :(
     }
@@ -178,7 +238,7 @@ impl Channel {
         let (createdsender, createdreceiver) = oneshot::channel::<CreateResponse>();
         let (send_circ_destroy, recv_circ_destroy) = oneshot::channel();
 
-        let id = {
+        let (logid, id) = {
             let mut inner = self.inner.lock().await;
             if inner.closed {
                 return Err(Error::ChannelClosed);
@@ -190,11 +250,12 @@ impl Channel {
                 .map_err(|_| Error::InternalError("Can't queue circuit closer".into()))?;
             if let Some(circmap) = inner.circmap.upgrade() {
                 let mut cmap = circmap.lock().await;
-                cmap.add_ent(rng, createdsender, sender)?
+                (inner.logid, cmap.add_ent(rng, createdsender, sender)?)
             } else {
                 return Err(Error::ChannelClosed);
             }
         };
+        trace!("{}: Circuit ID {} allocated.", logid, id);
 
         let destroy_handle = CircDestroyHandle::new(id, send_circ_destroy);
 

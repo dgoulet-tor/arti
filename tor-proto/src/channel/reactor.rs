@@ -7,7 +7,7 @@
 //! or in the error handling behavior.
 
 use super::circmap::{CircEnt, CircMap};
-use super::CellFrame;
+use super::{CellFrame, LogId};
 use crate::{Error, Result};
 use tor_cell::chancell::msg::{Destroy, DestroyReason};
 use tor_cell::chancell::{msg::ChanMsg, ChanCell, CircID};
@@ -22,9 +22,10 @@ use futures::stream::{self, SplitStream, StreamExt};
 use std::convert::TryInto;
 use std::sync::{Arc, Weak};
 
-use log::trace;
+use log::{debug, trace};
 
 /// A message telling the channel reactor to do something.
+#[derive(Debug)]
 pub(super) enum CtrlMsg {
     /// Shut down the reactor.
     Shutdown,
@@ -81,6 +82,9 @@ struct ReactorCore {
 
     /// Channel pointer -- used to send DESTROY cells.
     channel: Weak<Mutex<super::ChannelImpl>>,
+
+    /// Logging identifier for this channel
+    logid: LogId,
 }
 
 impl<T> Reactor<T>
@@ -98,10 +102,12 @@ where
         control: mpsc::Receiver<CtrlResult>,
         closeflag: oneshot::Receiver<CtrlMsg>,
         input: SplitStream<CellFrame<T>>,
+        logid: LogId,
     ) -> Self {
         let core = ReactorCore {
             channel: Arc::downgrade(&channel),
             circs: circmap,
+            logid,
         };
 
         let mut oneshots = stream::SelectAll::new();
@@ -125,7 +131,9 @@ where
         } else {
             return Err(Error::ChannelClosed);
         }
+        debug!("{}: Running reactor", self.core.logid);
         let result = self.run_impl().await;
+        debug!("{}: Reactor stopped: {:?}", self.core.logid, result);
         if let Some(chan) = self.core.channel.upgrade() {
             let mut chan = chan.lock().await;
             chan.closed = true;
@@ -164,6 +172,7 @@ where
 
     /// Handle a CtrlMsg other than Shutdown.
     async fn handle_control(&mut self, msg: CtrlMsg) -> Result<()> {
+        trace!("{}: reactor received {:?}", self.core.logid, msg);
         match msg {
             CtrlMsg::Shutdown => panic!(), // was handled in reactor loop.
             CtrlMsg::Register(ch) => self.register(ch),
@@ -184,8 +193,12 @@ impl ReactorCore {
     /// or rejected; a few get delivered to circuits.
     async fn handle_cell(&mut self, cell: ChanCell) -> Result<()> {
         let (circid, msg) = cell.into_circid_and_msg();
-        trace!("Received {} on {}", msg.cmd(), circid);
         use ChanMsg::*;
+
+        match msg {
+            Relay(_) | Padding(_) | VPadding(_) => {} // too frequent to log.
+            _ => trace!("{}: received {} for {}", self.logid, msg.cmd(), circid),
+        }
 
         match msg {
             // These aren't allowed on clients.
@@ -271,6 +284,11 @@ impl ReactorCore {
             // If the circuit is waiting for CREATED, tell it that it
             // won't get one.
             Some(CircEnt::Opening(oneshot, _)) => {
+                trace!(
+                    "{}: Passing destroy to pending circuit {}",
+                    self.logid,
+                    circid
+                );
                 oneshot
                     .send(msg.try_into()?)
                     // XXXX I think that this one actually means the other side
@@ -282,23 +300,29 @@ impl ReactorCore {
                     })
             }
             // It's an open circuit: tell it that it got a DESTROY cell.
-            Some(CircEnt::Open(mut sink)) => sink
-                .send(msg.try_into()?)
-                .await
-                // XXXX I think that this one actually means the other side
-                // is closed
-                .map_err(|_| {
-                    Error::InternalError("circuit wan't interested in destroy cell?".into())
-                }),
+            Some(CircEnt::Open(mut sink)) => {
+                trace!("{}: Passing destroy to open circuit {}", self.logid, circid);
+                sink.send(msg.try_into()?)
+                    .await
+                    // XXXX I think that this one actually means the other side
+                    // is closed
+                    .map_err(|_| {
+                        Error::InternalError("circuit wan't interested in destroy cell?".into())
+                    })
+            }
             // Got a DESTROY cell for a circuit we don't have.
-            // XXXXM3 do more?
-            None => Ok(()),
+            None => {
+                trace!("{}: Destroy for nonexistent circuit {}", self.logid, circid);
+                // XXXXM3 do more?
+                Ok(())
+            }
         }
     }
 
     /// Called when a circuit goes away: sends a DESTROY cell and removes
     /// the circuit.
     async fn outbound_destroy_circ(&mut self, id: CircID) -> Result<()> {
+        trace!("{}: Circuit {} is gone; sending DESTROY", self.logid, id);
         {
             let mut map = self.circs.lock().await;
             // Remove the circuit's entry from the map: nothing more

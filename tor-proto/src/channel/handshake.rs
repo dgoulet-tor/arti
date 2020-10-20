@@ -6,6 +6,7 @@ use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 
 use crate::channel::codec::ChannelCodec;
+use crate::channel::LogId;
 use crate::{Error, Result};
 use tor_cell::chancell::{msg, ChanCmd};
 
@@ -13,10 +14,14 @@ use std::net;
 use tor_bytes::Reader;
 use tor_linkspec::ChanTarget;
 use tor_llcrypto as ll;
+use tor_llcrypto::pk::ed25519::Ed25519Identity;
+use tor_llcrypto::pk::rsa::RSAIdentity;
 
 use digest::Digest;
 
 use super::CellFrame;
+
+use log::{debug, trace};
 
 /// A list of the link protocols that we support.
 // We only support version 4 for now, since we don't do padding right.
@@ -29,6 +34,12 @@ pub struct OutboundClientHandshake<T: AsyncRead + AsyncWrite + Send + Unpin + 's
     /// (We don't enforce that this is actually TLS, but if it isn't, the
     /// connection won't be secure.)
     tls: T,
+
+    /// Declared target for this stream, if any.  (Used for logging.)
+    target: Option<std::net::SocketAddr>,
+
+    /// Logging identifier for this stream.  (Used for logging only.)
+    logid: LogId,
 }
 
 /// A client channel on which versions have been negotiated and the
@@ -44,6 +55,8 @@ pub struct UnverifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     /// The netinfo cell that we got from the relay.
     #[allow(dead_code)] // Relays will need this.
     netinfo_cell: msg::Netinfo,
+    /// Logging identifier for this stream.  (Used for logging only.)
+    logid: LogId,
 }
 
 /// A client channel on which versions have been negotiated,
@@ -58,17 +71,32 @@ pub struct VerifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     link_protocol: u16,
     /// The Source+Sink on which we're reading and writing cells.
     tls: CellFrame<T>,
+    /// Logging identifier for this stream.  (Used for logging only.)
+    logid: LogId,
+    /// Validated Ed25519 identity for this peer.
+    ed25519_id: Ed25519Identity,
+    /// Validated RSA identity for this peer.
+    rsa_id: RSAIdentity,
 }
 
 impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake<T> {
     /// Construct a new OutboundClientHandshake.
-    pub(crate) fn new(tls: T) -> Self {
-        Self { tls }
+    pub(crate) fn new(tls: T, target: Option<std::net::SocketAddr>) -> Self {
+        Self {
+            tls,
+            target,
+            logid: LogId::new(),
+        }
     }
 
     /// Negotiate a link protocol version with the relay, and read
     /// the relay's handshake information.
     pub async fn connect(mut self) -> Result<UnverifiedChannel<T>> {
+        match self.target {
+            Some(addr) => debug!("{}: starting Tor handshake with {}", self.logid, addr),
+            None => debug!("{}: starting Tor handshake", self.logid),
+        }
+        trace!("{}: sending versions", self.logid);
         // Send versions cell
         {
             let my_versions = msg::Versions::new(LINK_PROTOCOLS);
@@ -77,6 +105,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         }
 
         // Get versions cell.
+        trace!("{}: waiting for versions", self.logid);
         let their_versions: msg::Versions = {
             // TODO: this could be turned into another function, I suppose.
             let mut hdr = [0u8; 5];
@@ -90,11 +119,13 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
             let mut reader = Reader::from_slice(&msg);
             reader.extract()?
         };
+        trace!("{}: received {:?}", self.logid, their_versions);
 
         // Determine which link protocol we negotiated.
         let link_protocol = their_versions
             .best_shared_link_protocol(LINK_PROTOCOLS)
             .ok_or_else(|| Error::ChanProto("No shared link protocols".into()))?;
+        trace!("{}: negotiated version {}", self.logid, link_protocol);
 
         // Now we can switch to using a "Framed". We can ignore the
         // AsyncRead/AsyncWrite aspects of the tls, and just treat it
@@ -108,9 +139,11 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         let mut seen_authchallenge = false;
 
         // Loop: reject duplicate and unexpected cells
+        trace!("{}: waiting for rest of handshake.", self.logid);
         while let Some(m) = tls.next().await {
             use msg::ChanMsg::*;
             let (_, m) = m?.into_circid_and_msg();
+            trace!("{}: received a {} cell.", self.logid, m.cmd());
             // trace!("READ: {:?}", m);
             match m {
                 // Are these technically allowed?
@@ -151,12 +184,16 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         match (certs, netinfo) {
             (Some(_), None) => Err(Error::ChanProto("Missing netinfo or closed stream".into())),
             (None, _) => Err(Error::ChanProto("Missing certs cell".into())),
-            (Some(certs_cell), Some(netinfo_cell)) => Ok(UnverifiedChannel {
-                link_protocol,
-                tls,
-                certs_cell,
-                netinfo_cell,
-            }),
+            (Some(certs_cell), Some(netinfo_cell)) => {
+                trace!("{}: receieved handshake, ready to verify.", self.logid);
+                Ok(UnverifiedChannel {
+                    link_protocol,
+                    tls,
+                    certs_cell,
+                    netinfo_cell,
+                    logid: self.logid,
+                })
+            }
         }
     }
 }
@@ -241,6 +278,8 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
             ));
         }
 
+        let ed25519_id: Ed25519Identity = identity_key.into();
+
         // Part 2: validate rsa stuff.
 
         // What is the RSA identity key, according to the X.509 certificate
@@ -274,6 +313,15 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
             ));
         }
 
+        let rsa_id = pkrsa.to_rsa_identity();
+
+        trace!(
+            "{}: Validated identity as {} [{}]",
+            self.logid,
+            ed25519_id,
+            rsa_id
+        );
+
         // Now that we've done all the verification steps on the
         // certificates, we know who we are talking to.  It's time to
         // make sure that the peer we are talking to is the peer we
@@ -282,17 +330,20 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         // We do this _last_, since "this is the wrong peer" is
         // usually a different situation than "this peer couldn't even
         // identify itself right."
-        if *peer.ed_identity() != (*identity_key).into() {
+        if *peer.ed_identity() != ed25519_id {
             return Err(Error::ChanProto("Peer ed25519 id not as expected".into()));
         }
 
-        if &pkrsa.to_rsa_identity() != peer.rsa_identity() {
+        if pkrsa.to_rsa_identity() != rsa_id {
             return Err(Error::ChanProto("Peer RSA id not as expected".into()));
         }
 
         Ok(VerifiedChannel {
             link_protocol: self.link_protocol,
             tls: self.tls,
+            logid: self.logid,
+            ed25519_id,
+            rsa_id,
         })
     }
 }
@@ -308,9 +359,20 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> VerifiedChannel<T> {
         mut self,
         peer_addr: &net::IpAddr,
     ) -> Result<(super::Channel, super::reactor::Reactor<T>)> {
+        trace!("{}: Sending netinfo cell.", self.logid);
         let netinfo = msg::Netinfo::for_client(*peer_addr);
         self.tls.send(netinfo.into()).await?;
 
-        Ok(super::Channel::new(self.link_protocol, self.tls))
+        debug!(
+            "{}: Completed handshake with {} [{}]",
+            self.logid, self.ed25519_id, self.rsa_id
+        );
+        Ok(super::Channel::new(
+            self.link_protocol,
+            self.tls,
+            self.logid,
+            self.ed25519_id,
+            self.rsa_id,
+        ))
     }
 }

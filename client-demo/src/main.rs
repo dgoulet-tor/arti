@@ -74,7 +74,8 @@ async fn connect<C: ChanTarget>(target: &C) -> Result<Channel> {
         .ok_or(Error::Misc("Somehow a TLS server didn't show a cert?"))?
         .to_der()?;
 
-    let chan = channel::start_client_handshake(tlscon).connect().await?;
+    let builder = channel::ChannelBuilder::new();
+    let chan = builder.launch(tlscon).connect().await?;
     info!("Version negotiated and cells read.");
 
     let chan = chan.check(target, &peer_cert)?;
