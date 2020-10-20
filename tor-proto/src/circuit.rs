@@ -103,8 +103,7 @@ struct ClientCircImpl {
     closed: bool,
     /// When this is dropped, the channel reactor is told to send a DESTROY
     /// cell.
-    #[allow(unused)] // XXXX This is probably an antipattern.
-    circ_closed: CircDestroyHandle,
+    circ_closed: Option<CircDestroyHandle>,
     /// Per-hop circuit information.
     ///
     /// Note that hops.len() must be the same as crypto.n_layers().
@@ -492,6 +491,19 @@ impl ClientCirc {
         self.begin_data_stream(RelayMsg::BeginDir).await
     }
     // XXXX Add a RESOLVE implementation, it will be simple.
+
+    /// Shut down this circuit immediately, along with all streams that
+    /// are using it.
+    ///
+    /// Note that other references to this circuit may exist.  If they
+    /// do, they will stop working after you call this function.
+    ///
+    /// It's not necessary to call this method if you're just done
+    /// with a circuit: the channel should close on its own once nothing
+    /// is using it any more.
+    pub async fn terminate(self) {
+        self.c.lock().await.shutdown();
+    }
 }
 
 impl ClientCircImpl {
@@ -620,6 +632,9 @@ impl ClientCircImpl {
             // ignore the error, since it can only be canceled.
             let _ = sender.send(CtrlMsg::Shutdown);
         }
+        // Drop the circuit destroy handle now so that a DESTROY cell
+        // gets sent.
+        drop(self.circ_closed.take());
     }
 }
 
@@ -649,7 +664,7 @@ impl PendingClientCirc {
             crypto_out,
             hops,
             closed: false,
-            circ_closed,
+            circ_closed: Some(circ_closed),
             control: sendctrl,
             sendshutdown: Cell::new(Some(sendclosed)),
             sendmeta: Cell::new(None),

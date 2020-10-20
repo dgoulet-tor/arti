@@ -241,6 +241,10 @@ fn main() -> Result<()> {
                 test_http(circ.clone()).await?;
             }
         }
+
+        circ.terminate().await;
+
+        async_std::task::sleep(std::time::Duration::new(10, 0)).await;
         Ok(())
     })
 }

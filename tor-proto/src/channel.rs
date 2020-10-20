@@ -280,6 +280,22 @@ impl Channel {
             circ_logid,
         ))
     }
+
+    /// Shut down this channel immediately, along with all circuits that
+    /// are using it.
+    ///
+    /// Note that other references to this channel may exist.  If they
+    /// do, they will stop working after you call this function.
+    ///
+    /// It's not necessary to call this method if you're just done
+    /// with a channel: the channel should close on its own once nothing
+    /// is using it any more.
+    pub async fn terminate(self) {
+        let mut inner = self.inner.lock().await;
+        inner.shutdown();
+        // ignore any failure to flush; we can't do anything about it.
+        let _ignore = inner.tls.flush().await;
+    }
 }
 
 impl Clone for Channel {
@@ -292,9 +308,7 @@ impl Clone for Channel {
 
 impl Drop for ChannelImpl {
     fn drop(&mut self) {
-        if let Some(sender) = self.sendclosed.take() {
-            let _ignore = sender.send(CtrlMsg::Shutdown);
-        }
+        self.shutdown();
     }
 }
 
@@ -306,6 +320,15 @@ impl ChannelImpl {
         }
         self.tls.send(cell).await?;
         Ok(())
+    }
+
+    /// Shut down this channel; causes all circuits using this channel
+    /// to become unusable.
+    fn shutdown(&mut self) {
+        if let Some(sender) = self.sendclosed.take() {
+            let _ignore = sender.send(CtrlMsg::Shutdown);
+        }
+        self.closed = true;
     }
 }
 
