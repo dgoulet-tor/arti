@@ -225,7 +225,11 @@ impl ReactorCore {
             CreatedFast(_) | Created2(_) => self.deliver_created(circid, msg).await,
 
             // These are always ignored.
-            Padding(_) | VPadding(_) | Unrecognized(_) => Ok(()),
+            Padding(_) | VPadding(_) => Ok(()),
+
+            // Unrecognized cell types should be safe to allow _on channels_,
+            // since they can't propagate.
+            Unrecognized(_) => Ok(()),
 
             // tor_cells knows about this type, but we don't.
             _ => Ok(()),
@@ -236,18 +240,24 @@ impl ReactorCore {
     async fn deliver_relay(&mut self, circid: CircID, msg: ChanMsg) -> Result<()> {
         let mut map = self.circs.lock().await;
 
-        if let Some(CircEnt::Open(s)) = map.get_mut(circid) {
-            // There's an open circuit; we can give it the RELAY cell.
-            // XXXXM3 handle errors better.
-            // XXXXM3 should we really be holding the mutex for this?
-            // XXXXM3 I think that this one actually means the other side
-            // is closed
-            s.send(msg.try_into()?).await.map_err(|_| {
-                Error::InternalError("Circuit queue rejected message. Is it closing? XXX".into())
-            })
-        } else {
-            // XXXXM3 handle this case better; don't just drop the cell.
-            Ok(())
+        match map.get_mut(circid) {
+            Some(CircEnt::Open(s)) => {
+                // There's an open circuit; we can give it the RELAY cell.
+                // XXXXM3 handle errors better.
+                // XXXXM3 should we really be holding the mutex for this?
+                // XXXXM3 I think that this one actually means the other side
+                // is closed
+                s.send(msg.try_into()?).await.map_err(|_| {
+                    Error::InternalError(
+                        "Circuit queue rejected message. Is it closing? XXX".into(),
+                    )
+                })
+            }
+            Some(CircEnt::Opening(_, _)) => Err(Error::ChanProto(
+                "Relay cell on pending circuit before CREATED received".into(),
+            )),
+            // Some(DestroySent(s)) => ...  XXXXM3 need to implement this
+            None => Err(Error::ChanProto("Relay cell on nonexistent circuit".into())),
         }
     }
 
@@ -310,11 +320,11 @@ impl ReactorCore {
                         Error::InternalError("circuit wan't interested in destroy cell?".into())
                     })
             }
+            // Some(DestroySent) => ... XXXXM3 implement this
             // Got a DESTROY cell for a circuit we don't have.
             None => {
                 trace!("{}: Destroy for nonexistent circuit {}", self.logid, circid);
-                // XXXXM3 do more?
-                Ok(())
+                Err(Error::ChanProto("Destroy for nonexistent circuit".into()))
             }
         }
     }

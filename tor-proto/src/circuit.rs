@@ -505,8 +505,9 @@ impl ClientCircImpl {
             return self.handle_sendme(hopnum, s).await;
         }
         if let RelayMsg::Truncated(_) = msg {
-            // XXXX need to handle Truncated cells.
-            return Ok(());
+            // XXXX need to handle Truncated cells. This isn't the right
+            // way, but at least it's safe.
+            return Err(Error::CircuitClosed);
         }
 
         trace!("{}: Received meta-cell {:?}", self.logid, msg);
