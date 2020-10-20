@@ -46,6 +46,9 @@ struct Args {
     /// try doing a download test (to 127.0.0.1:9999)? Requires chutney.
     #[argh(switch)]
     dl: bool,
+    /// enable trace-level logging
+    #[argh(switch)]
+    trace: bool,
 }
 
 /// Launch an authenticated channel to a relay.
@@ -161,9 +164,14 @@ fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
 }
 
 fn main() -> Result<()> {
-    simple_logging::log_to_stderr(LevelFilter::Debug);
-
     let args: Args = argh::from_env();
+
+    let filt = if args.trace {
+        LevelFilter::Trace
+    } else {
+        LevelFilter::Debug
+    };
+    simple_logging::log_to_stderr(filt);
 
     if args.chutney_dir.is_none() && (args.flood || args.dl) {
         eprintln!("--flood and --dl both require --chutney-dir.");
