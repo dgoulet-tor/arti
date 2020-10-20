@@ -193,6 +193,9 @@ impl ClientCirc {
     ///
     /// Note that you should register a meta handler _before_ you send whatever
     /// cell you're waiting a response to, or you might miss the response.
+    // TODO: It would be cool for this to take a list of allowable
+    // cell types to get in response, so that any other cell types are
+    // treated as circuit protocol violations automatically.
     async fn register_meta_handler(&mut self) -> Result<oneshot::Receiver<MetaResult>> {
         let (sender, receiver) = oneshot::channel();
 
