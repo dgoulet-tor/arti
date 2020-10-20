@@ -143,6 +143,12 @@ impl ChannelBuilder {
     }
 }
 
+impl Default for ChannelBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Channel {
     /// Construct a channel and reactor.
     ///
