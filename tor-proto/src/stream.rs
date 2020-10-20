@@ -84,6 +84,14 @@ impl TorStream {
         self.target.recvwindow.put();
         Ok(())
     }
+
+    /// Ensure that all the data in this stream has been flushed in to
+    /// the circuit, and close it.
+    pub async fn close(self) -> Result<()> {
+        // Not much to do here right now.
+        drop(self);
+        Ok(())
+    }
 }
 
 /// A DataStream is a wrapper around a TorStream for byte-oriented IO.
