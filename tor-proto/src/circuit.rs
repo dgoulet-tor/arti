@@ -31,12 +31,14 @@
 
 pub(crate) mod celltypes;
 mod halfstream;
+mod logid;
 pub(crate) mod reactor;
 pub(crate) mod sendme;
 mod streammap;
 
 use crate::channel::{Channel, CircDestroyHandle};
 use crate::circuit::celltypes::*;
+pub(crate) use crate::circuit::logid::LogId;
 use crate::circuit::reactor::{CtrlMsg, CtrlResult};
 use crate::crypto::cell::{
     ClientLayer, CryptInit, HopNum, InboundClientLayer, OutboundClientCrypt, OutboundClientLayer,
@@ -59,6 +61,8 @@ use std::cell::Cell;
 use std::sync::Arc;
 
 use rand::{thread_rng, CryptoRng, Rng};
+
+use log::{debug, trace};
 
 /// A circuit that we have constructed over the Tor network.
 #[derive(Clone)]
@@ -115,6 +119,8 @@ struct ClientCircImpl {
     /// For the purposes of this implementation, a "meta" cell
     /// is a RELAY cell with a stream ID value of 0.
     sendmeta: Cell<Option<oneshot::Sender<MetaResult>>>,
+    /// An identifier for this circuit, for logging purposes.
+    logid: LogId,
 }
 
 /// A handle to a circuit as held by a stream. Used to send cells.
@@ -201,6 +207,8 @@ impl ClientCirc {
             ));
         }
 
+        trace!("{}: Registered a meta-cell handler", circ.logid);
+
         Ok(receiver)
     }
 
@@ -231,16 +239,25 @@ impl ClientCirc {
         use tor_cell::relaycell::msg::{Body, Extend2};
         // Perform the first part of the cryptographic handshake
         let (state, msg) = H::client1(rng, &key)?;
-        let extend_msg = Extend2::new(linkspecs, handshake_id, msg);
+        // Cloning linkspecs is only necessary because of the log
+        // below. Would be nice to fix that.
+        let extend_msg = Extend2::new(linkspecs.clone(), handshake_id, msg);
         let cell = RelayCell::new(0.into(), extend_msg.as_message());
 
         // We'll be waiting for an EXTENDED2 cell; install the handler.
         let receiver = self.register_meta_handler().await?;
 
         // Now send the EXTEND2 cell to the the last hop...
-        let hop = {
+        let (logid, hop) = {
             let mut c = self.c.lock().await;
-            let hop = ((c.crypto_out.n_layers() - 1) as u8).into();
+            let n_hops = c.crypto_out.n_layers();
+            let hop = ((n_hops - 1) as u8).into();
+            debug!(
+                "{}: Extending circuit to hop {} with {:?}",
+                c.logid,
+                n_hops + 1,
+                linkspecs
+            );
 
             // Send the message to the last hop...
             c.send_relay_cell(
@@ -249,11 +266,12 @@ impl ClientCirc {
             )
             .await?;
 
-            hop
+            (c.logid, hop)
             // note that we're dropping the lock here, since we're going
             // to wait for a response.
         };
 
+        trace!("{}: waiting for EXTENDED2 cell", logid);
         // ... and now we wait for a response.
         let (from_hop, msg) = receiver.await.map_err(|_| {
             Error::CircDestroy("Circuit closed while waiting for extended cell".into())
@@ -283,10 +301,13 @@ impl ClientCirc {
         };
         let server_handshake = msg.into_body();
 
+        trace!("{}: Received EXTENDED2 cell; completing handshake.", logid);
         // Now perform the second part of the handshake, and see if it
         // succeeded.
         let keygen = H::client2(state, server_handshake)?;
         let layer = L::construct(keygen)?;
+
+        debug!("{}: Handshake complete; circuit extended.", logid);
 
         // If we get here, it succeeded.  Add a new hop to the circuit.
         let (layer_fwd, layer_back) = layer.split();
@@ -488,6 +509,8 @@ impl ClientCircImpl {
             return Ok(());
         }
 
+        trace!("{}: Received meta-cell {:?}", self.logid, msg);
+
         // For all other command types, we'll only get them in response
         // to another command, which should have registered a responder.
         //
@@ -608,6 +631,7 @@ impl PendingClientCirc {
         createdreceiver: oneshot::Receiver<CreateResponse>,
         circ_closed: CircDestroyHandle,
         input: mpsc::Receiver<ClientCircChanMsg>,
+        logid: LogId,
     ) -> (PendingClientCirc, reactor::Reactor) {
         let crypto_out = OutboundClientCrypt::new();
         let (sendclosed, recvclosed) = oneshot::channel::<CtrlMsg>();
@@ -625,6 +649,7 @@ impl PendingClientCirc {
             control: sendctrl,
             sendshutdown: Cell::new(Some(sendclosed)),
             sendmeta: Cell::new(None),
+            logid,
         };
         let circuit = ClientCirc {
             c: Arc::new(Mutex::new(circuit_impl)),
@@ -633,7 +658,7 @@ impl PendingClientCirc {
             recvcreated: createdreceiver,
             circ: circuit.clone(),
         };
-        let reactor = reactor::Reactor::new(circuit.c, recvctrl, recvclosed, input);
+        let reactor = reactor::Reactor::new(circuit.c, recvctrl, recvclosed, input, logid);
         (pending, reactor)
     }
 
@@ -666,10 +691,12 @@ impl PendingClientCirc {
         let PendingClientCirc { circ, recvcreated } = self;
         let (state, msg) = H::client1(rng, &key)?;
         let create_cell = wrap.to_chanmsg(msg);
-        {
+        let logid = {
             let mut c = circ.c.lock().await;
+            debug!("{}: Extending to hop 1 with {}", c.logid, create_cell.cmd());
             c.send_msg(create_cell).await?;
-        }
+            c.logid
+        };
 
         let reply = recvcreated
             .await
@@ -679,6 +706,9 @@ impl PendingClientCirc {
         let keygen = H::client2(state, server_handshake)?;
 
         let layer = L::construct(keygen)?;
+
+        debug!("{}: Handshake complete; circuit created.", logid);
+
         let (layer_fwd, layer_back) = layer.split();
         circ.add_hop(
             supports_flowctrl_1,

@@ -92,6 +92,9 @@ struct ChannelImpl {
 
     /// Logging identifier for this stream.  (Used for logging only.)
     logid: LogId,
+
+    /// Context for allocating unique circuit log identifiers.
+    circ_logid_ctx: logid::CircLogIdContext,
     /*
         /// Validated Ed25519 identity for this peer.
         ed25519_id: Ed25519Identity,
@@ -172,6 +175,7 @@ impl Channel {
             sendctrl,
             sendclosed: Cell::new(Some(sendclosed)),
             logid,
+            circ_logid_ctx: logid::CircLogIdContext::new(),
             /*
             ed25519_id,
             rsa_id,
@@ -238,7 +242,7 @@ impl Channel {
         let (createdsender, createdreceiver) = oneshot::channel::<CreateResponse>();
         let (send_circ_destroy, recv_circ_destroy) = oneshot::channel();
 
-        let (logid, id) = {
+        let (circ_logid, id) = {
             let mut inner = self.inner.lock().await;
             if inner.closed {
                 return Err(Error::ChannelClosed);
@@ -249,13 +253,15 @@ impl Channel {
                 .await
                 .map_err(|_| Error::InternalError("Can't queue circuit closer".into()))?;
             if let Some(circmap) = inner.circmap.upgrade() {
+                let my_logid = inner.logid;
+                let circ_logid = inner.circ_logid_ctx.next(my_logid);
                 let mut cmap = circmap.lock().await;
-                (inner.logid, cmap.add_ent(rng, createdsender, sender)?)
+                (circ_logid, cmap.add_ent(rng, createdsender, sender)?)
             } else {
                 return Err(Error::ChannelClosed);
             }
         };
-        trace!("{}: Circuit ID {} allocated.", logid, id);
+        trace!("{}: Allocated CircID {}", circ_logid, id);
 
         let destroy_handle = CircDestroyHandle::new(id, send_circ_destroy);
 
@@ -265,6 +271,7 @@ impl Channel {
             createdreceiver,
             destroy_handle,
             receiver,
+            circ_logid,
         ))
     }
 }

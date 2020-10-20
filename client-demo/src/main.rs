@@ -215,8 +215,7 @@ fn main() -> Result<()> {
 
         let (pendcirc, reactor) = chan.new_circ(&mut rng).await?;
         async_std::task::spawn(async {
-            let x = reactor.run().await;
-            eprintln!("Reactor exited and said {:?}", x);
+            let _ignore = reactor.run().await;
         });
 
         // let mut circ = pendcirc.create_firsthop_fast(&mut rng).await?;

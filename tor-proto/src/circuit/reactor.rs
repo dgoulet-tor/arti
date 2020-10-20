@@ -8,6 +8,7 @@
 
 use super::streammap::StreamEnt;
 use crate::circuit::celltypes::ClientCircChanMsg;
+use crate::circuit::logid::LogId;
 use crate::circuit::{sendme, streammap};
 use crate::crypto::cell::{HopNum, InboundClientCrypt, InboundClientLayer};
 use crate::{Error, Result};
@@ -22,6 +23,8 @@ use futures::sink::SinkExt;
 use futures::stream::{self, StreamExt};
 
 use std::sync::{Arc, Weak};
+
+use log::{debug, trace};
 
 /// A message telling the reactor to do something.
 pub(super) enum CtrlMsg {
@@ -51,6 +54,19 @@ pub(super) enum CtrlMsg {
         Box<dyn InboundClientLayer + Send>,
         oneshot::Sender<()>,
     ),
+}
+
+impl std::fmt::Debug for CtrlMsg {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        use CtrlMsg::*;
+        match self {
+            Shutdown => write!(f, "Shutdown"),
+            Register(_) => write!(f, "Register(_)"),
+            CloseStream(h, s, _) => write!(f, "CloseStream({:?}, {:?}, _)", h, s),
+            AddStream(h, _, _, _) => write!(f, "AddStream({:?}, _, _, _)", h),
+            AddHop(_, _, _) => write!(f, "AddHop(_, _, _)"),
+        }
+    }
 }
 
 /// Type returned by a oneshot channel for a controlmsg.  For convenience,
@@ -127,6 +143,8 @@ struct ReactorCore {
     crypto_in: InboundClientCrypt,
     /// List of hops state objects used by the reactor
     hops: Vec<InboundHop>,
+    /// An identifier for logging about this reactor's circuit.
+    logid: LogId,
 }
 
 impl Reactor {
@@ -136,11 +154,13 @@ impl Reactor {
         control: mpsc::Receiver<CtrlResult>,
         closeflag: oneshot::Receiver<CtrlMsg>,
         input: mpsc::Receiver<ClientCircChanMsg>,
+        logid: LogId,
     ) -> Self {
         let core = ReactorCore {
             circuit: Arc::downgrade(&circuit),
             crypto_in: InboundClientCrypt::new(),
             hops: Vec::new(),
+            logid,
         };
 
         let mut oneshots = stream::SelectAll::new();
@@ -164,7 +184,9 @@ impl Reactor {
         } else {
             return Err(Error::CircuitClosed);
         }
+        debug!("{}: Running circuit reactor", self.core.logid);
         let result = self.run_impl().await;
+        debug!("{}: Circuit reactor stopped: {:?}", self.core.logid, result);
         if let Some(circ) = self.core.circuit.upgrade() {
             let mut circ = circ.lock().await;
             circ.closed = true;
@@ -209,6 +231,7 @@ impl Reactor {
 
     /// Handle a CtrlMsg other than Shutdown.
     async fn handle_control(&mut self, msg: CtrlMsg) -> Result<()> {
+        trace!("{}: reactor received {:?}", self.core.logid, msg);
         match msg {
             CtrlMsg::Shutdown => panic!(), // was handled in reactor loop.
             CtrlMsg::CloseStream(hop, id, recvwindow) => {
@@ -251,6 +274,12 @@ impl Reactor {
         })?;
 
         let should_send_end = hop.map.terminate(id, window)?;
+        trace!(
+            "{}: Ending stream {}; should_send_end={}",
+            self.core.logid,
+            id,
+            should_send_end
+        );
         // TODO: I am about 80% sure that we only send an END cell if
         // we didn't already get an END cell.  But I should double-check!
         // XXXXM3
