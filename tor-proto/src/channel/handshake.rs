@@ -344,7 +344,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
             return Err(Error::ChanProto("Peer ed25519 id not as expected".into()));
         }
 
-        if pkrsa.to_rsa_identity() != rsa_id {
+        if *peer.rsa_identity() != rsa_id {
             return Err(Error::ChanProto("Peer RSA id not as expected".into()));
         }
 
