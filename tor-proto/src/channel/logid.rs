@@ -57,19 +57,16 @@ mod test {
     use super::*;
     #[test]
     fn chan_logid() {
-        let id0 = LogId::new();
-        let id1 = LogId::new();
-        let id2 = LogId::new();
-        let id3 = LogId::new();
-        let id4 = LogId::new();
+        // make sure nothing else has messed with this.
+        let ids: Vec<LogId> = (0..10).map(|_| LogId::new()).collect();
 
-        assert_eq!(id0.0, 0);
-        assert_eq!(id1.0, 1);
-        assert_eq!(id2.0, 2);
-        assert_eq!(id3.0, 3);
-        assert_eq!(id4.0, 4);
+        // Make sure we got distinct numbers
+        let mut all_nums: Vec<_> = ids.iter().map(|x| x.0).collect();
+        all_nums.sort();
+        all_nums.dedup();
+        assert_eq!(all_nums.len(), ids.len());
 
-        assert_eq!(format!("{}", id3), "Chan 3");
+        assert_eq!(format!("{}", ids[3]), format!("Chan {}", ids[3].0));
     }
 
     #[test]
