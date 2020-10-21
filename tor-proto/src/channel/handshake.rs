@@ -96,6 +96,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
             Some(addr) => debug!("{}: starting Tor handshake with {}", self.logid, addr),
             None => debug!("{}: starting Tor handshake", self.logid),
         }
+        dbg!("A");
         trace!("{}: sending versions", self.logid);
         // Send versions cell
         {
@@ -104,6 +105,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
             self.tls.flush().await?;
         }
 
+        dbg!("B");
         // Get versions cell.
         trace!("{}: waiting for versions", self.logid);
         let their_versions: msg::Versions = {
@@ -121,11 +123,13 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         };
         trace!("{}: received {:?}", self.logid, their_versions);
 
+        dbg!("C");
         // Determine which link protocol we negotiated.
         let link_protocol = their_versions
             .best_shared_link_protocol(LINK_PROTOCOLS)
             .ok_or_else(|| Error::ChanProto("No shared link protocols".into()))?;
         trace!("{}: negotiated version {}", self.logid, link_protocol);
+        dbg!(link_protocol);
 
         // Now we can switch to using a "Framed". We can ignore the
         // AsyncRead/AsyncWrite aspects of the tls, and just treat it
@@ -143,6 +147,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         while let Some(m) = tls.next().await {
             use msg::ChanMsg::*;
             let (_, m) = m?.into_circid_and_msg();
+            dbg!(&m);
             trace!("{}: received a {} cell.", self.logid, m.cmd());
             // trace!("READ: {:?}", m);
             match m {
@@ -374,5 +379,45 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> VerifiedChannel<T> {
             self.ed25519_id,
             self.rsa_id,
         ))
+    }
+}
+
+#[cfg(test)]
+pub(super) mod test {
+    use futures_await_test::async_test;
+    use hex_literal::hex;
+
+    use super::*;
+    use crate::channel::codec::test::MsgBuf;
+    use crate::Result;
+
+    #[async_test]
+    async fn test_connect_ok() -> Result<()> {
+        let mut buf = Vec::new();
+        // versions cell
+        buf.extend_from_slice(&hex!("0000 07 0006 0003 0004 0005")[..]);
+        // certs cell -- no certs in it, but this function doesn't care.
+        buf.extend_from_slice(&hex!("00000000 81 0001 00")[..]);
+        // netinfo cell -- quite minimal.
+        {
+            let len_prev = buf.len();
+            buf.extend_from_slice(
+                &hex!(
+                    "00000000 08 085F9067F7
+                   04 04 7f 00 00 02
+                   01
+                   04 04 7f 00 00 03"
+                )[..],
+            );
+            buf.resize(len_prev + 514, 0);
+        }
+        let mb = MsgBuf::new(&buf[..]);
+
+        let handshake = OutboundClientHandshake::new(mb, None);
+        let unverified = handshake.connect().await?;
+
+        assert_eq!(unverified.link_protocol, 4);
+
+        Ok(())
     }
 }
