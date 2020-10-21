@@ -63,6 +63,15 @@ pub trait Timebound<T>: Sized {
     fn check_valid_now(self) -> Result<T, Self::Error> {
         self.check_valid_at(&time::SystemTime::now())
     }
+
+    /// Unwrap this object if it is valid at the provided time t.
+    /// If no time is provided, check the object at the current time.
+    fn check_valid_at_opt(self, t: Option<time::SystemTime>) -> Result<T, Self::Error> {
+        match t {
+            Some(when) => self.check_valid_at(&when),
+            None => self.check_valid_now(),
+        }
+    }
 }
 
 /// A cryptographically signed object that can be validated without

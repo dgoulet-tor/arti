@@ -203,9 +203,22 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
     /// 'peer_cert' is the x.509 certificate that the peer presented during
     /// its handshake.
     ///
+    /// 'now' can be used for testing to override the current view of the
+    ///
     /// This is a separate function because it's likely to be somewhat
     /// CPU-intensive.
     pub fn check<U: ChanTarget>(self, peer: &U, peer_cert: &[u8]) -> Result<VerifiedChannel<T>> {
+        self.check_internal(peer, peer_cert, None)
+    }
+
+    /// Same as `check`, but allows the caller to override the time with
+    /// respect to which the validitity should be checked.
+    fn check_internal<U: ChanTarget>(
+        self,
+        peer: &U,
+        peer_cert: &[u8],
+        now: Option<std::time::SystemTime>,
+    ) -> Result<VerifiedChannel<T>> {
         use tor_cert::CertType;
         use tor_checkable::*;
         // We need to check the following lines of authentication:
@@ -233,7 +246,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         let (id_sk, id_sk_sig) = id_sk.check_key(&None)?.dangerously_split()?;
         sigs.push(&id_sk_sig);
         let id_sk = id_sk
-            .check_valid_now()
+            .check_valid_at_opt(now)
             .map_err(|_| Error::ChanProto("Certificate expired or not yet valid".into()))?;
 
         // Take the identity key from the identity->signing cert
@@ -382,6 +395,7 @@ pub(super) mod test {
     use super::*;
     use crate::channel::codec::test::MsgBuf;
     use crate::Result;
+    use tor_cell::chancell::msg;
 
     const VERSIONS: &[u8] = &hex!("0000 07 0006 0003 0004 0005");
     // no certificates in this cell, but connect() doesn't care.
@@ -529,5 +543,51 @@ pub(super) mod test {
             format!("{}", err),
             "channel protocol violation: Unexpected cell type CREATE"
         );
+    }
+
+    // not used yet
+    #[allow(unused)]
+    fn make_unverified(certs: msg::Certs) -> UnverifiedChannel<MsgBuf> {
+        let localhost = std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST);
+        let netinfo_cell = msg::Netinfo::for_client(localhost);
+        UnverifiedChannel {
+            link_protocol: 4,
+            tls: futures_codec::Framed::new(MsgBuf::new(&b""[..]), ChannelCodec::new(4)),
+            certs_cell: certs,
+            netinfo_cell,
+            logid: LogId::new(),
+        }
+    }
+
+    struct DummyChanTarget {
+        ed: Ed25519Identity,
+        rsa: RSAIdentity,
+    }
+    impl ChanTarget for DummyChanTarget {
+        fn addrs(&self) -> &[std::net::SocketAddr] {
+            &[]
+        }
+        fn ed_identity(&self) -> &Ed25519Identity {
+            &self.ed
+        }
+        fn rsa_identity(&self) -> &RSAIdentity {
+            &self.rsa
+        }
+    }
+
+    // not used yet
+    #[allow(unused)]
+    fn certs_test(
+        certs: msg::Certs,
+        peer_ed: &[u8],
+        peer_rsa: &[u8],
+        peer_cert: &[u8],
+    ) -> Result<VerifiedChannel<MsgBuf>> {
+        let unver = make_unverified(certs);
+        // XXXXM3 fix this naming inconsistency
+        let ed = Ed25519Identity::from_slice(peer_ed).unwrap();
+        let rsa = RSAIdentity::from_bytes(peer_rsa).unwrap();
+        let chan = DummyChanTarget { ed, rsa };
+        unver.check(&chan, peer_cert)
     }
 }
