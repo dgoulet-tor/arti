@@ -208,15 +208,16 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
     /// This is a separate function because it's likely to be somewhat
     /// CPU-intensive.
     pub fn check<U: ChanTarget>(self, peer: &U, peer_cert: &[u8]) -> Result<VerifiedChannel<T>> {
-        self.check_internal(peer, peer_cert, None)
+        let peer_cert_sha256 = ll::d::Sha256::digest(peer_cert);
+        self.check_internal(peer, &peer_cert_sha256[..], None)
     }
 
-    /// Same as `check`, but allows the caller to override the time with
-    /// respect to which the validitity should be checked.
+    /// Same as `check`, but with a less restrictive interface, for testing
+    /// purposes.
     fn check_internal<U: ChanTarget>(
         self,
         peer: &U,
-        peer_cert: &[u8],
+        peer_cert_sha256: &[u8],
         now: Option<std::time::SystemTime>,
     ) -> Result<VerifiedChannel<T>> {
         use tor_cert::CertType;
@@ -267,11 +268,10 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
             .dangerously_split()?;
         sigs.push(&sk_tls_sig);
         let sk_tls = sk_tls
-            .check_valid_now()
+            .check_valid_at_opt(now)
             .map_err(|_| Error::ChanProto("Certificate expired or not yet valid".into()))?;
 
-        let cert_sha256 = ll::d::Sha256::digest(peer_cert);
-        if &cert_sha256[..] != sk_tls.subject_key().as_bytes() {
+        if peer_cert_sha256 != sk_tls.subject_key().as_bytes() {
             return Err(Error::ChanProto(
                 "Peer cert did not authenticate TLS cert".into(),
             ));
@@ -314,7 +314,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         let rsa_cert = tor_cert::rsa::RSACrosscert::decode(rsa_cert)?
             .check_signature(&pkrsa)
             .map_err(|_| Error::ChanProto("Bad RSA->Ed crosscert signature".into()))?
-            .check_valid_now()
+            .check_valid_at_opt(now)
             .map_err(|_| Error::ChanProto("RSA->Ed crosscert expired or invalid".into()))?;
 
         if !rsa_cert.subject_key_matches(identity_key) {
@@ -391,6 +391,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> VerifiedChannel<T> {
 pub(super) mod test {
     use futures_await_test::async_test;
     use hex_literal::hex;
+    use std::time::{Duration, SystemTime};
 
     use super::*;
     use crate::channel::codec::test::MsgBuf;
@@ -575,19 +576,78 @@ pub(super) mod test {
         }
     }
 
-    // not used yet
-    #[allow(unused)]
+    // Timestamp when the example certificates were all valid.
+    fn cert_timestamp() -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::new(1601143280, 0)
+    }
+
     fn certs_test(
         certs: msg::Certs,
+        when: Option<SystemTime>,
         peer_ed: &[u8],
         peer_rsa: &[u8],
-        peer_cert: &[u8],
+        peer_cert_sha256: &[u8],
     ) -> Result<VerifiedChannel<MsgBuf>> {
         let unver = make_unverified(certs);
         // XXXXM3 fix this naming inconsistency
         let ed = Ed25519Identity::from_slice(peer_ed).unwrap();
         let rsa = RSAIdentity::from_bytes(peer_rsa).unwrap();
         let chan = DummyChanTarget { ed, rsa };
-        unver.check(&chan, peer_cert)
+        unver.check_internal(&chan, peer_cert_sha256, when)
+    }
+
+    // no certs at all!
+    #[test]
+    fn certs_none() {
+        let err = certs_test(
+            msg::Certs::new_empty(),
+            None,
+            &[0_u8; 32],
+            &[0_u8; 20],
+            &[0_u8; 128],
+        )
+        .err()
+        .unwrap();
+        // TODO: this message is ugly and backwards; can it be fixed?
+        assert_eq!(format!("{}", err), "cell encoding error: channel protocol violation: Missing IDENTITY_V_SIGNING certificate");
+    }
+
+    #[test]
+    fn certs_good() {
+        let peer_cert_digest =
+            &hex!("b4fd606b64e4cbd466b8d76cb131069bae6f3aa1878857c9f624e31d77a799b8")[..];
+        let peer_ed = &hex!("dcb604db2034b00fd16986d4adb9d16b21cb4e4457a33dec0f538903683e96e9")[..];
+        let peer_rsa = &hex!("2f1fb49bb332a9eec617e41e911c33fb3890aef3")[..];
+        let mut certs = msg::Certs::new_empty();
+
+        certs.push_cert_body(2.into(), certs::CERT_T2);
+        certs.push_cert_body(5.into(), certs::CERT_T5);
+        certs.push_cert_body(7.into(), certs::CERT_T7);
+        certs.push_cert_body(4.into(), certs::CERT_T4);
+        let res = certs_test(
+            certs,
+            Some(cert_timestamp()),
+            peer_ed,
+            peer_rsa,
+            peer_cert_digest,
+        );
+        let _ = res.unwrap();
+        //assert!(res.is_ok());
+    }
+
+    /// This module has a few certificates to play with. They're taken
+    /// from a chutney network. They match those used in the CERTS
+    /// cell test vector in the tor-cell crate.
+    ///
+    /// The names are taken from the type of the certificate.
+    mod certs {
+        use hex_literal::hex;
+
+        pub const CERT_T2: &[u8] = &hex!("308201B930820122A0030201020208607C28BE6C390943300D06092A864886F70D01010B0500301F311D301B06035504030C147777772E74636A76356B766A646472322E636F6D301E170D3230303831303030303030305A170D3231303831303030303030305A301F311D301B06035504030C147777772E74636A76356B766A646472322E636F6D30819F300D06092A864886F70D010101050003818D0030818902818100D38B1E6CEB946E0DB0751F4CBACE3DCB9688B6C25304227B4710C35AFB73627E50500F5913E158B621802612D1C75827003703338375237552EB3CD3C12F6AB3604E60C1A2D26BB1FBAD206FF023969A90909D6A65A5458A5312C26EBD3A3DAD30302D4515CDCD264146AC18E6FC60A04BD3EC327F04294D96BA5AA25B464C3F0203010001300D06092A864886F70D01010B0500038181003BCE561EA7F95CC00B78AAB5D69573FF301C282A751D4A651921D042F1BECDBA24D918A6D8A5E138DC07BBA0B335478AE37ABD2C93A93932442AE9084329E846170FE0FC4A50AAFC804F311CC3CA4F41D845A7BA5901CBBC3E021E9794AAC70CE1F37B0A951592DB1B64F2B4AFB81AE52DBD9B6FEDE96A5FB8125EB6251EE50A");
+
+        pub const CERT_T4: &[u8] = &hex!("01040006CC2A01F82294B866A31F01FC5D0DA8572850A9B929545C3266558D7D2316E3B74172B00100200400DCB604DB2034B00FD16986D4ADB9D16B21CB4E4457A33DEC0F538903683E96E9FF1A5203FA27F86EF7528D89A0845D2520166E340754FFEA2AAE0F612B7CE5DA094A0236CDAC45034B0B6842C18E7F6B51B93A3CF7E60663B8AD061C30A62602");
+        pub const CERT_T5: &[u8] = &hex!("01050006C98A03B4FD606B64E4CBD466B8D76CB131069BAE6F3AA1878857C9F624E31D77A799B8007173E5F8068431D0D3F5EE16B4C9FFD59DF373E152A87281BAE744AA5FCF72171BF4B27C4E8FC1C6A9FC5CA11058BC49647063D7903CFD9F512F89099B27BC0C");
+
+        pub const CERT_T7: &[u8] = &hex!("DCB604DB2034B00FD16986D4ADB9D16B21CB4E4457A33DEC0F538903683E96E90006DA3A805CF6006F9179066534DE6B45AD47A5C469063EE462762723396DC9F25452A0A52DA3F5087DD239F2A311F6B0D4DFEFF4ABD089DC3D0237A0ABAB19EB2045B91CDCAF04BE0A72D548A27BF2E77BD876ECFE5E1BE622350DA6BF31F6E306ED896488DD5B39409B23FC3EB7B2C9F7328EB18DA36D54D80575899EA6507CCBFCDF1F");
     }
 }
