@@ -567,8 +567,8 @@ fn take_one_netinfo_addr(r: &mut Reader<'_>) -> Result<Option<IpAddr>> {
             (&mut bytes[..]).copy_from_slice(abody);
             Ok(Some(IpAddr::V6(bytes.into())))
         }
-        (0x04, _) => Ok(None), // ignore this? Or call it an error?
-        (0x06, _) => Ok(None), // ignore this, or call it an error?
+        (0x04, _) => Ok(None), // TODO SPEC this is ignored.
+        (0x06, _) => Ok(None), // TODO SPEC this is ignored.
         (_, _) => Ok(None),
     }
 }
@@ -614,6 +614,7 @@ impl Readable for Netinfo {
         let their_addr = take_one_netinfo_addr(r)?.unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
         let mut my_addr = Vec::new();
         let my_n_addrs = r.take_u8()?;
+        dbg!(my_n_addrs);
         for _ in 0..my_n_addrs {
             if let Some(a) = take_one_netinfo_addr(r)? {
                 my_addr.push(a);

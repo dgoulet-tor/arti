@@ -5,15 +5,13 @@
 /// running in a chutney network with "test-network-all".
 use tor_cell::chancell::{msg, ChanCmd};
 
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 
 use hex_literal::hex;
 
 const CELL_SIZE: usize = 509;
 
-/// check whether a cell body encoded in a hex string matches a given message.
-fn test_body(cmd: ChanCmd, s: &str, m: &msg::ChanMsg, pad_to_len: bool) {
-    assert_eq!(cmd, m.cmd());
+fn test_decode(cmd: ChanCmd, s: &str, pad_to_len: bool) -> (Vec<u8>, msg::ChanMsg) {
     let body = {
         let mut s = s.to_string();
         s.retain(|c| !c.is_whitespace());
@@ -25,8 +23,16 @@ fn test_body(cmd: ChanCmd, s: &str, m: &msg::ChanMsg, pad_to_len: bool) {
         body
     };
     let mut r = tor_bytes::Reader::from_slice(&body[..]);
+    let msg = msg::ChanMsg::take(&mut r, cmd).unwrap();
 
-    let decoded = msg::ChanMsg::take(&mut r, cmd).unwrap();
+    (body, msg)
+}
+
+/// check whether a cell body encoded in a hex string matches a given message.
+fn test_body(cmd: ChanCmd, s: &str, m: &msg::ChanMsg, pad_to_len: bool) {
+    assert_eq!(cmd, m.cmd());
+
+    let (body, decoded) = test_decode(cmd, s, pad_to_len);
 
     // This is a bit kludgey: we don't implement PartialEq for
     // messages, but we do implement Debug.  That actually seems a
@@ -229,6 +235,21 @@ fn test_netinfo() {
          06 10 00000000000000000000000000000001",
         &msg::Netinfo::for_relay(0x5f6f859c, localhost_v6, &[localhost, localhost_v6][..]).into(),
     );
+
+    // Bogus addresses get ignored. (hand-generated from above)
+    let v4_unspec = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+    let (_, netinfo) = test_decode(
+        cmd,
+        "5F6F859C 06 09 000000000000000000
+         03
+         04 06 7F0000010000
+         BB 02 FFFF
+         06 10 00000000000000000000000000000001",
+        false,
+    );
+    let expect: msg::ChanMsg =
+        msg::Netinfo::for_relay(0x5f6f859c, v4_unspec, &[localhost_v6][..]).into();
+    assert_eq!(format!("{:?}", netinfo), format!("{:?}", expect));
 }
 
 #[test]
