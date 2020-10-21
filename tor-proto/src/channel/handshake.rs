@@ -96,7 +96,6 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
             Some(addr) => debug!("{}: starting Tor handshake with {}", self.logid, addr),
             None => debug!("{}: starting Tor handshake", self.logid),
         }
-        dbg!("A");
         trace!("{}: sending versions", self.logid);
         // Send versions cell
         {
@@ -105,7 +104,6 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
             self.tls.flush().await?;
         }
 
-        dbg!("B");
         // Get versions cell.
         trace!("{}: waiting for versions", self.logid);
         let their_versions: msg::Versions = {
@@ -123,13 +121,11 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         };
         trace!("{}: received {:?}", self.logid, their_versions);
 
-        dbg!("C");
         // Determine which link protocol we negotiated.
         let link_protocol = their_versions
             .best_shared_link_protocol(LINK_PROTOCOLS)
             .ok_or_else(|| Error::ChanProto("No shared link protocols".into()))?;
         trace!("{}: negotiated version {}", self.logid, link_protocol);
-        dbg!(link_protocol);
 
         // Now we can switch to using a "Framed". We can ignore the
         // AsyncRead/AsyncWrite aspects of the tls, and just treat it
@@ -147,9 +143,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         while let Some(m) = tls.next().await {
             use msg::ChanMsg::*;
             let (_, m) = m?.into_circid_and_msg();
-            dbg!(&m);
             trace!("{}: received a {} cell.", self.logid, m.cmd());
-            // trace!("READ: {:?}", m);
             match m {
                 // Are these technically allowed?
                 Padding(_) | VPadding(_) => (),
@@ -158,7 +152,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
                 // Clients don't care about AuthChallenge
                 AuthChallenge(_) => {
                     if seen_authchallenge {
-                        return Err(Error::ChanProto("Duplicate Authchallenge cell".into()));
+                        return Err(Error::ChanProto("Duplicate authchallenge cell".into()));
                     }
                     seen_authchallenge = true;
                 }
@@ -169,9 +163,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
                     certs = Some(c);
                 }
                 Netinfo(n) => {
-                    if netinfo.is_some() {
-                        return Err(Error::ChanProto("Duplicate certs cell".into()));
-                    }
+                    assert!(netinfo.is_none());
                     netinfo = Some(n);
                     break;
                 }
@@ -391,33 +383,151 @@ pub(super) mod test {
     use crate::channel::codec::test::MsgBuf;
     use crate::Result;
 
+    const VERSIONS: &[u8] = &hex!("0000 07 0006 0003 0004 0005");
+    // no certificates in this cell, but connect() doesn't care.
+    const NOCERTS: &[u8] = &hex!("00000000 81 0001 00");
+    const NETINFO_PREFIX: &[u8] = &hex!(
+        "00000000 08 085F9067F7
+         04 04 7f 00 00 02
+         01
+         04 04 7f 00 00 03"
+    );
+    const AUTHCHALLENGE: &[u8] = &hex!(
+        "00000000 82 0026
+         FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+         FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+         0002 0003 00ff"
+    );
+
+    const VPADDING: &[u8] = &hex!("00000000 80 0003 FF FF FF");
+
+    fn add_padded(buf: &mut Vec<u8>, cell: &[u8]) {
+        let len_prev = buf.len();
+        buf.extend_from_slice(cell);
+        buf.resize(len_prev + 514, 0);
+    }
+    fn add_netinfo(buf: &mut Vec<u8>) {
+        add_padded(buf, NETINFO_PREFIX);
+    }
+
     #[async_test]
-    async fn test_connect_ok() -> Result<()> {
+    async fn connect_ok() -> Result<()> {
         let mut buf = Vec::new();
         // versions cell
-        buf.extend_from_slice(&hex!("0000 07 0006 0003 0004 0005")[..]);
+        buf.extend_from_slice(VERSIONS);
         // certs cell -- no certs in it, but this function doesn't care.
-        buf.extend_from_slice(&hex!("00000000 81 0001 00")[..]);
+        buf.extend_from_slice(NOCERTS);
         // netinfo cell -- quite minimal.
-        {
-            let len_prev = buf.len();
-            buf.extend_from_slice(
-                &hex!(
-                    "00000000 08 085F9067F7
-                   04 04 7f 00 00 02
-                   01
-                   04 04 7f 00 00 03"
-                )[..],
-            );
-            buf.resize(len_prev + 514, 0);
-        }
+        add_netinfo(&mut buf);
         let mb = MsgBuf::new(&buf[..]);
-
         let handshake = OutboundClientHandshake::new(mb, None);
         let unverified = handshake.connect().await?;
 
         assert_eq!(unverified.link_protocol, 4);
 
+        // Try again with an authchallenge cell and some padding.
+        let mut buf = Vec::new();
+        buf.extend_from_slice(VERSIONS);
+        buf.extend_from_slice(NOCERTS);
+        buf.extend_from_slice(VPADDING);
+        buf.extend_from_slice(AUTHCHALLENGE);
+        buf.extend_from_slice(VPADDING);
+        add_netinfo(&mut buf);
+        let mb = MsgBuf::new(&buf[..]);
+        let handshake = OutboundClientHandshake::new(mb, None);
+        let _unverified = handshake.connect().await?;
+
         Ok(())
+    }
+
+    async fn connect_err<T: Into<Vec<u8>>>(input: T) -> Error {
+        let mb = MsgBuf::new(input);
+        let handshake = OutboundClientHandshake::new(mb, None);
+        handshake.connect().await.err().unwrap()
+    }
+
+    #[async_test]
+    async fn connect_badver() {
+        let err = connect_err(&b"HTTP://"[..]).await;
+        assert!(matches!(err, Error::ChanProto(_)));
+        assert_eq!(
+            format!("{}", err),
+            "channel protocol violation: Doesn't seem to be a tor relay"
+        );
+
+        let err = connect_err(&hex!("0000 07 0004 1234 ffff")[..]).await;
+        assert!(matches!(err, Error::ChanProto(_)));
+        assert_eq!(
+            format!("{}", err),
+            "channel protocol violation: No shared link protocols"
+        );
+    }
+
+    #[async_test]
+    async fn connect_cellparse() {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(VERSIONS);
+        // Here's a certs cell that will fail.
+        buf.extend_from_slice(&hex!("00000000 81 0001 01")[..]);
+        let err = connect_err(buf).await;
+        assert!(matches!(
+            err,
+            Error::CellErr(tor_cell::Error::BytesErr(tor_bytes::Error::Truncated))
+        ));
+    }
+
+    #[async_test]
+    async fn connect_duplicates() {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(VERSIONS);
+        buf.extend_from_slice(NOCERTS);
+        buf.extend_from_slice(NOCERTS);
+        add_netinfo(&mut buf);
+        let err = connect_err(buf).await;
+        assert!(matches!(err, Error::ChanProto(_)));
+        assert_eq!(
+            format!("{}", err),
+            "channel protocol violation: Duplicate certs cell"
+        );
+
+        let mut buf = Vec::new();
+        buf.extend_from_slice(VERSIONS);
+        buf.extend_from_slice(NOCERTS);
+        buf.extend_from_slice(AUTHCHALLENGE);
+        buf.extend_from_slice(AUTHCHALLENGE);
+        add_netinfo(&mut buf);
+        let err = connect_err(buf).await;
+        assert!(matches!(err, Error::ChanProto(_)));
+        assert_eq!(
+            format!("{}", err),
+            "channel protocol violation: Duplicate authchallenge cell"
+        );
+    }
+
+    #[async_test]
+    async fn connect_missing_certs() {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(VERSIONS);
+        add_netinfo(&mut buf);
+        let err = connect_err(buf).await;
+        assert!(matches!(err, Error::ChanProto(_)));
+        assert_eq!(
+            format!("{}", err),
+            "channel protocol violation: Missing certs cell"
+        );
+    }
+
+    #[async_test]
+    async fn connect_misplaced_cell() {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(VERSIONS);
+        // here's a create cell.
+        add_padded(&mut buf, &hex!("00000001 01")[..]);
+        let err = connect_err(buf).await;
+        assert!(matches!(err, Error::ChanProto(_)));
+        assert_eq!(
+            format!("{}", err),
+            "channel protocol violation: Unexpected cell type CREATE"
+        );
     }
 }
