@@ -334,6 +334,17 @@ mod tests {
     }
 
     #[test]
+    fn advance_too_far() {
+        let bytes = b"12345";
+        let mut r = Reader::from_slice(&bytes[..]);
+        assert_eq!(r.remaining(), 5);
+        assert_eq!(r.advance(6), Err(Error::Truncated));
+        assert_eq!(r.remaining(), 5);
+        assert_eq!(r.advance(5), Ok(()));
+        assert_eq!(r.remaining(), 0);
+    }
+
+    #[test]
     fn truncate() {
         let bytes = b"Hello universe!!!1!";
         let mut r = Reader::from_slice(&bytes[..]);
