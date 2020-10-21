@@ -239,7 +239,7 @@ impl Reactor {
             }
             CtrlMsg::Register(ch) => self.register(ch),
             CtrlMsg::AddStream(hop, sink, window, sender) => {
-                let hop = self.core.get_hop_mut(hop);
+                let hop = self.core.hop_mut(hop);
                 if let Some(hop) = hop {
                     let r = hop.map.add_ent(sink, window);
                     // XXXX not sure if this is right to ignore
@@ -269,7 +269,7 @@ impl Reactor {
         window: sendme::StreamRecvWindow,
     ) -> Result<()> {
         // Mark the stream as closing.
-        let hop = self.core.get_hop_mut(hopnum).ok_or_else(|| {
+        let hop = self.core.hop_mut(hopnum).ok_or_else(|| {
             Error::InternalError("Tried to close a stream on a hop that wasn't there?".into())
         })?;
 
@@ -345,7 +345,7 @@ impl ReactorCore {
         // send a sendme cell.
         let send_circ_sendme = if c_t_w {
             // XXXXM3 unwrap is yucky.
-            match self.get_hop_mut(hopnum).unwrap().recvwindow.take() {
+            match self.hop_mut(hopnum).unwrap().recvwindow.take() {
                 Some(true) => true,
                 Some(false) => false,
                 None => {
@@ -367,7 +367,7 @@ impl ReactorCore {
             } else {
                 return Err(Error::CircuitClosed);
             }
-            self.get_hop_mut(hopnum).unwrap().recvwindow.put();
+            self.hop_mut(hopnum).unwrap().recvwindow.put();
         }
 
         // Break the message apart into its streamID and message.
@@ -395,7 +395,7 @@ impl ReactorCore {
         }
 
         //XXXXM3 this is still an unwrap, and still risky.
-        let hop = self.get_hop_mut(hopnum).unwrap();
+        let hop = self.hop_mut(hopnum).unwrap();
         match hop.map.get_mut(streamid) {
             Some(StreamEnt::Open(s, w, ref mut dropped)) => {
                 // The stream for this message exists, and is open.
@@ -453,7 +453,7 @@ impl ReactorCore {
     }
 
     /// Return the hop corresponding to `hopnum`, if there is one.
-    fn get_hop_mut(&mut self, hopnum: HopNum) -> Option<&mut InboundHop> {
+    fn hop_mut(&mut self, hopnum: HopNum) -> Option<&mut InboundHop> {
         self.hops.get_mut(Into::<usize>::into(hopnum))
     }
 }

@@ -509,7 +509,7 @@ impl ClientCirc {
 impl ClientCircImpl {
     /// Return a mutable reference to the nth hop of this circuit, if one
     /// exists.
-    fn get_hop_mut(&mut self, hopnum: HopNum) -> Option<&mut CircHop> {
+    fn hop_mut(&mut self, hopnum: HopNum) -> Option<&mut CircHop> {
         self.hops.get_mut(Into::<usize>::into(hopnum))
     }
 
@@ -553,7 +553,7 @@ impl ClientCircImpl {
     async fn handle_sendme(&mut self, hopnum: HopNum, msg: Sendme) -> Result<()> {
         // No need to call "shutdown" on errors in this function;
         // it's called from the reactor task and errors will propagate there.
-        let hop = self.get_hop_mut(hopnum).unwrap(); // XXXX risky
+        let hop = self.hop_mut(hopnum).unwrap(); // XXXX risky
         let auth: Option<[u8; 20]> = match msg.into_tag() {
             Some(v) if v.len() == 20 => {
                 // XXXX ugly code.
