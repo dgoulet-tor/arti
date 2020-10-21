@@ -4,14 +4,14 @@
 //! uses the ed25519 trait and the Signature trait.
 
 use arrayref::array_ref;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Debug, Display, Formatter};
 use subtle::*;
 
 pub use ed25519_dalek::{ExpandedSecretKey, Keypair, PublicKey, SecretKey, Signature};
 
 /// A relay's identity, as an unchecked, unvalidated Ed25519 key.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Ed25519Identity {
     /// A raw unchecked Ed25519 public key.
     id: [u8; 32],
@@ -77,6 +77,13 @@ impl TryFrom<&Ed25519Identity> for PublicKey {
     type Error = ed25519_dalek::SignatureError;
     fn try_from(id: &Ed25519Identity) -> Result<PublicKey, Self::Error> {
         PublicKey::from_bytes(&id.id[..])
+    }
+}
+
+impl TryFrom<Ed25519Identity> for PublicKey {
+    type Error = ed25519_dalek::SignatureError;
+    fn try_from(id: Ed25519Identity) -> Result<PublicKey, Self::Error> {
+        (&id).try_into()
     }
 }
 
