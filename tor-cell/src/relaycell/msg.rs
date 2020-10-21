@@ -55,7 +55,7 @@ pub enum RelayMsg {
 /// Internal: traits in common different cell bodies.
 pub trait Body: Sized {
     /// Convert this type into a RelayMsg, wrapped appropriate.
-    fn as_message(self) -> RelayMsg;
+    fn into_message(self) -> RelayMsg;
     /// Decode a relay cell body from a provided reader.
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self>;
     /// Encode the body of this cell into the end of a vec.
@@ -64,7 +64,7 @@ pub trait Body: Sized {
 
 impl<B: Body> From<B> for RelayMsg {
     fn from(b: B) -> RelayMsg {
-        b.as_message()
+        b.into_message()
     }
 }
 
@@ -164,7 +164,7 @@ impl Begin {
 }
 
 impl Body for Begin {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::Begin(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
@@ -247,7 +247,7 @@ impl AsRef<[u8]> for Data {
 }
 
 impl Body for Data {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::Data(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
@@ -330,7 +330,7 @@ impl End {
     }
 }
 impl Body for End {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::End(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
@@ -397,7 +397,7 @@ impl Connected {
     }
 }
 impl Body for Connected {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::Connected(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
@@ -460,7 +460,7 @@ impl Sendme {
     }
 }
 impl Body for Sendme {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::Sendme(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
@@ -523,7 +523,7 @@ impl Extend {
     }
 }
 impl Body for Extend {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::Extend(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
@@ -559,7 +559,7 @@ impl Extended {
     }
 }
 impl Body for Extended {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::Extended(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
@@ -599,7 +599,7 @@ impl Extend2 {
 }
 
 impl Body for Extend2 {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::Extend2(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
@@ -645,7 +645,7 @@ impl Extended2 {
     }
 }
 impl Body for Extended2 {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::Extended2(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
@@ -675,7 +675,7 @@ impl Truncated {
     }
 }
 impl Body for Truncated {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::Truncated(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
@@ -726,7 +726,7 @@ impl Resolve {
     }
 }
 impl Body for Resolve {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::Resolve(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
@@ -873,7 +873,7 @@ impl Resolved {
     }
 }
 impl Body for Resolved {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::Resolved(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
@@ -925,7 +925,7 @@ impl Unrecognized {
 }
 
 impl Body for Unrecognized {
-    fn as_message(self) -> RelayMsg {
+    fn into_message(self) -> RelayMsg {
         RelayMsg::Unrecognized(self)
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {

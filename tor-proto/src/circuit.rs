@@ -244,7 +244,7 @@ impl ClientCirc {
         // Cloning linkspecs is only necessary because of the log
         // below. Would be nice to fix that.
         let extend_msg = Extend2::new(linkspecs.clone(), handshake_id, msg);
-        let cell = RelayCell::new(0.into(), extend_msg.as_message());
+        let cell = RelayCell::new(0.into(), extend_msg.into_message());
 
         // We'll be waiting for an EXTENDED2 cell; install the handler.
         let receiver = self.register_meta_handler().await?;

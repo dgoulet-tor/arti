@@ -9,7 +9,7 @@ use caret::caret_int;
 /// Trait for the 'bodies' of channel messages.
 pub trait Body: Readable {
     /// Convert this type into a ChanMsg, wrapped as appropriate.
-    fn as_message(self) -> ChanMsg;
+    fn into_message(self) -> ChanMsg;
     /// Consume this message and encode its body onto `w`.
     ///
     /// Does not encode anything _but_ the cell body, and does not pad
@@ -172,7 +172,7 @@ impl Default for Padding {
     }
 }
 impl Body for Padding {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::Padding(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, _w: &mut W) {}
@@ -198,7 +198,7 @@ impl VPadding {
     }
 }
 impl Body for VPadding {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::VPadding(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -238,7 +238,7 @@ macro_rules! fixed_len {
             }
         }
         impl Body for $name {
-            fn as_message(self) -> ChanMsg {
+            fn into_message(self) -> ChanMsg {
                 ChanMsg::$name(self)
             }
             fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -314,7 +314,7 @@ pub struct Create2 {
     handshake: Vec<u8>,
 }
 impl Body for Create2 {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::Create2(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -370,7 +370,7 @@ impl Created2 {
     }
 }
 impl Body for Created2 {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::Created2(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -439,7 +439,7 @@ impl std::fmt::Debug for Relay {
     }
 }
 impl Body for Relay {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::Relay(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -471,7 +471,7 @@ impl Destroy {
     }
 }
 impl Body for Destroy {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::Destroy(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -595,7 +595,7 @@ impl Netinfo {
     }
 }
 impl Body for Netinfo {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::Netinfo(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -682,7 +682,7 @@ impl Versions {
     }
 }
 impl Body for Versions {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::Versions(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -714,7 +714,7 @@ pub struct PaddingNegotiate {
     ito_high_ms: u16,
 }
 impl Body for PaddingNegotiate {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::PaddingNegotiate(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -830,7 +830,7 @@ impl Certs {
 }
 
 impl Body for Certs {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::Certs(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -885,7 +885,7 @@ impl AuthChallenge {
 }
 
 impl Body for AuthChallenge {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::AuthChallenge(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -936,7 +936,7 @@ impl Authenticate {
     }
 }
 impl Body for Authenticate {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::Authenticate(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -972,7 +972,7 @@ impl Authorize {
     }
 }
 impl Body for Authorize {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::Authorize(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -1020,7 +1020,7 @@ impl Unrecognized {
     }
 }
 impl Body for Unrecognized {
-    fn as_message(self) -> ChanMsg {
+    fn into_message(self) -> ChanMsg {
         ChanMsg::Unrecognized(self)
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
@@ -1038,7 +1038,7 @@ impl Readable for Unrecognized {
 
 impl<B: Body> From<B> for ChanMsg {
     fn from(body: B) -> Self {
-        body.as_message()
+        body.into_message()
     }
 }
 
@@ -1049,7 +1049,7 @@ macro_rules! msg_into_cell {
             fn from(body: $body) -> super::ChanCell {
                 super::ChanCell {
                     circid: 0.into(),
-                    msg: body.as_message(),
+                    msg: body.into_message(),
                 }
             }
         }
