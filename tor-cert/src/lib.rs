@@ -347,11 +347,14 @@ impl Ed25519Cert {
         }
     */
 
-    /// Try to decode a certificate from a byte slice, and check its
-    /// signature.
+    /// Try to decode a certificate from a byte slice.
     ///
     /// This function returns an error if the byte slice is not
     /// completely exhausted.
+    ///
+    /// Note that the resulting KeyUnknownCertificate is not checked
+    /// for validity at all: you will need to provide it with an expected
+    /// signing key, then check it for timeliness and well-signedness.
     pub fn decode(cert: &[u8]) -> Result<KeyUnknownCert> {
         let mut r = Reader::from_slice(cert);
         let v = r.take_u8()?;
