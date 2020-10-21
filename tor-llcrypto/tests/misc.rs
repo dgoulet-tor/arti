@@ -1,5 +1,4 @@
 use hex_literal::hex;
-/// Misc
 use tor_llcrypto as ll;
 
 use std::convert::TryInto;
@@ -36,4 +35,43 @@ fn test_ed25519_identity() {
     );
 
     assert_eq!(ex3.as_bytes(), &example_key[..]);
+}
+
+#[test]
+fn batch_verify() {
+    use ll::pk::ed25519::*;
+    use rand::RngCore;
+    use signature::Signer;
+
+    let mut rng = rand::thread_rng();
+    let mut sigs = Vec::new();
+    for _ in 0..3 {
+        let kp = Keypair::generate(&mut rng);
+
+        let mut bytes = [0u8; 128];
+        rng.fill_bytes(&mut bytes[..]);
+
+        let sig = kp.sign(&bytes[..]);
+
+        let val = ValidatableEd25519Signature::new(kp.public, sig, &bytes[..]);
+
+        sigs.push(val);
+    }
+
+    let sigrefs: Vec<_> = sigs.iter().collect();
+
+    for n in 0..=3 {
+        assert!(validate_batch(&sigrefs[0..n]));
+    }
+
+    // Now add a junk signature.
+    let kp = Keypair::generate(&mut rng);
+    let sig = kp.sign(&b"Apples"[..]);
+    sigs.push(ValidatableEd25519Signature::new(
+        kp.public,
+        sig,
+        &b"Oranges!"[..],
+    ));
+    let sigrefs: Vec<_> = sigs.iter().collect();
+    assert!(!validate_batch(&sigrefs[..]));
 }
