@@ -51,3 +51,35 @@ impl CircLogIdContext {
         crate::circuit::LogId::new(logid.0, circ_logid)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn chan_logid() {
+        let id0 = LogId::new();
+        let id1 = LogId::new();
+        let id2 = LogId::new();
+        let id3 = LogId::new();
+        let id4 = LogId::new();
+
+        assert_eq!(id0.0, 0);
+        assert_eq!(id1.0, 1);
+        assert_eq!(id2.0, 2);
+        assert_eq!(id3.0, 3);
+        assert_eq!(id4.0, 4);
+
+        assert_eq!(format!("{}", id3), "Chan 3");
+    }
+
+    #[test]
+    fn chan_circid() {
+        let chan_id99 = LogId(99);
+        let mut ctx = CircLogIdContext::new();
+
+        let _id0 = ctx.next(chan_id99);
+        let _id1 = ctx.next(chan_id99);
+        let id2 = ctx.next(chan_id99);
+        assert_eq!(format!("{}", id2), "Circ 99.2");
+    }
+}

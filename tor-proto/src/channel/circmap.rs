@@ -119,6 +119,7 @@ impl CircMap {
 
     /// See whether 'id' is an opening circuit.  If so, mark it "open" and
     /// return a oneshot::Sender that is waiting for its create cell.
+    // XXXXM3 this should return a Result, not an option.
     pub(super) fn advance_from_opening(
         &mut self,
         id: CircID,
@@ -144,4 +145,73 @@ impl CircMap {
     }
     // TODO: Eventually if we want relay support, we'll need to support
     // circuit IDs chosen by somebody else. But for now, we don't need those.
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use futures::channel::{mpsc, oneshot};
+
+    #[test]
+    fn circmap_basics() {
+        let mut map_low = CircMap::new(CircIDRange::Low);
+        let mut map_high = CircMap::new(CircIDRange::High);
+        let mut ids_low: Vec<CircID> = Vec::new();
+        let mut ids_high: Vec<CircID> = Vec::new();
+        let mut rng = rand::thread_rng();
+
+        assert!(map_low.get_mut(CircID::from(77)).is_none());
+
+        for _ in 0..128 {
+            let (csnd, _) = oneshot::channel();
+            let (snd, _) = mpsc::channel(8);
+            let id_low = map_low.add_ent(&mut rng, csnd, snd).unwrap();
+            assert!(u32::from(id_low) > 0);
+            assert!(u32::from(id_low) < 0x80000000);
+            assert!(ids_low.iter().find(|x| **x == id_low).is_none());
+            ids_low.push(id_low);
+
+            assert!(matches!(
+                map_low.get_mut(id_low),
+                Some(&mut CircEnt::Opening(_, _))
+            ));
+
+            let (csnd, _) = oneshot::channel();
+            let (snd, _) = mpsc::channel(8);
+            let id_high = map_high.add_ent(&mut rng, csnd, snd).unwrap();
+            assert!(u32::from(id_high) >= 0x80000000);
+            assert!(ids_high.iter().find(|x| **x == id_high).is_none());
+            ids_high.push(id_high);
+        }
+
+        // Test remove
+        assert!(map_low.get_mut(ids_low[0]).is_some());
+        map_low.remove(ids_low[0]);
+        assert!(map_low.get_mut(ids_low[0]).is_none());
+
+        // Test advance_from_opening.
+
+        // Good case.
+        assert!(map_high.get_mut(ids_high[0]).is_some());
+        assert!(matches!(
+            map_high.get_mut(ids_high[0]),
+            Some(&mut CircEnt::Opening(_, _))
+        ));
+        let adv = map_high.advance_from_opening(ids_high[0]);
+        assert!(adv.is_some());
+        assert!(matches!(
+            map_high.get_mut(ids_high[0]),
+            Some(&mut CircEnt::Open(_))
+        ));
+
+        // Can't double-advance.
+        let adv = map_high.advance_from_opening(ids_high[0]);
+        assert!(adv.is_none());
+
+        // Can't advance an entry that is not there.  We know "77"
+        // can't be in map_high, since we only added high circids to
+        // it.
+        let adv = map_high.advance_from_opening(77.into());
+        assert!(adv.is_none());
+    }
 }
