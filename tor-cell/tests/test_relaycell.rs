@@ -1,6 +1,7 @@
 // Tests for encoding/decoding relay messags into relay cell bodies.
 
-use tor_cell::relaycell::{msg, msg::RelayMsg, RelayCell, StreamID};
+use tor_bytes::Error;
+use tor_cell::relaycell::{msg, msg::RelayMsg, RelayCell, RelayCmd, StreamID};
 
 const CELL_BODY_LEN: usize = 509;
 
@@ -59,4 +60,40 @@ fn test_cells() {
         0x9999.into(),
         msg::Data::new(&b"need-to-know"[..]).into(),
     );
+
+    // length too big: 0x1f3 is one byte too many.
+    let m = decode("02 0000 9999 12345678 01f3 6e6565642d746f2d6b6e6f77 00000000");
+    assert_eq!(
+        RelayCell::decode(m).err(),
+        Some(Error::BadMessage("Insufficient data in relay cell"))
+    );
+
+    // check accessors.
+    let m = decode("02 0000 9999 12345678 01f2 6e6565642d746f2d6b6e6f77 00000000");
+    let c = RelayCell::decode(m).unwrap();
+    assert_eq!(c.cmd(), RelayCmd::from(2));
+    assert_eq!(c.msg().cmd(), RelayCmd::from(2));
+    let (s, _) = c.into_streamid_and_msg();
+    assert_eq!(s, StreamID::from(0x9999));
+}
+
+#[test]
+fn test_streamid() {
+    let zero: StreamID = 0.into();
+    let two: StreamID = 2.into();
+
+    assert!(zero.is_zero());
+    assert!(!two.is_zero());
+
+    assert_eq!(format!("{}", zero), "0");
+    assert_eq!(format!("{}", two), "2");
+
+    assert_eq!(u16::from(zero), 0_u16);
+    assert_eq!(u16::from(two), 2_u16);
+
+    assert!(RelayCmd::DATA.accepts_streamid_val(two));
+    assert!(!RelayCmd::DATA.accepts_streamid_val(zero));
+
+    assert!(RelayCmd::EXTEND2.accepts_streamid_val(zero));
+    assert!(!RelayCmd::EXTEND2.accepts_streamid_val(two));
 }

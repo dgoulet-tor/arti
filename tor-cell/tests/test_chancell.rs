@@ -2,7 +2,7 @@
 //
 // Reminder: you can think of a cell as an message plus a circuitid.
 
-use tor_cell::chancell::{codec, msg, ChanCell, CircID};
+use tor_cell::chancell::{codec, msg, ChanCell, ChanCmd, CircID};
 use tor_cell::Error;
 
 use bytes::BytesMut;
@@ -79,6 +79,25 @@ fn test_simple_cells() {
         msg::Relay::new(b"for a code called peacetime").into(),
         0x20201122.into(),
     );
+
+    // Now try some accessors.
+    let m = decode(
+        "20201122 03 666f72206120636f64652063616c6c656420706561636574696d65",
+        true,
+    );
+    let cell = {
+        let mut bm = BytesMut::new();
+        bm.extend_from_slice(&m);
+        codec::ChannelCodec::new(4)
+            .decode_cell(&mut bm)
+            .unwrap()
+            .unwrap()
+    };
+    assert_eq!(cell.circid(), CircID::from(0x20201122));
+    assert_eq!(cell.msg().cmd(), ChanCmd::RELAY);
+    let (id, msg) = cell.into_circid_and_msg();
+    assert_eq!(id, CircID::from(0x20201122));
+    assert_eq!(msg.cmd(), ChanCmd::RELAY);
 }
 
 fn short_cell(body: &str) {
