@@ -190,13 +190,14 @@ where
     pub async fn put(&mut self, tag: Option<T>) -> Option<u16> {
         let mut w = self.w.lock().await;
 
-        match (w.tags.pop_front(), tag) {
-            (Some(t), Some(tag)) if t == tag => {} // this is the right tag.
-            (Some(_), None) => {}                  // didn't need a tag.
+        match (w.tags.front(), tag) {
+            (Some(t), Some(tag)) if t == &tag => {} // this is the right tag.
+            (Some(_), None) => {}                   // didn't need a tag.
             _ => {
                 return None;
             } // Bad tag or unexpected sendme.
         }
+        w.tags.pop_front();
 
         let v = w.window.checked_add(P::increment())?;
         w.window = v;
@@ -235,6 +236,7 @@ impl<P: WindowParams> RecvWindow<P> {
     ///
     /// Returns None if we should not have sent the cell, and we just
     /// violated the window.
+    // TODO: XXXXM3: This should use Result, not Option.
     #[must_use]
     pub fn take(&mut self) -> Option<bool> {
         let v = self.window.checked_sub(1);
@@ -261,7 +263,7 @@ impl<P: WindowParams> RecvWindow<P> {
         }
     }
 
-    /// Called when we've just send a SENDME.
+    /// Called when we've just sent a SENDME.
     pub fn put(&mut self) {
         self.window = self.window.checked_add(P::increment()).unwrap();
     }
@@ -275,4 +277,132 @@ pub(crate) fn msg_counts_towards_windows(msg: &RelayMsg) -> bool {
 /// Return true if this message is counted by flow-control windows.
 pub(crate) fn cell_counts_towards_windows(cell: &RelayCell) -> bool {
     msg_counts_towards_windows(cell.msg())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use futures::FutureExt;
+    use futures_await_test::async_test;
+    use tor_cell::relaycell::{msg, RelayCell};
+
+    #[test]
+    fn what_counts() {
+        let m = msg::Begin::new("www.torproject.org", 443, 0)
+            .unwrap()
+            .into();
+        assert!(!msg_counts_towards_windows(&m));
+        assert!(!cell_counts_towards_windows(&RelayCell::new(77.into(), m)));
+
+        let m = msg::Data::new(&b"Education is not a prerequisite to political control-political control is the cause of popular education."[..]).into(); // Du Bois
+        assert!(msg_counts_towards_windows(&m));
+        assert!(cell_counts_towards_windows(&RelayCell::new(128.into(), m)));
+    }
+
+    #[test]
+    fn recvwindow() {
+        let mut w: RecvWindow<StreamParams> = RecvWindow::new(500);
+
+        for _ in 0..49 {
+            assert_eq!(w.take(), Some(false));
+        }
+        assert_eq!(w.take(), Some(true));
+        assert_eq!(w.window, 450);
+
+        assert!(w.decrement_n(123).is_ok());
+        assert_eq!(w.window, 327);
+
+        w.put();
+        assert_eq!(w.window, 377);
+
+        // failing decrement.
+        assert!(w.decrement_n(400).is_err());
+        // failing take.
+        assert!(w.decrement_n(377).is_ok());
+        assert_eq!(w.take(), None);
+    }
+
+    fn new_sendwindow() -> SendWindow<CircParams, &'static str> {
+        SendWindow::new(1000)
+    }
+
+    #[async_test]
+    async fn sendwindow_basic() {
+        let mut w = new_sendwindow();
+
+        let n = w.take(&"Hello").await;
+        assert_eq!(n, 999);
+        for _ in 0_usize..98 {
+            w.take(&"world").await;
+        }
+        assert_eq!(w.w.lock().await.window, 901);
+        assert_eq!(w.w.lock().await.tags.len(), 0);
+
+        let n = w.take(&"and").await;
+        assert_eq!(n, 900);
+        assert_eq!(w.w.lock().await.tags.len(), 1);
+        assert_eq!(w.w.lock().await.tags[0], "and");
+
+        let n = w.take(&"goodbye").await;
+        assert_eq!(n, 899);
+        assert_eq!(w.w.lock().await.tags.len(), 1);
+
+        // Try putting a good tag.
+        let n = w.put(Some(&"and")).await;
+        assert_eq!(n, Some(999));
+        assert_eq!(w.w.lock().await.tags.len(), 0);
+
+        for _ in 0_usize..300 {
+            w.take(&"dreamland").await;
+        }
+        assert_eq!(w.w.lock().await.tags.len(), 3);
+
+        // Put without a tag.
+        let n = w.put(None).await;
+        assert_eq!(n, Some(799));
+        assert_eq!(w.w.lock().await.tags.len(), 2);
+    }
+
+    #[async_test]
+    async fn sendwindow_bad_put() {
+        let mut w = new_sendwindow();
+        for _ in 0_usize..250 {
+            w.take(&"correct").await;
+        }
+
+        // wrong tag: won't work.
+        assert_eq!(w.w.lock().await.window, 750);
+        let n = w.put(Some(&"incorrect")).await;
+        assert!(n.is_none());
+
+        let n = w.put(Some(&"correct")).await;
+        assert_eq!(n, Some(850));
+        dbg!(&w.w.lock().await.tags);
+        let n = w.put(Some(&"correct")).await;
+        assert_eq!(n, Some(950));
+
+        // no tag expected: won't work.
+        let n = w.put(Some(&"correct")).await;
+        assert_eq!(n, None);
+        assert_eq!(w.w.lock().await.window, 950);
+
+        let n = w.put(None).await;
+        assert_eq!(n, None);
+        assert_eq!(w.w.lock().await.window, 950);
+    }
+
+    #[async_test]
+    async fn sendwindow_blocking() {
+        let mut w = new_sendwindow();
+        for _ in 0_usize..1000 {
+            w.take(&"here a string").await;
+        }
+        assert_eq!(w.w.lock().await.window, 0);
+
+        // This is going to block -- make sure it doesn't say it's ready.
+        let ready = w.take(&"there a string").now_or_never();
+        assert!(ready.is_none());
+
+        // TODO: test that this actually wakes up when somebody else says "put".
+    }
 }
