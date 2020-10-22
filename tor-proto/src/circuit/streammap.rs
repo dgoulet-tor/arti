@@ -157,3 +157,54 @@ impl StreamMap {
     // TODO: Eventually if we want relay support, we'll need to support
     // stream IDs chosen by somebody else. But for now, we don't need those.
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::circuit::sendme::{StreamRecvWindow, StreamSendWindow};
+
+    #[test]
+    fn streammap_basics() -> Result<()> {
+        let mut map = StreamMap::new();
+        let mut next_id = map.next_stream_id;
+        let mut ids = Vec::new();
+
+        // Try add_ent
+        for _ in 0..128 {
+            let (sink, _) = mpsc::channel(2);
+            let id = map.add_ent(sink, StreamSendWindow::new(500))?;
+            let expect_id: StreamID = next_id.into();
+            assert_eq!(expect_id, id);
+            next_id += 1;
+            ids.push(id);
+        }
+
+        // Test get_mut.
+        let nonesuch_id = next_id.into();
+        assert!(matches!(
+            map.get_mut(ids[0]),
+            Some(StreamEnt::Open(_, _, _))
+        ));
+        assert!(map.get_mut(nonesuch_id).is_none());
+
+        // Test end_received
+        assert!(map.end_received(nonesuch_id).is_err());
+        assert!(map.end_received(ids[1]).is_ok());
+        assert!(matches!(map.get_mut(ids[1]), Some(StreamEnt::EndReceived)));
+        assert!(map.end_received(ids[1]).is_err());
+
+        // Test terminate
+        let window = StreamRecvWindow::new(25);
+        assert!(map.terminate(nonesuch_id, window.clone()).is_err());
+        assert_eq!(map.terminate(ids[2], window.clone()).unwrap(), true); // we should send an end.
+        assert!(matches!(map.get_mut(ids[2]), Some(StreamEnt::EndSent(_))));
+        assert_eq!(map.terminate(ids[1], window.clone()).unwrap(), false); // we should not send an end.
+        assert!(matches!(map.get_mut(ids[1]), None));
+
+        // Try receving an end after a terminate.
+        assert!(map.end_received(ids[2]).is_ok());
+        assert!(matches!(map.get_mut(ids[2]), None));
+
+        Ok(())
+    }
+}
