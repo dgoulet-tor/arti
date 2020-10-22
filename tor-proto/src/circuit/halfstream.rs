@@ -53,7 +53,7 @@ impl HalfStream {
             RelayMsg::Data(_) => {
                 if self.recvw.take().is_none() {
                     Err(Error::CircProto(
-                        "Impossibly many cells sent to a closed stream!".into(),
+                        "Too many cells sent to a closed stream!".into(),
                     ))
                 } else {
                     Ok(())
@@ -77,5 +77,83 @@ impl HalfStream {
                 msg.cmd()
             ))),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::circuit::sendme::{StreamRecvWindow, StreamSendWindow};
+    use futures_await_test::async_test;
+    use tor_cell::relaycell::msg;
+
+    #[async_test]
+    async fn halfstream_sendme() {
+        let mut sendw = StreamSendWindow::new(101);
+        sendw.take(&()).await; // Make sure that it will accept one sendme.
+
+        let mut hs = HalfStream::new(sendw, StreamRecvWindow::new(20), true);
+
+        // one sendme is fine
+        let m = msg::Sendme::new_empty().into();
+        assert!(hs.handle_msg(&m).await.is_ok());
+        // but no more were expected!
+        let e = hs.handle_msg(&m).await.err().unwrap();
+        assert_eq!(
+            format!("{}", e),
+            "circuit protocol violation: Too many sendmes on a closed stream!"
+        );
+    }
+
+    fn hs_new() -> HalfStream {
+        HalfStream::new(StreamSendWindow::new(20), StreamRecvWindow::new(20), true)
+    }
+
+    #[async_test]
+    async fn halfstream_data() {
+        let mut hs = hs_new();
+
+        // 20 data cells are okay.
+        let m = msg::Data::new(&b"this offer is unrepeatable"[..]).into();
+        for _ in 0_u8..20 {
+            assert!(hs.handle_msg(&m).await.is_ok());
+        }
+
+        // But one more is a protocol violation.
+        let e = hs.handle_msg(&m).await.err().unwrap();
+        assert_eq!(
+            format!("{}", e),
+            "circuit protocol violation: Too many cells sent to a closed stream!"
+        );
+    }
+
+    #[async_test]
+    async fn halfstream_connected() {
+        let mut hs = hs_new();
+        // We were told to accept a connected, so we'll acccept one
+        // and no more.
+        let m = msg::Connected::new_empty().into();
+        assert!(hs.handle_msg(&m).await.is_ok());
+        assert!(hs.handle_msg(&m).await.is_err());
+
+        // If we try that again with connnected_ok == false, we won't
+        // accept any.
+        let mut hs = HalfStream::new(StreamSendWindow::new(20), StreamRecvWindow::new(20), false);
+        let e = hs.handle_msg(&m).await.err().unwrap();
+        assert_eq!(
+            format!("{}", e),
+            "circuit protocol violation: Bad CONNECTED cell on a closed stream!"
+        );
+    }
+
+    #[async_test]
+    async fn halfstream_other() {
+        let mut hs = hs_new();
+        let m = msg::Extended2::new(Vec::new()).into();
+        let e = hs.handle_msg(&m).await.err().unwrap();
+        assert_eq!(
+            format!("{}", e),
+            "circuit protocol violation: Bad EXTENDED2 cell on a closed stream!"
+        );
     }
 }
