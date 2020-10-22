@@ -35,6 +35,16 @@ pub(super) enum StreamEnt {
     EndSent(HalfStream),
 }
 
+/// Return value to indicate whether or not we send an END cell upon
+/// terminating a given stream.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub(super) enum ShouldSendEnd {
+    /// An END cell should be sent.
+    Send,
+    /// An END cell should not be sent.
+    DontSend,
+}
+
 /// A map from stream IDs to stream entries. Each circuit has one for each
 /// hop.
 pub(super) struct StreamMap {
@@ -128,7 +138,8 @@ impl StreamMap {
         &mut self,
         id: StreamID,
         mut recvw: sendme::StreamRecvWindow,
-    ) -> Result<bool> {
+    ) -> Result<ShouldSendEnd> {
+        use ShouldSendEnd::*;
         // TODO: can we refactor this to use HashMap::Entry?
         let old = self.m.get(&id);
         match old {
@@ -137,7 +148,7 @@ impl StreamMap {
             )),
             Some(StreamEnt::EndReceived) => {
                 self.m.remove(&id);
-                Ok(false)
+                Ok(DontSend)
             }
             Some(StreamEnt::Open(_, sendw, n)) => {
                 recvw.decrement_n(*n)?;
@@ -146,7 +157,7 @@ impl StreamMap {
                 let connected_ok = true;
                 let halfstream = HalfStream::new(sendw.new_ref(), recvw, connected_ok);
                 self.m.insert(id, StreamEnt::EndSent(halfstream));
-                Ok(true)
+                Ok(Send)
             }
             Some(StreamEnt::EndSent(_)) => {
                 panic!("Hang on! We're sending an END on a stream where we alerady sent an END‽");
@@ -196,9 +207,15 @@ mod test {
         // Test terminate
         let window = StreamRecvWindow::new(25);
         assert!(map.terminate(nonesuch_id, window.clone()).is_err());
-        assert_eq!(map.terminate(ids[2], window.clone()).unwrap(), true); // we should send an end.
+        assert_eq!(
+            map.terminate(ids[2], window.clone()).unwrap(),
+            ShouldSendEnd::Send
+        );
         assert!(matches!(map.get_mut(ids[2]), Some(StreamEnt::EndSent(_))));
-        assert_eq!(map.terminate(ids[1], window.clone()).unwrap(), false); // we should not send an end.
+        assert_eq!(
+            map.terminate(ids[1], window.clone()).unwrap(),
+            ShouldSendEnd::DontSend
+        );
         assert!(matches!(map.get_mut(ids[1]), None));
 
         // Try receving an end after a terminate.

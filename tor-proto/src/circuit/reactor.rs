@@ -6,7 +6,7 @@
 //! TODO: perhaps this should share code with channel::reactor; perhaps
 //! it should just not exist.
 
-use super::streammap::StreamEnt;
+use super::streammap::{ShouldSendEnd, StreamEnt};
 use crate::circuit::celltypes::ClientCircChanMsg;
 use crate::circuit::logid::LogId;
 use crate::circuit::{sendme, streammap};
@@ -275,7 +275,7 @@ impl Reactor {
 
         let should_send_end = hop.map.terminate(id, window)?;
         trace!(
-            "{}: Ending stream {}; should_send_end={}",
+            "{}: Ending stream {}; should_send_end={:?}",
             self.core.logid,
             id,
             should_send_end
@@ -283,7 +283,7 @@ impl Reactor {
         // TODO: I am about 80% sure that we only send an END cell if
         // we didn't already get an END cell.  But I should double-check!
         // XXXXM3
-        if should_send_end {
+        if should_send_end == ShouldSendEnd::Send {
             let end_cell = RelayCell::new(id, End::new_misc().into());
             if let Some(circ) = self.core.circuit.upgrade() {
                 let mut circ = circ.lock().await;
