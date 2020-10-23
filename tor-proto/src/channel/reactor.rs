@@ -66,12 +66,7 @@ where
     /// A Stream from which we can read ChanCells.  This should be backed
     /// by a TLS connection.
     input: stream::Fuse<SplitStream<CellFrame<T>>>,
-    /// The reactorcore object that knows how to handle cells.
-    core: ReactorCore,
-}
 
-/// This is a separate; we use it when handling cells.
-struct ReactorCore {
     // TODO: This lock is used pretty asymmetrically.  The reactor
     // task needs to use the circmap all the time, whereas other tasks
     // only need the circmap when dealing with circuit creation.
@@ -104,26 +99,22 @@ where
         input: SplitStream<CellFrame<T>>,
         logid: LogId,
     ) -> Self {
-        let core = ReactorCore {
-            channel: Arc::downgrade(&channel),
-            circs: circmap,
-            logid,
-        };
-
         let mut oneshots = stream::SelectAll::new();
         oneshots.push(stream::once(closeflag));
         let control = stream::select(control, oneshots);
         Reactor {
             control: control.fuse(),
             input: input.fuse(),
-            core,
+            channel: Arc::downgrade(&channel),
+            circs: circmap,
+            logid,
         }
     }
 
     /// Launch the reactor, and run until the channel closes or we
     /// encounter an error.
     pub async fn run(mut self) -> Result<()> {
-        if let Some(chan) = self.core.channel.upgrade() {
+        if let Some(chan) = self.channel.upgrade() {
             let chan = chan.lock().await;
             if chan.closed {
                 return Err(Error::ChannelClosed);
@@ -131,10 +122,10 @@ where
         } else {
             return Err(Error::ChannelClosed);
         }
-        debug!("{}: Running reactor", self.core.logid);
+        debug!("{}: Running reactor", self.logid);
         let result = self.run_impl().await;
-        debug!("{}: Reactor stopped: {:?}", self.core.logid, result);
-        if let Some(chan) = self.core.channel.upgrade() {
+        debug!("{}: Reactor stopped: {:?}", self.logid, result);
+        if let Some(chan) = self.channel.upgrade() {
             let mut chan = chan.lock().await;
             chan.closed = true;
         }
@@ -166,17 +157,17 @@ where
                 Some(r) => r?,         // it's a cell!
             };
 
-            self.core.handle_cell(item).await?;
+            self.handle_cell(item).await?;
         }
     }
 
     /// Handle a CtrlMsg other than Shutdown.
     async fn handle_control(&mut self, msg: CtrlMsg) -> Result<()> {
-        trace!("{}: reactor received {:?}", self.core.logid, msg);
+        trace!("{}: reactor received {:?}", self.logid, msg);
         match msg {
             CtrlMsg::Shutdown => panic!(), // was handled in reactor loop.
             CtrlMsg::Register(ch) => self.register(ch),
-            CtrlMsg::CloseCircuit(id) => self.core.outbound_destroy_circ(id).await?,
+            CtrlMsg::CloseCircuit(id) => self.outbound_destroy_circ(id).await?,
         }
         Ok(())
     }
@@ -186,9 +177,7 @@ where
         let (_, select_all) = self.control.get_mut().get_mut();
         select_all.push(stream::once(ch));
     }
-}
 
-impl ReactorCore {
     /// Helper: process a cell on a channel.  Most cell types get ignored
     /// or rejected; a few get delivered to circuits.
     async fn handle_cell(&mut self, cell: ChanCell) -> Result<()> {
