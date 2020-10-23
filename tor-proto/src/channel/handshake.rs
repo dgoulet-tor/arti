@@ -793,4 +793,22 @@ pub(super) mod test {
             &hex!("dcb604db2034b00fd16986d4adb9d16b21cb4e4457a33dec0f538903683e96e9");
         pub const PEER_RSA: &[u8] = &hex!("2f1fb49bb332a9eec617e41e911c33fb3890aef3");
     }
+
+    #[async_test]
+    async fn test_finish() {
+        let ed25519_id = [3_u8; 32].into();
+        let rsa_id = [4_u8; 20].into();
+        let ver = VerifiedChannel {
+            link_protocol: 4,
+            tls: futures_codec::Framed::new(MsgBuf::new(&b""[..]), ChannelCodec::new(4)),
+            logid: LogId::new(),
+            ed25519_id,
+            rsa_id,
+        };
+
+        let peer_addr = "127.1.1.2".parse().unwrap();
+        let (_chan, _reactor) = ver.finish(&peer_addr).await.unwrap();
+
+        // TODO: check contents of netinfo cell
+    }
 }

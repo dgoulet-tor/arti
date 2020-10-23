@@ -82,6 +82,12 @@ impl RSAIdentity {
     }
 }
 
+impl From<[u8; 20]> for RSAIdentity {
+    fn from(id: [u8; 20]) -> RSAIdentity {
+        RSAIdentity { id }
+    }
+}
+
 /// An RSA public key.
 ///
 /// This implementation is a simple wrapper so that we can define new
