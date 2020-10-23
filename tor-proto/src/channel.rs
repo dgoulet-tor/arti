@@ -216,20 +216,9 @@ impl Channel {
 
     /// Transmit a single cell on a channel.
     pub async fn send_cell(&self, cell: ChanCell) -> Result<()> {
-        use msg::ChanMsg::*;
         self.check_cell(&cell)?;
         let inner = &mut self.inner.lock().await;
-        match cell.msg() {
-            Relay(_) | Padding(_) | VPadding(_) => {} // too frequent to log.
-            _ => trace!(
-                "{}: Sending {} for {}",
-                inner.logid,
-                cell.msg().cmd(),
-                cell.circid()
-            ),
-        }
         inner.send_cell(cell).await
-        // XXXX I don't like holding the lock here. :(
     }
 
     /// Return a newly allocated PendingClientCirc object with
@@ -318,7 +307,17 @@ impl ChannelImpl {
         if self.closed {
             return Err(Error::ChannelClosed);
         }
-        self.tls.send(cell).await?;
+        use msg::ChanMsg::*;
+        match cell.msg() {
+            Relay(_) | Padding(_) | VPadding(_) => {} // too frequent to log.
+            _ => trace!(
+                "{}: Sending {} for {}",
+                self.logid,
+                cell.msg().cmd(),
+                cell.circid()
+            ),
+        }
+        self.tls.send(cell).await?; // XXXX I don't like holding the lock here.
         Ok(())
     }
 
