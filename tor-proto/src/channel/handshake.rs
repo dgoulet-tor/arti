@@ -670,6 +670,59 @@ pub(super) mod test {
         }
     }
 
+    #[test]
+    fn certs_wrongtarget() {
+        let mut certs = msg::Certs::new_empty();
+        certs.push_cert_body(2.into(), certs::CERT_T2);
+        certs.push_cert_body(5.into(), certs::CERT_T5);
+        certs.push_cert_body(7.into(), certs::CERT_T7);
+        certs.push_cert_body(4.into(), certs::CERT_T4);
+        let err = certs_test(
+            certs.clone(),
+            Some(cert_timestamp()),
+            &[0x10; 32],
+            certs::PEER_RSA,
+            certs::PEER_CERT_DIGEST,
+        )
+        .err()
+        .unwrap();
+
+        assert_eq!(
+            format!("{}", err),
+            "channel protocol violation: Peer ed25519 id not as expected"
+        );
+
+        let err = certs_test(
+            certs.clone(),
+            Some(cert_timestamp()),
+            certs::PEER_ED,
+            &[0x99; 20],
+            certs::PEER_CERT_DIGEST,
+        )
+        .err()
+        .unwrap();
+
+        assert_eq!(
+            format!("{}", err),
+            "channel protocol violation: Peer RSA id not as expected"
+        );
+
+        let err = certs_test(
+            certs.clone(),
+            Some(cert_timestamp()),
+            certs::PEER_ED,
+            certs::PEER_RSA,
+            &[0; 32],
+        )
+        .err()
+        .unwrap();
+
+        assert_eq!(
+            format!("{}", err),
+            "channel protocol violation: Peer cert did not authenticate TLS cert"
+        );
+    }
+
     /// This module has a few certificates to play with. They're taken
     /// from a chutney network. They match those used in the CERTS
     /// cell test vector in the tor-cell crate.
