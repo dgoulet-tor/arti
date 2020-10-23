@@ -608,16 +608,14 @@ pub(super) mod test {
         )
         .err()
         .unwrap();
-        // TODO: this message is ugly and backwards; can it be fixed?
-        assert_eq!(format!("{}", err), "cell encoding error: channel protocol violation: Missing IDENTITY_V_SIGNING certificate");
+        assert_eq!(
+            format!("{}", err),
+            "channel protocol violation: Missing IDENTITY_V_SIGNING certificate"
+        );
     }
 
     #[test]
     fn certs_good() {
-        let peer_cert_digest =
-            &hex!("b4fd606b64e4cbd466b8d76cb131069bae6f3aa1878857c9f624e31d77a799b8")[..];
-        let peer_ed = &hex!("dcb604db2034b00fd16986d4adb9d16b21cb4e4457a33dec0f538903683e96e9")[..];
-        let peer_rsa = &hex!("2f1fb49bb332a9eec617e41e911c33fb3890aef3")[..];
         let mut certs = msg::Certs::new_empty();
 
         certs.push_cert_body(2.into(), certs::CERT_T2);
@@ -627,12 +625,49 @@ pub(super) mod test {
         let res = certs_test(
             certs,
             Some(cert_timestamp()),
-            peer_ed,
-            peer_rsa,
-            peer_cert_digest,
+            certs::PEER_ED,
+            certs::PEER_RSA,
+            certs::PEER_CERT_DIGEST,
         );
         let _ = res.unwrap();
-        //assert!(res.is_ok());
+    }
+
+    #[test]
+    fn certs_missing() {
+        let all_certs = [
+            (2, certs::CERT_T2, "Couldn't find RSA identity key"),
+            (7, certs::CERT_T7, "No RSA->Ed crosscert"),
+            (4, certs::CERT_T4, "Missing IDENTITY_V_SIGNING certificate"),
+            (5, certs::CERT_T5, "Missing SIGNING_V_TLS_CERT certificate"),
+        ];
+
+        for omit_idx in 0..4 {
+            // build a certs cell with all but one certificate
+            let mut certs = msg::Certs::new_empty();
+            let mut expect_err = None;
+            for (idx, (ctype, cert, err)) in all_certs.iter().enumerate() {
+                if idx == omit_idx {
+                    expect_err = Some(err);
+                    continue;
+                }
+
+                certs.push_cert_body((*ctype).into(), &cert[..]);
+            }
+            let res = certs_test(
+                certs,
+                Some(cert_timestamp()),
+                certs::PEER_ED,
+                certs::PEER_RSA,
+                certs::PEER_CERT_DIGEST,
+            )
+            .err()
+            .unwrap();
+
+            assert_eq!(
+                format!("{}", res),
+                format!("channel protocol violation: {}", expect_err.unwrap())
+            );
+        }
     }
 
     /// This module has a few certificates to play with. They're taken
@@ -649,5 +684,12 @@ pub(super) mod test {
         pub const CERT_T5: &[u8] = &hex!("01050006C98A03B4FD606B64E4CBD466B8D76CB131069BAE6F3AA1878857C9F624E31D77A799B8007173E5F8068431D0D3F5EE16B4C9FFD59DF373E152A87281BAE744AA5FCF72171BF4B27C4E8FC1C6A9FC5CA11058BC49647063D7903CFD9F512F89099B27BC0C");
 
         pub const CERT_T7: &[u8] = &hex!("DCB604DB2034B00FD16986D4ADB9D16B21CB4E4457A33DEC0F538903683E96E90006DA3A805CF6006F9179066534DE6B45AD47A5C469063EE462762723396DC9F25452A0A52DA3F5087DD239F2A311F6B0D4DFEFF4ABD089DC3D0237A0ABAB19EB2045B91CDCAF04BE0A72D548A27BF2E77BD876ECFE5E1BE622350DA6BF31F6E306ED896488DD5B39409B23FC3EB7B2C9F7328EB18DA36D54D80575899EA6507CCBFCDF1F");
+
+        pub const PEER_CERT_DIGEST: &[u8] =
+            &hex!("b4fd606b64e4cbd466b8d76cb131069bae6f3aa1878857c9f624e31d77a799b8");
+
+        pub const PEER_ED: &[u8] =
+            &hex!("dcb604db2034b00fd16986d4adb9d16b21cb4e4457a33dec0f538903683e96e9");
+        pub const PEER_RSA: &[u8] = &hex!("2f1fb49bb332a9eec617e41e911c33fb3890aef3");
     }
 }

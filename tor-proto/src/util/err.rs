@@ -18,7 +18,7 @@ pub enum Error {
     IoErr(#[from] std::io::Error),
     /// An error occurred in the cell-handling layer.
     #[error("cell encoding error: {0}")]
-    CellErr(#[from] tor_cell::Error),
+    CellErr(#[source] tor_cell::Error),
     /// Somebody asked for a key that we didn't have.
     #[error("specified key was missing")]
     MissingKey,
@@ -68,4 +68,13 @@ pub enum Error {
     /// Stream protocol violation
     #[error("stream protocol violation: {0}")]
     StreamProto(String),
+}
+
+impl From<tor_cell::Error> for Error {
+    fn from(err: tor_cell::Error) -> Error {
+        match err {
+            tor_cell::Error::ChanProto(msg) => Error::ChanProto(msg),
+            _ => Error::CellErr(err),
+        }
+    }
 }
