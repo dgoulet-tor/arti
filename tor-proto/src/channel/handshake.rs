@@ -284,7 +284,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         // any performance.
         if !ll::pk::ed25519::validate_batch(&sigs[..]) {
             return Err(Error::ChanProto(
-                "Invalid ed25519 signature in handshake.".into(),
+                "Invalid ed25519 signature in handshake".into(),
             ));
         }
 
@@ -720,6 +720,54 @@ pub(super) mod test {
         assert_eq!(
             format!("{}", err),
             "channel protocol violation: Peer cert did not authenticate TLS cert"
+        );
+    }
+
+    #[test]
+    fn certs_badsig() {
+        fn munge(inp: &[u8]) -> Vec<u8> {
+            let mut v: Vec<u8> = inp.into();
+            v[inp.len() - 1] ^= 0x10;
+            v
+        }
+        let mut certs = msg::Certs::new_empty();
+        certs.push_cert_body(2.into(), certs::CERT_T2);
+        certs.push_cert_body(5.into(), munge(certs::CERT_T5)); // munge an ed signature
+        certs.push_cert_body(7.into(), certs::CERT_T7);
+        certs.push_cert_body(4.into(), certs::CERT_T4);
+        let res = certs_test(
+            certs,
+            Some(cert_timestamp()),
+            certs::PEER_ED,
+            certs::PEER_RSA,
+            certs::PEER_CERT_DIGEST,
+        )
+        .err()
+        .unwrap();
+
+        assert_eq!(
+            format!("{}", res),
+            "channel protocol violation: Invalid ed25519 signature in handshake"
+        );
+
+        let mut certs = msg::Certs::new_empty();
+        certs.push_cert_body(2.into(), certs::CERT_T2);
+        certs.push_cert_body(5.into(), certs::CERT_T5);
+        certs.push_cert_body(7.into(), munge(certs::CERT_T7)); // munge an RSA signature
+        certs.push_cert_body(4.into(), certs::CERT_T4);
+        let res = certs_test(
+            certs,
+            Some(cert_timestamp()),
+            certs::PEER_ED,
+            certs::PEER_RSA,
+            certs::PEER_CERT_DIGEST,
+        )
+        .err()
+        .unwrap();
+
+        assert_eq!(
+            format!("{}", res),
+            "channel protocol violation: Bad RSA->Ed crosscert signature"
         );
     }
 
