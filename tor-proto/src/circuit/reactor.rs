@@ -123,14 +123,7 @@ pub struct Reactor {
     /// channel.
     // TODO: could use a SPSC channel here instead.
     input: stream::Fuse<mpsc::Receiver<ClientCircChanMsg>>,
-    /// The main implementation of the reactor.
-    core: ReactorCore,
-}
 
-/// This is a separate; we use it when handling cells.
-///
-/// Why is this type separate, exactly?
-struct ReactorCore {
     /// Reference to the circuit.
     circuit: Weak<Mutex<super::ClientCircImpl>>,
     /// The cryptographic state for this circuit for inbound cells.
@@ -156,27 +149,23 @@ impl Reactor {
         input: mpsc::Receiver<ClientCircChanMsg>,
         logid: LogId,
     ) -> Self {
-        let core = ReactorCore {
-            circuit: Arc::downgrade(&circuit),
-            crypto_in: InboundClientCrypt::new(),
-            hops: Vec::new(),
-            logid,
-        };
-
         let mut oneshots = stream::SelectAll::new();
         oneshots.push(stream::once(closeflag));
         let control = stream::select(control, oneshots);
         Reactor {
             input: input.fuse(),
             control: control.fuse(),
-            core,
+            circuit: Arc::downgrade(&circuit),
+            crypto_in: InboundClientCrypt::new(),
+            hops: Vec::new(),
+            logid,
         }
     }
 
     /// Launch the reactor, and run until the circuit closes or we
     /// encounter an error.
     pub async fn run(mut self) -> Result<()> {
-        if let Some(circ) = self.core.circuit.upgrade() {
+        if let Some(circ) = self.circuit.upgrade() {
             let circ = circ.lock().await;
             if circ.closed {
                 return Err(Error::CircuitClosed);
@@ -184,10 +173,10 @@ impl Reactor {
         } else {
             return Err(Error::CircuitClosed);
         }
-        debug!("{}: Running circuit reactor", self.core.logid);
+        debug!("{}: Running circuit reactor", self.logid);
         let result = self.run_impl().await;
-        debug!("{}: Circuit reactor stopped: {:?}", self.core.logid, result);
-        if let Some(circ) = self.core.circuit.upgrade() {
+        debug!("{}: Circuit reactor stopped: {:?}", self.logid, result);
+        if let Some(circ) = self.circuit.upgrade() {
             let mut circ = circ.lock().await;
             circ.closed = true;
             if let Some(sender) = circ.sendmeta.take() {
@@ -222,7 +211,7 @@ impl Reactor {
                 Some(r) => r,
             };
 
-            let exit = self.core.handle_cell(item).await?;
+            let exit = self.handle_cell(item).await?;
             if exit {
                 return Ok(());
             }
@@ -231,7 +220,7 @@ impl Reactor {
 
     /// Handle a CtrlMsg other than Shutdown.
     async fn handle_control(&mut self, msg: CtrlMsg) -> Result<()> {
-        trace!("{}: reactor received {:?}", self.core.logid, msg);
+        trace!("{}: reactor received {:?}", self.logid, msg);
         match msg {
             CtrlMsg::Shutdown => panic!(), // was handled in reactor loop.
             CtrlMsg::CloseStream(hop, id, recvwindow) => {
@@ -239,7 +228,7 @@ impl Reactor {
             }
             CtrlMsg::Register(ch) => self.register(ch),
             CtrlMsg::AddStream(hop, sink, window, sender) => {
-                let hop = self.core.hop_mut(hop);
+                let hop = self.hop_mut(hop);
                 if let Some(hop) = hop {
                     let r = hop.map.add_ent(sink, window);
                     // XXXX not sure if this is right to ignore
@@ -249,8 +238,8 @@ impl Reactor {
                 // will cancel the attempt to add the stream.
             }
             CtrlMsg::AddHop(hop, layer, sender) => {
-                self.core.hops.push(hop);
-                self.core.crypto_in.add_layer(layer);
+                self.hops.push(hop);
+                self.crypto_in.add_layer(layer);
                 // XXXX not sure if this is right to ignore
                 let _ignore = sender.send(());
             }
@@ -269,14 +258,14 @@ impl Reactor {
         window: sendme::StreamRecvWindow,
     ) -> Result<()> {
         // Mark the stream as closing.
-        let hop = self.core.hop_mut(hopnum).ok_or_else(|| {
+        let hop = self.hop_mut(hopnum).ok_or_else(|| {
             Error::InternalError("Tried to close a stream on a hop that wasn't there?".into())
         })?;
 
         let should_send_end = hop.map.terminate(id, window)?;
         trace!(
             "{}: Ending stream {}; should_send_end={:?}",
-            self.core.logid,
+            self.logid,
             id,
             should_send_end
         );
@@ -285,7 +274,7 @@ impl Reactor {
         // XXXXM3
         if should_send_end == ShouldSendEnd::Send {
             let end_cell = RelayCell::new(id, End::new_misc().into());
-            if let Some(circ) = self.core.circuit.upgrade() {
+            if let Some(circ) = self.circuit.upgrade() {
                 let mut circ = circ.lock().await;
                 circ.send_relay_cell(hopnum, false, end_cell).await?;
             } else {
@@ -300,9 +289,7 @@ impl Reactor {
         let (_, select_all) = self.control.get_mut().get_mut();
         select_all.push(stream::once(ch));
     }
-}
 
-impl ReactorCore {
     /// Helper: process a cell on a channel.  Most cells get ignored
     /// or rejected; a few get delivered to circuits.
     ///
