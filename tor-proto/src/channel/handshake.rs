@@ -3,7 +3,7 @@
 use arrayref::array_ref;
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use futures::sink::SinkExt;
-use futures::stream::StreamExt;
+use futures::stream::{self, StreamExt};
 
 use crate::channel::codec::ChannelCodec;
 use crate::channel::LogId;
@@ -368,7 +368,10 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> VerifiedChannel<T> {
     pub async fn finish(
         mut self,
         peer_addr: &net::IpAddr,
-    ) -> Result<(super::Channel, super::reactor::Reactor<T>)> {
+    ) -> Result<(
+        super::Channel,
+        super::reactor::Reactor<stream::SplitStream<CellFrame<T>>>,
+    )> {
         trace!("{}: Sending netinfo cell.", self.logid);
         let netinfo = msg::Netinfo::for_client(*peer_addr);
         self.tls.send(netinfo.into()).await?;
@@ -377,9 +380,13 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> VerifiedChannel<T> {
             "{}: Completed handshake with {} [{}]",
             self.logid, self.ed25519_id, self.rsa_id
         );
+
+        let (tls_sink, tls_stream) = self.tls.split();
+
         Ok(super::Channel::new(
             self.link_protocol,
-            self.tls,
+            Box::new(tls_sink),
+            tls_stream,
             self.logid,
             self.ed25519_id,
             self.rsa_id,

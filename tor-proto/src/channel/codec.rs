@@ -10,10 +10,10 @@ use bytes::BytesMut;
 /// This type lets us wrap a TLS channel (or some other secure
 /// AsyncRead+AsyncWrite type) as a Sink and a Stream of ChanCell, so we
 /// can forget about byte-oriented communication.
-pub(crate) struct ChannelCodec(codec::ChannelCodec);
+pub struct ChannelCodec(codec::ChannelCodec);
 
 impl ChannelCodec {
-    /// Create a new ChannelCoded with a given link protocol.
+    /// Create a new ChannelCodec with a given link protocol.
     pub(crate) fn new(link_proto: u16) -> Self {
         ChannelCodec(codec::ChannelCodec::new(link_proto))
     }

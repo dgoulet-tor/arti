@@ -7,17 +7,16 @@
 //! or in the error handling behavior.
 
 use super::circmap::{CircEnt, CircMap};
-use super::{CellFrame, LogId};
+use super::LogId;
 use crate::{Error, Result};
 use tor_cell::chancell::msg::{Destroy, DestroyReason};
 use tor_cell::chancell::{msg::ChanMsg, ChanCell, CircID};
 
 use futures::channel::{mpsc, oneshot};
-use futures::io::AsyncRead;
 use futures::lock::Mutex;
 use futures::select_biased;
 use futures::sink::SinkExt;
-use futures::stream::{self, SplitStream, StreamExt};
+use futures::stream::{self, Stream, StreamExt};
 
 use std::convert::TryInto;
 use std::sync::{Arc, Weak};
@@ -68,7 +67,7 @@ impl From<Error> for ReactorError {
 #[must_use = "If you don't call run() on a reactor, the channel won't work."]
 pub struct Reactor<T>
 where
-    T: AsyncRead + Unpin,
+    T: Stream<Item = std::result::Result<ChanCell, tor_cell::Error>> + Unpin + Send + 'static,
 {
     /// A stream of oneshot receivers that this reactor can use to get
     /// control messages.
@@ -78,8 +77,7 @@ where
     control: stream::Fuse<stream::Select<mpsc::Receiver<CtrlResult>, OneshotStream>>,
     /// A Stream from which we can read ChanCells.  This should be backed
     /// by a TLS connection.
-    input: stream::Fuse<SplitStream<CellFrame<T>>>,
-
+    input: stream::Fuse<T>,
     // TODO: This lock is used pretty asymmetrically.  The reactor
     // task needs to use the circmap all the time, whereas other tasks
     // only need the circmap when dealing with circuit creation.
@@ -97,7 +95,7 @@ where
 
 impl<T> Reactor<T>
 where
-    T: AsyncRead + Unpin,
+    T: Stream<Item = std::result::Result<ChanCell, tor_cell::Error>> + Unpin + Send + 'static,
 {
     /// Construct a new Reactor.
     ///
@@ -109,7 +107,7 @@ where
         circmap: Arc<Mutex<CircMap>>,
         control: mpsc::Receiver<CtrlResult>,
         closeflag: oneshot::Receiver<CtrlMsg>,
-        input: SplitStream<CellFrame<T>>,
+        input: T,
         logid: LogId,
     ) -> Self {
         let mut oneshots = stream::SelectAll::new();

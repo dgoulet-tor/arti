@@ -43,7 +43,7 @@ use futures::channel::{mpsc, oneshot};
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::lock::Mutex;
 use futures::sink::{Sink, SinkExt};
-use futures::stream::StreamExt;
+use futures::stream::Stream;
 
 use std::cell::Cell;
 use std::sync::{Arc, Weak};
@@ -157,24 +157,23 @@ impl Channel {
     /// we're finally ready to create circuits.
     fn new<T>(
         link_protocol: u16,
-        tls: CellFrame<T>,
+        tls_sink: Box<dyn Sink<ChanCell, Error = tor_cell::Error> + Send + Unpin + 'static>,
+        tls_stream: T,
         logid: LogId,
         _ed25519_id: Ed25519Identity,
         _rsa_id: RSAIdentity,
     ) -> (Self, reactor::Reactor<T>)
     where
-        T: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+        T: Stream<Item = std::result::Result<ChanCell, tor_cell::Error>> + Send + Unpin + 'static,
     {
         use circmap::{CircIDRange, CircMap};
         let circmap = Arc::new(Mutex::new(CircMap::new(CircIDRange::High)));
-
-        let (sink, stream) = tls.split();
 
         let (sendctrl, recvctrl) = mpsc::channel::<CtrlResult>(128);
         let (sendclosed, recvclosed) = oneshot::channel::<CtrlMsg>();
 
         let inner = ChannelImpl {
-            tls: Box::new(sink),
+            tls: tls_sink,
             link_protocol,
             closed: false,
             circmap: Arc::downgrade(&circmap),
@@ -188,8 +187,14 @@ impl Channel {
              */
         };
         let inner = Arc::new(Mutex::new(inner));
-        let reactor =
-            reactor::Reactor::new(inner.clone(), circmap, recvctrl, recvclosed, stream, logid);
+        let reactor = reactor::Reactor::new(
+            inner.clone(),
+            circmap,
+            recvctrl,
+            recvclosed,
+            tls_stream,
+            logid,
+        );
 
         let channel = Channel { inner };
 
