@@ -48,6 +48,19 @@ pub(super) type CtrlResult = std::result::Result<CtrlMsg, oneshot::Canceled>;
 /// these types somehow.
 type OneshotStream = stream::SelectAll<stream::Once<oneshot::Receiver<CtrlMsg>>>;
 
+/// Error return value from run_once: indicates an error or a shutdown.
+enum ReactorError {
+    /// The reactor should shut down with an abnormal exit condition.
+    Err(Error),
+    /// The reactor should shut down without an error, since all is well.
+    Shutdown,
+}
+impl From<Error> for ReactorError {
+    fn from(e: Error) -> ReactorError {
+        ReactorError::Err(e)
+    }
+}
+
 /// Object to handle incoming cells on a channel.
 ///
 /// This type is returned when you finish a channel; you need to spawn a
@@ -123,7 +136,13 @@ where
             return Err(Error::ChannelClosed);
         }
         debug!("{}: Running reactor", self.logid);
-        let result = self.run_impl().await;
+        let result: Result<()> = loop {
+            match self.run_once().await {
+                Ok(()) => (),
+                Err(ReactorError::Shutdown) => break Ok(()),
+                Err(ReactorError::Err(e)) => break Err(e),
+            }
+        };
         debug!("{}: Reactor stopped: {:?}", self.logid, result);
         if let Some(chan) = self.channel.upgrade() {
             let mut chan = chan.lock().await;
@@ -132,33 +151,35 @@ where
         result
     }
 
-    /// Helper for run(): doesn't mark the channel closed on finish.
-    async fn run_impl(&mut self) -> Result<()> {
-        loop {
-            // Let's see what's next: maybe we got a cell, maybe the TLS
-            // connection got closed, or maybe we've been told to shut
-            // down.
-            let item = select_biased! {
-                // we got a control message!
-                ctrl = self.control.next() => {
-                    match ctrl {
-                        Some(Ok(CtrlMsg::Shutdown)) => return Ok(()),
-                        Some(Ok(msg)) => self.handle_control(msg).await?,
-                        Some(Err(_)) => (), // sender cancelled; ignore.
-                        None => panic!() // should be impossible.
-                    }
-                    continue;
+    /// Helper for run(): handles only one action, and doesn't mark
+    /// the channel closed on finish.
+    async fn run_once(&mut self) -> std::result::Result<(), ReactorError> {
+        // Let's see what's next: maybe we got a cell, maybe the TLS
+        // connection got closed, or maybe we've been told to shut
+        // down.
+        select_biased! {
+            // we got a control message!
+            ctrl = self.control.next() => {
+                match ctrl {
+                    Some(Ok(CtrlMsg::Shutdown)) =>
+                        return Err(ReactorError::Shutdown),
+                    Some(Ok(msg)) => self.handle_control(msg).await?,
+                    Some(Err(_)) => (), // sender cancelled; ignore.
+                    None => panic!() // should be impossible.
                 }
-                // we got a cell or a close.
-                item = self.input.next() => item,
-            };
-            let item = match item {
-                None => return Ok(()), // the TLS connection closed.
-                Some(r) => r?,         // it's a cell!
-            };
+            }
+            // we got a cell or a close.
+            item = self.input.next() => {
+                let item = match item {
+                    None => return Err(ReactorError::Shutdown), // the TLS connection closed.
+                    Some(r) => r.map_err(|e| Error::CellErr(e))?, // it's a cell.
+                };
+                self.handle_cell(item).await?;
 
-            self.handle_cell(item).await?;
-        }
+            }
+        };
+
+        Ok(()) // Run again.
     }
 
     /// Handle a CtrlMsg other than Shutdown.
@@ -343,3 +364,6 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {}
