@@ -52,6 +52,7 @@ impl rand::distributions::Distribution<CircID> for CircIDRange {
 /// An entry in the circuit map.  Right now, we only have "here's the
 /// way to send cells to a given circuit", but that's likely to
 /// change.
+#[derive(Debug)]
 pub(super) enum CircEnt {
     /// A circuit that has not yet received a CREATED cell.
     ///

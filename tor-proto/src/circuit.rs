@@ -681,6 +681,13 @@ impl PendingClientCirc {
         (pending, reactor)
     }
 
+    /// Testing only: extract the circuit ID for thid pending circuit.
+    #[cfg(test)]
+    pub(crate) async fn peek_circid(&self) -> CircID {
+        let c = self.circ.c.lock().await;
+        c.id
+    }
+
     /// Helper: create the first hop of a circuit.
     ///
     /// This is parameterized not just on the RNG, but a wrapper object to

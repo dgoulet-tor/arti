@@ -11,6 +11,7 @@ use std::convert::TryFrom;
 
 /// A subclass of ChanMsg that can arrive in response to a CREATE* cell
 /// that we send.
+#[derive(Debug)]
 pub(crate) enum CreateResponse {
     /// Destroy cell: the CREATE failed.
     Destroy(chanmsg::Destroy),
@@ -38,6 +39,7 @@ impl TryFrom<ChanMsg> for CreateResponse {
 
 /// A subclass of ChanMsg that can correctly arrive on a live client
 /// circuit (one where a CREATED* has been received).
+#[derive(Debug)]
 pub(crate) enum ClientCircChanMsg {
     /// A relay cell telling us some kind of remote command from some
     /// party on the circuit.

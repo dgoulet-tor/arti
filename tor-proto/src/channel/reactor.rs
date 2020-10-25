@@ -60,6 +60,16 @@ impl From<Error> for ReactorError {
         ReactorError::Err(e)
     }
 }
+#[cfg(test)]
+impl ReactorError {
+    /// Tests only: assert that this is an Error, and return it.
+    fn unwrap_err(self) -> Error {
+        match self {
+            ReactorError::Shutdown => panic!(),
+            ReactorError::Err(e) => e,
+        }
+    }
+}
 
 /// Object to handle incoming cells on a channel.
 ///
@@ -373,6 +383,7 @@ mod test {
     use super::*;
     use futures::executor::LocalPool;
     use futures::sink::SinkExt;
+    use futures::stream::StreamExt;
     use futures_await_test::async_test;
 
     type CodecResult = std::result::Result<ChanCell, tor_cell::Error>;
@@ -442,5 +453,139 @@ mod test {
 
         // Now let's see. The reactor should not _still_ be running.
         assert_eq!(run_reactor.peek(), Some(&true));
+    }
+
+    #[async_test]
+    async fn new_circ_closed() {
+        let mut rng = rand::thread_rng();
+        let (chan, mut reactor, _output, _input) = new_reactor();
+
+        let (pending, _circr) = chan.new_circ(&mut rng).await.unwrap();
+
+        reactor.run_once().await.unwrap();
+
+        let id = pending.peek_circid().await;
+
+        {
+            let mut circs = reactor.circs.lock().await;
+            let ent = circs.get_mut(id);
+            assert!(matches!(ent, Some(CircEnt::Opening(_, _))));
+        }
+        // Now drop the circuit; this should tell the reactor to remove
+        // the circuit from the map.
+        drop(pending);
+
+        reactor.run_once().await.unwrap();
+        {
+            let mut circs = reactor.circs.lock().await;
+            let ent = circs.get_mut(id);
+            assert!(matches!(ent, None));
+        }
+    }
+
+    // Test proper delivery of a created cell that doesn't make a channel
+    #[async_test]
+    async fn new_circ_create_failure() {
+        use tor_cell::chancell::msg;
+        let mut rng = rand::thread_rng();
+        let (chan, mut reactor, mut output, mut input) = new_reactor();
+
+        let (pending, _circr) = chan.new_circ(&mut rng).await.unwrap();
+
+        reactor.run_once().await.unwrap();
+
+        let id = pending.peek_circid().await;
+
+        {
+            let mut circs = reactor.circs.lock().await;
+            let ent = circs.get_mut(id);
+            assert!(matches!(ent, Some(CircEnt::Opening(_, _))));
+        }
+        // We'll get a bad handshake result from this createdfast cell.
+        let created_cell = ChanCell::new(id, msg::CreatedFast::new(*b"x").into());
+        input.send(Ok(created_cell)).await.unwrap();
+
+        let (circ, reac) =
+            futures::join!(pending.create_firsthop_fast(&mut rng), reactor.run_once());
+        // Make sure statuses are as expected.
+        assert!(matches!(circ.err().unwrap(), Error::BadHandshake));
+        assert!(reac.is_ok());
+
+        // Make sure that the createfast cell got sent
+        let cell_sent = output.next().await.unwrap();
+        assert!(matches!(cell_sent.msg(), msg::ChanMsg::CreateFast(_)));
+
+        // The circid now counts as open, since as far as the reactor knows,
+        // it was accepted.  (TODO: is this a bug?)
+        {
+            let mut circs = reactor.circs.lock().await;
+            let ent = circs.get_mut(id);
+            assert!(matches!(ent, Some(CircEnt::Open(_))));
+        }
+
+        // But the next run if the reactor will make the circuit get closed.
+        reactor.run_once().await.unwrap();
+        {
+            let mut circs = reactor.circs.lock().await;
+            let ent = circs.get_mut(id);
+            assert!(matches!(ent, None));
+        }
+    }
+
+    // Try incoming cells that shouldn't arrive on channels.
+    #[async_test]
+    async fn bad_cells() {
+        use tor_cell::chancell::msg;
+        let (_chan, mut reactor, _output, mut input) = new_reactor();
+
+        // We shouldn't get create cells, ever.
+        let create_cell = msg::Create2::new(4, *b"hihi").into();
+        input
+            .send(Ok(ChanCell::new(9.into(), create_cell)))
+            .await
+            .unwrap();
+
+        // shouldn't get created2 cells for nonexistent circuits
+        let created2_cell = msg::Created2::new(*b"hihi").into();
+        input
+            .send(Ok(ChanCell::new(7.into(), created2_cell)))
+            .await
+            .unwrap();
+
+        let e = reactor.run_once().await.unwrap_err().unwrap_err();
+        assert_eq!(
+            format!("{}", e),
+            "channel protocol violation: CREATE2 cell on client channel"
+        );
+
+        let e = reactor.run_once().await.unwrap_err().unwrap_err();
+        assert_eq!(
+            format!("{}", e),
+            "channel protocol violation: Unexpected CREATED2 cell"
+        );
+
+        // Can't get a relay cell on a circuit we've never heard of.
+        let relay_cell = msg::Relay::new(b"abc").into();
+        input
+            .send(Ok(ChanCell::new(4.into(), relay_cell)))
+            .await
+            .unwrap();
+        let e = reactor.run_once().await.unwrap_err().unwrap_err();
+        assert_eq!(
+            format!("{}", e),
+            "channel protocol violation: Relay cell on nonexistent circuit"
+        );
+
+        // Can't get handshaking cells while channel is open.
+        let versions_cell = msg::Versions::new([3]).into();
+        input
+            .send(Ok(ChanCell::new(0.into(), versions_cell)))
+            .await
+            .unwrap();
+        let e = reactor.run_once().await.unwrap_err().unwrap_err();
+        assert_eq!(
+            format!("{}", e),
+            "channel protocol violation: VERSIONS cell after handshake is done"
+        );
     }
 }
