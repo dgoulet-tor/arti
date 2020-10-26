@@ -678,4 +678,62 @@ mod test {
             "channel protocol violation: Too many cells received on destroyed circuit"
         );
     }
+
+    #[async_test]
+    async fn deliver_destroy() {
+        use crate::circuit::celltypes::*;
+        use tor_cell::chancell::msg;
+
+        let (_chan, mut reactor, _output, mut input) = new_reactor();
+
+        let (circ_oneshot_7, mut circ_stream_13) = {
+            let mut circmap = reactor.circs.lock().await;
+            let (snd1, rcv1) = oneshot::channel();
+            let (snd2, _rcv2) = mpsc::channel(64);
+            circmap.put_unchecked(7.into(), CircEnt::Opening(snd1, snd2));
+
+            let (snd3, rcv3) = mpsc::channel(64);
+            circmap.put_unchecked(13.into(), CircEnt::Open(snd3));
+
+            circmap.put_unchecked(23.into(), CircEnt::DestroySent(HalfCirc::new(25)));
+            (rcv1, rcv3)
+        };
+
+        // Destroying an opening circuit is fine.
+        let destroycell: ChanMsg = msg::Destroy::new(0.into()).into();
+        input
+            .send(Ok(ChanCell::new(7.into(), destroycell.clone())))
+            .await
+            .unwrap();
+        reactor.run_once().await.unwrap();
+        let msg = circ_oneshot_7.await;
+        assert!(matches!(msg, Ok(CreateResponse::Destroy(_))));
+
+        // Destroying an open circuit is fine.
+        input
+            .send(Ok(ChanCell::new(13.into(), destroycell.clone())))
+            .await
+            .unwrap();
+        reactor.run_once().await.unwrap();
+        let msg = circ_stream_13.next().await.unwrap();
+        assert!(matches!(msg, ClientCircChanMsg::Destroy(_)));
+
+        // Destroying a DestroySent circuit is fine.
+        input
+            .send(Ok(ChanCell::new(23.into(), destroycell.clone())))
+            .await
+            .unwrap();
+        reactor.run_once().await.unwrap();
+
+        // Destroying a nonexistent circuit is an error.
+        input
+            .send(Ok(ChanCell::new(101.into(), destroycell.clone())))
+            .await
+            .unwrap();
+        let e = reactor.run_once().await.unwrap_err().unwrap_err();
+        assert_eq!(
+            format!("{}", e),
+            "channel protocol violation: Destroy for nonexistent circuit"
+        );
+    }
 }
