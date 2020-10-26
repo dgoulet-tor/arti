@@ -288,20 +288,17 @@ where
     /// circuit, if that circuit is waiting for one.
     async fn deliver_created(&mut self, circid: CircId, msg: ChanMsg) -> Result<()> {
         let mut map = self.circs.lock().await;
-        if let Some(target) = map.advance_from_opening(circid) {
-            let created = msg.try_into()?;
-            // XXXX handle errors better.
-            // XXXX should we really be holding the mutex for this?
-            // XXXX I think that this one actually means the other side
-            // is closed
-            target.send(created).map_err(|_| {
-                Error::InternalError(
-                    "Circuit queue rejected created message. Is it closing? XXX".into(),
-                )
-            })
-        } else {
-            Err(Error::ChanProto(format!("Unexpected {} cell", msg.cmd())))
-        }
+        let target = map.advance_from_opening(circid)?;
+        let created = msg.try_into()?;
+        // XXXX handle errors better.
+        // XXXX should we really be holding the mutex for this?
+        // XXXX I think that this one actually means the other side
+        // is closed
+        target.send(created).map_err(|_| {
+            Error::InternalError(
+                "Circuit queue rejected created message. Is it closing? XXX".into(),
+            )
+        })
     }
 
     /// Handle a DESTROY cell by removing the corresponding circuit
@@ -561,7 +558,7 @@ mod test {
         let e = reactor.run_once().await.unwrap_err().unwrap_err();
         assert_eq!(
             format!("{}", e),
-            "channel protocol violation: Unexpected CREATED2 cell"
+            "channel protocol violation: Unexpected CREATED* cell not on opening circuit"
         );
 
         // Can't get a relay cell on a circuit we've never heard of.

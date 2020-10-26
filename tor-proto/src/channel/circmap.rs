@@ -120,23 +120,26 @@ impl CircMap {
 
     /// See whether 'id' is an opening circuit.  If so, mark it "open" and
     /// return a oneshot::Sender that is waiting for its create cell.
-    // XXXXM3 this should return a Result, not an option.
     pub(super) fn advance_from_opening(
         &mut self,
         id: CircId,
-    ) -> Option<oneshot::Sender<CreateResponse>> {
+    ) -> Result<oneshot::Sender<CreateResponse>> {
         // TODO: there should be a better way to do
-        // this. hash_map::Entry seems like it could be better.
+        // this. hash_map::Entry seems like it could be better, but
+        // there seems to be no way to replace the object in-place as
+        // a consuming function of itself.
         let ok = matches!(self.m.get(&id), Some(CircEnt::Opening(_, _)));
         if ok {
             if let Some(CircEnt::Opening(oneshot, sink)) = self.m.remove(&id) {
                 self.m.insert(id, CircEnt::Open(sink));
-                Some(oneshot)
+                Ok(oneshot)
             } else {
                 panic!("internal error: inconsistent circuit state");
             }
         } else {
-            None
+            Err(Error::ChanProto(
+                "Unexpected CREATED* cell not on opening circuit".into(),
+            ))
         }
     }
 
@@ -199,7 +202,7 @@ mod test {
             Some(&mut CircEnt::Opening(_, _))
         ));
         let adv = map_high.advance_from_opening(ids_high[0]);
-        assert!(adv.is_some());
+        assert!(adv.is_ok());
         assert!(matches!(
             map_high.get_mut(ids_high[0]),
             Some(&mut CircEnt::Open(_))
@@ -207,12 +210,12 @@ mod test {
 
         // Can't double-advance.
         let adv = map_high.advance_from_opening(ids_high[0]);
-        assert!(adv.is_none());
+        assert!(adv.is_err());
 
         // Can't advance an entry that is not there.  We know "77"
         // can't be in map_high, since we only added high circids to
         // it.
         let adv = map_high.advance_from_opening(77.into());
-        assert!(adv.is_none());
+        assert!(adv.is_err());
     }
 }
