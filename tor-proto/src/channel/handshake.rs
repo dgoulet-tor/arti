@@ -596,8 +596,7 @@ pub(super) mod test {
         peer_cert_sha256: &[u8],
     ) -> Result<VerifiedChannel<MsgBuf>> {
         let unver = make_unverified(certs);
-        // XXXXM3 fix this naming inconsistency
-        let ed = Ed25519Identity::from_slice(peer_ed).unwrap();
+        let ed = Ed25519Identity::from_bytes(peer_ed).unwrap();
         let rsa = RSAIdentity::from_bytes(peer_rsa).unwrap();
         let chan = DummyChanTarget { ed, rsa };
         unver.check_internal(&chan, peer_cert_sha256, when)

@@ -40,7 +40,7 @@ impl Ed25519Identity {
         Ed25519Identity { id }
     }
     /// If `id` is of the correct length, wrap it in an Ed25519Identity.
-    pub fn from_slice(id: &[u8]) -> Option<Self> {
+    pub fn from_bytes(id: &[u8]) -> Option<Self> {
         if id.len() == 32 {
             Some(Ed25519Identity::new(*array_ref!(id, 0, 32)))
         } else {
@@ -69,7 +69,7 @@ impl From<&PublicKey> for Ed25519Identity {
     fn from(pk: &PublicKey) -> Self {
         // This unwrap is safe because the public key is always 32 bytes
         // long.
-        Ed25519Identity::from_slice(pk.as_bytes()).unwrap()
+        Ed25519Identity::from_bytes(pk.as_bytes()).unwrap()
     }
 }
 

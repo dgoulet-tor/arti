@@ -10,8 +10,8 @@ fn test_ed25519_identity() {
     // bad key, but length is okay.
     let bad_pk = hex!("000aaafaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa000");
 
-    assert_eq!(Ed25519Identity::from_slice(&example_key[0..31]), None);
-    let ex1 = Ed25519Identity::from_slice(&example_key[0..32]).unwrap();
+    assert_eq!(Ed25519Identity::from_bytes(&example_key[0..31]), None);
+    let ex1 = Ed25519Identity::from_bytes(&example_key[0..32]).unwrap();
     assert_eq!(ex1, Ed25519Identity::new(example_key));
 
     let ex2: Ed25519Identity = bad_pk.into();

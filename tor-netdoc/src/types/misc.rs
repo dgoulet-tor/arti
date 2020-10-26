@@ -153,7 +153,7 @@ mod ed25519impl {
                     "bad length for ed25519 key.".into(),
                 ));
             }
-            let key = Ed25519Identity::from_slice(b64.as_bytes()).ok_or_else(|| {
+            let key = Ed25519Identity::from_bytes(b64.as_bytes()).ok_or_else(|| {
                 Error::BadArgument(Pos::at(s), "bad value for ed25519 key.".into())
             })?;
             Ok(Ed25519Public(key))
@@ -431,7 +431,7 @@ mod test {
             .unwrap();
 
         let k1: Ed25519Identity = k1.parse::<Ed25519Public>()?.into();
-        assert_eq!(k1, Ed25519Identity::from_slice(&k2).unwrap());
+        assert_eq!(k1, Ed25519Identity::from_bytes(&k2).unwrap());
 
         assert!("WVIPQ8oArAqLY4Xzk0!!!!8KsUJHBQhG8SC57qru"
             .parse::<Curve25519Public>()
