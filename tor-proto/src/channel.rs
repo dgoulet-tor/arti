@@ -206,12 +206,12 @@ impl Channel {
         use msg::ChanMsg::*;
         let msg = cell.msg();
         match msg {
-            Created(_) | Created2(_) | CreatedFast(_) => Err(Error::ChanProto(format!(
+            Created(_) | Created2(_) | CreatedFast(_) => Err(Error::InternalError(format!(
                 "Can't send {} cell on client channel",
                 msg.cmd()
             ))),
             Certs(_) | Versions(_) | Authenticate(_) | Authorize(_) | AuthChallenge(_)
-            | Netinfo(_) => Err(Error::ChanProto(format!(
+            | Netinfo(_) => Err(Error::InternalError(format!(
                 "Can't send {} cell after handshake is done",
                 msg.cmd()
             ))),
@@ -361,5 +361,42 @@ impl Drop for CircDestroyHandle {
         if let Some(s) = self.sender.take() {
             let _ignore_cancel = s.send(CtrlMsg::CloseCircuit(self.id));
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    // Most of this module is tested via tests that also check on the
+    // reactor code; there are just a few more cases to examine here.
+    use super::*;
+    use futures::stream::StreamExt;
+    use futures_await_test::async_test;
+    use reactor::test::new_reactor;
+    use tor_cell::chancell::{msg, msg::ChanMsg, ChanCell};
+
+    #[async_test]
+    async fn send_bad() {
+        let (chan, _reactor, mut output, _input) = new_reactor();
+
+        let cell = ChanCell::new(7.into(), msg::Created2::new(&b"hihi"[..]).into());
+        let e = chan.send_cell(cell).await;
+        assert!(e.is_err());
+        assert_eq!(
+            format!("{}", e.unwrap_err()),
+            "Internal programming error: Can't send CREATED2 cell on client channel"
+        );
+        let cell = ChanCell::new(0.into(), msg::Certs::new_empty().into());
+        let e = chan.send_cell(cell).await;
+        assert!(e.is_err());
+        assert_eq!(
+            format!("{}", e.unwrap_err()),
+            "Internal programming error: Can't send CERTS cell after handshake is done"
+        );
+
+        let cell = ChanCell::new(5.into(), msg::Create2::new(2, &b"abc"[..]).into());
+        let e = chan.send_cell(cell).await;
+        assert!(e.is_ok());
+        let got = output.next().await.unwrap();
+        assert!(matches!(got.msg(), ChanMsg::Create2(_)));
     }
 }

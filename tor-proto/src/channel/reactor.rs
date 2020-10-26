@@ -273,9 +273,7 @@ where
                 // XXXX I think that this one actually means the other side
                 // is closed. If we see it IRL we should maybe ignore it.
                 s.send(msg.try_into()?).await.map_err(|_| {
-                    Error::InternalError(
-                        "Circuit queue rejected message. Is it closing?".into(),
-                    )
+                    Error::InternalError("Circuit queue rejected message. Is it closing?".into())
                 })
             }
             Some(CircEnt::Opening(_, _)) => Err(Error::ChanProto(
@@ -373,7 +371,7 @@ where
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use super::*;
     use futures::executor::LocalPool;
     use futures::sink::SinkExt;
@@ -382,7 +380,7 @@ mod test {
 
     type CodecResult = std::result::Result<ChanCell, tor_cell::Error>;
 
-    fn new_reactor() -> (
+    pub(crate) fn new_reactor() -> (
         crate::channel::Channel,
         Reactor<mpsc::Receiver<CodecResult>>,
         mpsc::Receiver<ChanCell>,
