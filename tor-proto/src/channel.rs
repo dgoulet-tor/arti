@@ -369,9 +369,10 @@ mod test {
     // Most of this module is tested via tests that also check on the
     // reactor code; there are just a few more cases to examine here.
     use super::*;
+    use crate::channel::codec::test::MsgBuf;
+    use crate::channel::reactor::test::new_reactor;
     use futures::stream::StreamExt;
     use futures_await_test::async_test;
-    use reactor::test::new_reactor;
     use tor_cell::chancell::{msg, msg::ChanMsg, ChanCell};
 
     #[async_test]
@@ -398,5 +399,13 @@ mod test {
         assert!(e.is_ok());
         let got = output.next().await.unwrap();
         assert!(matches!(got.msg(), ChanMsg::Create2(_)));
+    }
+
+    #[test]
+    fn chanbuilder() {
+        let mut builder = ChannelBuilder::default();
+        builder.set_declared_addr("127.0.0.1:9001".parse().unwrap());
+        let tls = MsgBuf::new(&b""[..]);
+        let _outbound = builder.launch(tls);
     }
 }
