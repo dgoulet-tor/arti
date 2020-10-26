@@ -232,7 +232,10 @@ where
 
             // In theory this is allowed in clients, but we should never get
             // one, since we don't use TAP.
-            Created(_) => Err(Error::ChanProto(format!("{} cell received", msg.cmd()))),
+            Created(_) => Err(Error::ChanProto(format!(
+                "{} cell received, but we never send CREATEs",
+                msg.cmd()
+            ))),
 
             // These aren't allowed after handshaking is done.
             Versions(_) | Certs(_) | Authorize(_) | Authenticate(_) | AuthChallenge(_)
@@ -584,6 +587,18 @@ mod test {
         assert_eq!(
             format!("{}", e),
             "channel protocol violation: VERSIONS cell after handshake is done"
+        );
+
+        // We don't accept CREATED.
+        let created_cell = msg::Created::new(&b"xyzzy"[..]).into();
+        input
+            .send(Ok(ChanCell::new(25.into(), created_cell)))
+            .await
+            .unwrap();
+        let e = reactor.run_once().await.unwrap_err().unwrap_err();
+        assert_eq!(
+            format!("{}", e),
+            "channel protocol violation: CREATED cell received, but we never send CREATEs"
         );
     }
 }
