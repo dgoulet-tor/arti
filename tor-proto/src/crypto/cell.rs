@@ -226,9 +226,9 @@ pub(crate) type Tor1RelayCrypto =
 /// Incomplete untested implementation of Tor's current cell crypto.
 pub(crate) mod tor1 {
     use super::*;
+    use cipher::stream::{NewStreamCipher, StreamCipher};
     use digest::Digest;
     use std::convert::TryInto;
-    use stream_cipher::{NewStreamCipher, StreamCipher};
     use typenum::Unsigned;
 
     /// A CryptState is part of a RelayCrypt or a ClientLayer.

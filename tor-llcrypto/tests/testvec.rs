@@ -1,6 +1,6 @@
+use cipher::stream::*;
 use digest::{self, Digest, ExtendableOutput};
 use hex_literal::hex;
-use stream_cipher::*;
 use tor_llcrypto as ll;
 
 use std::convert::TryInto;

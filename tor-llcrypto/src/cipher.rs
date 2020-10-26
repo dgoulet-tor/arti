@@ -6,9 +6,9 @@
 /// Re-exports implementations of counter-mode AES
 ///
 /// These ciphers implement the
-/// [StreamCipher](https://docs.rs/stream-cipher/0.3.2/stream_cipher/trait.StreamCipher.html)
+/// [StreamCipher](https://docs.rs/cipher/0.2.1/cipher/stream/trait.StreamCipher.html)
 /// trait, so use the
-/// [stream-cipher](https://docs.rs/stream-cipher/0.3.2/stream_cipher/) crate to access them.
+/// [cipher](https://docs.rs/cipher/0.2.1/cipher/) crate to access them.
 pub mod aes {
     // These implement StreamCipher.
     pub use aes_ctr::{Aes128Ctr, Aes256Ctr};

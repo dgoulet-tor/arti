@@ -10,8 +10,9 @@ publish = false
 tor-llcrypto = { path="../tor-llcrypto" }
 
 arrayref = "0.3.6"
+# Can't upgrade this or futures-codec will break.
 bytes = "0.5.6"
-crypto-mac = "0.9.1"
+crypto-mac = "0.10.0"
 generic-array = "0.14.4"
 signature = "1.2.2"
 thiserror = "1.0.21"
