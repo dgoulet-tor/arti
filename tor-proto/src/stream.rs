@@ -58,15 +58,8 @@ impl TorStream {
 
         // Possibly decrement the window for the cell we just received, and
         // send a SENDME if doing so took us under the threshold.
-        if sendme::msg_counts_towards_windows(&msg) {
-            match self.target.recvwindow.take() {
-                Some(true) => self.send_sendme().await?,
-                Some(false) => {}
-                None => {
-                    self.target.protocol_error().await;
-                    return Err(Error::StreamProto("stream violated SENDME window".into()));
-                }
-            }
+        if sendme::msg_counts_towards_windows(&msg) && self.target.recvwindow.take()? {
+            self.send_sendme().await?;
         }
 
         Ok(msg)

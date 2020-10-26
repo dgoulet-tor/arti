@@ -51,13 +51,8 @@ impl HalfStream {
                 Ok(())
             }
             RelayMsg::Data(_) => {
-                if self.recvw.take().is_none() {
-                    Err(Error::CircProto(
-                        "Too many cells sent to a closed stream!".into(),
-                    ))
-                } else {
-                    Ok(())
-                }
+                self.recvw.take()?;
+                Ok(())
             }
             RelayMsg::Connected(_) => {
                 if self.connected_ok {
@@ -88,9 +83,9 @@ mod test {
     use tor_cell::relaycell::msg;
 
     #[async_test]
-    async fn halfstream_sendme() {
+    async fn halfstream_sendme() -> Result<()> {
         let mut sendw = StreamSendWindow::new(101);
-        sendw.take(&()).await; // Make sure that it will accept one sendme.
+        sendw.take(&()).await?; // Make sure that it will accept one sendme.
 
         let mut hs = HalfStream::new(sendw, StreamRecvWindow::new(20), true);
 
@@ -103,6 +98,7 @@ mod test {
             format!("{}", e),
             "circuit protocol violation: Too many sendmes on a closed stream!"
         );
+        Ok(())
     }
 
     fn hs_new() -> HalfStream {
@@ -123,7 +119,7 @@ mod test {
         let e = hs.handle_msg(&m).await.err().unwrap();
         assert_eq!(
             format!("{}", e),
-            "circuit protocol violation: Too many cells sent to a closed stream!"
+            "circuit protocol violation: Received a data cell in violation of a window"
         );
     }
 

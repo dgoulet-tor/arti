@@ -291,7 +291,9 @@ impl ClientCirc {
 
         // XXXX If two EXTEND cells are of these are launched on the
         // same circuit at once, could they collide in this part of
-        // the function? XXXXM3
+        // the function?  I don't _think_ so, but it might be a good idea
+        // to have an "extending" bit that keeps two tasks from entering
+        // extend_impl at the same time.
 
         // Did we get the right response?
         if from_hop != hop || msg.cmd() != RelayCmd::EXTENDED2 {
@@ -353,8 +355,9 @@ impl ClientCirc {
                 .map_err(|_| Error::InternalError("Can't queue AddHop request".into()))?;
         }
 
-        // XXXX need to do something make sure that we aren't trying to add
-        // two hops at once. XXXXM3
+        // I think we don't need to worry about two hops being added at
+        // once, because there can only be on meta-message receiver at
+        // a time.
 
         rcv.await
             .map_err(|_| Error::InternalError("AddHop request cancelled".into()))?;
@@ -466,10 +469,8 @@ impl ClientCirc {
     /// using a BEGIN cell.
     async fn begin_data_stream(&mut self, msg: RelayMsg) -> Result<DataStream> {
         let mut stream = self.begin_stream_impl(msg).await?;
+        // TODO: waiting for a response here preculdes optimistic data.
         let response = stream.recv().await?;
-
-        // XXXXX We need to remove the stream if we get an END cell or
-        // a weird cell. XXXXM3
 
         if response.cmd() == RelayCmd::CONNECTED {
             Ok(DataStream::new(stream))
@@ -628,7 +629,7 @@ impl ClientCircImpl {
             self.hops[Into::<usize>::into(hop)]
                 .sendwindow
                 .take(&tag_copy)
-                .await;
+                .await?;
         }
         self.send_msg(msg).await
     }
@@ -868,7 +869,7 @@ impl StreamTarget {
     pub(crate) async fn send(&mut self, msg: RelayMsg) -> Result<()> {
         if sendme::msg_counts_towards_windows(&msg) {
             // Decrement the stream window (and block if it's empty)
-            self.window.take(&()).await;
+            self.window.take(&()).await?;
         }
         let cell = RelayCell::new(self.stream_id, msg);
         let mut c = self.circ.c.lock().await;

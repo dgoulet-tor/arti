@@ -200,7 +200,7 @@ impl Reactor {
                         Some(Ok(CtrlMsg::Shutdown)) => return Ok(()),
                         Some(Ok(msg)) => self.handle_control(msg).await?,
                         Some(Err(_)) => (), // sender was cancelled; ignore.
-                        None => panic!(), // impossible, right? XXXXM3
+                        None => panic!(), // This should be impossible.
                     }
                     continue;
                 }
@@ -274,7 +274,6 @@ impl Reactor {
         );
         // TODO: I am about 80% sure that we only send an END cell if
         // we didn't already get an END cell.  But I should double-check!
-        // XXXXM3
         if should_send_end == ShouldSendEnd::Send {
             let end_cell = RelayCell::new(id, End::new_misc().into());
             if let Some(circ) = self.circuit.upgrade() {
@@ -322,7 +321,8 @@ impl Reactor {
         // copy it, but I don't see a way around it right now.
         let tag = {
             let mut tag_copy = [0u8; 20];
-            // XXXXM3 could crash if length changes.
+            // XXXX This could crash if the tag length changes.  We'll
+            // have to refactor it then.
             (&mut tag_copy).copy_from_slice(tag);
             tag_copy
         };
@@ -334,16 +334,10 @@ impl Reactor {
         // Decrement the circuit sendme windows, and see if we need to
         // send a sendme cell.
         let send_circ_sendme = if c_t_w {
-            // XXXXM3 unwrap is yucky.
-            match self.hop_mut(hopnum).unwrap().recvwindow.take() {
-                Some(true) => true,
-                Some(false) => false,
-                None => {
-                    return Err(Error::CircProto(
-                        "received a cell when circuit sendme window was empty.".into(),
-                    ))
-                }
-            }
+            let hop = self
+                .hop_mut(hopnum)
+                .ok_or_else(|| Error::CircProto("Sendme from nonexistent hop".into()))?;
+            hop.recvwindow.take()?
         } else {
             false
         };
@@ -384,8 +378,9 @@ impl Reactor {
             }
         }
 
-        //XXXXM3 this is still an unwrap, and still risky.
-        let hop = self.hop_mut(hopnum).unwrap();
+        let hop = self
+            .hop_mut(hopnum)
+            .ok_or_else(|| Error::CircProto("Cell from nonexistent hop!".into()))?;
         match hop.map.get_mut(streamid) {
             Some(StreamEnt::Open(s, w, ref mut dropped)) => {
                 // The stream for this message exists, and is open.
@@ -400,20 +395,19 @@ impl Reactor {
 
                 // Remember whether this was an end cell: if so we should
                 // close the stream.
-                let end_cell = matches!(msg, RelayMsg::End(_));
+                let is_end_cell = matches!(msg, RelayMsg::End(_));
 
-                // XXXXM3 handle errors better. Does this one mean that the
-                // the stream is closed?
-
-                // XXXXM3 reject cells that should never go to a client,
-                // XXXX like BEGIN.
+                // TODO: Add a wrapper type here to reject cells that should
+                // never go to a client, like BEGIN.
                 let result = s.send(msg).await;
                 if result.is_err() && c_t_w {
                     // the other side of the stream has gone away; remember
                     // that we received a cell that we couldn't queue for it.
+                    //
+                    // Later this value will be recorded in a half-stream.
                     *dropped += 1;
                 }
-                if end_cell {
+                if is_end_cell {
                     hop.map.end_received(streamid)?;
                 }
                 Ok(())
@@ -438,7 +432,7 @@ impl Reactor {
 
     /// Helper: process a destroy cell.
     fn handle_destroy_cell(&mut self) -> Result<()> {
-        // XXXXM3 anything more to do here?
+        // I think there is nothing more to do here.
         Ok(())
     }
 
@@ -446,4 +440,9 @@ impl Reactor {
     fn hop_mut(&mut self, hopnum: HopNum) -> Option<&mut InboundHop> {
         self.hops.get_mut(Into::<usize>::into(hopnum))
     }
+}
+
+#[cfg(test)]
+mod test {
+    // fn new_circ() -> () {}
 }

@@ -19,6 +19,8 @@ use std::sync::Arc;
 use tor_cell::relaycell::msg::RelayMsg;
 use tor_cell::relaycell::RelayCell;
 
+use crate::{Error, Result};
+
 // XXXX Three problems with this tag:
 // XXXX - First, we need to support unauthenticated flow control.
 // XXXX - Second, this tag type could be different for each layer, if we
@@ -143,8 +145,8 @@ where
     /// originated the cell.  It will get cloned and recorded if we'll
     /// need to check for it later.
     ///
-    /// Return the number of cells left in the window
-    pub async fn take(&mut self, tag: &T) -> u16 {
+    /// Return the number of cells left in the window.
+    pub async fn take(&mut self, tag: &T) -> Result<u16> {
         loop {
             let wait_on = {
                 let mut w = self.w.lock().await;
@@ -157,22 +159,31 @@ where
                         w.tags.push_back(tag.clone());
                     }
 
-                    return val;
+                    return Ok(val);
                 }
 
                 // Window is zero; can't send yet.
                 let (send, recv) = oneshot::channel::<()>();
 
                 let old = w.unblock.replace(send);
-                assert!(old.is_none()); // XXXXM3 can this happen?
+                if old.is_some() {
+                    w.unblock.replace(old.unwrap());
+                    // XXXXM3 find a better approach here; maybe this
+                    // _can_ happen.
+                    return Err(Error::InternalError(
+                        "Two tasks trying to block on the same sendme window at once!".into(),
+                    ));
+                }
                 recv
             };
             // Wait on this receiver while _not_ holding the lock.
 
-            // XXXXM3 Danger: can this unwrap fail? I think it can't, since
-            // the sender can't be cancelled as long as there's a refcount
-            // to it.
-            wait_on.await.unwrap()
+            // I believe this unwrap can't fail, the sender can't be
+            // cancelled as long as there's a refcount to it.  But
+            // let's be careful.
+            wait_on
+                .await
+                .map_err(|_| Error::InternalError("sendme window was cancelled?".into()))?;
         }
     }
 
@@ -236,17 +247,17 @@ impl<P: WindowParams> RecvWindow<P> {
     ///
     /// Returns None if we should not have sent the cell, and we just
     /// violated the window.
-    // TODO: XXXXM3: This should use Result, not Option.
-    #[must_use]
-    pub fn take(&mut self) -> Option<bool> {
+    pub fn take(&mut self) -> Result<bool> {
         let v = self.window.checked_sub(1);
         if let Some(x) = v {
             self.window = x;
             // TODO: same note as in SendWindow.take(). I don't know if
             // this truly matches the spec, but tor accepts it.
-            Some(x % P::increment() == 0)
+            Ok(x % P::increment() == 0)
         } else {
-            None
+            Err(Error::CircProto(
+                "Received a data cell in violation of a window".into(),
+            ))
         }
     }
 
@@ -304,9 +315,9 @@ mod test {
         let mut w: RecvWindow<StreamParams> = RecvWindow::new(500);
 
         for _ in 0..49 {
-            assert_eq!(w.take(), Some(false));
+            assert_eq!(w.take().unwrap(), false);
         }
-        assert_eq!(w.take(), Some(true));
+        assert_eq!(w.take().unwrap(), true);
         assert_eq!(w.window, 450);
 
         assert!(w.decrement_n(123).is_ok());
@@ -319,7 +330,7 @@ mod test {
         assert!(w.decrement_n(400).is_err());
         // failing take.
         assert!(w.decrement_n(377).is_ok());
-        assert_eq!(w.take(), None);
+        assert!(w.take().is_err());
     }
 
     fn new_sendwindow() -> SendWindow<CircParams, &'static str> {
@@ -327,23 +338,23 @@ mod test {
     }
 
     #[async_test]
-    async fn sendwindow_basic() {
+    async fn sendwindow_basic() -> Result<()> {
         let mut w = new_sendwindow();
 
-        let n = w.take(&"Hello").await;
+        let n = w.take(&"Hello").await?;
         assert_eq!(n, 999);
         for _ in 0_usize..98 {
-            w.take(&"world").await;
+            w.take(&"world").await?;
         }
         assert_eq!(w.w.lock().await.window, 901);
         assert_eq!(w.w.lock().await.tags.len(), 0);
 
-        let n = w.take(&"and").await;
+        let n = w.take(&"and").await?;
         assert_eq!(n, 900);
         assert_eq!(w.w.lock().await.tags.len(), 1);
         assert_eq!(w.w.lock().await.tags[0], "and");
 
-        let n = w.take(&"goodbye").await;
+        let n = w.take(&"goodbye").await?;
         assert_eq!(n, 899);
         assert_eq!(w.w.lock().await.tags.len(), 1);
 
@@ -353,7 +364,7 @@ mod test {
         assert_eq!(w.w.lock().await.tags.len(), 0);
 
         for _ in 0_usize..300 {
-            w.take(&"dreamland").await;
+            w.take(&"dreamland").await?;
         }
         assert_eq!(w.w.lock().await.tags.len(), 3);
 
@@ -361,13 +372,15 @@ mod test {
         let n = w.put(None).await;
         assert_eq!(n, Some(799));
         assert_eq!(w.w.lock().await.tags.len(), 2);
+
+        Ok(())
     }
 
     #[async_test]
-    async fn sendwindow_bad_put() {
+    async fn sendwindow_bad_put() -> Result<()> {
         let mut w = new_sendwindow();
         for _ in 0_usize..250 {
-            w.take(&"correct").await;
+            w.take(&"correct").await?;
         }
 
         // wrong tag: won't work.
@@ -389,13 +402,15 @@ mod test {
         let n = w.put(None).await;
         assert_eq!(n, None);
         assert_eq!(w.w.lock().await.window, 950);
+
+        Ok(())
     }
 
     #[async_test]
-    async fn sendwindow_blocking() {
+    async fn sendwindow_blocking() -> Result<()> {
         let mut w = new_sendwindow();
         for _ in 0_usize..1000 {
-            w.take(&"here a string").await;
+            w.take(&"here a string").await?;
         }
         assert_eq!(w.w.lock().await.window, 0);
 
@@ -404,5 +419,6 @@ mod test {
         assert!(ready.is_none());
 
         // TODO: test that this actually wakes up when somebody else says "put".
+        Ok(())
     }
 }
