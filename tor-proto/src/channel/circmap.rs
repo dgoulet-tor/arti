@@ -118,6 +118,13 @@ impl CircMap {
         Err(Error::IDRangeFull)
     }
 
+    /// Testing only: install an entry in this circuit map without regard
+    /// for consistency.
+    #[cfg(test)]
+    pub(super) fn put_unchecked(&mut self, id: CircId, ent: CircEnt) {
+        self.m.insert(id, ent);
+    }
+
     /// Return the entry for `id` in this map, if any.
     pub(super) fn get_mut(&mut self, id: CircId) -> Option<&mut CircEnt> {
         self.m.get_mut(&id)
@@ -148,6 +155,9 @@ impl CircMap {
         }
     }
 
+    /// Called when we have sent a DESTROY on a circuit.  Configures
+    /// a "HalfCirc" object to track how many cells we get on this
+    /// circuit, and to prevent us from reusing it immediately.
     pub(super) fn destroy_sent(&mut self, id: CircId, hs: HalfCirc) {
         self.m.insert(id, CircEnt::DestroySent(hs));
     }

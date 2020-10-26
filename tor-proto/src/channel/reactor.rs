@@ -281,7 +281,7 @@ where
                 })
             }
             Some(CircEnt::Opening(_, _)) => Err(Error::ChanProto(
-                "Relay cell on pending circuit before CREATED received".into(),
+                "Relay cell on pending circuit before CREATED* received".into(),
             )),
             Some(CircEnt::DestroySent(hs)) => hs.receive_cell(),
             None => Err(Error::ChanProto("Relay cell on nonexistent circuit".into())),
@@ -599,6 +599,83 @@ mod test {
         assert_eq!(
             format!("{}", e),
             "channel protocol violation: CREATED cell received, but we never send CREATEs"
+        );
+    }
+
+    #[async_test]
+    async fn deliver_relay() {
+        use crate::circuit::celltypes::ClientCircChanMsg;
+        use tor_cell::chancell::msg;
+
+        let (_chan, mut reactor, _output, mut input) = new_reactor();
+
+        let (_circ_stream_7, mut circ_stream_13) = {
+            let mut circmap = reactor.circs.lock().await;
+            let (snd1, _rcv1) = oneshot::channel();
+            let (snd2, rcv2) = mpsc::channel(64);
+            circmap.put_unchecked(7.into(), CircEnt::Opening(snd1, snd2));
+
+            let (snd3, rcv3) = mpsc::channel(64);
+            circmap.put_unchecked(13.into(), CircEnt::Open(snd3));
+
+            circmap.put_unchecked(23.into(), CircEnt::DestroySent(HalfCirc::new(25)));
+            (rcv2, rcv3)
+        };
+
+        // If a relay cell is sent on an open channel, the correct circuit
+        // should get it.
+        let relaycell: ChanMsg = msg::Relay::new(b"do you suppose").into();
+        input
+            .send(Ok(ChanCell::new(13.into(), relaycell.clone())))
+            .await
+            .unwrap();
+        reactor.run_once().await.unwrap();
+        let got = circ_stream_13.next().await.unwrap();
+        assert!(matches!(got, ClientCircChanMsg::Relay(_)));
+
+        // If a relay cell is sent on an opening channel, that's an error.
+        input
+            .send(Ok(ChanCell::new(7.into(), relaycell.clone())))
+            .await
+            .unwrap();
+        let e = reactor.run_once().await.unwrap_err().unwrap_err();
+        assert_eq!(
+            format!("{}", e),
+            "channel protocol violation: Relay cell on pending circuit before CREATED* received"
+        );
+
+        // If a relay cell is sent on a non-existent channel, that's an error.
+        input
+            .send(Ok(ChanCell::new(101.into(), relaycell.clone())))
+            .await
+            .unwrap();
+        let e = reactor.run_once().await.unwrap_err().unwrap_err();
+        assert_eq!(
+            format!("{}", e),
+            "channel protocol violation: Relay cell on nonexistent circuit"
+        );
+
+        // It's fine to get a relay cell on a DestroySent channel: that happens
+        // when the other side hasn't noticed the Destroy yet.
+
+        // We can do this 25 more times according to our setup:
+        for _ in 0..25 {
+            input
+                .send(Ok(ChanCell::new(23.into(), relaycell.clone())))
+                .await
+                .unwrap();
+            reactor.run_once().await.unwrap(); // should be fine.
+        }
+
+        // This one will fail.
+        input
+            .send(Ok(ChanCell::new(23.into(), relaycell.clone())))
+            .await
+            .unwrap();
+        let e = reactor.run_once().await.unwrap_err().unwrap_err();
+        assert_eq!(
+            format!("{}", e),
+            "channel protocol violation: Too many cells received on destroyed circuit"
         );
     }
 }
