@@ -7,6 +7,7 @@ use crate::{Error, Result};
 use tor_cell::chancell::CircId;
 
 use crate::circuit::celltypes::{ClientCircChanMsg, CreateResponse};
+use crate::circuit::halfcirc::HalfCirc;
 
 use futures::channel::{mpsc, oneshot};
 
@@ -69,6 +70,10 @@ pub(super) enum CircEnt {
 
     /// A circuit that is open and can be given relay cells.
     Open(mpsc::Sender<ClientCircChanMsg>),
+
+    /// A circuit where we have sent a DESTROY, but the other end might
+    /// not have gotten a DESTROY yet.
+    DestroySent(HalfCirc),
 }
 
 /// A map from circuit IDs to circuit entries. Each channel has one.
@@ -141,6 +146,10 @@ impl CircMap {
                 "Unexpected CREATED* cell not on opening circuit".into(),
             ))
         }
+    }
+
+    pub(super) fn destroy_sent(&mut self, id: CircId, hs: HalfCirc) {
+        self.m.insert(id, CircEnt::DestroySent(hs));
     }
 
     /// Extract the value from this map with 'id' if any

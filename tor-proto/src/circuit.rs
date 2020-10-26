@@ -30,6 +30,7 @@
 //! XXXX There is no flow-control or rate-limiting or fairness.
 
 pub(crate) mod celltypes;
+pub(crate) mod halfcirc;
 mod halfstream;
 mod logid;
 pub(crate) mod reactor;

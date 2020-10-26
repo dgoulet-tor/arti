@@ -8,6 +8,7 @@
 
 use super::circmap::{CircEnt, CircMap};
 use super::LogId;
+use crate::circuit::halfcirc::HalfCirc;
 use crate::{Error, Result};
 use tor_cell::chancell::msg::{Destroy, DestroyReason};
 use tor_cell::chancell::{msg::ChanMsg, ChanCell, CircId};
@@ -279,7 +280,7 @@ where
             Some(CircEnt::Opening(_, _)) => Err(Error::ChanProto(
                 "Relay cell on pending circuit before CREATED received".into(),
             )),
-            // Some(DestroySent(s)) => ...  XXXXM3 need to implement this
+            Some(CircEnt::DestroySent(hs)) => hs.receive_cell(),
             None => Err(Error::ChanProto("Relay cell on nonexistent circuit".into())),
         }
     }
@@ -304,9 +305,6 @@ where
     /// Handle a DESTROY cell by removing the corresponding circuit
     /// from the map, and pasing the destroy cell onward to the circuit.
     async fn deliver_destroy(&mut self, circid: CircId, msg: ChanMsg) -> Result<()> {
-        // XXXXM3 TODO: do we need to put a dummy entry in the map until
-        // the other side of the circuit object is gone?
-
         let mut map = self.circs.lock().await;
         // Remove the circuit from the map: nothing more can be done with it.
         let entry = map.remove(circid);
@@ -340,7 +338,8 @@ where
                         Error::InternalError("circuit wan't interested in destroy cell?".into())
                     })
             }
-            // Some(DestroySent) => ... XXXXM3 implement this
+            // We've sent a destroy; we can leave this circuit removed.
+            Some(CircEnt::DestroySent(_)) => Ok(()),
             // Got a DESTROY cell for a circuit we don't have.
             None => {
                 trace!("{}: Destroy for nonexistent circuit {}", self.logid, circid);
@@ -357,10 +356,9 @@ where
             let mut map = self.circs.lock().await;
             // Remove the circuit's entry from the map: nothing more
             // can be done with it.
-            let _old_entry = map.remove(id);
-
-            // TODO: should we remember that there was a circuit with this ID,
-            // so we can recognize junk cells? XXXXM3
+            // TODO: It would be great to have a tighter upper bound for
+            // the number of relay cells we'll receive.
+            map.destroy_sent(id, HalfCirc::new(3000));
         }
         {
             let destroy = Destroy::new(DestroyReason::NONE).into();
@@ -455,7 +453,7 @@ mod test {
     #[async_test]
     async fn new_circ_closed() {
         let mut rng = rand::thread_rng();
-        let (chan, mut reactor, _output, _input) = new_reactor();
+        let (chan, mut reactor, mut output, _input) = new_reactor();
 
         let (pending, _circr) = chan.new_circ(&mut rng).await.unwrap();
 
@@ -476,8 +474,11 @@ mod test {
         {
             let mut circs = reactor.circs.lock().await;
             let ent = circs.get_mut(id);
-            assert!(matches!(ent, None));
+            assert!(matches!(ent, Some(CircEnt::DestroySent(_))));
         }
+        let cell = output.next().await.unwrap();
+        assert_eq!(cell.circid(), id);
+        assert!(matches!(cell.msg(), ChanMsg::Destroy(_)));
     }
 
     // Test proper delivery of a created cell that doesn't make a channel
@@ -525,7 +526,7 @@ mod test {
         {
             let mut circs = reactor.circs.lock().await;
             let ent = circs.get_mut(id);
-            assert!(matches!(ent, None));
+            assert!(matches!(ent, Some(CircEnt::DestroySent(_))));
         }
     }
 
