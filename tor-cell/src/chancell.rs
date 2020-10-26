@@ -3,7 +3,7 @@
 //! A 'channel' is a direct connection between a tor client and a
 //! relay, or between two relays.  Current channels all use TLS.
 //!
-//! This module implements the "cell" type, which is the encoding for
+//! This module implements the [ChanCell] type, which is the encoding for
 //! data sent over a channel.  It also encodes and decodes various
 //! channel messages, which are the types of data conveyed over a
 //! channel.

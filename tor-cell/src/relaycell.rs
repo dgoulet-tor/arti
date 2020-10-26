@@ -157,7 +157,11 @@ impl StreamId {
     }
 }
 
-/// A parsed relay cell.
+/// A decoded and parsed relay cell.
+///
+/// Each relay cell represents a message that can be sent along a
+/// circuit, along with the ID for an associated stream that the
+/// message is meant for.
 #[derive(Debug)]
 pub struct RelayCell {
     /// The stream ID for the stream that this cell corresponds to.

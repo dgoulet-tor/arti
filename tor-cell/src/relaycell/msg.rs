@@ -137,7 +137,16 @@ impl RelayMsg {
     }
 }
 
-/// Message to create a enw stream
+/// A Begin message creates a new data stream.
+///
+/// Upon receiving a Begin message, relays should try to open a new stream
+/// for the client, if their exit policy permits, and associate it with a
+/// new TCP connection to the target address.
+///
+/// If the exit decides to reject the Begin message, or if the TCP
+/// connection fails, the exit should send an End message.
+///
+/// Clients should reject these messags.
 #[derive(Debug, Clone)]
 pub struct Begin {
     /// Ascii string describing target address
@@ -219,7 +228,13 @@ impl Body for Begin {
     }
 }
 
-/// Data on a stream
+/// A Data message represents data sent along a stream.
+///
+/// Upon receiving a Data message for a live stream, the client or
+/// exit sends that data onto the associated TCP connection.
+///
+/// These messages hold between 1 and [Data::MAXLEN] bytes of data each;
+/// they are the most numerous messages on the Tor network.
 #[derive(Debug, Clone)]
 pub struct Data {
     /// Contents of the cell, to be sent on a specific stream
@@ -260,7 +275,11 @@ impl Body for Data {
     }
 }
 
-/// Tells the other end of the circuit to close a stream.
+/// An End message tells the other end of the circuit to close a stream.
+///
+/// Note that End messages do not implement a true half-closed state,
+/// so after sending an End message each party needs to wait a while
+/// to be sure that the stream is completely dead.
 #[derive(Debug, Clone)]
 pub struct End {
     /// Reason for closing the stream
@@ -378,7 +397,12 @@ impl Body for End {
     }
 }
 
-/// Successful response to a Begin message
+/// A Connected message is a successful response to a Begin message
+///
+/// When an outgoing connection succeeds, the exit sends a Connected
+/// back to the client.
+///
+/// Clients never send Connected messages.
 #[derive(Debug, Clone)]
 pub struct Connected {
     /// Resolved address and TTL (time to live) in seconds
@@ -434,7 +458,22 @@ impl Body for Connected {
     }
 }
 
-/// Used for flow control to increase flow control window
+/// A Sendme message is used to increase flow-control windows.
+///
+/// To avoid congestion, each Tor circuit and stream keeps track of a
+/// number of data cells that it is willing to send.  It decrements
+/// these numbers every time it sends a cell.  If these numbers reach
+/// zero, then no more cells can be sent on the stream or circuit.
+///
+/// The only way to re-increment these numbers is by receiving a
+/// Sendme cell from the other end of the circuit or stream.
+///
+/// For security, current circuit-level Sendme cells include an
+/// authentication tag that proves knowledge of the cells that they are
+/// acking.
+///
+/// See [tor-spec.txt](https://spec.torproject.org/tor-spec) for more
+/// information; also see the source for `tor_proto::circuit::sendme`.
 #[derive(Debug, Clone)]
 pub struct Sendme {
     /// A tag value authenticating the previously received data.
@@ -497,9 +536,10 @@ impl Body for Sendme {
     }
 }
 
-/// Obsolete circuit extension message
+/// Extend was an obsolete circuit extension message format.
 ///
-/// This format only handled IPv4 addresses and the TAP handshake.
+/// This format only handled IPv4 addresses, RSA identities, and the
+/// TAP handshake.  Modern Tor clients use Extend2 instead.
 #[derive(Debug, Clone)]
 pub struct Extend {
     /// Where to extend to (address)
@@ -546,7 +586,11 @@ impl Body for Extend {
     }
 }
 
-/// Obsolete circuit extension message (reply)
+/// Extended was an obsolete circuit extension message, sent in reply to
+/// an Extend message.
+///
+/// Like Extend, the Extended message was only designed for the TAP
+/// handshake.
 #[derive(Debug, Clone)]
 pub struct Extended {
     /// Contents of the handshake sent in response to the EXTEND
@@ -571,7 +615,20 @@ impl Body for Extended {
     }
 }
 
-/// Tell the last relay in a circuit to extend the circuit to a new hop
+/// An Extend2 message tells the last relay in a circuit to extend to a new
+/// hop.
+///
+/// When a relay (call it R) receives an Extend2 message, it tries to
+/// find (or make) a channel to the other relay (R') described in the
+/// list of link specifiers. (A link specifier can be an IP addresses
+/// or a cryptographic identity).  Once R has such a channel, the
+/// it packages the client's handshake data as a new Create2 message
+/// R'.  If R' replies with a Created2 (success) message, R packages
+/// that message's contents in an Extended message.
+//
+/// Unlike Extend messages, Extend2 messages can encode any handshake
+/// type, and can describe relays in ways other than IPv4 addresses
+/// and RSA identities.
 #[derive(Debug, Clone)]
 pub struct Extend2 {
     /// A vector of "link specifiers"
@@ -627,7 +684,11 @@ impl Body for Extend2 {
     }
 }
 
-/// Successful reply to an Extend2
+/// Extended2 is a successful reply to an Extend2 message.
+///
+/// Extended2 messages are generated by the former last hop of a
+/// circuit, to tell the client that they have successfully completed
+/// a handshake on the client's behalf.
 #[derive(Debug, Clone)]
 pub struct Extended2 {
     /// Contents of the CREATED2 cell that the new final hop sent in
@@ -662,7 +723,13 @@ impl Body for Extended2 {
     }
 }
 
-/// The remaining hops of this circuit have gone away
+/// A Truncated messsage is sent to the client when the remaining hops
+/// of a circuit have gone away.
+///
+/// NOTE: Current Tor implementations often treat Truncated messages and
+/// Destroy messages interchangeably.  Truncated was intended to be a
+/// "soft" Destroy, that would leave the unaffected parts of a circuit
+/// still usable.
 #[derive(Debug, Clone)]
 pub struct Truncated {
     /// Reason for which this circuit was truncated.
@@ -688,7 +755,12 @@ impl Body for Truncated {
     }
 }
 
-/// Launch a DNS lookup
+/// A Resolve message launches a DNS lookup stream.
+///
+/// A client sends a Resolve message when it wants to perform a DNS
+/// lookup _without_ connecting to the resulting address.  On success
+/// the exit responds with a Resolved message; on failure it responds
+/// with an End message.
 #[derive(Debug, Clone)]
 pub struct Resolve {
     /// Ascii-encoded address to resolve
@@ -840,7 +912,10 @@ impl Writeable for ResolvedVal {
     }
 }
 
-/// Response to a Resolve message
+/// A Resolved message is a successful reply to a Resolve message.
+///
+/// The Resolved message contains a list of zero or more addresses,
+/// and their associated times-to-live in seconds.
 #[derive(Debug, Clone)]
 pub struct Resolved {
     /// List of addresses and their associated time-to-live values.
@@ -894,6 +969,8 @@ impl Body for Resolved {
 }
 
 /// A relay message that we didn't recognize
+///
+/// NOTE: Clients should generally reject these.
 #[derive(Debug, Clone)]
 pub struct Unrecognized {
     /// Command that we didn't recognize

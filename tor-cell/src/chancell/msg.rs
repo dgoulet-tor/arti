@@ -266,23 +266,35 @@ const FAST_C_HANDSHAKE_LEN: usize = 20;
 const FAST_S_HANDSHAKE_LEN: usize = 20 + 20;
 
 fixed_len! {
-    /// A Create cell creates a circuit, using the TAP handshake
+    /// A Create message creates a circuit, using the TAP handshake.
     ///
-    /// TAP is an obsolete handshake based on RSA-1024.
+    /// TAP is an obsolete handshake based on RSA-1024 and DH-1024.
+    /// Relays respond to Create message with a Created reply on
+    /// success, or a Destroy message on failure.
+    ///
+    /// In Tor today, Create is only used for the deprecated v2 onion
+    /// service protocol.
     Create, CREATE, TAP_C_HANDSHAKE_LEN
 }
 fixed_len! {
-    /// A Creatd cell responds to a Create cell, using the TAP handshake
+    /// A Created message responds to a Created message, using the TAP
+    /// handshake.
     ///
-    /// TAP is an obsolete handshake based on RSA-1024.
+    /// TAP is an obsolete handshake based on RSA-1024 and DH-1024.
     Created, CREATED, TAP_S_HANDSHAKE_LEN
 }
 fixed_len! {
-    /// A CreateFast cell creates a circuit using no public-key crypto.
+    /// A CreateFast message creates a circuit using no public-key crypto.
+    ///
+    /// CreateFast is safe only when used on an already-secure TLS
+    /// connection.  It can only be used for the first hop of a circuit.
+    ///
+    /// Relays reply to a CreateFast message with CreatedFast on
+    /// success, or a Destroy message on failure.
     ///
     /// This handshake was originally used for the first hop of every
-    /// circuit.  Nowadays it is used for creating one-hop circuits in
-    /// the case where we don't know any onion key for the first hop.
+    /// circuit.  Nowadays it is used for creating one-hop circuits
+    /// when we don't know any onion key for the first hop.
     CreateFast, CREATE_FAST, FAST_C_HANDSHAKE_LEN
 }
 impl CreateFast {
@@ -292,7 +304,10 @@ impl CreateFast {
     }
 }
 fixed_len! {
-    /// A CreatedFast cell responds to a CreateFast cell
+    /// A CreatedFast message responds to a CreateFast message
+    ///
+    /// Relays send this message back to indicate that the CrateFast handshake
+    /// is complete.
     CreatedFast, CREATED_FAST, FAST_S_HANDSHAKE_LEN
 }
 impl CreatedFast {
@@ -302,10 +317,14 @@ impl CreatedFast {
     }
 }
 
-/// Create a circuit on the current channel.
+/// A Create2 message create a circuit on the current channel.
 ///
 /// To create a circuit, the client sends a Create2 cell containing a
-/// handshake of a given type; the relay responds with a Created2 cell.
+/// handshake of a given type; the relay responds with a Created2 cell
+/// containing a reply.
+///
+/// Currently, most Create2 cells contain a client-side instance of the
+/// "ntor" handshake.
 #[derive(Clone, Debug)]
 pub struct Create2 {
     /// Identifier for what kind of handshake this is.
@@ -336,7 +355,7 @@ impl Readable for Create2 {
     }
 }
 impl Create2 {
-    /// Wrap a typed handshake as a create2 cell
+    /// Wrap a typed handshake as a Create2 message
     pub fn new<B>(handshake_type: u16, handshake: B) -> Self
     where
         B: Into<Vec<u8>>,
@@ -349,7 +368,10 @@ impl Create2 {
     }
 }
 
-/// Response to a Create2 cell
+/// A Created2 message completes a circuit-creation handshake.
+///
+/// When a relay receives a valid Create2 message that it can handle, it
+/// establishes the circuit and replies with a Created2.
 #[derive(Clone, Debug)]
 pub struct Created2 {
     /// Body of the handshake reply
@@ -387,7 +409,7 @@ impl Readable for Created2 {
     }
 }
 
-/// A Relay cell-- that is, one transmitted over a circuit.
+/// A Relay cell - that is, one transmitted over a circuit.
 ///
 /// Once a circuit has been established, relay cells can be sent over
 /// it.  Clients can send relay cells to any relay on the circuit. Any
@@ -396,7 +418,7 @@ impl Readable for Created2 {
 /// intermediate hops.
 ///
 /// A different protocol is defined over the relay cells; it is implemented
-/// in the relaycell module.
+/// in the [crate::relaycell] module.
 #[derive(Clone)]
 pub struct Relay {
     // XXXX either this shouldn't be boxed, or RelayCellBody should be boxed!
@@ -454,10 +476,10 @@ impl Readable for Relay {
     }
 }
 
-/// Tear down a circuit
+/// The Destroy message tears down a circuit.
 ///
 /// On receiving a Destroy message, a Tor implementation should
-/// tear down the associated circuit, and relay the destroy message
+/// tear down the associated circuit, and pass the destroy message
 /// down the circuit to later/earlier nodes on the circuit (if any).
 #[derive(Clone, Debug)]
 pub struct Destroy {
@@ -628,15 +650,15 @@ impl Readable for Netinfo {
     }
 }
 
-/// A Versions cell begins channel negotiation.
+/// A Versions message begins channel negotiation.
 ///
 /// Every channel must begin by sending a Versions message.  This message
 /// lists the link protocol versions that this Tor implementation supports.
 ///
 /// Note that we should never actually send Versions cells using the
-/// usual channel encoding: Versions cells use two-byte circuit IDs,
-/// whereas all the other cell types use four-byte circuit IDs
-/// [assuming a non-obsolete version is negotiated].
+/// usual channel cell encoding: Versions cells _always_ use two-byte
+/// circuit IDs, whereas all the other cell types use four-byte
+/// circuit IDs [assuming a non-obsolete version is negotiated].
 #[derive(Clone, Debug)]
 pub struct Versions {
     /// List of supported link protocol versions
@@ -702,7 +724,9 @@ impl Readable for Versions {
     }
 }
 
-/// Used to negotiate channel padding
+/// A PaddingNegotiate message is used to negotiate channel padding.
+///
+/// TODO: say more once we implement channel padding.
 #[derive(Clone, Debug)]
 pub struct PaddingNegotiate {
     /// Whether to start or stop padding
@@ -772,14 +796,15 @@ fn take_one_tor_cert(r: &mut Reader<'_>) -> Result<TorCert> {
         cert: cert.into(),
     })
 }
-/// Used as part of the channel handshake to send additioinal certificates
+/// A Certs message is used as part of the channel handshake to send
+/// additional certificates.
 ///
 /// These certificates are not presented as part of the TLS handshake.
 /// Originally this was meant to make Tor TLS handshakes look "normal", but
 /// nowadays it serves less purpose, especially now that we have TLS 1.3.
 ///
-/// Every relay sends these cells as part of negotiation; clients do not
-/// send them.
+/// Every relay sends this message as part of channel negotiation;
+/// clients do not send them.
 #[derive(Clone, Debug)]
 pub struct Certs {
     /// The certificates in this cell
@@ -856,11 +881,12 @@ impl Readable for Certs {
 /// Length of the body for an authentication challenge
 const CHALLENGE_LEN: usize = 32;
 
-/// Part of negotiation: sent by responders to initiators.
+/// An AuthChallenge message is part of negotiation, sent by
+/// responders to initiators.
 ///
 /// The AuthChallenge cell is used to ensure that some unpredictable material
 /// has been sent on the channel, and to tell the initiator what
-/// authentication methods will be extended.
+/// authentication methods will be accepted.
 ///
 /// Clients can safely ignore this message: they don't need to authenticate.
 #[derive(Clone, Debug)]
@@ -956,7 +982,7 @@ impl Readable for Authenticate {
     }
 }
 
-/// The Authorize cell type is not yet used.
+/// The Authorize message type is not yet used.
 #[derive(Clone, Debug)]
 pub struct Authorize {
     /// The cell's content, which isn't really specified yet.
@@ -988,10 +1014,13 @@ impl Readable for Authorize {
     }
 }
 
-/// Holds any cell whose command we don't recognize.
+/// Holds any message whose command we don't recognize.
 ///
 /// Well-behaved Tor implementations are required to ignore commands
 /// like this.
+///
+/// TODO: I believe that this is not a risky case of Postel's law,
+/// since it is only for channels, but we should be careful here.
 #[derive(Clone, Debug)]
 pub struct Unrecognized {
     /// The channel command that we got with this cell
