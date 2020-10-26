@@ -371,7 +371,6 @@ mod test {
 
         let n = w.put(Some(&"correct")).await;
         assert_eq!(n, Some(850));
-        dbg!(&w.w.lock().await.tags);
         let n = w.put(Some(&"correct")).await;
         assert_eq!(n, Some(950));
 

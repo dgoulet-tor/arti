@@ -93,7 +93,6 @@ mod test {
 
         // TODO: Calculate the expected failure rate for this test when
         // using an unseeded RNG.
-        dbg!(cnt);
         assert!(cnt[3] < cnt[0]);
         assert!(cnt[0] < cnt[2]);
 
@@ -112,7 +111,6 @@ mod test {
             let pos = arry.iter().position(|x| x == r);
             cnt[pos.unwrap()] += 1;
         }
-        dbg!(cnt);
         check_close(cnt[0], n_iters / 4);
         check_close(cnt[1], n_iters / 4);
         check_close(cnt[2], n_iters / 4);
@@ -128,7 +126,6 @@ mod test {
         fn check_fclose(a: f64, b: f64) {
             assert!((a - b).abs() < (b + 0.0001) / 10.0);
         }
-        dbg!(cnt);
         check_fclose((cnt[0] as f64) / (n_iters as f64), 0.0099);
         check_fclose((cnt[1] as f64) / (n_iters as f64), 0.0);
         check_fclose((cnt[2] as f64) / (n_iters as f64), 0.9901);

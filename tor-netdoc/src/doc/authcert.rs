@@ -380,7 +380,7 @@ mod test {
         // We should recover from the failed case and read the next data fine.
         assert!(res[0].is_err());
         assert!(res[1].is_ok());
-        dbg!(res.len());
+        assert_eq!(res.len(), 2);
     }
 
     #[test]
@@ -393,6 +393,6 @@ mod test {
         // We should recover from the failed case and read the next data fine.
         assert!(res[0].is_err());
         assert!(res[1].is_ok());
-        dbg!(res.len());
+        assert_eq!(res.len(), 2);
     }
 }

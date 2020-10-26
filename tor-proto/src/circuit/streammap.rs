@@ -14,6 +14,8 @@ use std::collections::HashMap;
 
 use rand::Rng;
 
+use log::info;
+
 /// The entry for a stream.
 pub(super) enum StreamEnt {
     /// An open stream: any relay cells tagged for this stream should get
@@ -118,7 +120,7 @@ impl StreamMap {
                 "Received two END cells on same stream".into(),
             )),
             Some(StreamEnt::EndSent(_)) => {
-                dbg!("Actually got an end cell on a half-closed stream!");
+                info!("Actually got an end cell on a half-closed stream!");
                 // We got an END, and we already sent an END. Great!
                 // we can forget about this stream.
                 self.m.remove(&id);

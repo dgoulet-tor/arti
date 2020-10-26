@@ -791,7 +791,6 @@ impl Resolve {
                 s
             }
         };
-        dbg!(&query);
         Resolve {
             query: query.into_bytes(),
         }

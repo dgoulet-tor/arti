@@ -24,7 +24,6 @@ impl futures_codec::Encoder for ChannelCodec {
     type Error = tor_cell::Error;
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        dbg!(&item);
         self.0.write_cell(item, dst)
     }
 }

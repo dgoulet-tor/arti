@@ -636,7 +636,6 @@ impl Readable for Netinfo {
         let their_addr = take_one_netinfo_addr(r)?.unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
         let mut my_addr = Vec::new();
         let my_n_addrs = r.take_u8()?;
-        dbg!(my_n_addrs);
         for _ in 0..my_n_addrs {
             if let Some(a) = take_one_netinfo_addr(r)? {
                 my_addr.push(a);
