@@ -270,13 +270,11 @@ where
         match map.get_mut(circid) {
             Some(CircEnt::Open(s)) => {
                 // There's an open circuit; we can give it the RELAY cell.
-                // XXXXM3 handle errors better.
-                // XXXXM3 should we really be holding the mutex for this?
-                // XXXXM3 I think that this one actually means the other side
-                // is closed
+                // XXXX I think that this one actually means the other side
+                // is closed. If we see it IRL we should maybe ignore it.
                 s.send(msg.try_into()?).await.map_err(|_| {
                     Error::InternalError(
-                        "Circuit queue rejected message. Is it closing? XXX".into(),
+                        "Circuit queue rejected message. Is it closing?".into(),
                     )
                 })
             }
@@ -294,8 +292,6 @@ where
         let mut map = self.circs.lock().await;
         let target = map.advance_from_opening(circid)?;
         let created = msg.try_into()?;
-        // XXXX handle errors better.
-        // XXXX should we really be holding the mutex for this?
         // XXXX I think that this one actually means the other side
         // is closed
         target.send(created).map_err(|_| {
