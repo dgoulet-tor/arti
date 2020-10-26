@@ -1,7 +1,7 @@
 //! Code to handle incoming cells on a circuit
 //!
-//! TODO: I have zero confidence in the close-and-cleanup behavior here,
-//! or in the error handling behavior.
+//! TODO: I don't have so much confidence in the close-and-cleanup
+//! behavior here, or in the error handling behavior.
 //!
 //! TODO: perhaps this should share code with channel::reactor; perhaps
 //! it should just not exist.
@@ -104,7 +104,7 @@ impl InboundHop {
     }
 }
 
-/// Object to handle incoming cells on a circuit
+/// Object to handle incoming cells and background tasks on a circuit
 ///
 /// This type is returned when you finish a circuit; you need to spawn a
 /// new task that calls `run()` on it.
@@ -164,6 +164,9 @@ impl Reactor {
 
     /// Launch the reactor, and run until the circuit closes or we
     /// encounter an error.
+    ///
+    /// Once this method returns, the circuit is dead and cannot be
+    /// used again.
     pub async fn run(mut self) -> Result<()> {
         if let Some(circ) = self.circuit.upgrade() {
             let circ = circ.lock().await;

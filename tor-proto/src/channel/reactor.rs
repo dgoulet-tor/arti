@@ -72,7 +72,7 @@ impl ReactorError {
     }
 }
 
-/// Object to handle incoming cells on a channel.
+/// Object to handle incoming cells and background tasks on a channel.
 ///
 /// This type is returned when you finish a channel; you need to spawn a
 /// new task that calls `run()` on it.
@@ -136,6 +136,9 @@ where
 
     /// Launch the reactor, and run until the channel closes or we
     /// encounter an error.
+    ///
+    /// Once this function returns, the channel is dead, and can't be
+    /// used again.
     pub async fn run(mut self) -> Result<()> {
         if let Some(chan) = self.channel.upgrade() {
             let chan = chan.lock().await;
@@ -147,21 +150,17 @@ where
         }
         debug!("{}: Running reactor", self.logid);
         let result: Result<()> = loop {
-            dbg!("Loop");
             match self.run_once().await {
                 Ok(()) => (),
                 Err(ReactorError::Shutdown) => break Ok(()),
                 Err(ReactorError::Err(e)) => break Err(e),
             }
         };
-        dbg!("Out");
         debug!("{}: Reactor stopped: {:?}", self.logid, result);
         if let Some(chan) = self.channel.upgrade() {
             let mut chan = chan.lock().await;
             chan.closed = true;
         }
-        dbg!("None.");
-        dbg!(&result);
         result
     }
 

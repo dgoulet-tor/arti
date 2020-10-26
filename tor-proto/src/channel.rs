@@ -1,8 +1,37 @@
-//! Talking directly (over a TLS connection) to a Tor node
+//! Code for talking directly (over a TLS connection) to a Tor node.
 //!
-//! Right now, we only support connecting to a Tor relay as a client.
+//! Channels form the basis of the rest of the Tor protocol: they are
+//! the only way for two Tor instances to talk.
 //!
-//! To do so, launch a TLS connection, then pass it to a ChannelBuilder.
+//! Channels are not useful directly for application requests: after
+//! making a channel, it needs to get used to build circuits, and the
+//! circuits are used to anonymize streams.  The streams are the
+//! objects corresponding to directory requests.
+//!
+//! In general, you shouldn't try to manage channels on your own;
+//! however, there is no alternative in Arti today.  (A future
+//! channel-manager library will probably fix that.)
+//!
+//! To launch a channel:
+//!
+//!  * Create a TLS connection as an object that implements AsyncRead
+//!    + AsyncWrite, and pass it to a [ChannelBuilder].  This will
+//!    yield an [handshake::OutboundClientHandshake] that represents
+//!    the state of the handshake.
+//!  * Call [handshake::OutboundClientHandshake:connect] on the result
+//!    to negotiate the rest of the handshake.  This will verify
+//!    syntactic correctness of the handshake, but not its cryptographic
+//!    integrity.
+//!  * Call [handshake::UnverifiedChannel::check] on the result.  This
+//!    finishes the cryptographic checks.
+//!  * Call [handshake::VerifiedChannel::finish] on the result. This
+//!    completes the handshake and produces an open channel and Reactor.
+//!  * Launch an asynchronous task to call the reactor's run() method.
+//!
+//! One you have a running channel, you can create circuits on it with
+//! its [Channel::new_circ] method.  See
+//! [crate::circuit::PendingClientCirc] for information on how to
+//! procede from there.
 //!
 //! # Design
 //!
@@ -61,6 +90,9 @@ type CellFrame<T> = futures_codec::Framed<T, crate::channel::codec::ChannelCodec
 /// An open client channel, ready to send and receive Tor cells.
 ///
 /// A channel is a direct connection to a Tor relay, implemented using TLS.
+///
+/// TODO: This is actually reference-counted counted handle.  In theory
+/// I'm supposed to give it a name to reflect that.
 pub struct Channel {
     /// reference-counted locked wrapper around the channel object
     inner: Arc<Mutex<ChannelImpl>>,
@@ -95,12 +127,12 @@ struct ChannelImpl {
 
     /// Context for allocating unique circuit log identifiers.
     circ_logid_ctx: logid::CircLogIdContext,
-    /*
-        /// Validated Ed25519 identity for this peer.
-        ed25519_id: Ed25519Identity,
-        /// Validated RSA identity for this peer.
-        rsa_id: RSAIdentity,
-    */
+    /// Validated Ed25519 identity for this peer.
+    #[allow(unused)]
+    ed25519_id: Ed25519Identity,
+    /// Validated RSA identity for this peer.
+    #[allow(unused)]
+    rsa_id: RSAIdentity,
 }
 
 /// Structure for building and launching a Tor channel.
@@ -160,8 +192,8 @@ impl Channel {
         tls_sink: Box<dyn Sink<ChanCell, Error = tor_cell::Error> + Send + Unpin + 'static>,
         tls_stream: T,
         logid: LogId,
-        _ed25519_id: Ed25519Identity,
-        _rsa_id: RSAIdentity,
+        ed25519_id: Ed25519Identity,
+        rsa_id: RSAIdentity,
     ) -> (Self, reactor::Reactor<T>)
     where
         T: Stream<Item = std::result::Result<ChanCell, tor_cell::Error>> + Send + Unpin + 'static,
@@ -181,10 +213,8 @@ impl Channel {
             sendclosed: Cell::new(Some(sendclosed)),
             logid,
             circ_logid_ctx: logid::CircLogIdContext::new(),
-            /*
             ed25519_id,
             rsa_id,
-             */
         };
         let inner = Arc::new(Mutex::new(inner));
         let reactor = reactor::Reactor::new(
@@ -227,12 +257,12 @@ impl Channel {
     }
 
     /// Return a newly allocated PendingClientCirc object with
-    /// corresponding reactor. A circuit ID is allocated, but no
-    /// handshaking is done.
+    /// a corresponding circuit reactor. A circuit ID is allocated, but no
+    /// messages are sent, and no cryptography is done.
     ///
     /// To use the results of this method, call Reactor::run() in a
-    /// new task, then use the methods of PendingClientCirc to build
-    /// the circuit.
+    /// new task, then use the methods of
+    /// [crate::circuit::PendingClientCirc] to build the circuit.
     pub async fn new_circ<R: Rng>(
         &self,
         rng: &mut R,

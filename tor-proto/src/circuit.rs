@@ -9,6 +9,15 @@
 //! knows only the hop before and the hop after.  The client shares a
 //! separate set of keys with each hop.
 //!
+//! To build a circuit, first create a [crate::channel::Channel], then
+//! call its [crate::channel::Channel::new_circ] method.  This yields
+//! a [PendingClientCirc] object that won't become live until you call
+//! one of the methods that extends it to its first hop.  After you've
+//! done that, you can call [Circuit::extend_ntor] on the circuit to
+//! build it into a multi-hop circuit.  Finally, you can use
+//! [Circuit::begin_stream] to get a Stream object that can be used
+//! for anonymized data.
+//!
 //! # Implementation
 //!
 //! Each open circuit has a corresponding Reactor object that runs in
@@ -27,7 +36,7 @@
 //! There's one big mutex on the whole circuit: the reactor needs to hold
 //! it to process a cell, and streams need to hold it to send.
 //!
-//! XXXX There is no flow-control or rate-limiting or fairness.
+//! There is no flow-control or rate-limiting or fairness.
 
 pub(crate) mod celltypes;
 pub(crate) mod halfcirc;
@@ -765,7 +774,8 @@ impl PendingClientCirc {
 
     /// Use the ntor handshake to connect to the first hop of this circuit.
     ///
-    /// Note that the provided 'target' must match the channel's target.
+    /// Note that the provided 'target' must match the channel's target,
+    /// or the handshake will fail.
     pub async fn create_firsthop_ntor<R, Tg>(self, rng: &mut R, target: &Tg) -> Result<ClientCirc>
     where
         R: Rng + CryptoRng,

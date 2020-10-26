@@ -553,8 +553,7 @@ pub(super) mod test {
         );
     }
 
-    // not used yet
-    #[allow(unused)]
+    #[cfg(test)]
     fn make_unverified(certs: msg::Certs) -> UnverifiedChannel<MsgBuf> {
         let localhost = std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST);
         let netinfo_cell = msg::Netinfo::for_client(localhost);
