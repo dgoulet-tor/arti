@@ -82,7 +82,7 @@ enum StreamIDReq {
 
 impl RelayCmd {
     /// Check whether this command requires a certain kind of
-    /// StreamID, and return a corresponding StreamIDReq.
+    /// StreamId, and return a corresponding StreamIDReq.
     fn expects_streamid(self) -> StreamIDReq {
         match self {
             RelayCmd::BEGIN
@@ -114,7 +114,7 @@ impl RelayCmd {
     }
     /// Return true if this command is one that accepts the particular
     /// stream ID `id`
-    pub fn accepts_streamid_val(self, id: StreamID) -> bool {
+    pub fn accepts_streamid_val(self, id: StreamId) -> bool {
         match (self.expects_streamid(), id.is_zero()) {
             (StreamIDReq::WantNonZero, true) => false,
             (StreamIDReq::WantZero, false) => false,
@@ -127,28 +127,28 @@ impl RelayCmd {
 ///
 /// These identifiers are local to each hop on a circuit
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
-pub struct StreamID(u16);
+pub struct StreamId(u16);
 
-impl From<u16> for StreamID {
-    fn from(v: u16) -> StreamID {
-        StreamID(v)
+impl From<u16> for StreamId {
+    fn from(v: u16) -> StreamId {
+        StreamId(v)
     }
 }
 
-impl From<StreamID> for u16 {
-    fn from(id: StreamID) -> u16 {
+impl From<StreamId> for u16 {
+    fn from(id: StreamId) -> u16 {
         id.0
     }
 }
 
-impl std::fmt::Display for StreamID {
+impl std::fmt::Display for StreamId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         self.0.fmt(f)
     }
 }
 
-impl StreamID {
-    /// Return true if this is the zero StreamID.
+impl StreamId {
+    /// Return true if this is the zero StreamId.
     ///
     /// A zero-valid circuit ID denotes a relay message that is not related to
     /// any particular stream, but which applies to the circuit as a whole.
@@ -161,18 +161,18 @@ impl StreamID {
 #[derive(Debug)]
 pub struct RelayCell {
     /// The stream ID for the stream that this cell corresponds to.
-    streamid: StreamID,
+    streamid: StreamId,
     /// The relay message for this cell.
     msg: msg::RelayMsg,
 }
 
 impl RelayCell {
     /// Construct a new relay cell.
-    pub fn new(streamid: StreamID, msg: msg::RelayMsg) -> Self {
+    pub fn new(streamid: StreamId, msg: msg::RelayMsg) -> Self {
         RelayCell { streamid, msg }
     }
     /// Consume this cell and return its components.
-    pub fn into_streamid_and_msg(self) -> (StreamID, msg::RelayMsg) {
+    pub fn into_streamid_and_msg(self) -> (StreamId, msg::RelayMsg) {
         (self.streamid, self.msg)
     }
     /// Return the command for this cell.
@@ -243,7 +243,7 @@ impl RelayCell {
     pub fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         let cmd = r.take_u8()?.into();
         r.advance(2)?; // "recognized"
-        let streamid = StreamID(r.take_u16()?);
+        let streamid = StreamId(r.take_u16()?);
         r.advance(4)?; // digest
         let len = r.take_u16()? as usize;
         if r.remaining() < len {

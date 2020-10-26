@@ -10,7 +10,7 @@ use super::circmap::{CircEnt, CircMap};
 use super::LogId;
 use crate::{Error, Result};
 use tor_cell::chancell::msg::{Destroy, DestroyReason};
-use tor_cell::chancell::{msg::ChanMsg, ChanCell, CircID};
+use tor_cell::chancell::{msg::ChanMsg, ChanCell, CircId};
 
 use futures::channel::{mpsc, oneshot};
 use futures::lock::Mutex;
@@ -32,7 +32,7 @@ pub(super) enum CtrlMsg {
     /// reactor.
     Register(oneshot::Receiver<CtrlMsg>),
     /// Tell the reactor that a given circuit has gone away.
-    CloseCircuit(CircID),
+    CloseCircuit(CircId),
 }
 
 /// Type returned by a oneshot channel for a CtrlMsg.
@@ -260,7 +260,7 @@ where
     }
 
     /// Give the RELAY cell `msg` to the appropriate circuid.
-    async fn deliver_relay(&mut self, circid: CircID, msg: ChanMsg) -> Result<()> {
+    async fn deliver_relay(&mut self, circid: CircId, msg: ChanMsg) -> Result<()> {
         let mut map = self.circs.lock().await;
 
         match map.get_mut(circid) {
@@ -286,7 +286,7 @@ where
 
     /// Handle a CREATED{,_FAST,2} cell by passing it on to the appropriate
     /// circuit, if that circuit is waiting for one.
-    async fn deliver_created(&mut self, circid: CircID, msg: ChanMsg) -> Result<()> {
+    async fn deliver_created(&mut self, circid: CircId, msg: ChanMsg) -> Result<()> {
         let mut map = self.circs.lock().await;
         if let Some(target) = map.advance_from_opening(circid) {
             let created = msg.try_into()?;
@@ -306,7 +306,7 @@ where
 
     /// Handle a DESTROY cell by removing the corresponding circuit
     /// from the map, and pasing the destroy cell onward to the circuit.
-    async fn deliver_destroy(&mut self, circid: CircID, msg: ChanMsg) -> Result<()> {
+    async fn deliver_destroy(&mut self, circid: CircId, msg: ChanMsg) -> Result<()> {
         // XXXXM3 TODO: do we need to put a dummy entry in the map until
         // the other side of the circuit object is gone?
 
@@ -354,7 +354,7 @@ where
 
     /// Called when a circuit goes away: sends a DESTROY cell and removes
     /// the circuit.
-    async fn outbound_destroy_circ(&mut self, id: CircID) -> Result<()> {
+    async fn outbound_destroy_circ(&mut self, id: CircId) -> Result<()> {
         trace!("{}: Circuit {} is gone; sending DESTROY", self.logid, id);
         {
             let mut map = self.circs.lock().await;

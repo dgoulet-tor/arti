@@ -14,7 +14,7 @@ use crate::crypto::cell::{HopNum, InboundClientCrypt, InboundClientLayer};
 use crate::{Error, Result};
 use tor_cell::chancell::msg::Relay;
 use tor_cell::relaycell::msg::{End, RelayMsg, Sendme};
-use tor_cell::relaycell::{RelayCell, StreamID};
+use tor_cell::relaycell::{RelayCell, StreamId};
 
 use futures::channel::{mpsc, oneshot};
 use futures::lock::Mutex;
@@ -39,13 +39,13 @@ pub(super) enum CtrlMsg {
     /// require the sender to .await.
     Register(oneshot::Receiver<CtrlMsg>),
     /// Tell the reactor that a given stream has gone away.
-    CloseStream(HopNum, StreamID, sendme::StreamRecvWindow),
+    CloseStream(HopNum, StreamId, sendme::StreamRecvWindow),
     /// Ask the reactor for a new stream ID, and allocate a circuit for it.
     AddStream(
         HopNum,
         mpsc::Sender<RelayMsg>,
         sendme::StreamSendWindow,
-        oneshot::Sender<Result<StreamID>>,
+        oneshot::Sender<Result<StreamId>>,
     ),
     /// Tell the reactor to add a new hop to its view of the circuit, and
     /// then tell us when it has done so.
@@ -254,7 +254,7 @@ impl Reactor {
     async fn close_stream(
         &mut self,
         hopnum: HopNum,
-        id: StreamID,
+        id: StreamId,
         window: sendme::StreamRecvWindow,
     ) -> Result<()> {
         // Mark the stream as closing.

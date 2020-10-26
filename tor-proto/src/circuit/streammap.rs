@@ -6,7 +6,7 @@ use crate::{Error, Result};
 /// Mapping from stream ID to streams.
 // NOTE: This is a work in progress and I bet I'll refactor it a lot;
 // it needs to stay opaque!
-use tor_cell::relaycell::{msg::RelayMsg, StreamID};
+use tor_cell::relaycell::{msg::RelayMsg, StreamId};
 
 use futures::channel::mpsc;
 use std::collections::hash_map::Entry;
@@ -48,10 +48,10 @@ pub(super) enum ShouldSendEnd {
 /// A map from stream IDs to stream entries. Each circuit has one for each
 /// hop.
 pub(super) struct StreamMap {
-    /// Map from StreamID to StreamEnt.  If there is no entry for a
-    /// StreamID, that stream doesn't exist.
-    m: HashMap<StreamID, StreamEnt>,
-    /// The next StreamID that we should use for a newly allocated
+    /// Map from StreamId to StreamEnt.  If there is no entry for a
+    /// StreamId, that stream doesn't exist.
+    m: HashMap<StreamId, StreamEnt>,
+    /// The next StreamId that we should use for a newly allocated
     /// circuit.  (0 is not a valid streamID).
     next_stream_id: u16,
 }
@@ -72,19 +72,19 @@ impl StreamMap {
         }
     }
 
-    /// Add an entry to this map; return the newly allocated StreamID.
+    /// Add an entry to this map; return the newly allocated StreamId.
     pub(super) fn add_ent(
         &mut self,
         sink: mpsc::Sender<RelayMsg>,
         window: sendme::StreamSendWindow,
-    ) -> Result<StreamID> {
+    ) -> Result<StreamId> {
         let stream_ent = StreamEnt::Open(sink, window, 0);
         // This "65536" seems too aggressive, but it's what tor does.
         //
         // Also, going around in a loop here is (sadly) needed in order
         // to look like Tor clients.
         for _ in 1..=65536 {
-            let id: StreamID = self.next_stream_id.into();
+            let id: StreamId = self.next_stream_id.into();
             self.next_stream_id = self.next_stream_id.wrapping_add(1);
             if id.is_zero() {
                 continue;
@@ -100,14 +100,14 @@ impl StreamMap {
     }
 
     /// Return the entry for `id` in this map, if any.
-    pub(super) fn get_mut(&mut self, id: StreamID) -> Option<&mut StreamEnt> {
+    pub(super) fn get_mut(&mut self, id: StreamId) -> Option<&mut StreamEnt> {
         self.m.get_mut(&id)
     }
 
     /// Note that we received an END cell on the stream with `id`.
     ///
     /// Returns true if there was really a stream there.
-    pub(super) fn end_received(&mut self, id: StreamID) -> Result<()> {
+    pub(super) fn end_received(&mut self, id: StreamId) -> Result<()> {
         // TODO: can we refactor this to use HashMap::Entry?
         let old = self.m.get(&id);
         match old {
@@ -136,7 +136,7 @@ impl StreamMap {
     /// ought to be sent.
     pub(super) fn terminate(
         &mut self,
-        id: StreamID,
+        id: StreamId,
         mut recvw: sendme::StreamRecvWindow,
     ) -> Result<ShouldSendEnd> {
         use ShouldSendEnd::*;
@@ -184,7 +184,7 @@ mod test {
         for _ in 0..128 {
             let (sink, _) = mpsc::channel(2);
             let id = map.add_ent(sink, StreamSendWindow::new(500))?;
-            let expect_id: StreamID = next_id.into();
+            let expect_id: StreamId = next_id.into();
             assert_eq!(expect_id, id);
             next_id += 1;
             ids.push(id);

@@ -35,7 +35,7 @@ use crate::channel::reactor::{CtrlMsg, CtrlResult};
 use crate::circuit;
 use crate::circuit::celltypes::CreateResponse;
 use crate::{Error, Result};
-use tor_cell::chancell::{msg, ChanCell, CircID};
+use tor_cell::chancell::{msg, ChanCell, CircId};
 use tor_llcrypto::pk::ed25519::Ed25519Identity;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
@@ -261,7 +261,7 @@ impl Channel {
                 return Err(Error::ChannelClosed);
             }
         };
-        trace!("{}: Allocated CircID {}", circ_logid, id);
+        trace!("{}: Allocated CircId {}", circ_logid, id);
 
         let destroy_handle = CircDestroyHandle::new(id, send_circ_destroy);
 
@@ -340,7 +340,7 @@ impl ChannelImpl {
 /// the circuit.
 pub(crate) struct CircDestroyHandle {
     /// The circuit ID in question
-    id: CircID,
+    id: CircId,
     /// A oneshot sender to tell the reactor.  This has to be a oneshot,
     /// so that we can send to it on drop.
     sender: Cell<Option<oneshot::Sender<CtrlMsg>>>,
@@ -348,7 +348,7 @@ pub(crate) struct CircDestroyHandle {
 
 impl CircDestroyHandle {
     /// Create a new CircDestroyHandle
-    fn new(id: CircID, sender: oneshot::Sender<CtrlMsg>) -> Self {
+    fn new(id: CircId, sender: oneshot::Sender<CtrlMsg>) -> Self {
         CircDestroyHandle {
             id,
             sender: Cell::new(Some(sender)),

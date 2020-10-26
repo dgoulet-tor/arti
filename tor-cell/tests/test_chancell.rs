@@ -2,7 +2,7 @@
 //
 // Reminder: you can think of a cell as an message plus a circuitid.
 
-use tor_cell::chancell::{codec, msg, ChanCell, ChanCmd, CircID};
+use tor_cell::chancell::{codec, msg, ChanCell, ChanCmd, CircId};
 use tor_cell::Error;
 
 use bytes::BytesMut;
@@ -20,7 +20,7 @@ fn decode(body: &str, pad_body: bool) -> Vec<u8> {
     body
 }
 
-fn cell(body: &str, msg: msg::ChanMsg, id: CircID, pad_body: bool) {
+fn cell(body: &str, msg: msg::ChanMsg, id: CircId, pad_body: bool) {
     let body = decode(body, pad_body);
 
     let cell = ChanCell::new(id, msg);
@@ -56,11 +56,11 @@ fn cell(body: &str, msg: msg::ChanMsg, id: CircID, pad_body: bool) {
     assert_eq!(encoded1, body);
 }
 
-fn fcell(body: &str, msg: msg::ChanMsg, id: CircID) {
+fn fcell(body: &str, msg: msg::ChanMsg, id: CircId) {
     cell(body, msg, id, true);
 }
 
-fn vcell(body: &str, msg: msg::ChanMsg, id: CircID) {
+fn vcell(body: &str, msg: msg::ChanMsg, id: CircId) {
     cell(body, msg, id, false);
 }
 
@@ -93,10 +93,10 @@ fn test_simple_cells() {
             .unwrap()
             .unwrap()
     };
-    assert_eq!(cell.circid(), CircID::from(0x20201122));
+    assert_eq!(cell.circid(), CircId::from(0x20201122));
     assert_eq!(cell.msg().cmd(), ChanCmd::RELAY);
     let (id, msg) = cell.into_circid_and_msg();
-    assert_eq!(id, CircID::from(0x20201122));
+    assert_eq!(id, CircId::from(0x20201122));
     assert_eq!(msg.cmd(), ChanCmd::RELAY);
 }
 

@@ -4,7 +4,7 @@
 // it needs to stay opaque!
 
 use crate::{Error, Result};
-use tor_cell::chancell::CircID;
+use tor_cell::chancell::CircId;
 
 use crate::circuit::celltypes::{ClientCircChanMsg, CreateResponse};
 
@@ -30,9 +30,9 @@ pub(super) enum CircIDRange {
     // protocol version 4.
 }
 
-impl rand::distributions::Distribution<CircID> for CircIDRange {
+impl rand::distributions::Distribution<CircId> for CircIDRange {
     /// Return a random circuit ID in the appropriate range.
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> CircID {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> CircId {
         // Make sure v is nonzero.
         let v = loop {
             match rng.gen() {
@@ -74,7 +74,7 @@ pub(super) enum CircEnt {
 /// A map from circuit IDs to circuit entries. Each channel has one.
 pub(super) struct CircMap {
     /// Map from circuit IDs to entries
-    m: HashMap<CircID, CircEnt>,
+    m: HashMap<CircId, CircEnt>,
     /// Rule for allocating new circuit IDs.
     range: CircIDRange,
 }
@@ -97,7 +97,7 @@ impl CircMap {
         rng: &mut R,
         createdsink: oneshot::Sender<CreateResponse>,
         sink: mpsc::Sender<ClientCircChanMsg>,
-    ) -> Result<CircID> {
+    ) -> Result<CircId> {
         /// How many times do we probe for a random circuit ID before
         /// we assume that the range is fully populated?
         const N_ATTEMPTS: usize = 16;
@@ -114,7 +114,7 @@ impl CircMap {
     }
 
     /// Return the entry for `id` in this map, if any.
-    pub(super) fn get_mut(&mut self, id: CircID) -> Option<&mut CircEnt> {
+    pub(super) fn get_mut(&mut self, id: CircId) -> Option<&mut CircEnt> {
         self.m.get_mut(&id)
     }
 
@@ -123,7 +123,7 @@ impl CircMap {
     // XXXXM3 this should return a Result, not an option.
     pub(super) fn advance_from_opening(
         &mut self,
-        id: CircID,
+        id: CircId,
     ) -> Option<oneshot::Sender<CreateResponse>> {
         // TODO: there should be a better way to do
         // this. hash_map::Entry seems like it could be better.
@@ -141,7 +141,7 @@ impl CircMap {
     }
 
     /// Extract the value from this map with 'id' if any
-    pub(super) fn remove(&mut self, id: CircID) -> Option<CircEnt> {
+    pub(super) fn remove(&mut self, id: CircId) -> Option<CircEnt> {
         self.m.remove(&id)
     }
     // TODO: Eventually if we want relay support, we'll need to support
@@ -157,11 +157,11 @@ mod test {
     fn circmap_basics() {
         let mut map_low = CircMap::new(CircIDRange::Low);
         let mut map_high = CircMap::new(CircIDRange::High);
-        let mut ids_low: Vec<CircID> = Vec::new();
-        let mut ids_high: Vec<CircID> = Vec::new();
+        let mut ids_low: Vec<CircId> = Vec::new();
+        let mut ids_high: Vec<CircId> = Vec::new();
         let mut rng = rand::thread_rng();
 
-        assert!(map_low.get_mut(CircID::from(77)).is_none());
+        assert!(map_low.get_mut(CircId::from(77)).is_none());
 
         for _ in 0..128 {
             let (csnd, _) = oneshot::channel();

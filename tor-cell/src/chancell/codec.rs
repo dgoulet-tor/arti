@@ -1,7 +1,7 @@
 //! Implementation for encoding and decoding of ChanCells.
 
 use super::CELL_DATA_LEN;
-use crate::chancell::{msg, ChanCell, ChanCmd, CircID};
+use crate::chancell::{msg, ChanCell, ChanCmd, CircId};
 use crate::Error;
 use arrayref::{array_mut_ref, array_ref};
 use tor_bytes::{self, Reader, Writer};
@@ -99,7 +99,7 @@ impl ChannelCodec {
         let cell = src.split_to(cell_len).freeze();
         //trace!("{:?} cell body ({}) is {:?}", cmd, cell.len(), &cell[..]);
         let mut r = Reader::from_bytes(&cell);
-        let circid: CircID = r.take_u32()?.into();
+        let circid: CircId = r.take_u32()?.into();
         r.advance(if varcell { 3 } else { 1 })?;
         let msg = msg::ChanMsg::take(&mut r, cmd)?;
 

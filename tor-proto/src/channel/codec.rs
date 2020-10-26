@@ -50,7 +50,7 @@ pub(crate) mod test {
     use std::pin::Pin;
 
     use super::ChannelCodec;
-    use tor_cell::chancell::{msg, ChanCell, ChanCmd, CircID};
+    use tor_cell::chancell::{msg, ChanCell, ChanCmd, CircId};
 
     /// Helper type for reading and writing bytes to/from buffers.
     // TODO: We might want to move this
@@ -148,9 +148,9 @@ pub(crate) mod test {
         let destroy = framed.next().await.unwrap()?;
         let nocerts = framed.next().await.unwrap()?;
 
-        assert_eq!(destroy.circid(), CircID::from(7));
+        assert_eq!(destroy.circid(), CircId::from(7));
         assert_eq!(destroy.msg().cmd(), ChanCmd::DESTROY);
-        assert_eq!(nocerts.circid(), CircID::from(0));
+        assert_eq!(nocerts.circid(), CircId::from(0));
         assert_eq!(nocerts.msg().cmd(), ChanCmd::CERTS);
 
         assert!(framed.into_inner().all_consumed());

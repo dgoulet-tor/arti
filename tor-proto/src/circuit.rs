@@ -47,9 +47,9 @@ use crate::crypto::cell::{
 use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
 use crate::stream::{DataStream, TorStream};
 use crate::{Error, Result};
-use tor_cell::chancell::{self, msg::ChanMsg, ChanCell, CircID};
+use tor_cell::chancell::{self, msg::ChanMsg, ChanCell, CircId};
 use tor_cell::relaycell::msg::{RelayMsg, Sendme};
-use tor_cell::relaycell::{RelayCell, RelayCmd, StreamID};
+use tor_cell::relaycell::{RelayCell, RelayCmd, StreamId};
 
 use tor_linkspec::LinkSpec;
 
@@ -90,7 +90,7 @@ type MetaResult = Result<(HopNum, RelayMsg)>;
 /// The implementation type for this circuit.
 struct ClientCircImpl {
     /// This circuit's ID on the upstream channel.
-    id: CircID,
+    id: CircId,
     /// The channel that this circuit uses to send its cells to the
     /// next hop.
     channel: Channel,
@@ -131,7 +131,7 @@ struct ClientCircImpl {
 // XXXX TODO: rename this
 pub(crate) struct StreamTarget {
     /// The stream ID for this stream on its circuit.
-    stream_id: StreamID,
+    stream_id: StreamId,
     /// Which hop on this circuit is this stream built from?
     // XXXX Using 'hop' by number here will cause bugs if circuits can get
     // XXXX truncated and then re-extended.
@@ -177,7 +177,7 @@ impl CircHop {
 
 impl ClientCirc {
     /// Helper: Register a handler that will be told about the RELAY message
-    /// with StreamID 0.
+    /// with StreamId 0.
     ///
     /// This pattern is useful for parts of the protocol where the circuit
     /// originator sends a single request, and waits for a single relay
@@ -645,7 +645,7 @@ impl PendingClientCirc {
     ///
     ///
     pub(crate) fn new(
-        id: CircID,
+        id: CircId,
         channel: Channel,
         createdreceiver: oneshot::Receiver<CreateResponse>,
         circ_closed: CircDestroyHandle,
@@ -683,7 +683,7 @@ impl PendingClientCirc {
 
     /// Testing only: extract the circuit ID for thid pending circuit.
     #[cfg(test)]
-    pub(crate) async fn peek_circid(&self) -> CircID {
+    pub(crate) async fn peek_circid(&self) -> CircId {
         let c = self.circ.c.lock().await;
         c.id
     }

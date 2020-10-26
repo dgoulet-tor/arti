@@ -1,7 +1,7 @@
 // Tests for encoding/decoding relay messags into relay cell bodies.
 
 use tor_bytes::Error;
-use tor_cell::relaycell::{msg, msg::RelayMsg, RelayCell, RelayCmd, StreamID};
+use tor_cell::relaycell::{msg, msg::RelayMsg, RelayCell, RelayCmd, StreamId};
 
 const CELL_BODY_LEN: usize = 509;
 
@@ -37,7 +37,7 @@ fn decode(body: &str) -> [u8; CELL_BODY_LEN] {
     result
 }
 
-fn cell(body: &str, id: StreamID, msg: RelayMsg) {
+fn cell(body: &str, id: StreamId, msg: RelayMsg) {
     let body = decode(body);
     let mut bad_rng = BadRng;
 
@@ -74,13 +74,13 @@ fn test_cells() {
     assert_eq!(c.cmd(), RelayCmd::from(2));
     assert_eq!(c.msg().cmd(), RelayCmd::from(2));
     let (s, _) = c.into_streamid_and_msg();
-    assert_eq!(s, StreamID::from(0x9999));
+    assert_eq!(s, StreamId::from(0x9999));
 }
 
 #[test]
 fn test_streamid() {
-    let zero: StreamID = 0.into();
-    let two: StreamID = 2.into();
+    let zero: StreamId = 0.into();
+    let two: StreamId = 2.into();
 
     assert!(zero.is_zero());
     assert!(!two.is_zero());
