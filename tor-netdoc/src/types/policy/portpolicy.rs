@@ -12,6 +12,13 @@ use super::{PolicyError, PortRange};
 /// These are used in Tor to summarize all policies in
 /// microdescriptors, and Ipv6 policies in router descriptors.
 ///
+/// NOTE: If a port is listed as accepted, it doesn't mean that the
+/// relay allows _every_ address on that port.  Instead, a port is
+/// listed if a relay will exit to _most public addresses_ on that
+/// port. Therefore, unlike [super::addrpolicy::AddrPolicy] objects,
+/// these policies cannot tell you if a port is _definitely_ allowed
+/// or rejected: only if it is _probably_ allowed or rejected.
+///
 /// # Examples
 /// ```
 /// use tor_netdoc::types::policy::PortPolicy;

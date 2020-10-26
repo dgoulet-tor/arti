@@ -1,4 +1,7 @@
 //! Implements the relay 'family' type.
+//!
+//! Families are opt-in lists of relays with the same operators,
+//! used to avoid building insecure circuits.
 
 use crate::types::misc::LongIdent;
 use crate::{Error, Result};

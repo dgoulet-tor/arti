@@ -9,6 +9,29 @@ use super::{PolicyError, PortRange};
 
 /// A sequence of rules that are applied to an address:port until one
 /// matches.
+///
+/// Each rule is of the form "accept PATTERN" or "reject PATTERN",
+/// where every pattern describes a set of addresses and ports.
+/// Address sets are given as a prefix of 0-128 bits that the address
+/// must have; port sets are given as a low-bound and high-bound that
+/// the target port might lie between.
+///
+/// Relays use this type for defining their own policies, and for
+/// publishing their IPv4 policies.  Clients instead use
+/// [super::portpolicy::PortPolicy] objects to view a summary of the
+/// relays' declared policies.
+///
+/// An example IPv4 policy might be:
+///
+/// ```ignore
+///  reject *:25
+///  reject 127.0.0.0/8:*
+///  reject 192.168.0.0/16:*
+///  accept *:80
+///  accept *:443
+///  accept *:9000-65535
+///  reject *:*
+/// ```
 #[derive(Clone, Debug)]
 pub struct AddrPolicy {
     /// A list of rules to apply to find out whether an address is

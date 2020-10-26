@@ -1,7 +1,9 @@
-//! Represents a clients' eye view of the Tor network.
+//! Represents a clients'-eye view of the Tor network.
 //!
 //! The tor-netdir crate wraps objects from tor-netdoc, and combines
 //! them to provide a unified view of the relays on the network.
+//! It is responsible for representing a client's knowledge of the
+//! network's state and who is on it.
 //!
 //! # Limitations
 //!

@@ -9,6 +9,12 @@
 //! Here we parse everything up to the first space, but ignore the
 //! "EXTRA_INFO" component.
 //!
+//! Why does Arti have to care about Tor versions?  Sometimes a given
+//! Tor version is broken for one purpose or another, and it's
+//! important to avoid using them for certain kinds of traffic.  (For
+//! planned incompatibilities, you should use protocol versions
+//! instead.)
+//!
 //! # Examples
 //!
 //! ```

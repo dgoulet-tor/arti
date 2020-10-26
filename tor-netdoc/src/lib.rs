@@ -9,15 +9,27 @@
 //! of the router descriptor type. We will eventually need to handle
 //! more types.
 //!
+//! # Structure
+//!
+//! The crate is derived into three main parts.  In the [parse]
+//! module, we have the generic code that we use to parse different
+//! kinds of network documents.  In the [types] module we have
+//! implementations for parsing specific data structures that are used
+//! inside directory documents.  Finally, the [doc] module defines
+//! the parsers for the documents themselves.
+//!
 //! # Caveat haxxor: limitations and infelicities
 //!
-//! TODO: This crate requires that all of its inputs be valid UTF-8.
+//! TODO: This crate requires that all of its inputs be valid UTF-8:
+//! This is fine only if we assume that proposal 285 is implemented in
+//! mainline Tor.
 //!
 //! TODO: This crate has several pieces that should probably be split out
 //! into other smaller cases, including handling for version numbers
 //! and exit policies.
 //!
-//! TODO: Many parts of this crate that should be public aren't.
+//! TODO: Many parts of this crate that should eventualy be public
+//! aren't.
 //!
 //! TODO: this crate needs far more tests!
 

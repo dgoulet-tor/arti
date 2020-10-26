@@ -7,6 +7,10 @@
 //! Microdescriptors are much smaller than router descriptors, and
 //! change less frequently. For this reason, they're currently used
 //! for building circuits by all relays and clients.
+//!
+//! Microdescriptors can't be used on their own: you need to know
+//! which relay they are for, which requires a valid consensus
+//! directory.
 
 use crate::parse::keyword::Keyword;
 use crate::parse::parser::SectionRules;
