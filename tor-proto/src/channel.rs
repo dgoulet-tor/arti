@@ -74,7 +74,6 @@ use futures::lock::Mutex;
 use futures::sink::{Sink, SinkExt};
 use futures::stream::Stream;
 
-use std::cell::Cell;
 use std::sync::{Arc, Weak};
 
 use log::trace;
@@ -120,7 +119,7 @@ struct ChannelImpl {
     /// A stream used to send control messages to the Reactor.
     sendctrl: mpsc::Sender<CtrlResult>,
     /// A oneshot sender used to tell the Reactor task to shut down.
-    sendclosed: Cell<Option<oneshot::Sender<CtrlMsg>>>,
+    sendclosed: Option<oneshot::Sender<CtrlMsg>>,
 
     /// Logging identifier for this stream.  (Used for logging only.)
     logid: LogId,
@@ -210,7 +209,7 @@ impl Channel {
             closed: false,
             circmap: Arc::downgrade(&circmap),
             sendctrl,
-            sendclosed: Cell::new(Some(sendclosed)),
+            sendclosed: Some(sendclosed),
             logid,
             circ_logid_ctx: logid::CircLogIdContext::new(),
             ed25519_id,
@@ -373,7 +372,7 @@ pub(crate) struct CircDestroyHandle {
     id: CircId,
     /// A oneshot sender to tell the reactor.  This has to be a oneshot,
     /// so that we can send to it on drop.
-    sender: Cell<Option<oneshot::Sender<CtrlMsg>>>,
+    sender: Option<oneshot::Sender<CtrlMsg>>,
 }
 
 impl CircDestroyHandle {
@@ -381,7 +380,7 @@ impl CircDestroyHandle {
     fn new(id: CircId, sender: oneshot::Sender<CtrlMsg>) -> Self {
         CircDestroyHandle {
             id,
-            sender: Cell::new(Some(sender)),
+            sender: Some(sender),
         }
     }
 }

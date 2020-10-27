@@ -67,7 +67,6 @@ use futures::channel::{mpsc, oneshot};
 use futures::lock::Mutex;
 use futures::sink::SinkExt;
 
-use std::cell::Cell;
 use std::sync::Arc;
 
 use rand::{thread_rng, CryptoRng, Rng};
@@ -121,13 +120,13 @@ struct ClientCircImpl {
     /// A stream that can be used to register streams with the reactor.
     control: mpsc::Sender<CtrlResult>,
     /// A oneshot sender that can be used to tell the reactor to shut down.
-    sendshutdown: Cell<Option<oneshot::Sender<CtrlMsg>>>,
+    sendshutdown: Option<oneshot::Sender<CtrlMsg>>,
     /// A oneshot sender that can be used by the reactor to report a
     /// meta-cell to an owning task.
     ///
     /// For the purposes of this implementation, a "meta" cell
     /// is a RELAY cell with a stream ID value of 0.
-    sendmeta: Cell<Option<oneshot::Sender<MetaResult>>>,
+    sendmeta: Option<oneshot::Sender<MetaResult>>,
     /// An identifier for this circuit, for logging purposes.
     logid: LogId,
 }
@@ -152,7 +151,7 @@ pub(crate) struct StreamTarget {
     window: sendme::StreamSendWindow,
     /// One-shot sender that should get a message once this stream
     /// is dropped.
-    stream_closed: Cell<Option<oneshot::Sender<CtrlMsg>>>,
+    stream_closed: Option<oneshot::Sender<CtrlMsg>>,
     /// Window to track incoming cells and SENDMEs.
     // XXXX Putting this field here in this object means that this
     // object isn't really so much a "target", since a "target"
@@ -208,16 +207,14 @@ impl ClientCirc {
     async fn register_meta_handler(&mut self) -> Result<oneshot::Receiver<MetaResult>> {
         let (sender, receiver) = oneshot::channel();
 
-        let circ = self.c.lock().await;
-        // Store the new sender as the meta-handler for this circuit.
-        let prev = circ.sendmeta.replace(Some(sender));
+        let mut circ = self.c.lock().await;
         // Was there previously a handler?
-        if prev.is_some() {
-            circ.sendmeta.replace(prev); // put the old value back.
+        if circ.sendmeta.is_some() {
             return Err(Error::InternalError(
                 "Tried to register a second meta-cell handler".into(),
             ));
         }
+        circ.sendmeta = Some(sender);
 
         trace!("{}: Registered a meta-cell handler", circ.logid);
 
@@ -459,7 +456,7 @@ impl ClientCirc {
             hop: hopnum,
             window,
             recvwindow: sendme::StreamRecvWindow::new(STREAM_RECV_INIT),
-            stream_closed: Cell::new(Some(send_close)),
+            stream_closed: Some(send_close),
         };
 
         Ok(TorStream::new(target, receiver))
@@ -677,8 +674,8 @@ impl PendingClientCirc {
             closed: false,
             circ_closed: Some(circ_closed),
             control: sendctrl,
-            sendshutdown: Cell::new(Some(sendclosed)),
-            sendmeta: Cell::new(None),
+            sendshutdown: Some(sendclosed),
+            sendmeta: None,
             logid,
         };
         let circuit = ClientCirc {
