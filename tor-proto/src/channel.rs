@@ -404,6 +404,50 @@ mod test {
     use futures_await_test::async_test;
     use tor_cell::chancell::{msg, msg::ChanMsg, ChanCell};
 
+    /// Type returned along with a fake channel: used to impersonate a
+    /// reactor and a network.
+    pub(crate) struct FakeChanHandle {
+        pub cells: mpsc::Receiver<ChanCell>,
+        circmap: Arc<Mutex<circmap::CircMap>>,
+        ignore_control_msgs: mpsc::Receiver<CtrlResult>,
+    }
+
+    /// Make a new fake reactor-less channel.  For testing only, obviously.
+    pub(crate) fn fake_channel() -> (Channel, FakeChanHandle) {
+        let (cell_send, cell_recv) = mpsc::channel(64);
+        let (ctrl_send, ctrl_recv) = mpsc::channel(64);
+
+        let cell_send = cell_send.sink_map_err(|_| {
+            tor_cell::Error::InternalError("Error from mpsc stream while testing".into())
+        });
+
+        let circmap = circmap::CircMap::new(circmap::CircIdRange::High);
+        let circmap = Arc::new(Mutex::new(circmap));
+        let logid = LogId::new();
+        let inner = ChannelImpl {
+            link_protocol: 4,
+            tls: Box::new(cell_send),
+            closed: false,
+            circmap: Arc::downgrade(&circmap),
+            sendctrl: ctrl_send,
+            sendclosed: None,
+            logid,
+            circ_logid_ctx: logid::CircLogIdContext::new(),
+            ed25519_id: [0u8; 32].into(),
+            rsa_id: [0u8; 20].into(),
+        };
+        let channel = Channel {
+            inner: Arc::new(Mutex::new(inner)),
+        };
+        let handle = FakeChanHandle {
+            cells: cell_recv,
+            circmap,
+            ignore_control_msgs: ctrl_recv,
+        };
+
+        (channel, handle)
+    }
+
     #[async_test]
     async fn send_bad() {
         let (chan, _reactor, mut output, _input) = new_reactor();

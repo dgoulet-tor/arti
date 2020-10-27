@@ -443,6 +443,4 @@ impl Reactor {
 }
 
 #[cfg(test)]
-mod test {
-    // fn new_circ() -> () {}
-}
+mod test {}
