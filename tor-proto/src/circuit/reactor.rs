@@ -11,6 +11,7 @@ use crate::circuit::celltypes::ClientCircChanMsg;
 use crate::circuit::logid::LogId;
 use crate::circuit::{sendme, streammap};
 use crate::crypto::cell::{HopNum, InboundClientCrypt, InboundClientLayer};
+use crate::util::err::ReactorError;
 use crate::{Error, Result};
 use tor_cell::chancell::msg::Relay;
 use tor_cell::relaycell::msg::{End, RelayMsg, Sendme};
@@ -177,7 +178,13 @@ impl Reactor {
             return Err(Error::CircuitClosed);
         }
         debug!("{}: Running circuit reactor", self.logid);
-        let result = self.run_impl().await;
+        let result: Result<()> = loop {
+            match self.run_once().await {
+                Ok(()) => (),
+                Err(ReactorError::Shutdown) => break Ok(()),
+                Err(ReactorError::Err(e)) => break Err(e),
+            }
+        };
         debug!("{}: Circuit reactor stopped: {:?}", self.logid, result);
         if let Some(circ) = self.circuit.upgrade() {
             let mut circ = circ.lock().await;
@@ -189,36 +196,36 @@ impl Reactor {
         result
     }
 
-    /// Helper for run: doesn't mark the circuit closed on finish.
-    async fn run_impl(&mut self) -> Result<()> {
-        loop {
-            // What's next to do?
-            let item = select_biased! {
-                // Got a control message!
-                ctrl = self.control.next() => {
-                    match ctrl {
-                        Some(Ok(CtrlMsg::Shutdown)) => return Ok(()),
-                        Some(Ok(msg)) => self.handle_control(msg).await?,
-                        Some(Err(_)) => (), // sender was cancelled; ignore.
-                        None => panic!(), // This should be impossible.
-                    }
-                    continue;
+    /// Helper for run: doesn't mark the circuit closed on finish.  Only
+    /// processes one cell or control message.
+    pub(super) async fn run_once(&mut self) -> std::result::Result<(), ReactorError> {
+        // What's next to do?
+        let item = select_biased! {
+            // Got a control message!
+            ctrl = self.control.next() => {
+                match ctrl {
+                    Some(Ok(CtrlMsg::Shutdown)) => return Err(ReactorError::Shutdown),
+                    Some(Ok(msg)) => self.handle_control(msg).await?,
+                    Some(Err(_)) => (), // sender was cancelled; ignore.
+                    None => panic!(), // This should be impossible.
                 }
-                // we got a message on our channel, or it closed.
-                item = self.input.next() => item,
-            };
-            let item = match item {
-                // the channel closed; we're done.
-                None => return Ok(()),
-                // we got a ChanMsg!
-                Some(r) => r,
-            };
-
-            let exit = self.handle_cell(item).await?;
-            if exit {
                 return Ok(());
             }
+            // we got a message on our channel, or it closed.
+            item = self.input.next() => item,
+        };
+        let item = match item {
+            // the channel closed; we're done.
+            None => return Err(ReactorError::Shutdown),
+            // we got a ChanMsg!
+            Some(r) => r,
+        };
+
+        let exit = self.handle_cell(item).await?;
+        if exit {
+            return Err(ReactorError::Shutdown);
         }
+        Ok(())
     }
 
     /// Handle a CtrlMsg other than Shutdown.

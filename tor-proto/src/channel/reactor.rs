@@ -9,6 +9,7 @@
 use super::circmap::{CircEnt, CircMap};
 use super::LogId;
 use crate::circuit::halfcirc::HalfCirc;
+use crate::util::err::ReactorError;
 use crate::{Error, Result};
 use tor_cell::chancell::msg::{Destroy, DestroyReason};
 use tor_cell::chancell::{msg::ChanMsg, ChanCell, CircId};
@@ -47,30 +48,6 @@ pub(super) type CtrlResult = std::result::Result<CtrlMsg, oneshot::Canceled>;
 /// TODO: copy documentation from circuit::reactor if we don't unify
 /// these types somehow.
 type OneshotStream = stream::SelectAll<stream::Once<oneshot::Receiver<CtrlMsg>>>;
-
-/// Error return value from run_once: indicates an error or a shutdown.
-#[derive(Debug)]
-enum ReactorError {
-    /// The reactor should shut down with an abnormal exit condition.
-    Err(Error),
-    /// The reactor should shut down without an error, since all is well.
-    Shutdown,
-}
-impl From<Error> for ReactorError {
-    fn from(e: Error) -> ReactorError {
-        ReactorError::Err(e)
-    }
-}
-#[cfg(test)]
-impl ReactorError {
-    /// Tests only: assert that this is an Error, and return it.
-    fn unwrap_err(self) -> Error {
-        match self {
-            ReactorError::Shutdown => panic!(),
-            ReactorError::Err(e) => e,
-        }
-    }
-}
 
 /// Object to handle incoming cells and background tasks on a channel.
 ///

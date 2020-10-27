@@ -78,3 +78,28 @@ impl From<tor_cell::Error> for Error {
         }
     }
 }
+
+/// Internal type: Error return value from reactor's run_once
+/// function: indicates an error or a shutdown.
+#[derive(Debug)]
+pub(crate) enum ReactorError {
+    /// The reactor should shut down with an abnormal exit condition.
+    Err(Error),
+    /// The reactor should shut down without an error, since all is well.
+    Shutdown,
+}
+impl From<Error> for ReactorError {
+    fn from(e: Error) -> ReactorError {
+        ReactorError::Err(e)
+    }
+}
+#[cfg(test)]
+impl ReactorError {
+    /// Tests only: assert that this is an Error, and return it.
+    pub(crate) fn unwrap_err(self) -> Error {
+        match self {
+            ReactorError::Shutdown => panic!(),
+            ReactorError::Err(e) => e,
+        }
+    }
+}
