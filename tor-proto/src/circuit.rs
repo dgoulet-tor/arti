@@ -908,10 +908,10 @@ mod test {
     use crate::channel::test::fake_channel;
     use chanmsg::{ChanMsg, Created2, CreatedFast};
     use futures::stream::StreamExt;
-    use tor_cell::chancell::msg as chanmsg;
-    //use tor_cell::relaycell::msg as relaymsg;
     use futures_await_test::async_test;
     use hex_literal::hex;
+    use tor_cell::chancell::msg as chanmsg;
+    use tor_cell::relaycell::msg as relaymsg;
     use tor_llcrypto::pk;
 
     struct ExampleTarget {
@@ -1040,6 +1040,7 @@ mod test {
     // An encryption layer that doesn't do any crypto.
     struct DummyCrypto {
         fixed_tag: [u8; 20],
+        lasthop: bool,
     }
     impl crate::crypto::cell::OutboundClientLayer for DummyCrypto {
         fn originate_for(&mut self, _cell: &mut RelayCellBody) -> &[u8] {
@@ -1049,22 +1050,33 @@ mod test {
     }
     impl crate::crypto::cell::InboundClientLayer for DummyCrypto {
         fn decrypt_inbound(&mut self, _cell: &mut RelayCellBody) -> Option<&[u8]> {
-            Some(&self.fixed_tag)
+            if self.lasthop {
+                Some(&self.fixed_tag)
+            } else {
+                None
+            }
         }
     }
     impl DummyCrypto {
-        fn new() -> Self {
+        fn new(lasthop: bool) -> Self {
             DummyCrypto {
                 fixed_tag: [77; 20],
+                lasthop,
             }
         }
     }
 
     // Helper: set up a 3-hop circuit with no encryption.
-    async fn newcirc(chan: Channel) -> (ClientCirc, reactor::Reactor) {
+    async fn newcirc(
+        chan: Channel,
+    ) -> (
+        ClientCirc,
+        reactor::Reactor,
+        mpsc::Sender<ClientCircChanMsg>,
+    ) {
         let circid = 128.into();
         let (_created_send, created_recv) = oneshot::channel();
-        let (_circmsg_send, circmsg_recv) = mpsc::channel(64);
+        let (circmsg_send, circmsg_recv) = mpsc::channel(64);
         let logid = LogId::new(23, 17);
 
         let (pending, mut reactor) = PendingClientCirc::new(
@@ -1081,12 +1093,12 @@ mod test {
             recvcreated: _,
         } = pending;
 
-        for _ in 0_u8..3 {
+        for idx in 0_u8..3 {
             let (hopf, reacf) = futures::join!(
                 circ.add_hop(
                     true,
-                    Box::new(DummyCrypto::new()),
-                    Box::new(DummyCrypto::new())
+                    Box::new(DummyCrypto::new(idx == 2)),
+                    Box::new(DummyCrypto::new(idx == 2))
                 ),
                 reactor.run_once()
             );
@@ -1094,14 +1106,14 @@ mod test {
             assert!(reacf.is_ok());
         }
 
-        (circ, reactor)
+        (circ, reactor, circmsg_send)
     }
 
     // Try sending a cell via send_relay_cell
     #[async_test]
     async fn send_simple() {
         let (chan, mut ch) = fake_channel();
-        let (circ, _reactor) = newcirc(chan).await;
+        let (circ, _reactor, _send) = newcirc(chan).await;
         let begindir = RelayCell::new(0.into(), RelayMsg::BeginDir);
         {
             let mut c = circ.c.lock().await;
@@ -1117,5 +1129,59 @@ mod test {
             _ => panic!(),
         };
         assert!(matches!(m.msg(), RelayMsg::BeginDir));
+    }
+
+    // Try getting a "meta-cell", which is what we're calling those not
+    // for a specific circuit.
+    #[async_test]
+    async fn recv_meta() {
+        let (chan, _ch) = fake_channel();
+        let (mut circ, mut reactor, mut sink) = newcirc(chan).await;
+
+        // 1: Try doing it via handle_meta_cell directly.
+        let meta_receiver = circ.register_meta_handler().await.unwrap();
+        let extended: RelayMsg = relaymsg::Extended2::new((*b"123").into()).into();
+        {
+            circ.c
+                .lock()
+                .await
+                .handle_meta_cell(2.into(), extended.clone())
+                .await
+                .unwrap();
+        }
+        let (hop, msg) = meta_receiver.await.unwrap().unwrap();
+        assert_eq!(hop, 2.into());
+        assert!(matches!(msg, RelayMsg::Extended2(_)));
+
+        // 2: Try doing it via the reactor.
+        let body: RelayCellBody = RelayCell::new(0.into(), extended.clone())
+            .encode(&mut thread_rng())
+            .unwrap()
+            .into();
+        let relay = chanmsg::Relay::from_raw(body.into());
+
+        let meta_receiver = circ.register_meta_handler().await.unwrap();
+        sink.send(ClientCircChanMsg::Relay(relay.clone()))
+            .await
+            .unwrap();
+        reactor.run_once().await.unwrap();
+        let (hop, msg) = meta_receiver.await.unwrap().unwrap();
+        assert_eq!(hop, 2.into());
+        assert!(matches!(msg, RelayMsg::Extended2(_)));
+
+        // 3: Try getting a meta cell that we didn't want.
+        let e = {
+            circ.c
+                .lock()
+                .await
+                .handle_meta_cell(2.into(), extended.clone())
+                .await
+                .err()
+                .unwrap()
+        };
+        assert_eq!(
+            format!("{}", e),
+            "circuit protocol violation: Unexpected EXTENDED2 cell on client circuit"
+        );
     }
 }
