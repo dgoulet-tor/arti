@@ -74,6 +74,14 @@ pub struct NtorSecretKey {
 
 use subtle::{Choice, ConstantTimeEq};
 impl NtorSecretKey {
+    /// Construct a new NtorSecretKey from its components.
+    #[allow(unused)]
+    pub fn new(sk: StaticSecret, pk: PublicKey, id: RSAIdentity) -> Self {
+        NtorSecretKey {
+            pk: NtorPublicKey { pk, id },
+            sk,
+        }
+    }
     /// Return true if the curve25519 public key in `self` matches `pk`.
     ///
     /// Used for looking up keys in an array.

@@ -366,6 +366,16 @@ impl Create2 {
             handshake,
         }
     }
+
+    /// Return the type of this handshake.
+    pub fn handshake_type(&self) -> u16 {
+        self.handshake_type
+    }
+
+    /// Return the body of this handshake.
+    pub fn body(&self) -> &[u8] {
+        &self.handshake[..]
+    }
 }
 
 /// A Created2 message completes a circuit-creation handshake.

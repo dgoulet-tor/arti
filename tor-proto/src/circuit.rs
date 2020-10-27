@@ -672,7 +672,7 @@ impl PendingClientCirc {
             crypto_out,
             hops,
             closed: false,
-            circ_closed: circ_closed,
+            circ_closed,
             control: sendctrl,
             sendshutdown: Some(sendclosed),
             sendmeta: None,
@@ -906,16 +906,60 @@ impl Drop for StreamTarget {
 mod test {
     use super::*;
     use crate::channel::test::fake_channel;
-    use chanmsg::{ChanMsg, CreatedFast};
+    use chanmsg::{ChanMsg, Created2, CreatedFast};
     use futures::stream::StreamExt;
     use tor_cell::chancell::msg as chanmsg;
     // use futures_await_test::async_test;
+    use hex_literal::hex;
+    use tor_llcrypto::pk;
 
-    #[test]
-    fn test_create_fast() {
+    struct ExampleTarget {
+        ntor_key: pk::curve25519::PublicKey,
+        protovers: tor_protover::Protocols,
+        ed_id: pk::ed25519::Ed25519Identity,
+        rsa_id: pk::rsa::RSAIdentity,
+    }
+    impl tor_linkspec::ChanTarget for ExampleTarget {
+        fn addrs(&self) -> &[std::net::SocketAddr] {
+            &[]
+        }
+        fn ed_identity(&self) -> &pk::ed25519::Ed25519Identity {
+            &self.ed_id
+        }
+        fn rsa_identity(&self) -> &pk::rsa::RSAIdentity {
+            &self.rsa_id
+        }
+    }
+    impl tor_linkspec::CircTarget for ExampleTarget {
+        fn ntor_onion_key(&self) -> &pk::curve25519::PublicKey {
+            &self.ntor_key
+        }
+        fn protovers(&self) -> &tor_protover::Protocols {
+            &self.protovers
+        }
+    }
+    /// return an ExampleTarget that can get used for an ntor handshake.
+    fn example_target() -> ExampleTarget {
+        ExampleTarget {
+            ntor_key: hex!("395cb26b83b3cd4b91dba9913e562ae87d21ecdd56843da7ca939a6a69001253")
+                .into(),
+            protovers: "FlowCtrl=1".parse().unwrap(),
+            ed_id: [6_u8; 32].into(),
+            rsa_id: [10_u8; 20].into(),
+        }
+    }
+    fn example_serverkey() -> crate::crypto::handshake::ntor::NtorSecretKey {
+        crate::crypto::handshake::ntor::NtorSecretKey::new(
+            hex!("7789d92a89711a7e2874c61ea495452cfd48627b3ca2ea9546aafa5bf7b55803").into(),
+            hex!("395cb26b83b3cd4b91dba9913e562ae87d21ecdd56843da7ca939a6a69001253").into(),
+            [10_u8; 20].into(),
+        )
+    }
+
+    fn test_create(fast: bool) {
         // We want to try progressing from a pending circuit to a circuit
         // via a crate_fast handshake.
-        use crate::crypto::handshake::{fast::CreateFastServer, ServerHandshake};
+        use crate::crypto::handshake::{fast::CreateFastServer, ntor::NtorServer, ServerHandshake};
         use futures::executor::LocalPool;
         use futures::future::FutureExt;
         use futures::task::LocalSpawnExt;
@@ -938,20 +982,34 @@ mod test {
         // one to reply as a relay, and one to be the reactor.
         let simulate_relay_fut = async move {
             let mut rng = rand::thread_rng();
-            let create_fast = ch.cells.next().await.unwrap();
-            assert_eq!(create_fast.circid(), 128.into());
-            let cf = match create_fast.msg() {
-                ChanMsg::CreateFast(cf) => cf,
-                _ => panic!(),
+            let create_cell = ch.cells.next().await.unwrap();
+            assert_eq!(create_cell.circid(), 128.into());
+            let reply = if fast {
+                let cf = match create_cell.msg() {
+                    ChanMsg::CreateFast(cf) => cf,
+                    _ => panic!(),
+                };
+                let (_, rep) = CreateFastServer::server(&mut rng, &[()], cf.body()).unwrap();
+                CreateResponse::CreatedFast(CreatedFast::new(rep))
+            } else {
+                let c2 = match create_cell.msg() {
+                    ChanMsg::Create2(c2) => c2,
+                    _ => panic!(),
+                };
+                let (_, rep) =
+                    NtorServer::server(&mut rng, &[example_serverkey()], c2.body()).unwrap();
+                CreateResponse::Created2(Created2::new(rep))
             };
-            let (_, reply) = CreateFastServer::server(&mut rng, &[()], cf.body()).unwrap();
-            created_send
-                .send(CreateResponse::CreatedFast(CreatedFast::new(reply)))
-                .unwrap();
+            created_send.send(reply).unwrap();
         };
         let client_fut = async move {
             let mut rng = rand::thread_rng();
-            pending.create_firsthop_fast(&mut rng).await
+            let target = example_target();
+            if fast {
+                pending.create_firsthop_fast(&mut rng).await
+            } else {
+                pending.create_firsthop_ntor(&mut rng, &target).await
+            }
         };
         let reactor_fut = reactor.run().map(|_| ());
 
@@ -967,5 +1025,14 @@ mod test {
         // pfew!  We've build a circuit!  Let's make sure it has one hop.
         let inner = Arc::try_unwrap(circuit.c).unwrap().into_inner();
         assert_eq!(inner.hops.len(), 1);
+    }
+
+    #[test]
+    fn test_create_fast() {
+        test_create(true)
+    }
+    #[test]
+    fn test_create_ntor() {
+        test_create(false)
     }
 }
