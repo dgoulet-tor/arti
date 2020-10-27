@@ -909,7 +909,8 @@ mod test {
     use chanmsg::{ChanMsg, Created2, CreatedFast};
     use futures::stream::StreamExt;
     use tor_cell::chancell::msg as chanmsg;
-    // use futures_await_test::async_test;
+    //use tor_cell::relaycell::msg as relaymsg;
+    use futures_await_test::async_test;
     use hex_literal::hex;
     use tor_llcrypto::pk;
 
@@ -1034,5 +1035,87 @@ mod test {
     #[test]
     fn test_create_ntor() {
         test_create(false)
+    }
+
+    // An encryption layer that doesn't do any crypto.
+    struct DummyCrypto {
+        fixed_tag: [u8; 20],
+    }
+    impl crate::crypto::cell::OutboundClientLayer for DummyCrypto {
+        fn originate_for(&mut self, _cell: &mut RelayCellBody) -> &[u8] {
+            &self.fixed_tag
+        }
+        fn encrypt_outbound(&mut self, _cell: &mut RelayCellBody) {}
+    }
+    impl crate::crypto::cell::InboundClientLayer for DummyCrypto {
+        fn decrypt_inbound(&mut self, _cell: &mut RelayCellBody) -> Option<&[u8]> {
+            Some(&self.fixed_tag)
+        }
+    }
+    impl DummyCrypto {
+        fn new() -> Self {
+            DummyCrypto {
+                fixed_tag: [77; 20],
+            }
+        }
+    }
+
+    // Helper: set up a 3-hop circuit with no encryption.
+    async fn newcirc(chan: Channel) -> (ClientCirc, reactor::Reactor) {
+        let circid = 128.into();
+        let (_created_send, created_recv) = oneshot::channel();
+        let (_circmsg_send, circmsg_recv) = mpsc::channel(64);
+        let logid = LogId::new(23, 17);
+
+        let (pending, mut reactor) = PendingClientCirc::new(
+            circid,
+            chan,
+            created_recv,
+            None, // circ_closed.
+            circmsg_recv,
+            logid,
+        );
+
+        let PendingClientCirc {
+            circ,
+            recvcreated: _,
+        } = pending;
+
+        for _ in 0_u8..3 {
+            let (hopf, reacf) = futures::join!(
+                circ.add_hop(
+                    true,
+                    Box::new(DummyCrypto::new()),
+                    Box::new(DummyCrypto::new())
+                ),
+                reactor.run_once()
+            );
+            assert!(hopf.is_ok());
+            assert!(reacf.is_ok());
+        }
+
+        (circ, reactor)
+    }
+
+    // Try sending a cell via send_relay_cell
+    #[async_test]
+    async fn send_simple() {
+        let (chan, mut ch) = fake_channel();
+        let (circ, _reactor) = newcirc(chan).await;
+        let begindir = RelayCell::new(0.into(), RelayMsg::BeginDir);
+        {
+            let mut c = circ.c.lock().await;
+            c.send_relay_cell(2.into(), false, begindir).await.unwrap();
+        }
+
+        // Here's what we tried to put on the TLS channel.  Note that
+        // we're using dummy relay crypto for testing convenience.
+        let rcvd = ch.cells.next().await.unwrap();
+        assert_eq!(rcvd.circid(), 128.into());
+        let m = match rcvd.into_circid_and_msg().1 {
+            ChanMsg::Relay(r) => RelayCell::decode(r.into_relay_body()).unwrap(),
+            _ => panic!(),
+        };
+        assert!(matches!(m.msg(), RelayMsg::BeginDir));
     }
 }
