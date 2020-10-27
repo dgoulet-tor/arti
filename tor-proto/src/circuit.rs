@@ -656,7 +656,7 @@ impl PendingClientCirc {
         id: CircId,
         channel: Channel,
         createdreceiver: oneshot::Receiver<CreateResponse>,
-        circ_closed: CircDestroyHandle,
+        circ_closed: Option<CircDestroyHandle>,
         input: mpsc::Receiver<ClientCircChanMsg>,
         logid: LogId,
     ) -> (PendingClientCirc, reactor::Reactor) {
@@ -672,7 +672,7 @@ impl PendingClientCirc {
             crypto_out,
             hops,
             closed: false,
-            circ_closed: Some(circ_closed),
+            circ_closed: circ_closed,
             control: sendctrl,
             sendshutdown: Some(sendclosed),
             sendmeta: None,
@@ -899,5 +899,73 @@ impl Drop for StreamTarget {
         }
         // If there's an error, no worries: it's hard-cancel, and we
         // can just ignore it. XXXX (I hope?)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::channel::test::fake_channel;
+    use chanmsg::{ChanMsg, CreatedFast};
+    use futures::stream::StreamExt;
+    use tor_cell::chancell::msg as chanmsg;
+    // use futures_await_test::async_test;
+
+    #[test]
+    fn test_create_fast() {
+        // We want to try progressing from a pending circuit to a circuit
+        // via a crate_fast handshake.
+        use crate::crypto::handshake::{fast::CreateFastServer, ServerHandshake};
+        use futures::executor::LocalPool;
+        use futures::future::FutureExt;
+        use futures::task::LocalSpawnExt;
+
+        let (chan, mut ch) = fake_channel();
+        let circid = 128.into();
+        let (created_send, created_recv) = oneshot::channel();
+        let (_circmsg_send, circmsg_recv) = mpsc::channel(64);
+        let logid = LogId::new(23, 17);
+
+        let (pending, reactor) = PendingClientCirc::new(
+            circid,
+            chan,
+            created_recv,
+            None, // circ_closed.
+            circmsg_recv,
+            logid,
+        );
+
+        // one to reply as a relay, and one to be the reactor.
+        let simulate_relay_fut = async move {
+            let mut rng = rand::thread_rng();
+            let create_fast = ch.cells.next().await.unwrap();
+            assert_eq!(create_fast.circid(), 128.into());
+            let cf = match create_fast.msg() {
+                ChanMsg::CreateFast(cf) => cf,
+                _ => panic!(),
+            };
+            let (_, reply) = CreateFastServer::server(&mut rng, &[()], cf.body()).unwrap();
+            created_send
+                .send(CreateResponse::CreatedFast(CreatedFast::new(reply)))
+                .unwrap();
+        };
+        let client_fut = async move {
+            let mut rng = rand::thread_rng();
+            pending.create_firsthop_fast(&mut rng).await
+        };
+        let reactor_fut = reactor.run().map(|_| ());
+
+        let mut pool = LocalPool::new();
+        let spawner = pool.spawner();
+        spawner.spawn_local(reactor_fut).unwrap();
+        spawner.spawn_local(simulate_relay_fut).unwrap();
+        let client_handle = spawner.spawn_local_with_handle(client_fut).unwrap();
+        pool.run_until_stalled();
+
+        let circuit = client_handle.now_or_never().unwrap().unwrap();
+
+        // pfew!  We've build a circuit!  Let's make sure it has one hop.
+        let inner = Arc::try_unwrap(circuit.c).unwrap().into_inner();
+        assert_eq!(inner.hops.len(), 1);
     }
 }

@@ -298,7 +298,7 @@ impl Channel {
             id,
             self.clone(),
             createdreceiver,
-            destroy_handle,
+            Some(destroy_handle),
             receiver,
             circ_logid,
         ))
@@ -394,7 +394,7 @@ impl Drop for CircDestroyHandle {
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     // Most of this module is tested via tests that also check on the
     // reactor code; there are just a few more cases to examine here.
     use super::*;
@@ -406,6 +406,7 @@ mod test {
 
     /// Type returned along with a fake channel: used to impersonate a
     /// reactor and a network.
+    #[allow(unused)]
     pub(crate) struct FakeChanHandle {
         pub cells: mpsc::Receiver<ChanCell>,
         circmap: Arc<Mutex<circmap::CircMap>>,
@@ -413,6 +414,8 @@ mod test {
     }
 
     /// Make a new fake reactor-less channel.  For testing only, obviously.
+    ///
+    /// This function is used for testing _circuits_, not channels.
     pub(crate) fn fake_channel() -> (Channel, FakeChanHandle) {
         let (cell_send, cell_recv) = mpsc::channel(64);
         let (ctrl_send, ctrl_recv) = mpsc::channel(64);
