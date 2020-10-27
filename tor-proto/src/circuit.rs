@@ -1201,7 +1201,6 @@ mod test {
             circ // gotta keep the circ alive, or the reactor would exit.
         };
         let reply_fut = async move {
-            let mut rng = rand::thread_rng();
             // We've disabled encryption on this circuit, so we can just
             // read the extend2 cell.
             let (id, chmsg) = ch.cells.next().await.unwrap().into_circid_and_msg();
@@ -1236,5 +1235,42 @@ mod test {
         // Did we really add another hop?
         let inner = Arc::try_unwrap(circ.c).unwrap().into_inner();
         assert_eq!(inner.hops.len(), 4);
+    }
+
+    #[async_test]
+    async fn begindir() {
+        let (chan, mut ch) = fake_channel();
+        let (mut circ, mut reactor, mut sink) = newcirc(chan).await;
+
+        let begin_fut = async move { circ.begin_dir_stream().await.unwrap() };
+        let reply_fut = async move {
+            // We've disabled encryption on this circuit, so we can just
+            // read the extend2 cell.
+            let (id, chmsg) = ch.cells.next().await.unwrap().into_circid_and_msg();
+            assert_eq!(id, 128.into());
+            let rmsg = match chmsg {
+                ChanMsg::Relay(r) => RelayCell::decode(r.into_relay_body()).unwrap(),
+                _ => panic!(),
+            };
+            let (streamid, rmsg) = rmsg.into_streamid_and_msg();
+            assert!(matches!(rmsg, RelayMsg::BeginDir));
+            let mut rng = thread_rng();
+            let rc = RelayCell::new(streamid, relaymsg::Connected::new_empty().into())
+                .encode(&mut rng)
+                .unwrap();
+            let rm = chanmsg::Relay::from_raw(rc.into());
+            sink.send(ClientCircChanMsg::Relay(rm.into()))
+                .await
+                .unwrap();
+            sink // gotta keep the sink alive, or the reactor will exit.
+        };
+        let reactor_fut = async move {
+            reactor.run_once().await.unwrap(); // AddStream
+            reactor.run_once().await.unwrap(); // Register stream closer
+            reactor.run_once().await.unwrap(); // Connected cell
+            reactor
+        };
+
+        let (_stream, _, _) = futures::join!(begin_fut, reply_fut, reactor_fut);
     }
 }
