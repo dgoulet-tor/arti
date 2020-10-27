@@ -20,7 +20,7 @@ use std::collections::{hash_map::Entry, HashMap};
 /// If we initiated the channel, we use High circuit ids.  If we're the
 /// responder, we use low circuit ids.
 #[derive(Copy, Clone)]
-pub(super) enum CircIDRange {
+pub(super) enum CircIdRange {
     /// Only use circuit IDs with the MSB cleared.
     #[allow(dead_code)] // Relays will need this.
     Low,
@@ -31,7 +31,7 @@ pub(super) enum CircIDRange {
     // protocol version 4.
 }
 
-impl rand::distributions::Distribution<CircId> for CircIDRange {
+impl rand::distributions::Distribution<CircId> for CircIdRange {
     /// Return a random circuit ID in the appropriate range.
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> CircId {
         // Make sure v is nonzero.
@@ -43,8 +43,8 @@ impl rand::distributions::Distribution<CircId> for CircIDRange {
         };
         // Force the high bit of v to the appropriate value.
         match self {
-            CircIDRange::Low => v & 0x7fff_ffff,
-            CircIDRange::High => v | 0x8000_0000,
+            CircIdRange::Low => v & 0x7fff_ffff,
+            CircIdRange::High => v | 0x8000_0000,
         }
         .into()
     }
@@ -81,12 +81,12 @@ pub(super) struct CircMap {
     /// Map from circuit IDs to entries
     m: HashMap<CircId, CircEnt>,
     /// Rule for allocating new circuit IDs.
-    range: CircIDRange,
+    range: CircIdRange,
 }
 
 impl CircMap {
     /// Make a new empty CircMap
-    pub(super) fn new(idrange: CircIDRange) -> Self {
+    pub(super) fn new(idrange: CircIdRange) -> Self {
         CircMap {
             m: HashMap::new(),
             range: idrange,
@@ -177,8 +177,8 @@ mod test {
 
     #[test]
     fn circmap_basics() {
-        let mut map_low = CircMap::new(CircIDRange::Low);
-        let mut map_high = CircMap::new(CircIDRange::High);
+        let mut map_low = CircMap::new(CircIdRange::Low);
+        let mut map_high = CircMap::new(CircIdRange::High);
         let mut ids_low: Vec<CircId> = Vec::new();
         let mut ids_high: Vec<CircId> = Vec::new();
         let mut rng = rand::thread_rng();

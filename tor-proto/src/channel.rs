@@ -198,8 +198,8 @@ impl Channel {
     where
         T: Stream<Item = std::result::Result<ChanCell, tor_cell::Error>> + Send + Unpin + 'static,
     {
-        use circmap::{CircIDRange, CircMap};
-        let circmap = Arc::new(Mutex::new(CircMap::new(CircIDRange::High)));
+        use circmap::{CircIdRange, CircMap};
+        let circmap = Arc::new(Mutex::new(CircMap::new(CircIdRange::High)));
 
         let (sendctrl, recvctrl) = mpsc::channel::<CtrlResult>(128);
         let (sendclosed, recvclosed) = oneshot::channel::<CtrlMsg>();
