@@ -653,6 +653,16 @@ impl Extend2 {
             handshake,
         }
     }
+
+    /// Return the type of this handshake.
+    pub fn handshake_type(&self) -> u16 {
+        self.handshake_type
+    }
+
+    /// Return the inner handshake for this Extend2 cell.
+    pub fn handshake(&self) -> &[u8] {
+        &self.handshake[..]
+    }
 }
 
 impl Body for Extend2 {

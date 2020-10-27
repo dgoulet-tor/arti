@@ -960,6 +960,8 @@ mod test {
     fn test_create(fast: bool) {
         // We want to try progressing from a pending circuit to a circuit
         // via a crate_fast handshake.
+
+        // XXXX Make this use join!() instead.
         use crate::crypto::handshake::{fast::CreateFastServer, ntor::NtorServer, ServerHandshake};
         use futures::executor::LocalPool;
         use futures::future::FutureExt;
@@ -1183,5 +1185,56 @@ mod test {
             format!("{}", e),
             "circuit protocol violation: Unexpected EXTENDED2 cell on client circuit"
         );
+    }
+
+    #[async_test]
+    async fn extend() {
+        use crate::crypto::handshake::{ntor::NtorServer, ServerHandshake};
+
+        let (chan, mut ch) = fake_channel();
+        let (mut circ, mut reactor, mut sink) = newcirc(chan).await;
+
+        let extend_fut = async move {
+            let target = example_target();
+            let mut rng = thread_rng();
+            circ.extend_ntor(&mut rng, &target).await.unwrap();
+            circ // gotta keep the circ alive, or the reactor would exit.
+        };
+        let reply_fut = async move {
+            let mut rng = rand::thread_rng();
+            // We've disabled encryption on this circuit, so we can just
+            // read the extend2 cell.
+            let (id, chmsg) = ch.cells.next().await.unwrap().into_circid_and_msg();
+            assert_eq!(id, 128.into());
+            let rmsg = match chmsg {
+                ChanMsg::RelayEarly(r) => RelayCell::decode(r.into_relay_body()).unwrap(),
+                _ => panic!(),
+            };
+            let e2 = match rmsg.msg() {
+                RelayMsg::Extend2(e2) => e2,
+                _ => panic!(),
+            };
+            let mut rng = thread_rng();
+            let (_, reply) =
+                NtorServer::server(&mut rng, &[example_serverkey()], e2.handshake()).unwrap();
+            let rc = RelayCell::new(0.into(), relaymsg::Extended2::new(reply).into())
+                .encode(&mut rng)
+                .unwrap();
+            let rm = chanmsg::Relay::from_raw(rc.into());
+            sink.send(ClientCircChanMsg::Relay(rm.into()))
+                .await
+                .unwrap();
+            sink // gotta keep the sink alive, or the reactor will exit.
+        };
+        let reactor_fut = async move {
+            reactor.run_once().await.unwrap(); // to deliver the relay cell
+            reactor.run_once().await.unwrap(); // to handle the AddHop
+        };
+
+        let (circ, _, _) = futures::join!(extend_fut, reply_fut, reactor_fut);
+
+        // Did we really add another hop?
+        let inner = Arc::try_unwrap(circ.c).unwrap().into_inner();
+        assert_eq!(inner.hops.len(), 4);
     }
 }
