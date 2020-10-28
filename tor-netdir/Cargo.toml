@@ -15,6 +15,7 @@ tor-protover = { path="../tor-protover", version= "*" }
 
 hex = "0.4.2"
 log = "0.4.11"
+memmap = "0.7.0"
 rand = "0.7.3"
 signature = "1.2.2"
 thiserror = "1.0.22"

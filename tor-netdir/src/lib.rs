@@ -22,6 +22,9 @@
 
 mod err;
 mod pick;
+mod storage;
+
+use crate::storage::{legacy::LegacyStore, ReadableStore};
 
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
 use tor_netdoc::doc::authcert::AuthCert;
@@ -214,39 +217,42 @@ impl NetDirConfig {
         self.cache_path = Some(path.to_path_buf());
     }
 
-    /// Helper: Load the authority certificates from cached-certs.
+    /// Helper: Load the authority certificates from a store.
     ///
     /// Only loads the certificates that match identity keys for
     /// authorities that we believe in.
     ///
     /// Warn about invalid certs, but don't give an error unless there
     /// is a complete failure.
-    fn load_certs(&self, path: &Path) -> Result<Vec<AuthCert>> {
+    fn load_certs<S: ReadableStore>(&self, store: &S) -> Result<Vec<AuthCert>> {
         let mut res = Vec::new();
-        let text = fs::read_to_string(path)?;
-        for cert in AuthCert::parse_multiple(&text) {
-            let r = (|| {
-                let cert = cert?.check_signature()?.check_valid_now()?;
+        for input in store.authcerts().filter_map(Result::ok) {
+            let text = input.as_str()?;
 
-                let found = self
-                    .authorities
-                    .iter()
-                    .any(|a| &a.v3ident == cert.id_fingerprint());
-                if !found {
-                    return Err(Error::Unwanted("no such authority"));
-                }
-                Ok(cert)
-            })();
+            for cert in AuthCert::parse_multiple(text) {
+                let r = (|| {
+                    let cert = cert?.check_signature()?.check_valid_now()?;
 
-            match r {
-                Err(e) => warn!("unwanted certificate: {}", e),
-                Ok(cert) => {
-                    debug!(
-                        "adding cert for {} (SK={})",
-                        cert.id_fingerprint(),
-                        cert.sk_fingerprint()
-                    );
-                    res.push(cert);
+                    let found = self
+                        .authorities
+                        .iter()
+                        .any(|a| &a.v3ident == cert.id_fingerprint());
+                    if !found {
+                        return Err(Error::Unwanted("no such authority"));
+                    }
+                    Ok(cert)
+                })();
+
+                match r {
+                    Err(e) => warn!("unwanted certificate: {}", e),
+                    Ok(cert) => {
+                        debug!(
+                            "adding cert for {} (SK={})",
+                            cert.id_fingerprint(),
+                            cert.sk_fingerprint()
+                        );
+                        res.push(cert);
+                    }
                 }
             }
         }
@@ -255,11 +261,16 @@ impl NetDirConfig {
         Ok(res)
     }
 
-    /// Read the consensus from a provided file, and check it
+    /// Read the consensus from a provided store, and check it
     /// with a list of authcerts.
-    fn load_consensus(&self, path: &Path, certs: &[AuthCert]) -> Result<MDConsensus> {
-        let text = fs::read_to_string(path)?;
-        let consensus = MDConsensus::parse(&text)?
+    fn load_consensus<S: ReadableStore>(
+        &self,
+        store: &S,
+        certs: &[AuthCert],
+    ) -> Result<MDConsensus> {
+        let input = store.latest_consensus()?;
+        let text = input.as_str()?;
+        let consensus = MDConsensus::parse(text)?
             .extend_tolerance(time::Duration::new(86400, 0))
             .check_valid_now()?
             .set_n_authorities(self.authorities.len() as u16)
@@ -268,21 +279,27 @@ impl NetDirConfig {
         Ok(consensus)
     }
 
-    /// Read a list of microdescriptors from a provided file, and check it
+    /// Read a list of microdescriptors from a provided store, and check it
     /// with a list of authcerts.
     ///
     /// Warn about invalid microdescs, but don't give an error unless there
     /// is a complete failure.
-    fn load_mds(&self, path: &Path, res: &mut HashMap<MDDigest, Microdesc>) -> Result<()> {
-        let text = fs::read_to_string(path)?;
-        for annotated in
-            microdesc::MicrodescReader::new(&text, AllowAnnotations::AnnotationsAllowed)
-        {
-            let r = annotated.map(microdesc::AnnotatedMicrodesc::into_microdesc);
-            match r {
-                Err(e) => warn!("bad microdesc: {}", e),
-                Ok(md) => {
-                    res.insert(*md.digest(), md);
+    fn load_mds<S: ReadableStore>(
+        &self,
+        store: &S,
+        res: &mut HashMap<MDDigest, Microdesc>,
+    ) -> Result<()> {
+        for input in store.microdescs().filter_map(Result::ok) {
+            let text = input.as_str()?;
+            for annotated in
+                microdesc::MicrodescReader::new(&text, AllowAnnotations::AnnotationsAllowed)
+            {
+                let r = annotated.map(microdesc::AnnotatedMicrodesc::into_microdesc);
+                match r {
+                    Err(e) => warn!("bad microdesc: {}", e),
+                    Ok(md) => {
+                        res.insert(*md.digest(), md);
+                    }
                 }
             }
         }
@@ -299,25 +316,17 @@ impl NetDirConfig {
                 pb
             }
         };
-        let certspath = cachedir.join("cached-certs");
-        let conspath = cachedir.join("cached-microdesc-consensus");
-        let mdpath = cachedir.join("cached-microdescs");
-        let md2path = mdpath.with_extension("new");
+        let store = LegacyStore::new(cachedir);
 
         if self.authorities.is_empty() {
             self.add_default_authorities();
         }
 
-        let certs = self.load_certs(&certspath)?;
-        let consensus = self.load_consensus(&conspath, &certs)?;
+        let certs = self.load_certs(&store)?;
+        let consensus = self.load_consensus(&store, &certs)?;
         info!("Loaded consensus");
         let mut mds = HashMap::new();
-        if mdpath.exists() {
-            self.load_mds(&mdpath, &mut mds)?;
-        }
-        if md2path.exists() {
-            self.load_mds(&md2path, &mut mds)?;
-        }
+        self.load_mds(&store, &mut mds)?;
         info!("Loaded {} microdescriptors", mds.len());
 
         let mut dir = NetDir {

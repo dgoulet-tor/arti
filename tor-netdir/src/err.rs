@@ -23,4 +23,8 @@ pub enum Error {
     /// A bad argument was provided to some configuration function.
     #[error("bad argument: {0}")]
     BadArgument(&'static str),
+    /// We couldn't read something from disk that we should have been
+    /// able to read.
+    #[error("corrupt cache: {0}")]
+    CacheCorruption(&'static str),
 }
