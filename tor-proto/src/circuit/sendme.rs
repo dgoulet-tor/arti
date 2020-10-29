@@ -85,7 +85,6 @@ pub trait WindowParams {
 
 /// Parameters used for SENDME windows on circuits: limit at 1000 cells,
 /// and each SENDME adjusts by 100.
-#[derive(Clone)]
 pub struct CircParams;
 impl WindowParams for CircParams {
     fn maximum() -> u16 {

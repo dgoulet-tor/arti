@@ -234,11 +234,11 @@ fn main() -> Result<()> {
 
         for _ in 0..args.n {
             if args.flood {
-                test_cat(circ.clone()).await?;
+                test_cat(circ.new_ref()).await?;
             } else if args.dl {
-                test_dl(circ.clone()).await?;
+                test_dl(circ.new_ref()).await?;
             } else {
-                test_http(circ.clone()).await?;
+                test_http(circ.new_ref()).await?;
             }
         }
 

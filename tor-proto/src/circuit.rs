@@ -74,7 +74,6 @@ use rand::{thread_rng, CryptoRng, Rng};
 use log::{debug, trace};
 
 /// A circuit that we have constructed over the Tor network.
-#[derive(Clone)]
 pub struct ClientCirc {
     /// Reference-counted locked reference to the inner circuit object.
     c: Arc<Mutex<ClientCircImpl>>,
@@ -185,6 +184,13 @@ impl CircHop {
 }
 
 impl ClientCirc {
+    /// Allocate and return a new reference to this circuit.
+    pub fn new_ref(&self) -> Self {
+        ClientCirc {
+            c: Arc::clone(&self.c),
+        }
+    }
+
     /// Helper: Register a handler that will be told about the RELAY message
     /// with StreamId 0.
     ///
@@ -451,7 +457,7 @@ impl ClientCirc {
         const STREAM_RECV_INIT: u16 = 500;
 
         let target = StreamTarget {
-            circ: self.clone(),
+            circ: self.new_ref(),
             stream_id: id,
             hop: hopnum,
             window,
@@ -681,11 +687,12 @@ impl PendingClientCirc {
         let circuit = ClientCirc {
             c: Arc::new(Mutex::new(circuit_impl)),
         };
+        let circ_ref = Arc::clone(&circuit.c);
         let pending = PendingClientCirc {
             recvcreated: createdreceiver,
-            circ: circuit.clone(),
+            circ: circuit,
         };
-        let reactor = reactor::Reactor::new(circuit.c, recvctrl, recvclosed, input, logid);
+        let reactor = reactor::Reactor::new(circ_ref, recvctrl, recvclosed, input, logid);
         (pending, reactor)
     }
 

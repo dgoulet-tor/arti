@@ -230,6 +230,13 @@ impl Channel {
         (channel, reactor)
     }
 
+    /// Allocate and return a new reference to this channel.
+    fn new_ref(&self) -> Self {
+        Channel {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
     /// Check whether a cell type is acceptable on an open client channel.
     fn check_cell(&self, cell: &ChanCell) -> Result<()> {
         use msg::ChanMsg::*;
@@ -296,7 +303,7 @@ impl Channel {
 
         Ok(circuit::PendingClientCirc::new(
             id,
-            self.clone(),
+            self.new_ref(),
             createdreceiver,
             Some(destroy_handle),
             receiver,
@@ -318,14 +325,6 @@ impl Channel {
         inner.shutdown();
         // ignore any failure to flush; we can't do anything about it.
         let _ignore = inner.tls.flush().await;
-    }
-}
-
-impl Clone for Channel {
-    fn clone(&self) -> Self {
-        Channel {
-            inner: Arc::clone(&self.inner),
-        }
     }
 }
 
