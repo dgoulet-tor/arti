@@ -68,6 +68,9 @@ pub enum Error {
     /// Stream protocol violation
     #[error("stream protocol violation: {0}")]
     StreamProto(String),
+    /// Channel does not match target
+    #[error("channel mismatch: {0}")]
+    ChanMismatch(String),
 }
 
 impl From<tor_cell::Error> for Error {

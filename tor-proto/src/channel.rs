@@ -65,6 +65,7 @@ use crate::circuit;
 use crate::circuit::celltypes::CreateResponse;
 use crate::{Error, Result};
 use tor_cell::chancell::{msg, ChanCell, CircId};
+use tor_linkspec::ChanTarget;
 use tor_llcrypto::pk::ed25519::Ed25519Identity;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
@@ -127,10 +128,8 @@ struct ChannelImpl {
     /// Context for allocating unique circuit log identifiers.
     circ_logid_ctx: logid::CircLogIdContext,
     /// Validated Ed25519 identity for this peer.
-    #[allow(unused)]
     ed25519_id: Ed25519Identity,
     /// Validated RSA identity for this peer.
-    #[allow(unused)]
     rsa_id: RSAIdentity,
 }
 
@@ -235,6 +234,32 @@ impl Channel {
         Channel {
             inner: Arc::clone(&self.inner),
         }
+    }
+
+    /// Return an error if this channel is somehow mismatched with the
+    /// given target.
+    ///
+    /// TODO: This really shouldn't have to be async.
+    pub async fn check_match<T: ChanTarget>(&self, target: &T) -> Result<()> {
+        let chan = self.inner.lock().await;
+
+        if &chan.ed25519_id != target.ed_identity() {
+            return Err(Error::ChanMismatch(format!(
+                "Identity {} does not match target {}",
+                chan.ed25519_id,
+                target.ed_identity()
+            )));
+        }
+
+        if &chan.rsa_id != target.rsa_identity() {
+            return Err(Error::ChanMismatch(format!(
+                "Identity {} does not match target {}",
+                chan.rsa_id,
+                target.rsa_identity()
+            )));
+        }
+
+        Ok(())
     }
 
     /// Check whether a cell type is acceptable on an open client channel.
