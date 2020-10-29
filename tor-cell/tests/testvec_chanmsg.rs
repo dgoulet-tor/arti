@@ -5,7 +5,7 @@
 /// running in a chutney network with "test-network-all".
 use tor_cell::chancell::{msg, ChanCmd};
 
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
 
 use hex_literal::hex;
 
@@ -215,14 +215,14 @@ fn test_netinfo() {
     fbody(
         cmd,
         "00000000 04 04 7F000001 00",
-        &msg::Netinfo::for_client(localhost).into(),
+        &msg::Netinfo::for_client(Some(localhost)).into(),
     );
 
     // example relay netinfo
     fbody(
         cmd,
         "5F6F80E1 04 04 7F000001 01 04 04 7F000001",
-        &msg::Netinfo::for_relay(0x5f6f80e1, localhost, &[localhost][..]).into(),
+        &msg::Netinfo::for_relay(0x5f6f80e1, Some(localhost), &[localhost][..]).into(),
     );
 
     // example ipv6 relay netinfo
@@ -233,11 +233,15 @@ fn test_netinfo() {
          02
          04 04 7F000001
          06 10 00000000000000000000000000000001",
-        &msg::Netinfo::for_relay(0x5f6f859c, localhost_v6, &[localhost, localhost_v6][..]).into(),
+        &msg::Netinfo::for_relay(
+            0x5f6f859c,
+            Some(localhost_v6),
+            &[localhost, localhost_v6][..],
+        )
+        .into(),
     );
 
     // Bogus addresses get ignored. (hand-generated from above)
-    let v4_unspec = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
     let (_, netinfo) = test_decode(
         cmd,
         "5F6F859C 06 09 000000000000000000
@@ -248,7 +252,7 @@ fn test_netinfo() {
         false,
     );
     let expect: msg::ChanMsg =
-        msg::Netinfo::for_relay(0x5f6f859c, v4_unspec, &[localhost_v6][..]).into();
+        msg::Netinfo::for_relay(0x5f6f859c, None, &[localhost_v6][..]).into();
     assert_eq!(format!("{:?}", netinfo), format!("{:?}", expect));
 }
 

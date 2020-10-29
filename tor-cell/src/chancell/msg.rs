@@ -564,7 +564,7 @@ pub struct Netinfo {
     /// a client.
     timestamp: u32,
     /// Observed address for party that did not send the netinfo cell.
-    their_addr: IpAddr,
+    their_addr: Option<IpAddr>,
     /// Canonical addresses for the party that did send the netinfo cell.
     my_addr: Vec<IpAddr>,
 }
@@ -606,7 +606,7 @@ fn take_one_netinfo_addr(r: &mut Reader<'_>) -> Result<Option<IpAddr>> {
 }
 impl Netinfo {
     /// Construct a new Netinfo to be sent by a client.
-    pub fn for_client(their_addr: IpAddr) -> Self {
+    pub fn for_client(their_addr: Option<IpAddr>) -> Self {
         Netinfo {
             timestamp: 0, // clients don't report their timestamps.
             their_addr,
@@ -614,7 +614,7 @@ impl Netinfo {
         }
     }
     /// Construct a new Netinfo to be sent by a relay
-    pub fn for_relay<V>(timestamp: u32, their_addr: IpAddr, my_addrs: V) -> Self
+    pub fn for_relay<V>(timestamp: u32, their_addr: Option<IpAddr>, my_addrs: V) -> Self
     where
         V: Into<Vec<IpAddr>>,
     {
@@ -632,7 +632,10 @@ impl Body for Netinfo {
     }
     fn write_body_onto<W: Writer + ?Sized>(self, w: &mut W) {
         w.write_u32(self.timestamp);
-        enc_one_netinfo_addr(w, &self.their_addr);
+        let their_addr = self
+            .their_addr
+            .unwrap_or_else(|| Ipv4Addr::UNSPECIFIED.into());
+        enc_one_netinfo_addr(w, &their_addr);
         assert!(self.my_addr.len() <= u8::MAX as usize);
         w.write_u8(self.my_addr.len() as u8);
         for addr in self.my_addr.iter() {
@@ -643,7 +646,7 @@ impl Body for Netinfo {
 impl Readable for Netinfo {
     fn take_from(r: &mut Reader<'_>) -> Result<Self> {
         let timestamp = r.take_u32()?;
-        let their_addr = take_one_netinfo_addr(r)?.unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+        let their_addr = take_one_netinfo_addr(r)?.filter(|a| !a.is_unspecified());
         let mut my_addr = Vec::new();
         let my_n_addrs = r.take_u8()?;
         for _ in 0..my_n_addrs {
