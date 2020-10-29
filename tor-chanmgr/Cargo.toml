@@ -1,0 +1,30 @@
+[package]
+name = "tor-chanmgr"
+version = "0.0.0"
+authors = ["Nick Mathewson <nickm@torproject.org>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[features]
+default = [ "nativetls", "async-std" ]
+
+nativetls = [ "async-native-tls", "native-tls" ]
+
+[dependencies]
+tor-netdir = { path="../tor-netdir", version= "*" }
+tor-netdoc = { path="../tor-netdoc", version= "*" }
+tor-proto = { path="../tor-proto", version= "*" }
+tor-linkspec = { path="../tor-linkspec", version= "*" }
+tor-llcrypto = { path="../tor-llcrypto", version= "*" }
+
+async-trait = "0.1.41"
+event-listener = "2.5.1"
+futures = "0.3.6"
+log = "0.4.11"
+#rand = "0.7.3"
+thiserror = "1.0.21"
+
+async-native-tls = { version = "0.3.3", optional = true }
+async-std = { version = "1.6.5", optional = true }
+native-tls = { version = "0.2.4", optional = true }

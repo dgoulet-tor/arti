@@ -11,7 +11,7 @@ use subtle::*;
 pub use ed25519_dalek::{ExpandedSecretKey, Keypair, PublicKey, SecretKey, Signature};
 
 /// A relay's identity, as an unchecked, unvalidated Ed25519 key.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash)]
 pub struct Ed25519Identity {
     /// A raw unchecked Ed25519 public key.
     id: [u8; 32],

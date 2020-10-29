@@ -230,7 +230,7 @@ impl Channel {
     }
 
     /// Allocate and return a new reference to this channel.
-    fn new_ref(&self) -> Self {
+    pub fn new_ref(&self) -> Self {
         Channel {
             inner: Arc::clone(&self.inner),
         }
