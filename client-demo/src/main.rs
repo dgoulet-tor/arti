@@ -77,14 +77,15 @@ async fn connect<C: ChanTarget>(target: &C) -> Result<Channel> {
         .ok_or(Error::Misc("Somehow a TLS server didn't show a cert?"))?
         .to_der()?;
 
-    let builder = channel::ChannelBuilder::new();
+    let mut builder = channel::ChannelBuilder::new();
+    builder.set_declared_addr(*addr);
     let chan = builder.launch(tlscon).connect().await?;
     info!("Version negotiated and cells read.");
 
     let chan = chan.check(target, &peer_cert)?;
     info!("Certificates validated; peer authenticated.");
 
-    let (chan, reactor) = chan.finish(&addr.ip()).await?;
+    let (chan, reactor) = chan.finish().await?;
     info!("Channel complete.");
 
     async_std::task::spawn(async { reactor.run().await });

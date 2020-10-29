@@ -10,7 +10,7 @@ use crate::channel::LogId;
 use crate::{Error, Result};
 use tor_cell::chancell::{msg, ChanCmd};
 
-use std::net;
+use std::net::SocketAddr;
 use tor_bytes::Reader;
 use tor_linkspec::ChanTarget;
 use tor_llcrypto as ll;
@@ -35,8 +35,8 @@ pub struct OutboundClientHandshake<T: AsyncRead + AsyncWrite + Send + Unpin + 's
     /// connection won't be secure.)
     tls: T,
 
-    /// Declared target for this stream, if any.  (Used for logging.)
-    target: Option<std::net::SocketAddr>,
+    /// Declared target for this stream, if any.
+    target_addr: Option<SocketAddr>,
 
     /// Logging identifier for this stream.  (Used for logging only.)
     logid: LogId,
@@ -52,6 +52,8 @@ pub struct UnverifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     tls: CellFrame<T>,
     /// The certs cell that we got from the relay.
     certs_cell: msg::Certs,
+    /// Declared target for this stream, if any.
+    target_addr: Option<SocketAddr>,
     /// The netinfo cell that we got from the relay.
     #[allow(dead_code)] // Relays will need this.
     netinfo_cell: msg::Netinfo,
@@ -71,6 +73,8 @@ pub struct VerifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     link_protocol: u16,
     /// The Source+Sink on which we're reading and writing cells.
     tls: CellFrame<T>,
+    /// Declared target for this stream, if any.
+    target_addr: Option<SocketAddr>,
     /// Logging identifier for this stream.  (Used for logging only.)
     logid: LogId,
     /// Validated Ed25519 identity for this peer.
@@ -81,10 +85,10 @@ pub struct VerifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
 
 impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake<T> {
     /// Construct a new OutboundClientHandshake.
-    pub(crate) fn new(tls: T, target: Option<std::net::SocketAddr>) -> Self {
+    pub(crate) fn new(tls: T, target_addr: Option<SocketAddr>) -> Self {
         Self {
             tls,
-            target,
+            target_addr,
             logid: LogId::new(),
         }
     }
@@ -92,7 +96,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
     /// Negotiate a link protocol version with the relay, and read
     /// the relay's handshake information.
     pub async fn connect(mut self) -> Result<UnverifiedChannel<T>> {
-        match self.target {
+        match self.target_addr {
             Some(addr) => debug!("{}: starting Tor handshake with {}", self.logid, addr),
             None => debug!("{}: starting Tor handshake", self.logid),
         }
@@ -188,6 +192,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
                     tls,
                     certs_cell,
                     netinfo_cell,
+                    target_addr: self.target_addr,
                     logid: self.logid,
                 })
             }
@@ -352,6 +357,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
             link_protocol: self.link_protocol,
             tls: self.tls,
             logid: self.logid,
+            target_addr: self.target_addr,
             ed25519_id,
             rsa_id,
         })
@@ -367,13 +373,12 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> VerifiedChannel<T> {
     /// circuit.
     pub async fn finish(
         mut self,
-        peer_addr: &net::IpAddr,
     ) -> Result<(
         super::Channel,
         super::reactor::Reactor<stream::SplitStream<CellFrame<T>>>,
     )> {
         trace!("{}: Sending netinfo cell.", self.logid);
-        let netinfo = msg::Netinfo::for_client(*peer_addr);
+        let netinfo = msg::Netinfo::for_client(self.target_addr.as_ref().map(SocketAddr::ip));
         self.tls.send(netinfo.into()).await?;
 
         debug!(
@@ -553,15 +558,15 @@ pub(super) mod test {
         );
     }
 
-    #[cfg(test)]
     fn make_unverified(certs: msg::Certs) -> UnverifiedChannel<MsgBuf> {
         let localhost = std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST);
-        let netinfo_cell = msg::Netinfo::for_client(localhost);
+        let netinfo_cell = msg::Netinfo::for_client(Some(localhost));
         UnverifiedChannel {
             link_protocol: 4,
             tls: futures_codec::Framed::new(MsgBuf::new(&b""[..]), ChannelCodec::new(4)),
             certs_cell: certs,
             netinfo_cell,
+            target_addr: None,
             logid: LogId::new(),
         }
     }
@@ -571,7 +576,7 @@ pub(super) mod test {
         rsa: RSAIdentity,
     }
     impl ChanTarget for DummyChanTarget {
-        fn addrs(&self) -> &[std::net::SocketAddr] {
+        fn addrs(&self) -> &[SocketAddr] {
             &[]
         }
         fn ed_identity(&self) -> &Ed25519Identity {
@@ -803,16 +808,17 @@ pub(super) mod test {
     async fn test_finish() {
         let ed25519_id = [3_u8; 32].into();
         let rsa_id = [4_u8; 20].into();
+        let peer_addr = "127.1.1.2:443".parse().unwrap();
         let ver = VerifiedChannel {
             link_protocol: 4,
             tls: futures_codec::Framed::new(MsgBuf::new(&b""[..]), ChannelCodec::new(4)),
             logid: LogId::new(),
+            target_addr: Some(peer_addr),
             ed25519_id,
             rsa_id,
         };
 
-        let peer_addr = "127.1.1.2".parse().unwrap();
-        let (_chan, _reactor) = ver.finish(&peer_addr).await.unwrap();
+        let (_chan, _reactor) = ver.finish().await.unwrap();
 
         // TODO: check contents of netinfo cell
     }
