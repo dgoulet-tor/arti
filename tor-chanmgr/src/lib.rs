@@ -104,7 +104,17 @@ where
             let state = channels.get(ed_identity);
 
             match state {
-                Some(Open(ch)) => return self.check_chan_match(target, ch.new_ref()).await,
+                Some(Open(ch)) => {
+                    if ch.is_closing().await {
+                        // duplicate with below. XXXXX
+                        let e = Arc::new(event_listener::Event::new());
+                        let state = Building(Arc::clone(&e));
+                        channels.insert(*ed_identity, state);
+                        (true, e)
+                    } else {
+                        return self.check_chan_match(target, ch.new_ref()).await;
+                    }
+                }
                 Some(Building(e)) => (false, Arc::clone(e)),
                 None => {
                     let e = Arc::new(event_listener::Event::new());

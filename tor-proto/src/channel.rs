@@ -262,6 +262,13 @@ impl Channel {
         Ok(())
     }
 
+    /// Return true if this connection is closed and therefore unusable.
+    ///
+    /// TODO: This shouldn't be async.
+    pub async fn is_closing(&self) -> bool {
+        self.inner.lock().await.closed
+    }
+
     /// Check whether a cell type is acceptable on an open client channel.
     fn check_cell(&self, cell: &ChanCell) -> Result<()> {
         use msg::ChanMsg::*;
