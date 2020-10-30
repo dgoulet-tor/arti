@@ -10,19 +10,16 @@
 
 mod err;
 
+use argh::FromArgs;
+use futures::task::SpawnError;
 use log::{info, LevelFilter};
+use rand::thread_rng;
 use std::path::PathBuf;
-use tor_linkspec::ChanTarget;
-use tor_proto::channel::{self, Channel};
+
+use tor_chanmgr::transport::nativetls::NativeTlsTransport;
 use tor_proto::circuit::ClientCirc;
 
-use argh::FromArgs;
-//use async_std::prelude::*;
-use async_native_tls::TlsConnector;
-use async_std::net;
 use err::{Error, Result};
-
-use rand::thread_rng;
 
 #[derive(FromArgs)]
 /// Make a connection to the Tor network, connect to
@@ -51,46 +48,28 @@ struct Args {
     trace: bool,
 }
 
-/// Launch an authenticated channel to a relay.
-async fn connect<C: ChanTarget>(target: &C) -> Result<Channel> {
-    let addr = target
-        .addrs()
-        .get(0) // Instead we might want to try multiple addresses in parallel
-        .ok_or(Error::Misc("No addresses for chosen relay‽"))?;
+struct Spawner {
+    name: String,
+}
 
-    // These function names are scary, but they just mean that we're skipping
-    // web pki, and using our own PKI functions.
-    let connector = TlsConnector::new()
-        .danger_accept_invalid_certs(true)
-        .danger_accept_invalid_hostnames(true);
+impl Spawner {
+    fn new(name: &str) -> Self {
+        Spawner {
+            name: name.to_string(),
+        }
+    }
+}
 
-    info!("Connecting to {}", addr);
-    let stream = net::TcpStream::connect(addr).await?;
-
-    info!("Negotiating TLS with {}", addr);
-    let tlscon = connector.connect("ignored", stream).await?;
-    info!("TLS negotiated.");
-
-    // Extract the peer certificate now before we wrap the tlscon.
-    let peer_cert = tlscon
-        .peer_certificate()?
-        .ok_or(Error::Misc("Somehow a TLS server didn't show a cert?"))?
-        .to_der()?;
-
-    let mut builder = channel::ChannelBuilder::new();
-    builder.set_declared_addr(*addr);
-    let chan = builder.launch(tlscon).connect().await?;
-    info!("Version negotiated and cells read.");
-
-    let chan = chan.check(target, &peer_cert)?;
-    info!("Certificates validated; peer authenticated.");
-
-    let (chan, reactor) = chan.finish().await?;
-    info!("Channel complete.");
-
-    async_std::task::spawn(async { reactor.run().await });
-
-    Ok(chan)
+impl futures::task::Spawn for Spawner {
+    fn spawn_obj(
+        &self,
+        future: futures::task::FutureObj<'static, ()>,
+    ) -> std::result::Result<(), SpawnError> {
+        use async_std::task::Builder;
+        let builder = Builder::new().name(self.name.clone());
+        let _handle = builder.spawn(future).map_err(|_| SpawnError::shutdown())?;
+        Ok(())
+    }
 }
 
 async fn test_cat(mut circ: ClientCirc) -> Result<()> {
@@ -212,7 +191,10 @@ fn main() -> Result<()> {
 
     async_std::task::block_on(async {
         let mut rng = thread_rng();
-        let chan = connect(&guard).await?;
+        let spawn = Spawner::new("channel reactors");
+        let transport = NativeTlsTransport::new();
+        let chanmgr = tor_chanmgr::ChanMgr::new(transport, spawn);
+        let chan = chanmgr.get_or_launch(&guard).await?;
 
         let (pendcirc, reactor) = chan.new_circ(&mut rng).await?;
         async_std::task::spawn(async {
