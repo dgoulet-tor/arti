@@ -12,6 +12,7 @@ pub use ed25519_dalek::{ExpandedSecretKey, Keypair, PublicKey, SecretKey, Signat
 
 /// A relay's identity, as an unchecked, unvalidated Ed25519 key.
 #[derive(Clone, Copy, Hash)]
+#[allow(clippy::derive_hash_xor_eq)]
 pub struct Ed25519Identity {
     /// A raw unchecked Ed25519 public key.
     id: [u8; 32],

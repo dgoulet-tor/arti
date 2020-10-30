@@ -236,6 +236,12 @@ impl Channel {
         }
     }
 
+    /// Return true if this and `other` are both handles to the same
+    /// channel.
+    pub fn same_channnel(&self, other: &Channel) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+
     /// Return an error if this channel is somehow mismatched with the
     /// given target.
     ///
