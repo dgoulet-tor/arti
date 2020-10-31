@@ -43,6 +43,7 @@ pub fn str_offset(haystack: &str, needle: &str) -> Option<usize> {
 /// This whole type is probably naughty and shouldn't exist.  We use
 /// it only within this crate, to remember where it was that we found
 /// parsed objects within the strings we got them from.
+#[derive(Clone, Debug)]
 pub(crate) struct Extent {
     /// At what position within the original string is this extent, in bytes?
     offset: usize,

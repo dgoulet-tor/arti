@@ -10,6 +10,7 @@ use crate::parse::keyword::Keyword;
 use crate::parse::parser::SectionRules;
 use crate::parse::tokenize::{ItemResult, NetDocReader};
 use crate::types::misc::{Fingerprint, ISO8601TimeSp, RSAPublic};
+use crate::util::str::Extent;
 use crate::{Error, Result};
 
 use tor_checkable::{signed, timed};
@@ -69,6 +70,11 @@ lazy_static! {
 #[allow(dead_code)]
 #[derive(Clone)]
 pub struct AuthCert {
+    /// Where we found this AuthCert within the string containing it.
+    ///
+    /// (Perhaps this field should be within some other wrapper type?)
+    location: Option<Extent>,
+
     /// An IPv4 address for this authority.
     address: Option<net::SocketAddrV4>,
     /// The long-term RSA identity key for this authority
@@ -128,6 +134,20 @@ impl AuthCert {
         &self.sk_fingerprint
     }
 
+    /// If this AuthCert was originally parsed from `haystack`, return its
+    /// text.
+    ///
+    /// TODO: This is a pretty bogus interface; there should be a
+    /// better way to remember where to look for this thing if we want
+    /// it without keeping the input alive forever.  We should
+    /// refactor.
+    pub fn within<'a>(&self, haystack: &'a str) -> Option<&'a str> {
+        self.location
+            .as_ref()
+            .map(|ext| ext.reconstruct(haystack))
+            .flatten()
+    }
+
     /// Parse an authority certificate from a reader.
     fn take_from_reader(reader: &mut NetDocReader<'_, AuthCertKW>) -> Result<UncheckedAuthCert> {
         use AuthCertKW::*;
@@ -147,7 +167,7 @@ impl AuthCert {
         // safely call unwrap() on first and last, since there are required
         // tokens in the rules, so we know that at least one token will have
         // been parsed.
-        {
+        let start_pos = {
             let first_item = body.first_item().unwrap();
             if first_item.kwd() != DIR_KEY_CERTIFICATE_VERSION {
                 return Err(Error::WrongStartingToken(
@@ -155,8 +175,9 @@ impl AuthCert {
                     first_item.pos(),
                 ));
             }
-        }
-        {
+            first_item.pos()
+        };
+        let end_pos = {
             let last_item = body.last_item().unwrap();
             if last_item.kwd() != DIR_KEY_CERTIFICATION {
                 return Err(Error::WrongEndingToken(
@@ -164,7 +185,8 @@ impl AuthCert {
                     last_item.pos(),
                 ));
             }
-        }
+            last_item.end_pos()
+        };
 
         let version = body
             .required(DIR_KEY_CERTIFICATE_VERSION)?
@@ -251,7 +273,18 @@ impl AuthCert {
         let id_fingerprint = identity_key.to_rsa_identity();
         let sk_fingerprint = signing_key.to_rsa_identity();
 
+        let location = {
+            let s = reader.str();
+            let start_idx = start_pos.offset_within(s);
+            let end_idx = end_pos.offset_within(s);
+            match (start_idx, end_idx) {
+                (Some(a), Some(b)) => Extent::new(s, &s[a..b + 1]),
+                _ => None,
+            }
+        };
+
         let authcert = AuthCert {
+            location,
             address,
             identity_key,
             signing_key,

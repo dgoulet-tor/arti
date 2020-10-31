@@ -19,6 +19,7 @@ use crate::types::family::RelayFamily;
 use crate::types::misc::*;
 use crate::types::policy::PortPolicy;
 use crate::util;
+use crate::util::str::Extent;
 use crate::{AllowAnnotations, Error, Result};
 use tor_llcrypto::d;
 use tor_llcrypto::pk::{curve25519, ed25519, rsa};
@@ -101,6 +102,9 @@ pub struct AnnotatedMicrodesc {
     md: Microdesc,
     /// The annotations for the microdescriptor
     ann: MicrodescAnnotation,
+    /// Where did we find the microdescriptor with the originally parsed
+    /// string?
+    location: Option<Extent>,
 }
 
 impl AnnotatedMicrodesc {
@@ -113,6 +117,14 @@ impl AnnotatedMicrodesc {
     /// microdescriptor.
     pub fn md(&self) -> &Microdesc {
         &self.md
+    }
+
+    /// If this Microdesc was parsed from `s`, return its original text.
+    pub fn within<'a>(&self, s: &'a str) -> Option<&'a str> {
+        self.location
+            .as_ref()
+            .map(|ext| ext.reconstruct(s))
+            .flatten()
     }
 }
 
@@ -183,13 +195,15 @@ impl Microdesc {
     /// Parse a string into a new microdescriptor.
     pub fn parse(s: &str) -> Result<Microdesc> {
         let mut items = crate::parse::tokenize::NetDocReader::new(s);
-        let result = Self::parse_from_reader(&mut items).map_err(|e| e.within(s));
+        let (result, _) = Self::parse_from_reader(&mut items).map_err(|e| e.within(s))?;
         items.should_be_exhausted()?;
-        result
+        Ok(result)
     }
 
     /// Extract a single microdescriptor from a NetDocReader.
-    fn parse_from_reader(reader: &mut NetDocReader<'_, MicrodescKW>) -> Result<Microdesc> {
+    fn parse_from_reader(
+        reader: &mut NetDocReader<'_, MicrodescKW>,
+    ) -> Result<(Microdesc, Option<Extent>)> {
         use MicrodescKW::*;
         let s = reader.str();
 
@@ -279,9 +293,12 @@ impl Microdesc {
                 .ok_or_else(|| Error::Internal(last_item.end_pos()))?
         };
 
-        let sha256 = d::Sha256::digest(&s[start_pos..end_pos].as_bytes()).into();
+        let text = &s[start_pos..end_pos];
+        let sha256 = d::Sha256::digest(text.as_bytes()).into();
 
-        Ok(Microdesc {
+        let location = Extent::new(s, text);
+
+        let md = Microdesc {
             sha256,
             tap_onion_key,
             ntor_onion_key,
@@ -289,7 +306,8 @@ impl Microdesc {
             ipv4_policy,
             ipv6_policy,
             ed25519_id,
-        })
+        };
+        Ok((md, location))
     }
 }
 
@@ -353,8 +371,8 @@ impl<'a> MicrodescReader<'a> {
     /// On error, parsing stops after the first failure.
     fn take_annotated_microdesc_raw(&mut self) -> Result<AnnotatedMicrodesc> {
         let ann = self.take_annotation()?;
-        let md = Microdesc::parse_from_reader(&mut self.reader)?;
-        Ok(AnnotatedMicrodesc { md, ann })
+        let (md, location) = Microdesc::parse_from_reader(&mut self.reader)?;
+        Ok(AnnotatedMicrodesc { md, ann, location })
     }
 
     /// Parse a (possibly annotated) microdescriptor from the reader.
