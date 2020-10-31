@@ -223,7 +223,7 @@ impl Microdesc {
                 ));
             }
             // Unwrap is safe here because we are parsing these strings from s
-            util::str_offset(s, first.kwd_str()).unwrap()
+            util::str::str_offset(s, first.kwd_str()).unwrap()
         };
 
         // Legacy (tap) onion key

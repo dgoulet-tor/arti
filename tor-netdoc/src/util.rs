@@ -1,5 +1,7 @@
 //! Misc helper functions and types for use in parsing network documents
 
+pub(crate) mod str;
+
 use std::iter::Peekable;
 
 /// An iterator adaptor that pauses when a given predicate is true.
@@ -86,44 +88,6 @@ impl<'a, I: Iterator, F: FnMut(&I::Item) -> bool> Iterator for PauseAt<'a, I, F>
     }
 }
 
-/// Return the position of one string slice within another.
-///
-/// If `needle` is indeed part of `haystack`, returns some offset
-/// `off`, such that `needle` is the same as
-/// `&haystack[off..needle.len()]`.
-///
-/// Returns None if `needle` is not a part of `haystack`.
-///
-/// Remember, offsets are in bytes, not in characters.
-///
-/// # Example
-/// ```ignore
-/// use tor_netdoc::util::str_offset;
-/// let quote = "A rose is a rose is a rose."; // -- Gertrude Stein
-/// assert_eq!(&quote[2..6], "rose");
-/// assert_eq!(str_offset(quote, &quote[2..6]).unwrap(), 2);
-/// assert_eq!(&quote[12..16], "rose");
-/// assert_eq!(str_offset(quote, &quote[12..16]).unwrap(), 12);
-/// assert_eq!(&quote[22..26], "rose");
-/// assert_eq!(str_offset(quote, &quote[22..26]).unwrap(), 22);
-///
-/// assert_eq!(str_offset(quote, "rose"), None);
-///
-/// assert_eq!(str_offset(&quote[1..], &quote[2..6]), Some(1));
-/// assert_eq!(str_offset(&quote[1..5], &quote[2..6]), None);
-/// ```
-pub fn str_offset(haystack: &str, needle: &str) -> Option<usize> {
-    let needle_start_u = needle.as_ptr() as usize;
-    let needle_end_u = needle_start_u + needle.len();
-    let haystack_start_u = haystack.as_ptr() as usize;
-    let haystack_end_u = haystack_start_u + haystack.len();
-    if haystack_start_u <= needle_start_u && needle_end_u <= haystack_end_u {
-        Some(needle_start_u - haystack_start_u)
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -173,22 +137,5 @@ mod tests {
         assert_eq!(iter.next(), Some(3));
         assert_eq!(iter.peek(), None);
         assert_eq!(iter.next(), None);
-    }
-
-    #[test]
-    fn test_str_offset() {
-        use super::str_offset;
-        let quote = "A rose is a rose is a rose."; // -- Gertrude Stein
-        assert_eq!(&quote[2..6], "rose");
-        assert_eq!(str_offset(quote, &quote[2..6]).unwrap(), 2);
-        assert_eq!(&quote[12..16], "rose");
-        assert_eq!(str_offset(quote, &quote[12..16]).unwrap(), 12);
-        assert_eq!(&quote[22..26], "rose");
-        assert_eq!(str_offset(quote, &quote[22..26]).unwrap(), 22);
-
-        assert_eq!(str_offset(quote, "rose"), None);
-
-        assert_eq!(str_offset(&quote[1..], &quote[2..6]), Some(1));
-        assert_eq!(str_offset(&quote[1..5], &quote[2..6]), None);
     }
 }

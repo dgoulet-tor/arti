@@ -433,7 +433,7 @@ impl<'a, K: Keyword> Item<'a, K> {
     ///
     /// Returns None if this item doesn't actually belong to the string.
     pub fn offset_in(&self, s: &str) -> Option<usize> {
-        crate::util::str_offset(s, self.kwd_str)
+        crate::util::str::str_offset(s, self.kwd_str)
     }
     /// Return the position of the n'th argument of this item.
     ///
