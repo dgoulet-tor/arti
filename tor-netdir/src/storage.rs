@@ -3,6 +3,7 @@
 #![allow(unused)]
 
 pub(crate) mod legacy;
+pub(crate) mod sqlite;
 
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
@@ -56,19 +57,3 @@ impl From<Vec<u8>> for InputString {
         InputString::UncheckedBytes(v)
     }
 }
-
-pub(crate) trait ReadableStore {
-    type MDStrIter: Iterator<Item = Result<InputString>>;
-    type CertStrIter: Iterator<Item = Result<InputString>>;
-    fn latest_consensus(&self) -> Result<InputString>;
-    fn microdescs(&self) -> Self::MDStrIter;
-    fn authcerts(&self) -> Self::CertStrIter;
-}
-
-/*
-pub(crate) trait WritableStore {
-    fn store_consensus(&mut self, text: &str);
-    fn store_authority_cert(&mut self, text: &str);
-    fn store_microdescs(&mut self, text: HashMap<MDDigest, &str>); // XXXX need annotations!
-}
-*/

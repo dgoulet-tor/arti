@@ -1,4 +1,4 @@
-use super::{InputString, ReadableStore};
+use super::InputString;
 use crate::{Error, Result};
 
 use std::path::{Path, PathBuf};
@@ -19,18 +19,13 @@ impl LegacyStore {
         pb.push(relpath);
         pb
     }
-}
 
-impl ReadableStore for LegacyStore {
-    type MDStrIter = Box<dyn Iterator<Item = Result<InputString>>>;
-    type CertStrIter = Box<dyn Iterator<Item = Result<InputString>>>;
-
-    fn latest_consensus(&self) -> Result<InputString> {
+    pub fn latest_consensus(&self) -> Result<InputString> {
         let p = self.relative_path("cached-microdesc-consensus");
         Ok(InputString::load(p)?)
     }
 
-    fn microdescs(&self) -> Self::MDStrIter {
+    pub fn microdescs(&self) -> impl Iterator<Item = Result<InputString>> {
         // impl Iterator<Item=Result<InputString,Self::Error>> {
         let paths = vec![
             self.relative_path("cached-microdescs"),
@@ -39,7 +34,7 @@ impl ReadableStore for LegacyStore {
         Box::new(paths.into_iter().map(InputString::load))
     }
 
-    fn authcerts(&self) -> Self::CertStrIter {
+    pub fn authcerts(&self) -> impl Iterator<Item = Result<InputString>> {
         // impl Iterator<Item=Result<InputString,Self::Error>> {
         let paths = vec![self.relative_path("cached-certs")];
         Box::new(paths.into_iter().map(InputString::load))

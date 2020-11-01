@@ -20,11 +20,12 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
+pub mod docmeta;
 mod err;
 mod pick;
 mod storage;
 
-use crate::storage::{legacy::LegacyStore, ReadableStore};
+use crate::storage::legacy::LegacyStore;
 
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
 use tor_netdoc::doc::authcert::AuthCert;
@@ -224,7 +225,7 @@ impl NetDirConfig {
     ///
     /// Warn about invalid certs, but don't give an error unless there
     /// is a complete failure.
-    fn load_certs<S: ReadableStore>(&self, store: &S) -> Result<Vec<AuthCert>> {
+    fn load_certs(&self, store: &LegacyStore) -> Result<Vec<AuthCert>> {
         let mut res = Vec::new();
         for input in store.authcerts().filter_map(Result::ok) {
             let text = input.as_str()?;
@@ -263,11 +264,7 @@ impl NetDirConfig {
 
     /// Read the consensus from a provided store, and check it
     /// with a list of authcerts.
-    fn load_consensus<S: ReadableStore>(
-        &self,
-        store: &S,
-        certs: &[AuthCert],
-    ) -> Result<MDConsensus> {
+    fn load_consensus(&self, store: &LegacyStore, certs: &[AuthCert]) -> Result<MDConsensus> {
         let input = store.latest_consensus()?;
         let text = input.as_str()?;
         let (_, consensus) = MDConsensus::parse(text)?;
@@ -285,11 +282,7 @@ impl NetDirConfig {
     ///
     /// Warn about invalid microdescs, but don't give an error unless there
     /// is a complete failure.
-    fn load_mds<S: ReadableStore>(
-        &self,
-        store: &S,
-        res: &mut HashMap<MDDigest, Microdesc>,
-    ) -> Result<()> {
+    fn load_mds(&self, store: &LegacyStore, res: &mut HashMap<MDDigest, Microdesc>) -> Result<()> {
         for input in store.microdescs().filter_map(Result::ok) {
             let text = input.as_str()?;
             for annotated in

@@ -27,4 +27,10 @@ pub enum Error {
     /// able to read.
     #[error("corrupt cache: {0}")]
     CacheCorruption(&'static str),
+    /// rusqlite gave us an error.
+    #[error("sqlite error: {0}")]
+    SqliteError(#[from] rusqlite::Error),
+    /// A schema version that says we can't read it.
+    #[error("unrecognized data storage schema")]
+    UnrecognizedSchema,
 }
