@@ -13,8 +13,8 @@ mod err;
 use argh::FromArgs;
 use futures::task::SpawnError;
 use log::{info, LevelFilter};
-use rand::thread_rng;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use tor_chanmgr::transport::nativetls::NativeTlsTransport;
 use tor_proto::circuit::ClientCirc;
@@ -162,21 +162,16 @@ fn main() -> Result<()> {
     // TODO CONFORMANCE: we should stop now if there are required
     // protovers we don't support.
 
-    let path = {
-        use tor_circmgr::path::PathBuilder;
-        let mut rng = thread_rng();
-        let pathb = tor_circmgr::path::exitpath::ExitPathBuilder::new(vec![80]);
-        pathb.pick_path(&mut rng, &dir)?
-    };
-
     async_std::task::block_on(async {
-        let mut rng = thread_rng();
         let spawn = Spawner::new("channel reactors");
         let transport = NativeTlsTransport::new();
         let chanmgr = tor_chanmgr::ChanMgr::new(transport, spawn);
 
         let spawn = Spawner::new("circuit reactors");
-        let circ = path.build_circuit(&mut rng, &chanmgr, &spawn).await?;
+        let circmgr = tor_circmgr::CircMgr::new(Arc::new(dir), Arc::new(chanmgr), Box::new(spawn));
+
+        let exit_ports = &[80];
+        let circ = circmgr.get_or_launch_exit(exit_ports).await?;
 
         info!("Built a three-hop circuit.");
 

@@ -3,7 +3,7 @@ use crate::Error;
 
 pub struct DirPathBuilder {}
 impl DirPathBuilder {
-    fn new() -> Self {
+    pub fn new() -> Self {
         DirPathBuilder {}
     }
 }
