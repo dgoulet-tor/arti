@@ -179,20 +179,28 @@ where
         let mut rng = rand::thread_rng();
 
         // XXXX LOG.
+        // XXXX This function is huge and ugly.
 
         // Check the state of our circuit list.
         let (should_launch, event, id) = {
             let mut circs = self.circuits.lock().await;
             let mut suitable = Vec::new();
             let par = self.parallelism(&usage);
+            let mut remove = Vec::new();
             assert!(par >= 1);
             for (id, c) in circs.iter() {
-                // XXXX Check whether it's closing.
-                if c.usage.contains(&usage) {
-                    suitable.push((id, c));
+                if !c.usage.contains(&usage) {
+                    continue;
                 }
+                if let Circ::Open(ref c) = &c.circ {
+                    if c.is_closing().await {
+                        remove.push(*id);
+                        continue;
+                    }
+                }
+                suitable.push((id, c));
             }
-            if suitable.len() < par {
+            let result = if suitable.len() < par {
                 // There aren't enough circuits of this type. Launch one.
                 let event = Arc::new(event_listener::Event::new());
                 let id = CircEntId::new();
@@ -212,7 +220,12 @@ where
                     Circ::Open(c) => return Ok(c.new_ref()), // Found a circuit!
                     Circ::Pending(event) => (false, Arc::clone(&event), **id), // wait for this one.
                 }
+            };
+
+            for id in remove {
+                circs.remove(&id);
             }
+            result
         };
 
         if should_launch {

@@ -518,6 +518,13 @@ impl ClientCirc {
     pub async fn terminate(self) {
         self.c.lock().await.shutdown();
     }
+
+    /// Return true if this circuit is closed and therefore unusable.
+    ///
+    /// TODO: This shouldn't be async.
+    pub async fn is_closing(&self) -> bool {
+        self.c.lock().await.closed
+    }
 }
 
 impl ClientCircImpl {
