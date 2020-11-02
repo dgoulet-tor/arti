@@ -168,10 +168,10 @@ fn main() -> Result<()> {
         let chanmgr = tor_chanmgr::ChanMgr::new(transport, spawn);
 
         let spawn = Spawner::new("circuit reactors");
-        let circmgr = tor_circmgr::CircMgr::new(Arc::new(dir), Arc::new(chanmgr), Box::new(spawn));
+        let circmgr = tor_circmgr::CircMgr::new(Arc::new(chanmgr), Box::new(spawn));
 
         let exit_ports = &[80];
-        let circ = circmgr.get_or_launch_exit(exit_ports).await?;
+        let circ = circmgr.get_or_launch_exit(&dir, exit_ports).await?;
 
         info!("Built a three-hop circuit.");
 

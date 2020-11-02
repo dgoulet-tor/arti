@@ -48,9 +48,6 @@ pub struct CircMgr<TR>
 where
     TR: tor_chanmgr::transport::Transport,
 {
-    /// XXXX Hang on, Having this here isn't so great. It needs to be able to change
-    /// underneath us. Maybe make it an argument to the path-building functions.
-    netdir: Arc<NetDir>,
     /// Reference to a channel manager that this circuit manager can use to make
     /// channels.
     chanmgr: Arc<ChanMgr<TR>>,
@@ -141,11 +138,10 @@ where
     TR: tor_chanmgr::transport::Transport,
 {
     /// Construct a new circuit manager.
-    pub fn new(netdir: Arc<NetDir>, chanmgr: Arc<ChanMgr<TR>>, spawn: Box<dyn Spawn>) -> Self {
+    pub fn new(chanmgr: Arc<ChanMgr<TR>>, spawn: Box<dyn Spawn>) -> Self {
         let circuits = Mutex::new(HashMap::new());
 
         CircMgr {
-            netdir,
             chanmgr,
             spawn,
             circuits,
@@ -154,14 +150,14 @@ where
 
     /// Return a circuit suitable for sending one-hop BEGINDIR streams,
     /// launching it if necessary.
-    pub async fn get_or_launch_dir(&self) -> Result<ClientCirc> {
-        self.get_or_launch_by_usage(CircUsage::Dir).await
+    pub async fn get_or_launch_dir(&self, netdir: &NetDir) -> Result<ClientCirc> {
+        self.get_or_launch_by_usage(netdir, CircUsage::Dir).await
     }
 
     /// Return a circuit suitable for exiting to all of the provided
     /// `ports`, launching it if necessary.
-    pub async fn get_or_launch_exit(&self, ports: &[u16]) -> Result<ClientCirc> {
-        self.get_or_launch_by_usage(CircUsage::Exit(ports.into()))
+    pub async fn get_or_launch_exit(&self, netdir: &NetDir, ports: &[u16]) -> Result<ClientCirc> {
+        self.get_or_launch_by_usage(netdir, CircUsage::Exit(ports.into()))
             .await
     }
 
@@ -175,7 +171,11 @@ where
     }
 
     /// Helper: return a a circuit for this usage, launching it if necessary.
-    async fn get_or_launch_by_usage(&self, usage: CircUsage) -> Result<ClientCirc> {
+    async fn get_or_launch_by_usage(
+        &self,
+        netdir: &NetDir,
+        usage: CircUsage,
+    ) -> Result<ClientCirc> {
         let mut rng = rand::thread_rng();
 
         // XXXX LOG.
@@ -230,7 +230,7 @@ where
 
         if should_launch {
             // TODO: Try again on failure?
-            let result = self.build_by_usage(&mut rng, &usage).await;
+            let result = self.build_by_usage(&mut rng, netdir, &usage).await;
 
             // Adjust the map and notify the others.
             {
@@ -267,10 +267,11 @@ where
     async fn build_by_usage<R: Rng + CryptoRng>(
         &self,
         rng: &mut R,
+        netdir: &NetDir,
         usage: &CircUsage,
     ) -> Result<ClientCirc> {
         // XXXX Timeout support.
-        let path = usage.build_path(rng, &self.netdir)?;
+        let path = usage.build_path(rng, netdir)?;
         let circ = path.build_circuit(rng, &self.chanmgr, &self.spawn).await?;
         Ok(circ)
     }
