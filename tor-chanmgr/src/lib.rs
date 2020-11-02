@@ -162,6 +162,7 @@ where
 
     /// Helper: construct a new channel for a target
     async fn build_channel<T: ChanTarget + Sync>(&self, target: &T) -> Result<Channel> {
+        /// XXXX Timeout support.
         use crate::transport::CertifiedConn;
 
         let (addr, tls) = self.transport.connect(target).await?;

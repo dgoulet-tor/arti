@@ -1,16 +1,26 @@
+//! Code for building paths to an exit relay.
+
 use super::*;
 use crate::Error;
 
+/// A PathBuilder that builds a path to an exit node supporting a given
+/// set of ports.
+///
+/// TODO: IPv6 support
 pub struct ExitPathBuilder {
+    /// List of ports that the exit needs to support
     wantports: Vec<u16>,
 }
 
 impl ExitPathBuilder {
+    /// Create a new builder that will try to get an exit node
+    /// containing all the ports in `ports`.
     pub fn new<P: Into<Vec<u16>>>(ports: P) -> Self {
         let wantports = ports.into();
         ExitPathBuilder { wantports }
     }
 
+    /// Return true if `r` supports every port in `self.wantports`
     fn ports_supported_by(&self, r: &Relay<'_>) -> bool {
         self.wantports.iter().all(|p| r.supports_exit_port(*p))
     }

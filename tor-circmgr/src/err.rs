@@ -1,5 +1,8 @@
+//! Declare an error type for tor-circmgr
+
 use thiserror::Error;
 
+/// An error returned while looking up or building a circuit
 #[derive(Error, Debug)]
 pub enum Error {
     /// An error from the protocol module

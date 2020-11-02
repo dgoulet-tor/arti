@@ -1,8 +1,12 @@
+//! Code to construct paths to a directory for non-anonymous downloads
 use super::*;
 use crate::Error;
 
+/// A PathBuilder that can connect to a directory.
 pub struct DirPathBuilder {}
+
 impl DirPathBuilder {
+    /// Create a new DirPathBuilder.
     pub fn new() -> Self {
         DirPathBuilder {}
     }
