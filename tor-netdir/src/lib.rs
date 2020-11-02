@@ -404,6 +404,7 @@ impl<'a> UncheckedRelay<'a> {
     /// This function should return `true` for every Relay we expose
     /// to the user.
     fn is_usable(&self) -> bool {
+        // No need to check for 'valid' or 'running': they are implicit.
         self.md.is_some() && self.rs.ed25519_id_is_usable()
     }
     /// If this is usable, return a corresponding Relay object.
@@ -437,7 +438,17 @@ impl<'a> Relay<'a> {
     /// Return true if this relay allows exiting to `port` on IPv4.
     // XXXX ipv4/ipv6
     pub fn supports_exit_port(&self, port: u16) -> bool {
-        self.md.ipv4_policy().allows_port(port)
+        !self.rs.is_flagged_bad_exit() && self.md.ipv4_policy().allows_port(port)
+    }
+    /// Return true if this relay is suitable for use as a directory
+    /// cache.
+    pub fn is_dir_cache(&self) -> bool {
+        use tor_protover::ProtoKind;
+        self.rs.is_flagged_v2dir()
+            && self
+                .rs
+                .protovers()
+                .supports_known_subver(ProtoKind::DirCache, 2)
     }
     /// Return the weight of this Relay, according to `wf`.
     fn weight(&self, wf: WeightFn) -> u32 {

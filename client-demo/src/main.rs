@@ -162,56 +162,21 @@ fn main() -> Result<()> {
     // TODO CONFORMANCE: we should stop now if there are required
     // protovers we don't support.
 
-    let guard = dir
-        .pick_relay(&mut thread_rng(), |_, u| u)
-        .ok_or(Error::Misc("no usable relays"))?;
-
-    let mid = dir
-        .pick_relay(
-            &mut thread_rng(),
-            |r, u| {
-                if r.same_relay(&guard) {
-                    0
-                } else {
-                    u
-                }
-            },
-        )
-        .ok_or(Error::Misc("no usable second hop."))?;
-
-    let exit = dir
-        .pick_relay(&mut thread_rng(), |r, u| {
-            if r.same_relay(&guard) || r.same_relay(&mid) || !r.supports_exit_port(80) {
-                0
-            } else {
-                u
-            }
-        })
-        .ok_or(Error::Misc("no usable second hop."))?;
+    let path = {
+        use tor_circmgr::path::PathBuilder;
+        let mut rng = thread_rng();
+        let pathb = tor_circmgr::path::exitpath::ExitPathBuilder::new(vec![80]);
+        pathb.pick_path(&mut rng, &dir)?
+    };
 
     async_std::task::block_on(async {
         let mut rng = thread_rng();
         let spawn = Spawner::new("channel reactors");
         let transport = NativeTlsTransport::new();
         let chanmgr = tor_chanmgr::ChanMgr::new(transport, spawn);
-        let chan = chanmgr.get_or_launch(&guard).await?;
 
-        let (pendcirc, reactor) = chan.new_circ(&mut rng).await?;
-        async_std::task::spawn(async {
-            let _ignore = reactor.run().await;
-        });
-
-        // let mut circ = pendcirc.create_firsthop_fast(&mut rng).await?;
-        // info!("fast handshake with first hop was successful.");
-
-        let mut circ = pendcirc.create_firsthop_ntor(&mut rng, &guard).await?;
-        info!("ntor handshake with first hop was successful.");
-
-        circ.extend_ntor(&mut rng, &mid).await?;
-        info!("ntor handshake with second hop was successful.");
-
-        circ.extend_ntor(&mut rng, &exit).await?;
-        info!("ntor handshake with third hop was successful.");
+        let spawn = Spawner::new("circuit reactors");
+        let circ = path.build_circuit(&mut rng, &chanmgr, &spawn).await?;
 
         info!("Built a three-hop circuit.");
 

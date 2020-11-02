@@ -15,5 +15,6 @@ members = [
     "tor-netdoc",
     "tor-netdir",
     "tor-chanmgr",
+    "tor-circmgr",
     "client-demo",
     ]

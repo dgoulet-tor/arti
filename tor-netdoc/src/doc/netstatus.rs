@@ -358,6 +358,14 @@ impl MDConsensusRouterStatus {
     pub fn ed25519_id_is_usable(&self) -> bool {
         !self.flags.no_ed_consensus
     }
+    /// Return true if this routerstatus is listed with the BadExit
+    pub fn is_flagged_bad_exit(&self) -> bool {
+        self.flags.bad_exit
+    }
+    /// Return true if this routerstatus is listed with the v2dir flag.
+    pub fn is_flagged_v2dir(&self) -> bool {
+        self.flags.v2dir
+    }
 }
 
 /// All information about a single authority, as represented in a consensus

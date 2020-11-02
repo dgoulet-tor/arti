@@ -9,7 +9,9 @@ pub enum Error {
     #[error("Tls: {0}")]
     Tls(#[from] native_tls::Error),
     #[error("ChanMgr: {0}")]
-    ChanMgr(#[from] tor_chanmgr::Error),
+    ChanMgrErr(#[from] tor_chanmgr::Error),
+    #[error("CircMgr: {0}")]
+    CircMgrErr(#[from] tor_circmgr::Error),
     #[error("Misc: {0}")]
     Misc(&'static str),
 }
