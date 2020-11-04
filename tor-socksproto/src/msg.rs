@@ -40,7 +40,7 @@ pub enum SocksAddr {
 }
 
 /// Provided authentication from a SOCKS handshake
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum SocksAuth {
     /// No authentication was provided
     NoAuth,
@@ -165,6 +165,11 @@ impl SocksRequest {
         self.cmd
     }
 
+    /// Return the 'authentication' information from this request.
+    pub fn auth(&self) -> &SocksAuth {
+        &self.auth
+    }
+
     /// Return the requested port.
     pub fn port(&self) -> u16 {
         self.port
@@ -184,5 +189,22 @@ impl fmt::Display for SocksAddr {
             SocksAddr::Ip(a) => write!(f, "{}", a),
             SocksAddr::Hostname(h) => write!(f, "{}", h),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn display_sa() {
+        let a = SocksAddr::Ip(IpAddr::V4("127.0.0.1".parse().unwrap()));
+        assert_eq!(a.to_string(), "127.0.0.1");
+
+        let a = SocksAddr::Ip(IpAddr::V6("f00::9999".parse().unwrap()));
+        assert_eq!(a.to_string(), "f00::9999");
+
+        let a = SocksAddr::Hostname("www.torproject.org".into());
+        assert_eq!(a.to_string(), "www.torproject.org");
     }
 }

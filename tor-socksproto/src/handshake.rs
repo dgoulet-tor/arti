@@ -322,3 +322,180 @@ impl Writeable for SocksAddr {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use hex_literal::hex;
+
+    #[test]
+    fn socks4_good() {
+        let mut h = SocksHandshake::new();
+        let a = h.handshake(&hex!("04 01 0050 CB007107 00")[..]).unwrap();
+        assert!(a.finished);
+        assert!(h.finished());
+        assert_eq!(a.drain, 9);
+        assert!(a.reply.is_empty()); // no reply -- waiting to see how it goes
+
+        let req = h.into_request().unwrap();
+        assert_eq!(req.port(), 80);
+        assert_eq!(req.addr().to_string(), "203.0.113.7");
+        assert_eq!(req.command(), SocksCmd::CONNECT);
+
+        assert_eq!(
+            req.reply(
+                SocksStatus::GENERAL_FAILURE,
+                Some(&SocksAddr::Ip("127.0.0.1".parse().unwrap()))
+            ),
+            hex!("00 5B 0050 7f000001")
+        );
+    }
+
+    #[test]
+    fn socks4a_good() {
+        let mut h = SocksHandshake::new();
+        let msg = hex!(
+            "04 01 01BB 00000001 73776f72646669736800
+                        7777772e6578616d706c652e636f6d00 99"
+        );
+        let a = h.handshake(&msg[..]).unwrap();
+        assert!(a.finished);
+        assert!(h.finished());
+        assert_eq!(a.drain, msg.len() - 1);
+        assert!(a.reply.is_empty()); // no reply -- waiting to see how it goes
+
+        let req = h.into_request().unwrap();
+        assert_eq!(req.port(), 443);
+        assert_eq!(req.addr().to_string(), "www.example.com");
+        assert_eq!(req.auth(), &SocksAuth::Socks4(b"swordfish".to_vec()));
+        assert_eq!(req.command(), SocksCmd::CONNECT);
+
+        assert_eq!(
+            req.reply(SocksStatus::SUCCEEDED, None),
+            hex!("00 5A 0000 00000000")
+        );
+    }
+
+    #[test]
+    fn socks5_init_noauth() {
+        let mut h = SocksHandshake::new();
+        let a = h.handshake(&hex!("05 01 00")[..]).unwrap();
+        assert_eq!(a.finished, false);
+        assert_eq!(a.drain, 3);
+        assert_eq!(a.reply, &[5, 0]);
+        assert_eq!(h.state, State::Socks5Wait);
+    }
+
+    #[test]
+    fn socks5_init_username() {
+        let mut h = SocksHandshake::new();
+        let a = h.handshake(&hex!("05 04 00023031")[..]).unwrap();
+        assert_eq!(a.finished, false);
+        assert_eq!(a.drain, 6);
+        assert_eq!(a.reply, &[5, 2]);
+        assert_eq!(h.state, State::Socks5Username);
+    }
+
+    #[test]
+    fn socks5_init_nothing_works() {
+        let mut h = SocksHandshake::new();
+        let a = h.handshake(&hex!("05 02 9988")[..]);
+        dbg!(&a);
+        assert!(matches!(a, Err(Error::NoSupport)));
+    }
+
+    #[test]
+    fn socks5_username_ok() {
+        let mut h = SocksHandshake::new();
+        let _a = h.handshake(&hex!("05 02 9902")).unwrap();
+        let a = h
+            .handshake(&hex!("01 08 5761677374616666 09 24776f726466693568"))
+            .unwrap();
+        assert_eq!(a.drain, 20);
+        assert_eq!(a.reply, &[1, 0]);
+        assert_eq!(h.state, State::Socks5Wait);
+        assert_eq!(
+            h.socks5_auth.unwrap(),
+            // _Horse Feathers_, 1932
+            SocksAuth::Username(b"Wagstaff".to_vec(), b"$wordfi5h".to_vec())
+        );
+    }
+
+    #[test]
+    fn socks5_request_ok_ipv4() {
+        let mut h = SocksHandshake::new();
+        let _a = h.handshake(&hex!("05 01 00")).unwrap();
+        let a = h.handshake(&hex!("05 01 00 01 7f000007 1f90")).unwrap();
+        assert_eq!(a.drain, 10);
+        assert!(a.finished);
+        assert!(a.reply.is_empty());
+        assert_eq!(h.state, State::Done);
+
+        let req = h.into_request().unwrap();
+        assert_eq!(req.version(), 5);
+        assert_eq!(req.command(), SocksCmd::CONNECT);
+        assert_eq!(req.addr().to_string(), "127.0.0.7");
+        assert_eq!(req.port(), 8080);
+        assert_eq!(req.auth(), &SocksAuth::NoAuth);
+
+        assert_eq!(
+            req.reply(
+                SocksStatus::HOST_UNREACHABLE,
+                Some(&SocksAddr::Hostname("foo.example.com".into()))
+            ),
+            hex!("05 04 00 03 0f 666f6f2e6578616d706c652e636f6d 1f90")
+        );
+    }
+
+    #[test]
+    fn socks5_request_ok_ipv6() {
+        let mut h = SocksHandshake::new();
+        let _a = h.handshake(&hex!("05 01 00")).unwrap();
+        let a = h
+            .handshake(&hex!(
+                "05 01 00 04 f000 0000 0000 0000 0000 0000 0000 ff11 1f90"
+            ))
+            .unwrap();
+        assert_eq!(a.drain, 22);
+        assert!(a.finished);
+        assert!(a.reply.is_empty());
+        assert_eq!(h.state, State::Done);
+
+        let req = h.into_request().unwrap();
+        assert_eq!(req.version(), 5);
+        assert_eq!(req.command(), SocksCmd::CONNECT);
+        assert_eq!(req.addr().to_string(), "f000::ff11");
+        assert_eq!(req.port(), 8080);
+        assert_eq!(req.auth(), &SocksAuth::NoAuth);
+
+        assert_eq!(
+            req.reply(SocksStatus::GENERAL_FAILURE, Some(req.addr())),
+            hex!("05 01 00 04 f000 0000 0000 0000 0000 0000 0000 ff11 1f90")
+        );
+    }
+
+    #[test]
+    fn socks5_request_ok_hostname() {
+        let mut h = SocksHandshake::new();
+        let _a = h.handshake(&hex!("05 01 00")).unwrap();
+        let a = h
+            .handshake(&hex!("05 01 00 03 0f 666f6f2e6578616d706c652e636f6d 1f90"))
+            .unwrap();
+        assert_eq!(a.drain, 22);
+        assert!(a.finished);
+        assert!(a.reply.is_empty());
+        assert_eq!(h.state, State::Done);
+
+        let req = h.into_request().unwrap();
+        assert_eq!(req.version(), 5);
+        assert_eq!(req.command(), SocksCmd::CONNECT);
+        assert_eq!(req.addr().to_string(), "foo.example.com");
+        assert_eq!(req.port(), 8080);
+        assert_eq!(req.auth(), &SocksAuth::NoAuth);
+
+        assert_eq!(
+            req.reply(SocksStatus::SUCCEEDED, None),
+            hex!("05 00 00 01 00000000 0000")
+        );
+    }
+}
