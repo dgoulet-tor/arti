@@ -1,3 +1,5 @@
+//! Types to implement the SOCKS handshake.
+
 use crate::msg::{SocksAddr, SocksAuth, SocksCmd, SocksRequest, SocksStatus};
 use crate::{Error, Result};
 
@@ -7,29 +9,56 @@ use tor_bytes::{Readable, Reader, Writeable, Writer};
 
 use std::net::IpAddr;
 
+/// An ongoing SOCKS handshake.
+///
+/// To perform a handshake, call the [SocksHandshake::handshake]
+/// method repeatedly with new inputs, until the resulting [Action]
+/// has `finished` set to true.
 #[derive(Clone, Debug)]
 pub struct SocksHandshake {
+    /// Current state of the handshake. Each completed message
+    /// advances the state.
     state: State,
+    /// SOCKS5 authentication that has been received (but not yet put
+    /// in a SocksRequest object.)
     socks5_auth: Option<SocksAuth>,
+    /// Completed SOCKS handshake.
     handshake: Option<SocksRequest>,
 }
 
+/// Possible state for a Socks connection.
+///
+/// Each completed message advances the state.
 #[derive(Clone, Debug, Copy, PartialEq)]
 enum State {
+    /// Starting state: no messages have been handled yet.
     Initial,
+    /// SOCKS5: we've negotiated Username/Password authentication, and
+    /// are waiting for the client to send it.
     Socks5Username,
+    /// SOCKS5: we've finished the authentication (if any), and
+    /// we're waiting for the actual request.
     Socks5Wait,
+    /// Ending (successful) state: the client has sent all its messages.
+    ///
+    /// (Note that we still need to send a reply.)
     Done,
 }
 
+/// An action to take in response to a SOCKS handshake message.
 #[derive(Clone, Debug)]
 pub struct Action {
+    /// If nonzero, this many bytes should be drained from the
+    /// client's inputs.
     pub drain: usize,
+    /// If nonempty, this reply should be sent to the client.
     pub reply: Vec<u8>,
+    /// If true, then this handshake is over, either successfully or not.
     pub finished: bool,
 }
 
 impl SocksHandshake {
+    /// Construct a new SocksHandshake in its initial state
     pub fn new() -> Self {
         SocksHandshake {
             state: State::Initial,
@@ -38,6 +67,14 @@ impl SocksHandshake {
         }
     }
 
+    /// Try to advance a SocksHandshake, given some client input in
+    /// `input`.
+    ///
+    /// If there isn't enough input, gives [Error::Truncated].  Other
+    /// errors indicate a failure.
+    ///
+    /// On success, return an Action describing what to tell the client,
+    /// and how much of its input to consume.
     pub fn handshake(&mut self, input: &[u8]) -> Result<Action> {
         if input.is_empty() {
             return Err(Error::Truncated);
@@ -53,6 +90,7 @@ impl SocksHandshake {
         }
     }
 
+    /// Complete a socks4 or socks4a handshake.
     fn s4(&mut self, input: &[u8]) -> Result<Action> {
         let mut r = Reader::from_slice(input);
         let version = r.take_u8()?;
@@ -88,11 +126,15 @@ impl SocksHandshake {
         })
     }
 
+    /// Socks5: initial handshake to negotiate authentication method.
     fn s5_initial(&mut self, input: &[u8]) -> Result<Action> {
         let mut r = Reader::from_slice(input);
         let version = r.take_u8()?;
         assert_eq!(version, 5);
+        /// Constant for Username/Password-style authentication.
+        /// (See RFC 1929)
         const USERNAME_PASSWORD: u8 = 0x02;
+        /// Constant for "no authentication".
         const NO_AUTHENTICATION: u8 = 0x00;
 
         let nmethods = r.take_u8()?;
@@ -117,6 +159,7 @@ impl SocksHandshake {
         })
     }
 
+    /// Socks5: second step for username/password authentication.
     fn s5_uname(&mut self, input: &[u8]) -> Result<Action> {
         let mut r = Reader::from_slice(input);
 
@@ -139,6 +182,7 @@ impl SocksHandshake {
         })
     }
 
+    /// Socks5: final step, to receive client's request.
     fn s5(&mut self, input: &[u8]) -> Result<Action> {
         let mut r = Reader::from_slice(input);
 
@@ -165,10 +209,13 @@ impl SocksHandshake {
         })
     }
 
+    /// Return true if this handshake is finished.
     pub fn finished(&self) -> bool {
         self.state == State::Done
     }
 
+    /// Consume this handshake's state; if it finished successfully,
+    /// return a SocksRequest.
     pub fn into_request(self) -> Option<SocksRequest> {
         self.handshake
     }
@@ -181,6 +228,10 @@ impl Default for SocksHandshake {
 }
 
 impl SocksRequest {
+    /// Format a reply to this request, indicating success or failure.
+    ///
+    /// Note that an address should be provided only when the request
+    /// was for a RESOLVE.
     pub fn reply(&self, status: SocksStatus, addr: Option<&SocksAddr>) -> Vec<u8> {
         match self.version() {
             4 => self.s4(status, addr),
@@ -189,6 +240,7 @@ impl SocksRequest {
         }
     }
 
+    /// Format a SOCKS4 reply.
     fn s4(&self, status: SocksStatus, addr: Option<&SocksAddr>) -> Vec<u8> {
         let mut w = Vec::new();
         w.write_u8(0);
@@ -206,6 +258,7 @@ impl SocksRequest {
         w
     }
 
+    /// Format a SOCKS5 reply.
     pub fn s5(&self, status: SocksStatus, addr: Option<&SocksAddr>) -> Vec<u8> {
         let mut w = Vec::new();
         w.write_u8(5);
