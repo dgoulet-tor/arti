@@ -31,7 +31,6 @@ use tor_netdoc::AllowAnnotations;
 
 use ll::pk::rsa::RSAIdentity;
 use log::{debug, info, warn};
-use std::cell::Cell;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -99,7 +98,7 @@ pub struct NetDir {
     mds: HashMap<MDDigest, Microdesc>,
     /// Value describing how to find the weight to use when picking a
     /// router by weight.
-    weight_fn: Cell<Option<WeightFn>>,
+    weight_fn: Option<WeightFn>,
 }
 
 /// A view of a relay on the Tor network, suitable for building circuits.
@@ -321,11 +320,13 @@ impl NetDirConfig {
         }
         info!("Loaded {} microdescriptors", mds.len());
 
-        Ok(NetDir {
+        let mut dir = NetDir {
             consensus,
             mds,
-            weight_fn: Cell::new(None),
-        })
+            weight_fn: None,
+        };
+        dir.set_weight_fn();
+        Ok(dir)
     }
 }
 
@@ -357,25 +358,26 @@ impl NetDir {
     pub fn relays(&self) -> impl Iterator<Item = Relay<'_>> {
         self.all_relays().filter_map(UncheckedRelay::into_relay)
     }
-    /// Heolper: Set self.weight_fn to the function we should use to find
+    /// Helper: Calculate the function we should use to find
     /// initial relay weights.
-    fn pick_weight_fn(&self) {
+    fn pick_weight_fn(&self) -> WeightFn {
         let has_measured = self.relays().any(|r| r.rs.weight().is_measured());
         let has_nonzero = self.relays().any(|r| r.rs.weight().is_nonzero());
         if !has_nonzero {
-            self.weight_fn.set(Some(WeightFn::Uniform));
+            WeightFn::Uniform
         } else if !has_measured {
-            self.weight_fn.set(Some(WeightFn::IncludeUnmeasured));
+            WeightFn::IncludeUnmeasured
         } else {
-            self.weight_fn.set(Some(WeightFn::MeasuredOnly));
+            WeightFn::MeasuredOnly
         }
     }
-    /// Return the value of self.weight_fn, setting itif needed.
+    /// Cache the correct weighting function to use for this directory
+    pub fn set_weight_fn(&mut self) {
+        self.weight_fn = Some(self.pick_weight_fn())
+    }
+    /// Return the value of self.weight_fn that we should use.
     fn get_weight_fn(&self) -> WeightFn {
-        if self.weight_fn.get().is_none() {
-            self.pick_weight_fn();
-        }
-        self.weight_fn.get().unwrap()
+        self.weight_fn.unwrap_or_else(|| self.pick_weight_fn())
     }
     /// Chose a relay at random.
     ///
