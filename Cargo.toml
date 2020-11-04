@@ -7,7 +7,7 @@ members = [
     "tor-llcrypto",
     "tor-protover",
     "tor-bytes",
-    "tor-socks",
+    "tor-socksproto",
     "tor-checkable",
     "tor-cert",
     "tor-linkspec",

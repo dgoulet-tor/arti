@@ -153,7 +153,7 @@ async fn handle_socks_conn(
     circmgr: Arc<tor_circmgr::CircMgr<NativeTlsTransport>>,
     stream: async_std::net::TcpStream,
 ) -> Result<()> {
-    let mut handshake = tor_socks::SocksHandshake::new();
+    let mut handshake = tor_socksproto::SocksHandshake::new();
 
     let (mut r, mut w) = stream.split();
     let mut inbuf = [0_u8; 1024];
@@ -164,7 +164,7 @@ async fn handle_socks_conn(
 
         // try to advance the handshake.
         let action = match handshake.handshake(&inbuf[..n_read]) {
-            Err(tor_socks::Error::Truncated) => continue,
+            Err(tor_socksproto::Error::Truncated) => continue,
             Err(e) => return Err(e.into()),
             Ok(action) => action,
         };
@@ -197,7 +197,7 @@ async fn handle_socks_conn(
     info!("Got a stream for {}:{}", addr, port);
     // TODO: Should send a SOCKS reply if something fails.
 
-    let reply = request.reply(tor_socks::SocksStatus::SUCCEEDED, None);
+    let reply = request.reply(tor_socksproto::SocksStatus::SUCCEEDED, None);
     w.write(&reply[..]).await?;
 
     let (mut rstream, wstream) = stream.split();

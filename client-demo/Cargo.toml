@@ -12,7 +12,7 @@ tor-chanmgr = { path="../tor-chanmgr", version= "*" }
 tor-netdir = { path="../tor-netdir", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
-tor-socks = { path="../tor-socks", version= "*" }
+tor-socksproto = { path="../tor-socksproto", version= "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
 
 async-native-tls = "0.3.3"

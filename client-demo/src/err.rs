@@ -13,7 +13,7 @@ pub enum Error {
     #[error("CircMgr: {0}")]
     CircMgrErr(#[from] tor_circmgr::Error),
     #[error("Socks: {0}")]
-    Socks(#[from] tor_socks::Error),
+    Socks(#[from] tor_socksproto::Error),
     #[error("Misc: {0}")]
     Misc(&'static str),
 }
