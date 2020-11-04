@@ -11,8 +11,11 @@
 mod err;
 
 use argh::FromArgs;
+use futures::io::{AsyncReadExt, AsyncWriteExt};
+use futures::lock::Mutex;
+use futures::stream::StreamExt;
 use futures::task::SpawnError;
-use log::{info, LevelFilter};
+use log::{info, warn, LevelFilter};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -46,6 +49,9 @@ struct Args {
     /// enable trace-level logging
     #[argh(switch)]
     trace: bool,
+    /// run a socks proxy on port N. [WILL NOT WORK YET]
+    #[argh(option)]
+    socksport: Option<u16>,
 }
 
 struct Spawner {
@@ -143,6 +149,120 @@ fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
     Ok(cfg.load()?)
 }
 
+async fn handle_socks_conn(
+    dir: Arc<tor_netdir::NetDir>,
+    circmgr: Arc<tor_circmgr::CircMgr<NativeTlsTransport>>,
+    stream: async_std::net::TcpStream,
+) -> Result<()> {
+    let mut handshake = tor_socks::SocksHandshake::new();
+
+    let (mut r, mut w) = stream.split();
+    let mut inbuf = [0_u8; 1024];
+    let mut n_read = 0;
+    let request = loop {
+        // Read some more stuff.
+        n_read += r.read(&mut inbuf[n_read..]).await?;
+
+        // try to advance the handshake.
+        let action = match handshake.handshake(&inbuf[..n_read]) {
+            Err(tor_socks::Error::Truncated) => continue,
+            Err(e) => return Err(e.into()),
+            Ok(action) => action,
+        };
+
+        // reply if needed.
+        if action.drain > 0 {
+            (&mut inbuf).copy_within(action.drain..action.drain + n_read, 0);
+            n_read -= action.drain;
+        }
+        if !action.reply.is_empty() {
+            w.write(&action.reply[..]).await?;
+        }
+        if action.finished {
+            break handshake.into_request();
+        }
+    }
+    .unwrap();
+
+    let addr = request.addr().to_string();
+    let port = request.port();
+    info!("Got a socks request for {}:{}", addr, port);
+
+    let exit_ports = [port];
+    let mut circ = circmgr
+        .get_or_launch_exit(dir.as_ref(), &exit_ports)
+        .await?;
+    info!("Got a circuit for {}:{}", addr, port);
+
+    let stream = circ.begin_stream(&addr, port).await?;
+    info!("Got a stream for {}:{}", addr, port);
+    let reply = request.reply(tor_socks::SocksStatus::SUCCEEDED, None);
+    w.write(&reply[..]).await?;
+
+    let stream = Arc::new(Mutex::new(stream));
+    let stream2 = Arc::clone(&stream);
+
+    // XXXX This won't work: we're going to hit a deadlock since the writing
+    // XXXX thread will block while waiting for the reading thread to have
+    // XXXX something to say.
+    let _t1 = async_std::task::spawn(async move {
+        let mut buf = [0u8; 1024];
+        loop {
+            dbg!("read?");
+            let n = match r.read(&mut buf[..]).await {
+                Err(e) => break e.into(),
+                Ok(n) => n,
+            };
+            dbg!(n);
+            if let Err(e) = stream.lock().await.write_bytes(&buf[..n]).await {
+                break e;
+            }
+        }
+    });
+    let _t2 = async_std::task::spawn(async move {
+        let mut buf = [0u8; 1024];
+        loop {
+            dbg!("write?");
+            let n = match stream2.lock().await.read_bytes(&mut buf[..]).await {
+                Err(e) => break e,
+                Ok(n) => n,
+            };
+            dbg!(n);
+            if let Err(e) = w.write(&buf[..n]).await {
+                break e.into();
+            }
+        }
+    });
+
+    Ok(())
+}
+
+async fn run_socks_proxy(
+    dir: tor_netdir::NetDir,
+    circmgr: tor_circmgr::CircMgr<NativeTlsTransport>,
+    args: Args,
+) -> Result<()> {
+    let dir = Arc::new(dir);
+    let circmgr = Arc::new(circmgr);
+    let listener =
+        async_std::net::TcpListener::bind(("localhost", args.socksport.unwrap())).await?;
+    let mut incoming = listener.incoming();
+
+    while let Some(stream) = incoming.next().await {
+        let stream = stream?;
+        let d = Arc::clone(&dir);
+        let ci = Arc::clone(&circmgr);
+        async_std::task::spawn(async move {
+            let res = handle_socks_conn(d, ci, stream).await;
+            if let Err(e) = res {
+                warn!("connection edited with error: {}", e);
+            }
+        });
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let args: Args = argh::from_env();
 
@@ -165,10 +285,14 @@ fn main() -> Result<()> {
     async_std::task::block_on(async {
         let spawn = Spawner::new("channel reactors");
         let transport = NativeTlsTransport::new();
-        let chanmgr = tor_chanmgr::ChanMgr::new(transport, spawn);
+        let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(transport, spawn));
 
         let spawn = Spawner::new("circuit reactors");
-        let circmgr = tor_circmgr::CircMgr::new(Arc::new(chanmgr), Box::new(spawn));
+        let circmgr = tor_circmgr::CircMgr::new(Arc::clone(&chanmgr), Box::new(spawn));
+
+        if args.socksport.is_some() {
+            return run_socks_proxy(dir, circmgr, args).await;
+        }
 
         let exit_ports = &[80];
         let circ = circmgr.get_or_launch_exit(&dir, exit_ports).await?;
@@ -187,7 +311,7 @@ fn main() -> Result<()> {
 
         circ.terminate().await;
 
-        async_std::task::sleep(std::time::Duration::new(10, 0)).await;
+        async_std::task::sleep(std::time::Duration::new(3, 0)).await;
         Ok(())
     })
 }

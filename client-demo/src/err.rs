@@ -12,6 +12,8 @@ pub enum Error {
     ChanMgrErr(#[from] tor_chanmgr::Error),
     #[error("CircMgr: {0}")]
     CircMgrErr(#[from] tor_circmgr::Error),
+    #[error("Socks: {0}")]
+    Socks(#[from] tor_socks::Error),
     #[error("Misc: {0}")]
     Misc(&'static str),
 }
