@@ -79,7 +79,7 @@ impl futures::task::Spawn for Spawner {
 }
 
 async fn test_cat(mut circ: ClientCirc) -> Result<()> {
-    let mut stream = circ.begin_stream("127.0.0.1", 9999).await?;
+    let stream = circ.begin_stream("127.0.0.1", 9999).await?;
     for x in 1..2000 {
         let one_k = [b'x'; 1024];
         stream.write_bytes(&one_k[..]).await?;

@@ -471,7 +471,7 @@ impl ClientCirc {
     /// Start a DataStream connection to the given address and port,
     /// using a BEGIN cell.
     async fn begin_data_stream(&mut self, msg: RelayMsg) -> Result<DataStream> {
-        let mut stream = self.begin_stream_impl(msg).await?;
+        let stream = self.begin_stream_impl(msg).await?;
         // TODO: waiting for a response here preculdes optimistic data.
         let response = stream.recv().await?;
 

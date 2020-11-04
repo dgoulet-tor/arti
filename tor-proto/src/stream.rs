@@ -17,6 +17,7 @@ use crate::{Error, Result};
 use tor_cell::relaycell::msg::{Data, RelayMsg, Resolved, Sendme};
 
 use futures::channel::mpsc;
+use futures::lock::Mutex;
 use futures::stream::StreamExt;
 
 /// A TorStream is a client's cell-oriented view of a stream over the
@@ -25,10 +26,10 @@ pub struct TorStream {
     /// Wrapped view of the circuit, hop, and streamid that we're using.
     ///
     /// TODO: do something similar with circuits?
-    target: StreamTarget,
+    target: Mutex<StreamTarget>,
     /// A Stream over which we receive relay messages.  Only relay messages
     /// that can be associated with a stream ID will be received.
-    receiver: mpsc::Receiver<RelayMsg>,
+    receiver: Mutex<mpsc::Receiver<RelayMsg>>,
     /// Have we been informed that this stream is closed?  If so this is
     /// the message or the error that told us.
     received_end: Option<Result<RelayMsg>>,
@@ -38,16 +39,18 @@ impl TorStream {
     /// Internal: build a new TorStream.
     pub(crate) fn new(target: StreamTarget, receiver: mpsc::Receiver<RelayMsg>) -> Self {
         TorStream {
-            target,
-            receiver,
+            target: Mutex::new(target),
+            receiver: Mutex::new(receiver),
             received_end: None,
         }
     }
 
     /// Try to read the next relay message from this stream.
-    pub async fn recv(&mut self) -> Result<RelayMsg> {
+    pub async fn recv(&self) -> Result<RelayMsg> {
         let msg = self
             .receiver
+            .lock()
+            .await
             .next()
             .await
             // This probably means that the other side closed the
@@ -58,23 +61,31 @@ impl TorStream {
 
         // Possibly decrement the window for the cell we just received, and
         // send a SENDME if doing so took us under the threshold.
-        if sendme::msg_counts_towards_windows(&msg) && self.target.recvwindow.take()? {
-            self.send_sendme().await?;
+        if sendme::msg_counts_towards_windows(&msg) {
+            let mut target = self.target.lock().await;
+            if target.recvwindow.take()? {
+                self.send_sendme(&mut target).await?;
+            }
         }
 
         Ok(msg)
     }
 
     /// Send a relay message along this stream
-    pub async fn send(&mut self, msg: RelayMsg) -> Result<()> {
-        self.target.send(msg).await
+    pub async fn send(&self, msg: RelayMsg) -> Result<()> {
+        self.target.lock().await.send(msg).await
+    }
+
+    /// Inform the circuit-side of this stream about a protocol error
+    async fn protocol_error(&self) {
+        self.target.lock().await.protocol_error().await
     }
 
     /// Send a SENDME cell and adjust the receive window.
-    async fn send_sendme(&mut self) -> Result<()> {
+    async fn send_sendme(&self, target: &mut StreamTarget) -> Result<()> {
         let sendme = Sendme::new_empty();
-        self.target.send(sendme.into()).await?;
-        self.target.recvwindow.put();
+        target.send(sendme.into()).await?;
+        target.recvwindow.put();
         Ok(())
     }
 
@@ -113,7 +124,7 @@ impl DataStream {
     /// TODO: We should have DataStream implement AsyncWrite.
     ///
     /// TODO: should we do some variant of Nagle's algorithm?
-    pub async fn write_bytes(&mut self, b: &[u8]) -> Result<()> {
+    pub async fn write_bytes(&self, b: &[u8]) -> Result<()> {
         for chunk in b.chunks(Data::MAXLEN) {
             let cell = Data::new(chunk);
             self.s.send(cell.into()).await?;
@@ -174,7 +185,7 @@ impl DataStream {
                 Err(Error::StreamClosed("received an end cell"))
             }
             Ok(m) => {
-                self.s.target.protocol_error().await;
+                self.s.protocol_error().await;
                 Err(Error::StreamProto(format!(
                     "Unexpected {} cell on steam",
                     m.cmd()
@@ -208,7 +219,7 @@ impl ResolveStream {
             RelayMsg::End(_) => Err(Error::StreamClosed("Received end cell on resolve stream")),
             RelayMsg::Resolved(r) => Ok(r),
             m => {
-                self.s.target.protocol_error().await;
+                self.s.protocol_error().await;
                 Err(Error::StreamProto(format!(
                     "Unexpected {} on resolve stream",
                     m.cmd()
