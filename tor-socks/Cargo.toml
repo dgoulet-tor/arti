@@ -1,0 +1,17 @@
+[package]
+name = "tor-socks"
+version = "0.0.0"
+authors = ["Nick Mathewson <nickm@torproject.org>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+caret = { path="../caret" }
+tor-bytes = { path="../tor-bytes" }
+
+thiserror = "1.0.21"
+
+[dev-dependencies]
+hex-literal = "0.3.1"
+
