@@ -19,7 +19,7 @@ use tor_proto::circuit::ClientCirc;
 use futures::lock::Mutex;
 use futures::task::Spawn;
 use rand::seq::SliceRandom;
-use rand::{CryptoRng, Rng};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -52,7 +52,7 @@ where
     /// channels.
     chanmgr: Arc<ChanMgr<TR>>,
     /// Object used to spawn background tasks for circuit reactors.
-    spawn: Box<dyn Spawn>,
+    spawn: Box<dyn Spawn + Send + Sync>,
 
     /// Map from unique circuit identifier to an entry describing its state.
     ///
@@ -138,7 +138,7 @@ where
     TR: tor_chanmgr::transport::Transport,
 {
     /// Construct a new circuit manager.
-    pub fn new(chanmgr: Arc<ChanMgr<TR>>, spawn: Box<dyn Spawn>) -> Self {
+    pub fn new(chanmgr: Arc<ChanMgr<TR>>, spawn: Box<dyn Spawn + Send + Sync>) -> Self {
         let circuits = Mutex::new(HashMap::new());
 
         CircMgr {
@@ -176,10 +176,9 @@ where
         netdir: &NetDir,
         usage: CircUsage,
     ) -> Result<ClientCirc> {
-        let mut rng = rand::thread_rng();
-
         // XXXX LOG.
         // XXXX This function is huge and ugly.
+        let mut rng = StdRng::from_rng(rand::thread_rng()).unwrap();
 
         // Check the state of our circuit list.
         let (should_launch, event, id) = {
@@ -213,7 +212,6 @@ where
             } else {
                 // There are enough circuits or pending circuits of this type.
                 // We'll pick one.
-
                 // unwrap ok: there is at least one member in suitable.
                 let (id, entry) = suitable.choose(&mut rng).unwrap();
                 match &entry.circ {
@@ -264,9 +262,9 @@ where
     }
 
     /// Actually construct a circuit for a given usage.
-    async fn build_by_usage<R: Rng + CryptoRng>(
+    async fn build_by_usage(
         &self,
-        rng: &mut R,
+        rng: &mut StdRng,
         netdir: &NetDir,
         usage: &CircUsage,
     ) -> Result<ClientCirc> {
