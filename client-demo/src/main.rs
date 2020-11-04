@@ -12,7 +12,6 @@ mod err;
 
 use argh::FromArgs;
 use futures::io::{AsyncReadExt, AsyncWriteExt};
-use futures::lock::Mutex;
 use futures::stream::StreamExt;
 use futures::task::SpawnError;
 use log::{info, warn, LevelFilter};
@@ -196,25 +195,22 @@ async fn handle_socks_conn(
 
     let stream = circ.begin_stream(&addr, port).await?;
     info!("Got a stream for {}:{}", addr, port);
+    // TODO: Should send a SOCKS reply if something fails.
+
     let reply = request.reply(tor_socks::SocksStatus::SUCCEEDED, None);
     w.write(&reply[..]).await?;
 
-    let stream = Arc::new(Mutex::new(stream));
-    let stream2 = Arc::clone(&stream);
+    let (mut rstream, wstream) = stream.split();
 
-    // XXXX This won't work: we're going to hit a deadlock since the writing
-    // XXXX thread will block while waiting for the reading thread to have
-    // XXXX something to say.
     let _t1 = async_std::task::spawn(async move {
         let mut buf = [0u8; 1024];
         loop {
-            dbg!("read?");
             let n = match r.read(&mut buf[..]).await {
                 Err(e) => break e.into(),
+                Ok(0) => break tor_proto::Error::StreamClosed("closed"),
                 Ok(n) => n,
             };
-            dbg!(n);
-            if let Err(e) = stream.lock().await.write_bytes(&buf[..n]).await {
+            if let Err(e) = wstream.write_bytes(&buf[..n]).await {
                 break e;
             }
         }
@@ -222,17 +218,17 @@ async fn handle_socks_conn(
     let _t2 = async_std::task::spawn(async move {
         let mut buf = [0u8; 1024];
         loop {
-            dbg!("write?");
-            let n = match stream2.lock().await.read_bytes(&mut buf[..]).await {
+            let n = match rstream.read_bytes(&mut buf[..]).await {
                 Err(e) => break e,
                 Ok(n) => n,
             };
-            dbg!(n);
             if let Err(e) = w.write(&buf[..n]).await {
                 break e.into();
             }
         }
     });
+
+    // TODO: we should close the TCP stream if either task fails.
 
     Ok(())
 }

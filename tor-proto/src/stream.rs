@@ -19,6 +19,7 @@ use tor_cell::relaycell::msg::{Data, RelayMsg, Resolved, Sendme};
 use futures::channel::mpsc;
 use futures::lock::Mutex;
 use futures::stream::StreamExt;
+use std::sync::Arc;
 
 /// A TorStream is a client's cell-oriented view of a stream over the
 /// Tor network.
@@ -32,6 +33,7 @@ pub struct TorStream {
     receiver: Mutex<mpsc::Receiver<RelayMsg>>,
     /// Have we been informed that this stream is closed?  If so this is
     /// the message or the error that told us.
+    #[allow(dead_code)] //XXXXXX
     received_end: Option<Result<RelayMsg>>,
 }
 
@@ -100,28 +102,69 @@ impl TorStream {
 
 /// A DataStream is a wrapper around a TorStream for byte-oriented IO.
 /// It's suitable for use with BEGIN or BEGIN_DIR streams.
+// TODO: I'd like this to implement AsyncRead and AsyncWrite.
 pub struct DataStream {
+    /// Underlying writer for this stream
+    w: DataWriter,
+    /// Underlying reader for this stream
+    r: DataReader,
+}
+
+/// Wrapper for the write part of a DataStream
+// TODO: I'd like this to implement AsyncWrite.
+pub struct DataWriter {
     /// The underlying TorStream object.
-    s: TorStream,
+    s: Arc<TorStream>,
+}
+
+/// Wrapper for the read part of a DataStream
+// TODO: I'd like this to implement AsyncRead
+pub struct DataReader {
+    /// The underlying TorStream object.
+    s: Arc<TorStream>,
+
     /// If present, data that we received on this stream but have not
     /// been able to send to the caller yet.
     pending: Option<Vec<u8>>, // bad design, but okay I guess.
 }
-
-// TODO: I'd like this to implement AsyncRead and AsyncWrite.
 
 impl DataStream {
     /// Wrap a TorStream as a DataStream.
     ///
     /// Call only after a CONNECTED cell has been received.
     pub(crate) fn new(s: TorStream) -> Self {
-        DataStream { s, pending: None }
+        let s = Arc::new(s);
+        let r = DataReader {
+            s: Arc::clone(&s),
+            pending: None,
+        };
+        let w = DataWriter { s };
+        DataStream { r, w }
     }
 
     /// Write all the bytes in b onto the stream, using as few data
     /// cells as possible.
+    pub async fn write_bytes(&self, buf: &[u8]) -> Result<()> {
+        self.w.write_bytes(buf).await
+    }
+
+    /// Try to read some amount of bytes from the stream; return how
+    /// much we read.
+    pub async fn read_bytes(&mut self, buf: &mut [u8]) -> Result<usize> {
+        self.r.read_bytes(buf).await
+    }
+
+    /// Divide this DataStream into its consituent parts.
+    pub fn split(self) -> (DataReader, DataWriter) {
+        (self.r, self.w)
+    }
+}
+
+impl DataWriter {
+    /// Write all the bytes in b onto the stream, using as few data
+    /// cells as possible.
     ///
-    /// TODO: We should have DataStream implement AsyncWrite.
+    /// TODO: We should have DataWriter implement AsyncWrite.
     ///
     /// TODO: should we do some variant of Nagle's algorithm?
     pub async fn write_bytes(&self, b: &[u8]) -> Result<()> {
@@ -131,7 +174,9 @@ impl DataStream {
         }
         Ok(())
     }
+}
 
+impl DataReader {
     /// Try to read some amount of bytes from the stream; return how
     /// much we read.
     ///
@@ -156,9 +201,11 @@ impl DataStream {
             }
         }
 
-        if self.s.received_end.is_some() {
-            return Err(Error::StreamClosed("Stream is closed."));
-        }
+        /* XXXX RESTORE THIS
+                if self.s.received_end.is_some() {
+                    return Err(Error::StreamClosed("Stream is closed."));
+                }
+        */
 
         if let Some(pending) = self.pending.take() {
             let (n, new_pending) = split_and_write(buf, pending);
@@ -181,7 +228,9 @@ impl DataStream {
                 Ok(n)
             }
             Err(_) | Ok(RelayMsg::End(_)) => {
+                /* XXXXX RESTORE THIS
                 self.s.received_end = Some(cell);
+                 */
                 Err(Error::StreamClosed("received an end cell"))
             }
             Ok(m) => {
