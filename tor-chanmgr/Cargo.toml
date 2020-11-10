@@ -22,7 +22,7 @@ async-trait = "0.1.41"
 event-listener = "2.5.1"
 futures = "0.3.7"
 log = "0.4.11"
-thiserror = "1.0.21"
+thiserror = "1.0.22"
 
 async-native-tls = { version = "0.3.3", optional = true }
 async-std = { version = "1.6.5", optional = true }

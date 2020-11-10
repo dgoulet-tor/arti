@@ -15,7 +15,7 @@ bytes = "0.5.6"
 crypto-mac = "0.10.0"
 generic-array = "0.14.4"
 signature = "1.2.2"
-thiserror = "1.0.21"
+thiserror = "1.0.22"
 
 [dev-dependencies]
 hex-literal = "0.3.1"

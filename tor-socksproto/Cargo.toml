@@ -10,7 +10,7 @@ publish = false
 caret = { path="../caret" }
 tor-bytes = { path="../tor-bytes" }
 
-thiserror = "1.0.21"
+thiserror = "1.0.22"
 
 [dev-dependencies]
 hex-literal = "0.3.1"

@@ -9,4 +9,4 @@ publish = false
 [dependencies]
 caret = { path="../caret", version="*" }
 
-thiserror = "1.0.21"
+thiserror = "1.0.22"
