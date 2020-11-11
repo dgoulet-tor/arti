@@ -6,6 +6,6 @@ pub mod task {
     pub use async_std_crate::task::{block_on, sleep, spawn};
 }
 
-pub mod util {
+pub mod timer {
     pub use async_io::Timer;
 }
