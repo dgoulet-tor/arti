@@ -46,6 +46,15 @@ pub enum Pos {
     },
 }
 
+// It's okay to send a Pos to another thread, even though its Raw
+// variant contains a pointer. That's because we never dereference the
+// pointer: we only compare it to another pointer representing a
+// string.
+//
+// TODO: Find a better way to have Pos work.
+unsafe impl Send for Pos {}
+unsafe impl Sync for Pos {}
+
 impl Pos {
     /// Construct a Pos from an offset within a &str slice.
     pub fn from_offset(s: &str, off: usize) -> Self {
