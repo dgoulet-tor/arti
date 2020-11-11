@@ -8,4 +8,5 @@ pub mod task {
 
 pub mod timer {
     pub use async_io::Timer;
+    pub use async_std_crate::future::timeout;
 }

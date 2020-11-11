@@ -28,6 +28,7 @@ use anyhow::Result;
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 pub use err::Error;
 
@@ -125,8 +126,6 @@ where
         };
 
         if should_launch {
-            // TODO: We might want to try again here if the pending channel
-            // failed?
             let result = self.build_channel(target).await;
             {
                 let mut channels = self.channels.lock().await;
@@ -142,8 +141,6 @@ where
             event.notify(usize::MAX);
             result
         } else {
-            // TODO: We might want to try again here if the pending channel
-            // failed?
             event.listen().await;
             let chan = self
                 .get_nowait_by_ed_id(ed_identity)
@@ -153,11 +150,24 @@ where
         }
     }
 
-    /// Helper: construct a new channel for a target
+    /// Helper: construct a new channel for a target.
     async fn build_channel<T: ChanTarget + Sync>(&self, target: &T) -> Result<Channel> {
-        /// XXXX Timeout support.
-        use crate::transport::CertifiedConn;
+        // XXXX make this a parameter.
+        let timeout = Duration::new(5, 0);
 
+        let result = tor_rtcompat::timer::timeout(timeout, self.build_channel_once(target)).await;
+
+        match result {
+            Ok(Ok(chan)) => Ok(chan),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err(Error::ChanTimeout.into()),
+        }
+    }
+
+    /// Helper: construct a new channel for a target, trying only once,
+    /// and not timing out.
+    async fn build_channel_once<T: ChanTarget + Sync>(&self, target: &T) -> Result<Channel> {
+        use crate::transport::CertifiedConn;
         let (addr, tls) = self.transport.connect(target).await?;
 
         // XXXX wrong error

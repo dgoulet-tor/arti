@@ -12,4 +12,8 @@ pub enum Error {
     /// We were waiting on a pending channel, but it didn't succeed.
     #[error("Pending channel failed to launch")]
     PendingFailed,
+
+    /// It took too long for us to establish this connection.
+    #[error("Channel timed out")]
+    ChanTimeout,
 }
