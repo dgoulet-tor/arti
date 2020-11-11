@@ -12,4 +12,8 @@ pub enum Error {
     /// We were waiting on a pending circuit, but it didn't succeed.
     #[error("Pending circuit failed to launch")]
     PendingFailed,
+
+    /// A circuit build took too long to finish.
+    #[error("Circuit took too long to build")]
+    CircTimeout,
 }

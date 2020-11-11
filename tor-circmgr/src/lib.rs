@@ -23,6 +23,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 mod err;
 pub mod path;
@@ -218,7 +219,6 @@ where
         };
 
         if should_launch {
-            // TODO: Try again on failure?
             let result = self.build_by_usage(&mut rng, netdir, &usage).await;
 
             // Adjust the map and notify the others.
@@ -236,7 +236,6 @@ where
             event.notify(usize::MAX);
             result
         } else {
-            // TODO: Try again on failure?
             // Wait on the event.
             event.listen().await;
 
@@ -259,7 +258,41 @@ where
         netdir: &NetDir,
         usage: &CircUsage,
     ) -> Result<ClientCirc> {
-        // XXXX Timeout support.
+        // This should probably be an option too.
+        let n_tries: usize = 3;
+        // This is way too long, AND it should be an option.
+        let timeout = Duration::new(10, 0);
+        let mut last_err = None;
+
+        for _ in 0..n_tries {
+            let result =
+                tor_rtcompat::timer::timeout(timeout, self.build_once_by_usage(rng, netdir, usage))
+                    .await;
+
+            match result {
+                Ok(Ok(circ)) => {
+                    return Ok(circ);
+                }
+                Ok(Err(e)) => {
+                    last_err = Some(e);
+                }
+                Err(_) => {
+                    last_err = Some(Error::CircTimeout.into());
+                }
+            }
+        }
+        // TODO: maybe don't forget all the other errors?
+        Err(last_err.unwrap())
+    }
+
+    /// Actually construct a circuit for a given usage.  Does not time out
+    /// or retry.
+    async fn build_once_by_usage(
+        &self,
+        rng: &mut StdRng,
+        netdir: &NetDir,
+        usage: &CircUsage,
+    ) -> Result<ClientCirc> {
         let path = usage.build_path(rng, netdir)?;
         let circ = path.build_circuit(rng, &self.chanmgr).await?;
         Ok(circ)
