@@ -18,7 +18,6 @@ use tor_proto::circuit::ClientCirc;
 
 use anyhow::Result;
 use futures::lock::Mutex;
-use futures::task::Spawn;
 use rand::seq::SliceRandom;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
@@ -49,8 +48,6 @@ where
     /// Reference to a channel manager that this circuit manager can use to make
     /// channels.
     chanmgr: Arc<ChanMgr<TR>>,
-    /// Object used to spawn background tasks for circuit reactors.
-    spawn: Box<dyn Spawn + Send + Sync>,
 
     /// Map from unique circuit identifier to an entry describing its state.
     ///
@@ -136,14 +133,10 @@ where
     TR: tor_chanmgr::transport::Transport,
 {
     /// Construct a new circuit manager.
-    pub fn new(chanmgr: Arc<ChanMgr<TR>>, spawn: Box<dyn Spawn + Send + Sync>) -> Self {
+    pub fn new(chanmgr: Arc<ChanMgr<TR>>) -> Self {
         let circuits = Mutex::new(HashMap::new());
 
-        CircMgr {
-            chanmgr,
-            spawn,
-            circuits,
-        }
+        CircMgr { chanmgr, circuits }
     }
 
     /// Return a circuit suitable for sending one-hop BEGINDIR streams,
@@ -268,7 +261,7 @@ where
     ) -> Result<ClientCirc> {
         // XXXX Timeout support.
         let path = usage.build_path(rng, netdir)?;
-        let circ = path.build_circuit(rng, &self.chanmgr, &self.spawn).await?;
+        let circ = path.build_circuit(rng, &self.chanmgr).await?;
         Ok(circ)
     }
 }

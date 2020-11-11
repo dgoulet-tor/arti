@@ -11,7 +11,6 @@ use tor_netdir::{NetDir, Relay};
 use tor_proto::channel::Channel;
 use tor_proto::circuit::ClientCirc;
 
-use futures::task::{Spawn, SpawnExt};
 use rand::{CryptoRng, Rng};
 
 use crate::{Error, Result};
@@ -50,24 +49,22 @@ impl<'a> TorPath<'a> {
     }
 
     /// Try to build a circuit corresponding to this path.
-    pub async fn build_circuit<TR, R, S>(
+    pub async fn build_circuit<TR, R>(
         &self,
         rng: &mut R,
         chanmgr: &ChanMgr<TR>,
-        spawn: &S,
     ) -> Result<ClientCirc>
     where
         TR: tor_chanmgr::transport::Transport,
         R: Rng + CryptoRng,
-        S: Spawn,
     {
         use TorPath::*;
         let chan = self.get_channel(chanmgr).await?;
         let (pcirc, reactor) = chan.new_circ(rng).await?;
 
-        spawn.spawn(async {
+        tor_rtcompat::task::spawn(async {
             let _ = reactor.run().await;
-        })?;
+        });
 
         match self {
             OneHop(_) => {

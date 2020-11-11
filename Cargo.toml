@@ -4,6 +4,7 @@
 # within it.
 members = [
     "caret",
+    "tor-rtcompat",
     "tor-llcrypto",
     "tor-protover",
     "tor-bytes",

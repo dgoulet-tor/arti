@@ -11,7 +11,6 @@
 use argh::FromArgs;
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::stream::StreamExt;
-use futures::task::SpawnError;
 use log::{info, warn, LevelFilter};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -49,30 +48,6 @@ struct Args {
     /// run a socks proxy on port N. [WILL NOT WORK YET]
     #[argh(option)]
     socksport: Option<u16>,
-}
-
-struct Spawner {
-    name: String,
-}
-
-impl Spawner {
-    fn new(name: &str) -> Self {
-        Spawner {
-            name: name.to_string(),
-        }
-    }
-}
-
-impl futures::task::Spawn for Spawner {
-    fn spawn_obj(
-        &self,
-        future: futures::task::FutureObj<'static, ()>,
-    ) -> std::result::Result<(), SpawnError> {
-        use async_std::task::Builder;
-        let builder = Builder::new().name(self.name.clone());
-        let _handle = builder.spawn(future).map_err(|_| SpawnError::shutdown())?;
-        Ok(())
-    }
 }
 
 async fn test_cat(mut circ: ClientCirc) -> Result<()> {
@@ -153,7 +128,7 @@ fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
 async fn handle_socks_conn(
     dir: Arc<tor_netdir::NetDir>,
     circmgr: Arc<tor_circmgr::CircMgr<NativeTlsTransport>>,
-    stream: async_std::net::TcpStream,
+    stream: tor_rtcompat::net::TcpStream,
 ) -> Result<()> {
     let mut handshake = tor_socksproto::SocksHandshake::new();
 
@@ -204,7 +179,7 @@ async fn handle_socks_conn(
 
     let (mut rstream, wstream) = stream.split();
 
-    let _t1 = async_std::task::spawn(async move {
+    let _t1 = tor_rtcompat::task::spawn(async move {
         let mut buf = [0u8; 1024];
         loop {
             let n = match r.read(&mut buf[..]).await {
@@ -217,7 +192,7 @@ async fn handle_socks_conn(
             }
         }
     });
-    let _t2 = async_std::task::spawn(async move {
+    let _t2 = tor_rtcompat::task::spawn(async move {
         let mut buf = [0u8; 1024];
         loop {
             let n = match rstream.read_bytes(&mut buf[..]).await {
@@ -243,14 +218,14 @@ async fn run_socks_proxy(
     let dir = Arc::new(dir);
     let circmgr = Arc::new(circmgr);
     let listener =
-        async_std::net::TcpListener::bind(("localhost", args.socksport.unwrap())).await?;
+        tor_rtcompat::net::TcpListener::bind(("localhost", args.socksport.unwrap())).await?;
     let mut incoming = listener.incoming();
 
     while let Some(stream) = incoming.next().await {
         let stream = stream?;
         let d = Arc::clone(&dir);
         let ci = Arc::clone(&circmgr);
-        async_std::task::spawn(async move {
+        tor_rtcompat::task::spawn(async move {
             let res = handle_socks_conn(d, ci, stream).await;
             if let Err(e) = res {
                 warn!("connection edited with error: {}", e);
@@ -280,13 +255,11 @@ fn main() -> Result<()> {
     // TODO CONFORMANCE: we should stop now if there are required
     // protovers we don't support.
 
-    async_std::task::block_on(async {
-        let spawn = Spawner::new("channel reactors");
+    tor_rtcompat::task::block_on(async {
         let transport = NativeTlsTransport::new();
-        let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(transport, spawn));
+        let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(transport));
 
-        let spawn = Spawner::new("circuit reactors");
-        let circmgr = tor_circmgr::CircMgr::new(Arc::clone(&chanmgr), Box::new(spawn));
+        let circmgr = tor_circmgr::CircMgr::new(Arc::clone(&chanmgr));
 
         if args.socksport.is_some() {
             return run_socks_proxy(dir, circmgr, args).await;
@@ -309,7 +282,7 @@ fn main() -> Result<()> {
 
         circ.terminate().await;
 
-        async_std::task::sleep(std::time::Duration::new(3, 0)).await;
+        tor_rtcompat::task::sleep(std::time::Duration::new(3, 0)).await;
         Ok(())
     })
 }

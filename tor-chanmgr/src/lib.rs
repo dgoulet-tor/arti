@@ -26,7 +26,6 @@ use tor_proto::channel::{Channel, ChannelBuilder};
 
 use anyhow::Result;
 use futures::lock::Mutex;
-use futures::task::{Spawn, SpawnExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -50,9 +49,6 @@ pub struct ChanMgr<TR> {
     /// Note that other Channels may exist that are not indexed here.
     channels: Mutex<HashMap<Ed25519Identity, ChannelState>>,
 
-    /// Object used to launch channel reactors.
-    spawn: Box<dyn Spawn + Send + Sync>,
-
     /// Object used to create TLS connections to relays.
     transport: TR,
 }
@@ -73,10 +69,9 @@ where
 {
     /// Construct a new channel manager.  It will use `transport` to construct
     /// TLS streams, and `spawn` to launch reactor tasks.
-    pub fn new<S: Spawn + Send + Sync + 'static>(transport: TR, spawn: S) -> Self {
+    pub fn new(transport: TR) -> Self {
         ChanMgr {
             channels: Mutex::new(HashMap::new()),
-            spawn: Box::new(spawn),
             transport,
         }
     }
@@ -175,9 +170,9 @@ where
         let chan = chan.check(target, &peer_cert)?;
         let (chan, reactor) = chan.finish().await?;
 
-        self.spawn.spawn(async {
+        tor_rtcompat::task::spawn(async {
             let _ = reactor.run().await;
-        })?;
+        });
         Ok(chan)
     }
 
@@ -202,7 +197,7 @@ mod test {
     use async_trait::async_trait;
     use futures::io::{AsyncRead, AsyncWrite};
     use futures::join;
-    use futures::task::{Context, Spawn, SpawnError};
+    use futures::task::Context;
     use futures_await_test::async_test;
     use std::net::SocketAddr;
     use std::pin::Pin;
@@ -210,16 +205,6 @@ mod test {
 
     struct FakeTransport;
     struct FakeConnection;
-
-    struct FakeSpawner;
-    impl Spawn for FakeSpawner {
-        fn spawn_obj(
-            &self,
-            _future: futures::task::FutureObj<'static, ()>,
-        ) -> std::result::Result<(), SpawnError> {
-            Ok(())
-        }
-    }
 
     #[async_trait]
     impl crate::transport::Transport for FakeTransport {
@@ -292,7 +277,7 @@ mod test {
 
     #[async_test]
     async fn connect_one_ok() {
-        let mgr = ChanMgr::new(FakeTransport, FakeSpawner);
+        let mgr = ChanMgr::new(FakeTransport);
         let target = Target {
             addr: ["127.0.0.1:443".parse().unwrap()],
             ed_id: [3; 32].into(),
@@ -318,7 +303,7 @@ mod test {
 
     #[async_test]
     async fn connect_one_fail() {
-        let mgr = ChanMgr::new(FakeTransport, FakeSpawner);
+        let mgr = ChanMgr::new(FakeTransport);
         // port 1337 is set up to always fail in FakeTransport.
         let target = Target {
             addr: ["127.0.0.1:1337".parse().unwrap()],
@@ -348,7 +333,7 @@ mod test {
 
     #[async_test]
     async fn test_concurrent() {
-        let mgr = ChanMgr::new(FakeTransport, FakeSpawner);
+        let mgr = ChanMgr::new(FakeTransport);
         let target3 = Target {
             addr: ["127.0.0.1:99".parse().unwrap()],
             ed_id: [3; 32].into(),
@@ -395,7 +380,7 @@ mod test {
     async fn test_stall() {
         use futures::FutureExt;
 
-        let mgr = ChanMgr::new(FakeTransport, FakeSpawner);
+        let mgr = ChanMgr::new(FakeTransport);
         let target = Target {
             addr: ["127.0.0.1:99".parse().unwrap()],
             ed_id: [12; 32].into(),
@@ -416,7 +401,7 @@ mod test {
 
     #[async_test]
     async fn connect_two_closing() {
-        let mgr = ChanMgr::new(FakeTransport, FakeSpawner);
+        let mgr = ChanMgr::new(FakeTransport);
         let target = Target {
             addr: ["127.0.0.1:443".parse().unwrap()],
             ed_id: [3; 32].into(),

@@ -6,6 +6,7 @@
 use super::{CertifiedConn, Transport};
 use crate::{Error, Result};
 use tor_linkspec::ChanTarget;
+use tor_rtcompat::net::TcpStream;
 
 use async_trait::async_trait;
 use futures::io::{AsyncRead, AsyncWrite};
@@ -34,7 +35,7 @@ impl NativeTlsTransport {
 
 #[async_trait]
 impl Transport for NativeTlsTransport {
-    type Connection = async_native_tls::TlsStream<async_std::net::TcpStream>;
+    type Connection = async_native_tls::TlsStream<TcpStream>;
 
     async fn connect<T: ChanTarget + Sync>(
         &self,
@@ -49,7 +50,7 @@ impl Transport for NativeTlsTransport {
             .ok_or_else(|| Error::UnusableTarget("No addresses for chosen relay".into()))?;
 
         info!("Connecting to {}", addr);
-        let stream = async_std::net::TcpStream::connect(addr).await?;
+        let stream = TcpStream::connect(addr).await?;
 
         info!("Negotiating TLS with {}", addr);
         // TODO: add a random hostname here if it will be used for SNI?

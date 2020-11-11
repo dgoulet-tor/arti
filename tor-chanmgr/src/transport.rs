@@ -1,6 +1,6 @@
 //! Types for launching TLS connections to relays
 
-#[cfg(all(feature = "native-tls", feature = "async-std"))]
+#[cfg(feature = "native-tls")]
 pub mod nativetls;
 
 use crate::Result;
