@@ -844,8 +844,8 @@ impl ConsensusVoterInfo {
 }
 
 impl std::str::FromStr for RouterFlags {
-    type Err = (); // Can't fail. TODO: Use the ! type when it's stable.
-    fn from_str(s: &str) -> std::result::Result<Self, ()> {
+    type Err = std::convert::Infallible;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         Ok(match s {
             "Authority" => RouterFlags::AUTHORITY,
             "BadExit" => RouterFlags::BAD_EXIT,
