@@ -13,8 +13,6 @@ nativetls = [ "async-native-tls", "native-tls" ]
 
 [dependencies]
 tor-rtcompat = { path="../tor-rtcompat", version= "*" }
-tor-netdir = { path="../tor-netdir", version= "*" }
-tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
 tor-llcrypto = { path="../tor-llcrypto", version= "*" }
