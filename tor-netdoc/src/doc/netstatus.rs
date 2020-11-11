@@ -54,6 +54,7 @@ use std::convert::TryInto;
 use std::{net, result, time};
 use tor_protover::Protocols;
 
+use bitflags::bitflags;
 use digest::Digest;
 use tor_checkable::{timed::TimerangeBound, ExternallySigned};
 use tor_llcrypto as ll;
@@ -217,52 +218,50 @@ struct DirSource {
     or_port: u16,
 }
 
-/// A set of known flags on a single relay
-///
-/// TODO: This should have a more compact representation.  Right now it's
-/// using 8 bits per boolean.
-#[allow(dead_code)]
-struct RouterFlags {
-    /// Is this a directory authority?
-    authority: bool,
-    /// Is this relay marked as a bad exit?
-    ///
-    /// Bad exits can be used as intermediate relays, but not to
-    /// deliver traffic.
-    bad_exit: bool,
-    /// Is this relay marked as an exit for weighting purposes?
-    exit: bool,
-    /// Is this relay considered "fast" above a certain threshold?
-    fast: bool,
-    /// Is this relay suitable for use as a guard node?
-    ///
-    /// Clients choose their their initial relays from among the set
-    /// of Guard nodes.
-    guard: bool,
-    /// Does this relay participate on the hidden service directory
-    /// ring?
-    hsdir: bool,
-    /// If set, there is no consensus for the ed25519 key for this relay.
-    no_ed_consensus: bool,
-    /// Is this relay considerd "stable" enough for long-lived circuits.
-    stable: bool,
-    /// Set if the authorities are requesting a fresh descriptor for
-    /// this relay.
-    stale_desc: bool,
-    /// Set if this relay is currently running.
-    ///
-    /// This flag can appear in votes, but in consensuses, every relay
-    /// is assumed to be running.
-    running: bool,
-    /// Set if this relay is considered "valid" -- allowed to be on
-    /// the network.
-    ///
-    /// This flag can appear in votes, but in consensuses, every relay
-    /// is assumed to be running.
-    valid: bool,
-    /// Set if this relay supports a currently recognized version of the
-    /// directory protocol.
-    v2dir: bool,
+bitflags! {
+    /// A set of known flags on a single relay
+    struct RouterFlags: u16 {
+        /// Is this a directory authority?
+        const AUTHORITY = (1<<0);
+        /// Is this relay marked as a bad exit?
+        ///
+        /// Bad exits can be used as intermediate relays, but not to
+        /// deliver traffic.
+        const BAD_EXIT = (1<<1);
+        /// Is this relay marked as an exit for weighting purposes?
+        const EXIT = (1<<2);
+        /// Is this relay considered "fast" above a certain threshold?
+        const FAST = (1<<3);
+        /// Is this relay suitable for use as a guard node?
+        ///
+        /// Clients choose their their initial relays from among the set
+        /// of Guard nodes.
+        const GUARD = (1<<4);
+        /// Does this relay participate on the hidden service directory
+        /// ring?
+        const HSDIR = (1<<5);
+        /// If set, there is no consensus for the ed25519 key for this relay.
+        const NO_ED_CONSENSUS = (1<<6);
+        /// Is this relay considerd "stable" enough for long-lived circuits.
+        const STABLE = (1<<7);
+        /// Set if the authorities are requesting a fresh descriptor for
+        /// this relay.
+        const STALE_DESC = (1<<8);
+        /// Set if this relay is currently running.
+        ///
+        /// This flag can appear in votes, but in consensuses, every relay
+        /// is assumed to be running.
+        const RUNNING = (1<<9);
+        /// Set if this relay is considered "valid" -- allowed to be on
+        /// the network.
+        ///
+        /// This flag can appear in votes, but in consensuses, every relay
+        /// is assumed to be valid
+        const VALID = (1<<10);
+        /// Set if this relay supports a currently recognized version of the
+        /// directory protocol.
+        const V2DIR = (1<<11);
+    }
 }
 
 /// Recognized weight fields on a single relay in a consensus
@@ -356,15 +355,15 @@ impl MDConsensusRouterStatus {
     /// Return true if the ed25519 identity on this relay reflects a
     /// true consensus among the authorities.
     pub fn ed25519_id_is_usable(&self) -> bool {
-        !self.flags.no_ed_consensus
+        !self.flags.contains(RouterFlags::NO_ED_CONSENSUS)
     }
     /// Return true if this routerstatus is listed with the BadExit
     pub fn is_flagged_bad_exit(&self) -> bool {
-        self.flags.bad_exit
+        self.flags.contains(RouterFlags::BAD_EXIT)
     }
     /// Return true if this routerstatus is listed with the v2dir flag.
     pub fn is_flagged_v2dir(&self) -> bool {
-        self.flags.v2dir
+        self.flags.contains(RouterFlags::V2DIR)
     }
 }
 
@@ -844,24 +843,35 @@ impl ConsensusVoterInfo {
     }
 }
 
+impl std::str::FromStr for RouterFlags {
+    type Err = (); // Can't fail. TODO: Use the ! type when it's stable.
+    fn from_str(s: &str) -> std::result::Result<Self, ()> {
+        Ok(match s {
+            "Authority" => RouterFlags::AUTHORITY,
+            "BadExit" => RouterFlags::BAD_EXIT,
+            "Exit" => RouterFlags::EXIT,
+            "Fast" => RouterFlags::FAST,
+            "Guard" => RouterFlags::GUARD,
+            "HSDir" => RouterFlags::HSDIR,
+            "NoEdConsensus" => RouterFlags::NO_ED_CONSENSUS,
+            "Stable" => RouterFlags::STABLE,
+            "StaleDesc" => RouterFlags::STALE_DESC,
+            "Running" => RouterFlags::RUNNING,
+            "Valid" => RouterFlags::VALID,
+            "V2Dir" => RouterFlags::V2DIR,
+            _ => RouterFlags::empty(),
+        })
+    }
+}
+
 impl RouterFlags {
     /// Parse a router-flags entry from an "s" line.
     fn from_item(item: &Item<'_, NetstatusKW>) -> Result<RouterFlags> {
         if item.kwd() != NetstatusKW::RS_S {
             return Err(Error::Internal(item.pos()));
         }
-        let mut authority = false;
-        let mut bad_exit = false;
-        let mut exit = false;
-        let mut fast = false;
-        let mut guard = false;
-        let mut hsdir = false;
-        let mut no_ed_consensus = false;
-        let mut stable = false;
-        let mut stale_desc = false;
-        let mut running = true; // 'Running' is implicit.
-        let mut valid = true; // 'Valid' is implicit.
-        let mut v2dir = false;
+        // These flags are implicit.
+        let mut flags: RouterFlags = RouterFlags::RUNNING | RouterFlags::VALID;
 
         let mut prev: Option<&str> = None;
         for s in item.args() {
@@ -874,38 +884,12 @@ impl RouterFlags {
                     ));
                 }
             }
-            match s {
-                "Authority" => authority = true,
-                "BadExit" => bad_exit = true,
-                "Exit" => exit = true,
-                "Fast" => fast = true,
-                "Guard" => guard = true,
-                "HSDir" => hsdir = true,
-                "NoEdConsensus" => no_ed_consensus = true,
-                "Stable" => stable = true,
-                "StaleDesc" => stale_desc = true,
-                "Running" => running = true,
-                "Valid" => valid = true,
-                "V2Dir" => v2dir = true,
-                _ => (),
-            }
+            let fl = s.parse().unwrap();
+            flags |= fl;
             prev = Some(s);
         }
 
-        Ok(RouterFlags {
-            authority,
-            bad_exit,
-            exit,
-            fast,
-            guard,
-            hsdir,
-            no_ed_consensus,
-            stable,
-            stale_desc,
-            running,
-            valid,
-            v2dir,
-        })
+        Ok(flags)
     }
 }
 
