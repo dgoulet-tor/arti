@@ -8,8 +8,6 @@
 
 #![warn(missing_docs)]
 
-mod err;
-
 use argh::FromArgs;
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::stream::StreamExt;
@@ -21,7 +19,7 @@ use std::sync::Arc;
 use tor_chanmgr::transport::nativetls::NativeTlsTransport;
 use tor_proto::circuit::ClientCirc;
 
-use err::{Error, Result};
+use anyhow::{anyhow, Context, Result};
 
 #[derive(FromArgs)]
 /// Make a connection to the Tor network, connect to
@@ -108,7 +106,10 @@ async fn test_dl(mut circ: ClientCirc) -> Result<()> {
 }
 
 async fn test_http(mut circ: ClientCirc) -> Result<()> {
-    let mut stream = circ.begin_stream("www.torproject.org", 80).await?;
+    let mut stream = circ
+        .begin_stream("www.torproject.org", 80)
+        .await
+        .context("making stream to www.torproject.org")?;
 
     let request = b"GET / HTTP/1.0\r\nHost: www.torproject.org\r\n\r\n";
 
@@ -130,7 +131,7 @@ async fn test_http(mut circ: ClientCirc) -> Result<()> {
 fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
     if args.tor_dir.is_some() && args.chutney_dir.is_some() {
         eprintln!("Can't specify both --tor-dir and --chutney-dir");
-        return Err(Error::Misc("arguments"));
+        return Err(anyhow!("Conflicting --tor-dir and --chutney-dir"));
     }
     let mut cfg = tor_netdir::NetDirConfig::new();
 
@@ -138,14 +139,15 @@ fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
         cfg.add_default_authorities();
         cfg.set_cache_path(&d);
     } else if let Some(ref d) = args.chutney_dir {
-        cfg.add_authorities_from_chutney(&d)?;
+        cfg.add_authorities_from_chutney(&d)
+            .context("Loading authorities from chutney directory")?;
         cfg.set_cache_path(&d);
     } else {
         eprintln!("Must specify --tor-dir or --chutney-dir");
-        return Err(Error::Misc("arguments"));
+        return Err(anyhow!("Missing --tor-dir or --chutney-dir"));
     }
 
-    Ok(cfg.load()?)
+    Ok(cfg.load().context("Loading directory from disk")?)
 }
 
 async fn handle_socks_conn(
