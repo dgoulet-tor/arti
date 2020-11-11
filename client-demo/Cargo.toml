@@ -16,10 +16,10 @@ tor-socksproto = { path="../tor-socksproto", version= "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
 
 async-native-tls = "0.3.3"
-async-std = "1.6.5"
-futures = "0.3.7"
+async-std = "1.7.0"
+futures = "0.3.8"
 log = "0.4.11"
-native-tls = "0.2.4"
+native-tls = "0.2.6"
 rand = "0.7.3"
 simple-logging = "2.0.2"
 thiserror = "1.0.22"
