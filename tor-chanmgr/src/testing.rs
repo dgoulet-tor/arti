@@ -63,9 +63,7 @@ impl FakeChannel {
     }
     pub fn check<T: ChanTarget>(self, _target: &T, _cert: &[u8]) -> Result<Self> {
         if self.chan.addr.port() == 8686 {
-            Err(Error::ProtoError(tor_proto::Error::ChanProto(
-                "86ed".into(),
-            )))
+            Err(tor_proto::Error::ChanProto("86ed".into()).into())
         } else {
             Ok(self)
         }
@@ -82,7 +80,7 @@ impl FakeChannel {
     pub async fn check_match<T: ChanTarget>(&self, target: &T) -> Result<()> {
         if let Some(ref id) = self.chan.want_rsa_id {
             if id != target.rsa_identity() {
-                return Err(Error::UnusableTarget("Wrong RSA".into()));
+                return Err(Error::UnusableTarget("Wrong RSA".into()).into());
             }
         }
         Ok(())

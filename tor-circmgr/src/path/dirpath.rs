@@ -26,9 +26,7 @@ impl PathBuilder for DirPathBuilder {
         if let Some(r) = relay {
             Ok(TorPath::OneHop(r))
         } else {
-            Err(Error::NoRelays(
-                "No relays found for use as directory cache".into(),
-            ))
+            Err(Error::NoRelays("No relays found for use as directory cache".into()).into())
         }
     }
 }

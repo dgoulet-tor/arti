@@ -24,15 +24,13 @@ use testing::{FakeChannel as Channel, FakeChannelBuilder as ChannelBuilder};
 #[cfg(not(test))]
 use tor_proto::channel::{Channel, ChannelBuilder};
 
+use anyhow::Result;
 use futures::lock::Mutex;
 use futures::task::{Spawn, SpawnExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 
 pub use err::Error;
-
-/// A Result type used by this crate.
-pub type Result<T> = std::result::Result<T, Error>;
 
 /// A Type that remembers a set of live channels, and launches new
 /// ones on request.
@@ -232,7 +230,7 @@ mod test {
         ) -> Result<(std::net::SocketAddr, FakeConnection)> {
             let addr = t.addrs().get(0).unwrap();
             if addr.port() == 1337 {
-                Err(Error::UnusableTarget("too leet!".into()))
+                Err(Error::UnusableTarget("too leet!".into()).into())
             } else {
                 Ok((*addr, FakeConnection))
             }
@@ -329,7 +327,10 @@ mod test {
         };
 
         let res1 = mgr.get_or_launch(&target).await;
-        assert!(matches!(res1, Err(Error::UnusableTarget(_))));
+        assert!(matches!(
+            res1.unwrap_err().downcast(),
+            Ok(Error::UnusableTarget(_))
+        ));
 
         // port 8686 is set up to always fail in FakeTransport.
         let target = Target {
@@ -339,7 +340,7 @@ mod test {
         };
 
         let res1 = mgr.get_or_launch(&target).await;
-        assert!(matches!(res1, Err(Error::ProtoError(_))));
+        assert!(res1.unwrap_err().is::<tor_proto::Error>());
 
         let chan3 = mgr.get_nowait_by_ed_id(&[4; 32].into()).await;
         assert!(chan3.is_none());
@@ -386,8 +387,8 @@ mod test {
         assert!(ch44a.same_channel(&ch44b));
         assert!(!ch3a.same_channel(&ch44b));
 
-        assert!(matches!(err_a, Error::ProtoError(_)));
-        assert!(matches!(err_b, Error::ProtoError(_)));
+        assert!(err_a.is::<tor_proto::Error>());
+        assert!(err_b.is::<tor_proto::Error>());
     }
 
     #[async_test]

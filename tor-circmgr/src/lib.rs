@@ -16,6 +16,7 @@ use tor_chanmgr::ChanMgr;
 use tor_netdir::NetDir;
 use tor_proto::circuit::ClientCirc;
 
+use anyhow::Result;
 use futures::lock::Mutex;
 use futures::task::Spawn;
 use rand::seq::SliceRandom;
@@ -28,9 +29,6 @@ mod err;
 pub mod path;
 
 pub use err::Error;
-
-/// The result type returned by the circuit-manager crate.
-pub type Result<T> = std::result::Result<T, Error>;
 
 use crate::path::{dirpath::DirPathBuilder, exitpath::ExitPathBuilder, PathBuilder, TorPath};
 
@@ -255,7 +253,7 @@ where
                 if let Circ::Open(ref c) = ent.circ {
                     Ok(c.new_ref())
                 } else {
-                    Err(Error::PendingFailed) // should be impossible XXXX
+                    Err(Error::PendingFailed.into()) // should be impossible XXXX
                 }
             }
         }

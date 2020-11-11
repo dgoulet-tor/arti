@@ -44,7 +44,7 @@ impl<'a> TorPath<'a> {
         match self {
             OneHop(r) => Ok(chanmgr.get_or_launch(r).await?),
 
-            Path(p) if p.is_empty() => Err(Error::NoRelays("Path with no entries!".into())),
+            Path(p) if p.is_empty() => Err(Error::NoRelays("Path with no entries!".into()).into()),
             Path(p) => Ok(chanmgr.get_or_launch(&p[0]).await?),
         }
     }
