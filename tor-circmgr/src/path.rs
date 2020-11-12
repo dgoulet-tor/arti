@@ -12,6 +12,7 @@ use tor_proto::channel::Channel;
 use tor_proto::circuit::ClientCirc;
 
 use rand::{CryptoRng, Rng};
+use std::sync::Arc;
 
 use crate::{Error, Result};
 
@@ -35,7 +36,7 @@ pub trait PathBuilder {
 
 impl<'a> TorPath<'a> {
     /// Internal: get or create a channel for the first hop of a path.
-    async fn get_channel<TR>(&self, chanmgr: &ChanMgr<TR>) -> Result<Channel>
+    async fn get_channel<TR>(&self, chanmgr: &ChanMgr<TR>) -> Result<Arc<Channel>>
     where
         TR: tor_chanmgr::transport::Transport,
     {

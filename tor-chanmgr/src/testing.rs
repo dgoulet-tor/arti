@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct FakeChannel {
-    chan: Arc<FakeChannelInner>,
+    chan: FakeChannelInner,
 }
 
 #[derive(Debug)]
@@ -51,15 +51,10 @@ impl FakeChannel {
             want_rsa_id: None,
             addr,
         };
-        FakeChannel {
-            chan: Arc::new(inner),
-        }
+        FakeChannel { chan: inner }
     }
     pub async fn connect(self) -> Result<Self> {
         Ok(self)
-    }
-    pub fn same_channel(&self, other: &FakeChannel) -> bool {
-        Arc::ptr_eq(&self.chan, &other.chan)
     }
     pub fn check<T: ChanTarget>(self, _target: &T, _cert: &[u8]) -> Result<Self> {
         if self.chan.addr.port() == 8686 {
@@ -68,8 +63,11 @@ impl FakeChannel {
             Ok(self)
         }
     }
-    pub(crate) async fn finish(self) -> Result<(Self, FakeReactor)> {
-        Ok((self, FakeReactor {}))
+    pub fn same_channel(self: &Arc<Self>, other: &Arc<FakeChannel>) -> bool {
+        Arc::ptr_eq(self, other)
+    }
+    pub(crate) async fn finish(self) -> Result<(Arc<Self>, FakeReactor)> {
+        Ok((Arc::new(self), FakeReactor {}))
     }
     pub async fn is_closing(&self) -> bool {
         self.chan.closing.load(Ordering::SeqCst)
@@ -84,12 +82,6 @@ impl FakeChannel {
             }
         }
         Ok(())
-    }
-
-    pub fn new_ref(&self) -> Self {
-        FakeChannel {
-            chan: Arc::clone(&self.chan),
-        }
     }
 }
 

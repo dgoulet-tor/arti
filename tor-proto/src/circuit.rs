@@ -101,7 +101,7 @@ struct ClientCircImpl {
     id: CircId,
     /// The channel that this circuit uses to send its cells to the
     /// next hop.
-    channel: Channel,
+    channel: Arc<Channel>,
     /// The cryptographic state for this circuit for outbound cells.
     /// This object is divided into multiple layers, each of which is
     /// shared with one hop of the circuit
@@ -667,7 +667,7 @@ impl PendingClientCirc {
     ///
     pub(crate) fn new(
         id: CircId,
-        channel: Channel,
+        channel: Arc<Channel>,
         createdreceiver: oneshot::Receiver<CreateResponse>,
         circ_closed: Option<CircDestroyHandle>,
         input: mpsc::Receiver<ClientCircChanMsg>,
@@ -1084,7 +1084,7 @@ mod test {
 
     // Helper: set up a 3-hop circuit with no encryption.
     async fn newcirc(
-        chan: Channel,
+        chan: Arc<Channel>,
     ) -> (
         ClientCirc,
         reactor::Reactor,
@@ -1097,7 +1097,7 @@ mod test {
 
         let (pending, mut reactor) = PendingClientCirc::new(
             circid,
-            chan,
+            Arc::clone(&chan),
             created_recv,
             None, // circ_closed.
             circmsg_recv,

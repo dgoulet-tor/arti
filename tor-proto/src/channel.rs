@@ -95,7 +95,7 @@ type CellFrame<T> = futures_codec::Framed<T, crate::channel::codec::ChannelCodec
 /// I'm supposed to give it a name to reflect that.
 pub struct Channel {
     /// reference-counted locked wrapper around the channel object
-    inner: Arc<Mutex<ChannelImpl>>,
+    inner: Mutex<ChannelImpl>,
 }
 
 /// Main implementation type for a channel.
@@ -192,7 +192,7 @@ impl Channel {
         logid: LogId,
         ed25519_id: Ed25519Identity,
         rsa_id: RSAIdentity,
-    ) -> (Self, reactor::Reactor<T>)
+    ) -> (Arc<Self>, reactor::Reactor<T>)
     where
         T: Stream<Item = std::result::Result<ChanCell, tor_cell::Error>> + Send + Unpin + 'static,
     {
@@ -214,9 +214,12 @@ impl Channel {
             ed25519_id,
             rsa_id,
         };
-        let inner = Arc::new(Mutex::new(inner));
+        let inner = Mutex::new(inner);
+        let channel = Channel { inner };
+        let channel = Arc::new(channel);
+
         let reactor = reactor::Reactor::new(
-            inner.clone(),
+            Arc::clone(&channel),
             circmap,
             recvctrl,
             recvclosed,
@@ -224,22 +227,7 @@ impl Channel {
             logid,
         );
 
-        let channel = Channel { inner };
-
         (channel, reactor)
-    }
-
-    /// Allocate and return a new reference to this channel.
-    pub fn new_ref(&self) -> Self {
-        Channel {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    /// Return true if this and `other` are both handles to the same
-    /// channel.
-    pub fn same_channnel(&self, other: &Channel) -> bool {
-        Arc::ptr_eq(&self.inner, &other.inner)
     }
 
     /// Return an error if this channel is somehow mismatched with the
@@ -308,7 +296,7 @@ impl Channel {
     /// new task, then use the methods of
     /// [crate::circuit::PendingClientCirc] to build the circuit.
     pub async fn new_circ<R: Rng>(
-        &self,
+        self: &Arc<Self>,
         rng: &mut R,
     ) -> Result<(circuit::PendingClientCirc, circuit::reactor::Reactor)> {
         // TODO: blocking is risky, but so is unbounded.
@@ -341,7 +329,7 @@ impl Channel {
 
         Ok(circuit::PendingClientCirc::new(
             id,
-            self.new_ref(),
+            Arc::clone(self),
             createdreceiver,
             Some(destroy_handle),
             receiver,
@@ -358,7 +346,7 @@ impl Channel {
     /// It's not necessary to call this method if you're just done
     /// with a channel: the channel should close on its own once nothing
     /// is using it any more.
-    pub async fn terminate(self) {
+    pub async fn terminate(&self) {
         let mut inner = self.inner.lock().await;
         inner.shutdown();
         // ignore any failure to flush; we can't do anything about it.
@@ -453,7 +441,7 @@ pub(crate) mod test {
     /// Make a new fake reactor-less channel.  For testing only, obviously.
     ///
     /// This function is used for testing _circuits_, not channels.
-    pub(crate) fn fake_channel() -> (Channel, FakeChanHandle) {
+    pub(crate) fn fake_channel() -> (Arc<Channel>, FakeChanHandle) {
         let (cell_send, cell_recv) = mpsc::channel(64);
         let (ctrl_send, ctrl_recv) = mpsc::channel(64);
 
@@ -477,7 +465,7 @@ pub(crate) mod test {
             rsa_id: [0u8; 20].into(),
         };
         let channel = Channel {
-            inner: Arc::new(Mutex::new(inner)),
+            inner: Mutex::new(inner),
         };
         let handle = FakeChanHandle {
             cells: cell_recv,
@@ -485,7 +473,7 @@ pub(crate) mod test {
             ignore_control_msgs: ctrl_recv,
         };
 
-        (channel, handle)
+        (Arc::new(channel), handle)
     }
 
     #[async_test]

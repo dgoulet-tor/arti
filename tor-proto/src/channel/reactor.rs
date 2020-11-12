@@ -76,7 +76,7 @@ where
     circs: Arc<Mutex<CircMap>>,
 
     /// Channel pointer -- used to send DESTROY cells.
-    channel: Weak<Mutex<super::ChannelImpl>>,
+    channel: Weak<super::Channel>,
 
     /// Logging identifier for this channel
     logid: LogId,
@@ -92,7 +92,7 @@ where
     ///
     /// When closeflag fires, the reactor should shut down.
     pub(super) fn new(
-        channel: Arc<Mutex<super::ChannelImpl>>,
+        channel: Arc<super::Channel>,
         circmap: Arc<Mutex<CircMap>>,
         control: mpsc::Receiver<CtrlResult>,
         closeflag: oneshot::Receiver<CtrlMsg>,
@@ -118,7 +118,7 @@ where
     /// used again.
     pub async fn run(mut self) -> Result<()> {
         if let Some(chan) = self.channel.upgrade() {
-            let chan = chan.lock().await;
+            let chan = chan.inner.lock().await;
             if chan.closed {
                 return Err(Error::ChannelClosed);
             }
@@ -135,7 +135,7 @@ where
         };
         debug!("{}: Reactor stopped: {:?}", self.logid, result);
         if let Some(chan) = self.channel.upgrade() {
-            let mut chan = chan.lock().await;
+            let mut chan = chan.inner.lock().await;
             chan.closed = true;
         }
         result
@@ -162,7 +162,7 @@ where
             item = self.input.next() => {
                 let item = match item {
                     None => return Err(ReactorError::Shutdown), // the TLS connection closed.
-                    Some(r) => r.map_err(|e| Error::CellErr(e))?, // it's a cell.
+                    Some(r) => r.map_err(Error::CellErr)?, // it's a cell.
                 };
                 self.handle_cell(item).await?;
 
@@ -337,7 +337,7 @@ where
             let destroy = Destroy::new(DestroyReason::NONE).into();
             let cell = ChanCell::new(id, destroy);
             if let Some(chan) = self.channel.upgrade() {
-                let mut chan = chan.lock().await;
+                let mut chan = chan.inner.lock().await;
                 chan.send_cell(cell).await?;
             }
         }
@@ -349,7 +349,6 @@ where
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
-    use futures::executor::LocalPool;
     use futures::sink::SinkExt;
     use futures::stream::StreamExt;
     use futures_await_test::async_test;
@@ -357,7 +356,7 @@ pub(crate) mod test {
     type CodecResult = std::result::Result<ChanCell, tor_cell::Error>;
 
     pub(crate) fn new_reactor() -> (
-        crate::channel::Channel,
+        Arc<crate::channel::Channel>,
         Reactor<mpsc::Receiver<CodecResult>>,
         mpsc::Receiver<ChanCell>,
         mpsc::Sender<CodecResult>,
@@ -395,32 +394,28 @@ pub(crate) mod test {
     }
 
     // Try shutdown while reactor is running.
-    #[test]
-    fn shutdown2() {
+    #[async_test]
+    async fn shutdown2() {
         // TODO: Ask a rust person if this is how to do this.
         use futures::future::FutureExt;
-        use futures::task::LocalSpawnExt;
+        use futures::join;
 
-        let mut pool = LocalPool::new();
-        let spawner = pool.spawner();
         let (chan, reactor, _output, _input) = new_reactor();
         // Let's get the reactor running...
         let run_reactor = reactor.run().map(|x| x.is_ok()).shared();
-        let run_handle = spawner
-            .spawn_local_with_handle(run_reactor.clone())
-            .unwrap();
-        run_handle.forget();
-        pool.run_until_stalled();
 
-        // Now let's see. The reactor should _still_ be running.
-        assert!(run_reactor.peek().is_none());
+        let rr = run_reactor.clone();
 
-        // Now let's try shutting down.
-        spawner.spawn_local(chan.terminate()).unwrap();
-        pool.run_until_stalled();
+        let exit_then_check = async {
+            assert!(rr.peek().is_none());
+            // ... and terminate the channel while that's happening.
+            chan.terminate().await;
+        };
+
+        let (rr_s, _) = join!(run_reactor, exit_then_check);
 
         // Now let's see. The reactor should not _still_ be running.
-        assert_eq!(run_reactor.peek(), Some(&true));
+        assert_eq!(rr_s, true);
     }
 
     #[async_test]

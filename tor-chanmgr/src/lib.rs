@@ -58,7 +58,7 @@ pub struct ChanMgr<TR> {
 enum ChannelState {
     /// The channel is open, authenticated, and canonical: we can give
     /// it out as needed.
-    Open(Channel),
+    Open(Arc<Channel>),
     /// Some task is building the channel, and will notify all
     /// listeners on this event on success or failure.
     Building(Arc<event_listener::Event>),
@@ -83,7 +83,12 @@ where
     /// We need to do this check since it's theoretically possible for
     /// a channel to (for example) match the Ed25519 key of the
     /// target, but not the RSA key.
-    async fn check_chan_match<T: ChanTarget>(&self, target: &T, ch: Channel) -> Result<Channel> {
+    async fn check_chan_match<T: ChanTarget>(
+        &self,
+        target: &T,
+        ch: Arc<Channel>,
+    ) -> Result<Arc<Channel>> {
+        // XXXX would prefer not to have this async.
         ch.check_match(target).await?;
         Ok(ch)
     }
@@ -94,7 +99,7 @@ where
     /// If there is already a channel launch attempt in progress, this
     /// function will wait until that launch is complete, and succeed
     /// or fail depending on its outcome.
-    pub async fn get_or_launch<T: ChanTarget + Sync>(&self, target: &T) -> Result<Channel> {
+    pub async fn get_or_launch<T: ChanTarget + Sync>(&self, target: &T) -> Result<Arc<Channel>> {
         let ed_identity = target.ed_identity();
         use ChannelState::*;
 
@@ -112,7 +117,7 @@ where
                         channels.insert(*ed_identity, state);
                         (true, e)
                     } else {
-                        return self.check_chan_match(target, ch.new_ref()).await;
+                        return self.check_chan_match(target, Arc::clone(ch)).await;
                     }
                 }
                 Some(Building(e)) => (false, Arc::clone(e)),
@@ -131,7 +136,7 @@ where
                 let mut channels = self.channels.lock().await;
                 match &result {
                     Ok(ch) => {
-                        channels.insert(*ed_identity, Open(ch.new_ref()));
+                        channels.insert(*ed_identity, Open(Arc::clone(ch)));
                     }
                     Err(_) => {
                         channels.remove(ed_identity);
@@ -151,7 +156,7 @@ where
     }
 
     /// Helper: construct a new channel for a target.
-    async fn build_channel<T: ChanTarget + Sync>(&self, target: &T) -> Result<Channel> {
+    async fn build_channel<T: ChanTarget + Sync>(&self, target: &T) -> Result<Arc<Channel>> {
         // XXXX make this a parameter.
         let timeout = Duration::new(5, 0);
 
@@ -166,7 +171,7 @@ where
 
     /// Helper: construct a new channel for a target, trying only once,
     /// and not timing out.
-    async fn build_channel_once<T: ChanTarget + Sync>(&self, target: &T) -> Result<Channel> {
+    async fn build_channel_once<T: ChanTarget + Sync>(&self, target: &T) -> Result<Arc<Channel>> {
         use crate::transport::CertifiedConn;
         let (addr, tls) = self.transport.connect(target).await?;
 
@@ -188,11 +193,11 @@ where
 
     /// Helper: Get the Channel with the given Ed25519 identity, if there
     /// is one.
-    async fn get_nowait_by_ed_id(&self, ed_id: &Ed25519Identity) -> Option<Channel> {
+    async fn get_nowait_by_ed_id(&self, ed_id: &Ed25519Identity) -> Option<Arc<Channel>> {
         use ChannelState::*;
         let channels = self.channels.lock().await;
         match channels.get(ed_id) {
-            Some(Open(ch)) => Some(ch.new_ref()),
+            Some(Open(ch)) => Some(Arc::clone(ch)),
             _ => None,
         }
     }

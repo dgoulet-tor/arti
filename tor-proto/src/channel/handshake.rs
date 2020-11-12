@@ -11,6 +11,7 @@ use crate::{Error, Result};
 use tor_cell::chancell::{msg, ChanCmd};
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tor_bytes::Reader;
 use tor_linkspec::ChanTarget;
 use tor_llcrypto as ll;
@@ -374,7 +375,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> VerifiedChannel<T> {
     pub async fn finish(
         mut self,
     ) -> Result<(
-        super::Channel,
+        Arc<super::Channel>,
         super::reactor::Reactor<stream::SplitStream<CellFrame<T>>>,
     )> {
         trace!("{}: Sending netinfo cell.", self.logid);
