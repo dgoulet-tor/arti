@@ -50,7 +50,7 @@ struct Args {
     socksport: Option<u16>,
 }
 
-async fn test_cat(mut circ: ClientCirc) -> Result<()> {
+async fn test_cat(circ: Arc<ClientCirc>) -> Result<()> {
     let stream = circ.begin_stream("127.0.0.1", 9999).await?;
     for x in 1..2000 {
         let one_k = [b'x'; 1024];
@@ -61,7 +61,7 @@ async fn test_cat(mut circ: ClientCirc) -> Result<()> {
     Ok(())
 }
 
-async fn test_dl(mut circ: ClientCirc) -> Result<()> {
+async fn test_dl(circ: Arc<ClientCirc>) -> Result<()> {
     let mut stream = circ.begin_stream("127.0.0.1", 9999).await?;
     let mut n_read = 0;
     let mut buf = [0u8; 512];
@@ -80,7 +80,7 @@ async fn test_dl(mut circ: ClientCirc) -> Result<()> {
     Ok(())
 }
 
-async fn test_http(mut circ: ClientCirc) -> Result<()> {
+async fn test_http(circ: Arc<ClientCirc>) -> Result<()> {
     let mut stream = circ
         .begin_stream("www.torproject.org", 80)
         .await
@@ -165,7 +165,7 @@ async fn handle_socks_conn(
     info!("Got a socks request for {}:{}", addr, port);
 
     let exit_ports = [port];
-    let mut circ = circmgr
+    let circ = circmgr
         .get_or_launch_exit(dir.as_ref(), &exit_ports)
         .await?;
     info!("Got a circuit for {}:{}", addr, port);
@@ -272,11 +272,11 @@ fn main() -> Result<()> {
 
         for _ in 0..args.n {
             if args.flood {
-                test_cat(circ.new_ref()).await?;
+                test_cat(Arc::clone(&circ)).await?;
             } else if args.dl {
-                test_dl(circ.new_ref()).await?;
+                test_dl(Arc::clone(&circ)).await?;
             } else {
-                test_http(circ.new_ref()).await?;
+                test_http(Arc::clone(&circ)).await?;
             }
         }
 

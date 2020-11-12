@@ -102,7 +102,7 @@ enum CircUsage {
 /// The state of a circuit: either built or waiting to be built.
 enum Circ {
     /// A circuit that has been constructed and which is probably usable.
-    Open(ClientCirc),
+    Open(Arc<ClientCirc>),
     /// A circuit that we've started building, which could succeed or fail.
     Pending(Arc<event_listener::Event>),
 }
@@ -142,13 +142,17 @@ where
 
     /// Return a circuit suitable for sending one-hop BEGINDIR streams,
     /// launching it if necessary.
-    pub async fn get_or_launch_dir(&self, netdir: &NetDir) -> Result<ClientCirc> {
+    pub async fn get_or_launch_dir(&self, netdir: &NetDir) -> Result<Arc<ClientCirc>> {
         self.get_or_launch_by_usage(netdir, CircUsage::Dir).await
     }
 
     /// Return a circuit suitable for exiting to all of the provided
     /// `ports`, launching it if necessary.
-    pub async fn get_or_launch_exit(&self, netdir: &NetDir, ports: &[u16]) -> Result<ClientCirc> {
+    pub async fn get_or_launch_exit(
+        &self,
+        netdir: &NetDir,
+        ports: &[u16],
+    ) -> Result<Arc<ClientCirc>> {
         self.get_or_launch_by_usage(netdir, CircUsage::Exit(ports.into()))
             .await
     }
@@ -167,7 +171,7 @@ where
         &self,
         netdir: &NetDir,
         usage: CircUsage,
-    ) -> Result<ClientCirc> {
+    ) -> Result<Arc<ClientCirc>> {
         // XXXX LOG.
         // XXXX This function is huge and ugly.
         let mut rng = StdRng::from_rng(rand::thread_rng()).unwrap();
@@ -207,7 +211,7 @@ where
                 // unwrap ok: there is at least one member in suitable.
                 let (id, entry) = suitable.choose(&mut rng).unwrap();
                 match &entry.circ {
-                    Circ::Open(c) => return Ok(c.new_ref()), // Found a circuit!
+                    Circ::Open(c) => return Ok(Arc::clone(c)), // Found a circuit!
                     Circ::Pending(event) => (false, Arc::clone(&event), **id), // wait for this one.
                 }
             };
@@ -228,7 +232,7 @@ where
                     let p = circs.get_mut(&id);
                     // XXXX instead of unwrapping, should make a new entry.
                     let p = p.unwrap();
-                    p.circ = Circ::Open(circ.new_ref());
+                    p.circ = Circ::Open(Arc::clone(circ));
                 } else {
                     circs.remove(&id);
                 }
@@ -243,7 +247,7 @@ where
                 let circs = self.circuits.lock().await;
                 let ent = circs.get(&id).ok_or(Error::PendingFailed)?;
                 if let Circ::Open(ref c) = ent.circ {
-                    Ok(c.new_ref())
+                    Ok(Arc::clone(c))
                 } else {
                     Err(Error::PendingFailed.into()) // should be impossible XXXX
                 }
@@ -257,7 +261,7 @@ where
         rng: &mut StdRng,
         netdir: &NetDir,
         usage: &CircUsage,
-    ) -> Result<ClientCirc> {
+    ) -> Result<Arc<ClientCirc>> {
         // This should probably be an option too.
         let n_tries: usize = 3;
         // This is way too long, AND it should be an option.
@@ -292,7 +296,7 @@ where
         rng: &mut StdRng,
         netdir: &NetDir,
         usage: &CircUsage,
-    ) -> Result<ClientCirc> {
+    ) -> Result<Arc<ClientCirc>> {
         let path = usage.build_path(rng, netdir)?;
         let circ = path.build_circuit(rng, &self.chanmgr).await?;
         Ok(circ)

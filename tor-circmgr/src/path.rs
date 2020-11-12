@@ -54,7 +54,7 @@ impl<'a> TorPath<'a> {
         &self,
         rng: &mut R,
         chanmgr: &ChanMgr<TR>,
-    ) -> Result<ClientCirc>
+    ) -> Result<Arc<ClientCirc>>
     where
         TR: tor_chanmgr::transport::Transport,
         R: Rng + CryptoRng,
@@ -73,7 +73,7 @@ impl<'a> TorPath<'a> {
                 Ok(circ)
             }
             Path(p) => {
-                let mut circ = pcirc.create_firsthop_ntor(rng, &p[0]).await?;
+                let circ = pcirc.create_firsthop_ntor(rng, &p[0]).await?;
                 for relay in p[1..].iter() {
                     circ.extend_ntor(rng, relay).await?;
                 }

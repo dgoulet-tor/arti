@@ -18,7 +18,6 @@ use tor_cell::relaycell::msg::{End, RelayMsg, Sendme};
 use tor_cell::relaycell::{RelayCell, StreamId};
 
 use futures::channel::{mpsc, oneshot};
-use futures::lock::Mutex;
 use futures::select_biased;
 use futures::sink::SinkExt;
 use futures::stream::{self, StreamExt};
@@ -126,7 +125,7 @@ pub struct Reactor {
     input: stream::Fuse<mpsc::Receiver<ClientCircChanMsg>>,
 
     /// Reference to the circuit.
-    circuit: Weak<Mutex<super::ClientCircImpl>>,
+    circuit: Weak<super::ClientCirc>,
     /// The cryptographic state for this circuit for inbound cells.
     /// This object is divided into multiple layers, each of which is
     /// shared with one hop of the circuit.
@@ -144,7 +143,7 @@ pub struct Reactor {
 impl Reactor {
     /// Construct a new Reactor.
     pub(super) fn new(
-        circuit: Arc<Mutex<super::ClientCircImpl>>,
+        circuit: Arc<super::ClientCirc>,
         control: mpsc::Receiver<CtrlResult>,
         closeflag: oneshot::Receiver<CtrlMsg>,
         input: mpsc::Receiver<ClientCircChanMsg>,
@@ -170,7 +169,7 @@ impl Reactor {
     /// used again.
     pub async fn run(mut self) -> Result<()> {
         if let Some(circ) = self.circuit.upgrade() {
-            let circ = circ.lock().await;
+            let circ = circ.c.lock().await;
             if circ.closed {
                 return Err(Error::CircuitClosed);
             }
@@ -187,7 +186,7 @@ impl Reactor {
         };
         debug!("{}: Circuit reactor stopped: {:?}", self.logid, result);
         if let Some(circ) = self.circuit.upgrade() {
-            let mut circ = circ.lock().await;
+            let mut circ = circ.c.lock().await;
             circ.closed = true;
             if let Some(sender) = circ.sendmeta.take() {
                 let _ignore_err = sender.send(Err(Error::CircuitClosed));
@@ -284,7 +283,7 @@ impl Reactor {
         if should_send_end == ShouldSendEnd::Send {
             let end_cell = RelayCell::new(id, End::new_misc().into());
             if let Some(circ) = self.circuit.upgrade() {
-                let mut circ = circ.lock().await;
+                let mut circ = circ.c.lock().await;
                 circ.send_relay_cell(hopnum, false, end_cell).await?;
             } else {
                 return Err(Error::CircuitClosed);
@@ -353,7 +352,7 @@ impl Reactor {
             let sendme = Sendme::new_tag(tag);
             let cell = RelayCell::new(0.into(), sendme.into());
             if let Some(circ) = self.circuit.upgrade() {
-                let mut circ = circ.lock().await;
+                let mut circ = circ.c.lock().await;
                 circ.send_relay_cell(hopnum, false, cell).await?;
             } else {
                 return Err(Error::CircuitClosed);
@@ -378,7 +377,7 @@ impl Reactor {
         // not meant for a particualr stream.
         if streamid.is_zero() {
             if let Some(circ) = self.circuit.upgrade() {
-                let mut circ = circ.lock().await;
+                let mut circ = circ.c.lock().await;
                 return circ.handle_meta_cell(hopnum, msg).await;
             } else {
                 return Err(Error::CircuitClosed);
