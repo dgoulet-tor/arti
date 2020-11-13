@@ -281,8 +281,23 @@ impl Channel {
             return Err(Error::ChannelClosed);
         }
         self.check_cell(&cell)?;
+        {
+            use msg::ChanMsg::*;
+            match cell.msg() {
+                Relay(_) | Padding(_) | VPadding(_) => {} // too frequent to log.
+                _ => trace!(
+                    "{}: Sending {} for {}",
+                    self.logid,
+                    cell.msg().cmd(),
+                    cell.circid()
+                ),
+            }
+        }
+
         let inner = &mut self.inner.lock().await;
-        inner.send_cell(self.logid, cell).await
+        inner.tls.send(cell).await?; // XXXX I don't like holding the lock here.
+
+        Ok(())
     }
 
     /// Return a newly allocated PendingClientCirc object with
@@ -348,7 +363,7 @@ impl Channel {
         let previously_closed = self.closed.compare_and_swap(false, true, Ordering::SeqCst);
         if !previously_closed {
             let mut inner = self.inner.lock().await;
-            inner.shutdown();
+            inner.shutdown_reactor();
             // ignore any failure to flush; we can't do anything about it.
             let _ignore = inner.tls.flush().await;
         }
@@ -357,30 +372,14 @@ impl Channel {
 
 impl Drop for ChannelImpl {
     fn drop(&mut self) {
-        self.shutdown();
+        self.shutdown_reactor();
     }
 }
 
 impl ChannelImpl {
-    /// Try to send `cell` on this channel.
-    async fn send_cell(&mut self, logid: LogId, cell: ChanCell) -> Result<()> {
-        use msg::ChanMsg::*;
-        match cell.msg() {
-            Relay(_) | Padding(_) | VPadding(_) => {} // too frequent to log.
-            _ => trace!(
-                "{}: Sending {} for {}",
-                logid,
-                cell.msg().cmd(),
-                cell.circid()
-            ),
-        }
-        self.tls.send(cell).await?; // XXXX I don't like holding the lock here.
-        Ok(())
-    }
-
-    /// Shut down this channel; causes all circuits using this channel
-    /// to become unusable.
-    fn shutdown(&mut self) {
+    /// Shut down this channel's reactor; causes all circuits using
+    /// this channel to become unusable.
+    fn shutdown_reactor(&mut self) {
         if let Some(sender) = self.sendclosed.take() {
             let _ignore = sender.send(CtrlMsg::Shutdown);
         }
