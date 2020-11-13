@@ -22,6 +22,7 @@ use futures::select_biased;
 use futures::sink::SinkExt;
 use futures::stream::{self, StreamExt};
 
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use log::{debug, trace};
@@ -169,8 +170,7 @@ impl Reactor {
     /// used again.
     pub async fn run(mut self) -> Result<()> {
         if let Some(circ) = self.circuit.upgrade() {
-            let circ = circ.c.lock().await;
-            if circ.closed {
+            if circ.is_closing() {
                 return Err(Error::CircuitClosed);
             }
         } else {
@@ -186,8 +186,9 @@ impl Reactor {
         };
         debug!("{}: Circuit reactor stopped: {:?}", self.logid, result);
         if let Some(circ) = self.circuit.upgrade() {
+            // TODO: should this call terminate?
+            circ.closed.store(true, Ordering::SeqCst);
             let mut circ = circ.c.lock().await;
-            circ.closed = true;
             if let Some(sender) = circ.sendmeta.take() {
                 let _ignore_err = sender.send(Err(Error::CircuitClosed));
             }
@@ -283,7 +284,6 @@ impl Reactor {
         if should_send_end == ShouldSendEnd::Send {
             let end_cell = RelayCell::new(id, End::new_misc().into());
             if let Some(circ) = self.circuit.upgrade() {
-                let mut circ = circ.c.lock().await;
                 circ.send_relay_cell(hopnum, false, end_cell).await?;
             } else {
                 return Err(Error::CircuitClosed);
@@ -352,7 +352,6 @@ impl Reactor {
             let sendme = Sendme::new_tag(tag);
             let cell = RelayCell::new(0.into(), sendme.into());
             if let Some(circ) = self.circuit.upgrade() {
-                let mut circ = circ.c.lock().await;
                 circ.send_relay_cell(hopnum, false, cell).await?;
             } else {
                 return Err(Error::CircuitClosed);

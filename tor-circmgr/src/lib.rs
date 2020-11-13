@@ -188,7 +188,7 @@ where
                     continue;
                 }
                 if let Circ::Open(ref c) = &c.circ {
-                    if c.is_closing().await {
+                    if c.is_closing() {
                         remove.push(*id);
                         continue;
                     }

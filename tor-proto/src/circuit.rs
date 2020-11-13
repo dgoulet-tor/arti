@@ -67,6 +67,7 @@ use futures::channel::{mpsc, oneshot};
 use futures::lock::Mutex;
 use futures::sink::SinkExt;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use rand::{thread_rng, CryptoRng, Rng};
@@ -75,6 +76,10 @@ use log::{debug, trace};
 
 /// A circuit that we have constructed over the Tor network.
 pub struct ClientCirc {
+    /// This circuit can't be used because it has been closed, locally
+    /// or remotely.
+    closed: AtomicBool,
+
     /// Reference-counted locked reference to the inner circuit object.
     c: Mutex<ClientCircImpl>,
 }
@@ -106,9 +111,6 @@ struct ClientCircImpl {
     /// This object is divided into multiple layers, each of which is
     /// shared with one hop of the circuit
     crypto_out: OutboundClientCrypt,
-    /// This circuit can't be used because it has been closed, locally
-    /// or remotely.
-    closed: bool,
     /// When this is dropped, the channel reactor is told to send a DESTROY
     /// cell.
     circ_closed: Option<CircDestroyHandle>,
@@ -300,7 +302,7 @@ impl ClientCirc {
 
         // Did we get the right response?
         if from_hop != hop || msg.cmd() != RelayCmd::EXTENDED2 {
-            self.c.lock().await.shutdown();
+            self.protocol_error().await;
             return Err(Error::CircProto(format!(
                 "wanted EXTENDED2 from {}; got {} from {}",
                 hop,
@@ -480,7 +482,7 @@ impl ClientCirc {
         } else if response.cmd() == RelayCmd::END {
             Err(Error::StreamClosed("end cell when waiting for connection"))
         } else {
-            self.c.lock().await.shutdown();
+            self.protocol_error().await;
             Err(Error::StreamProto(format!(
                 "Received {} while waiting for connection",
                 response.cmd()
@@ -506,6 +508,18 @@ impl ClientCirc {
     }
     // XXXX Add a RESOLVE implementation, it will be simple.
 
+    /// Helper: Encode the relay cell `cell`, encrypt it, and send it to the
+    /// 'hop'th hop.
+    ///
+    /// Does not check whether the cell is well-formed or reasonable.
+    async fn send_relay_cell(&self, hop: HopNum, early: bool, cell: RelayCell) -> Result<()> {
+        if self.closed.load(Ordering::SeqCst) {
+            return Err(Error::CircuitClosed);
+        }
+        let mut c = self.c.lock().await;
+        c.send_relay_cell(hop, early, cell).await
+    }
+
     /// Shut down this circuit immediately, along with all streams that
     /// are using it.
     ///
@@ -516,14 +530,24 @@ impl ClientCirc {
     /// with a circuit: the channel should close on its own once nothing
     /// is using it any more.
     pub async fn terminate(&self) {
-        self.c.lock().await.shutdown();
+        let previously_closed = self.closed.compare_and_swap(false, true, Ordering::SeqCst);
+        if !previously_closed {
+            self.c.lock().await.shutdown_reactor();
+        }
+    }
+
+    /// Called when a circuit-level protocol error has occured and the
+    /// circuit needs to shut down.
+    ///
+    /// This is a separate function because we may eventually want to have
+    /// it do more than just shut down.
+    pub(crate) async fn protocol_error(&self) {
+        self.terminate().await;
     }
 
     /// Return true if this circuit is closed and therefore unusable.
-    ///
-    /// TODO: This shouldn't be async.
-    pub async fn is_closing(&self) -> bool {
-        self.c.lock().await.closed
+    pub fn is_closing(&self) -> bool {
+        self.closed.load(Ordering::SeqCst)
     }
 }
 
@@ -614,9 +638,6 @@ impl ClientCircImpl {
     ///
     /// Does not check whether the cell is well-formed or reasonable.
     async fn send_relay_cell(&mut self, hop: HopNum, early: bool, cell: RelayCell) -> Result<()> {
-        if self.closed {
-            return Err(Error::CircuitClosed);
-        }
         let c_t_w = sendme::cell_counts_towards_windows(&cell);
         let mut body: RelayCellBody = cell.encode(&mut thread_rng())?.into();
         let tag = self.crypto_out.encrypt(&mut body, hop)?;
@@ -644,11 +665,10 @@ impl ClientCircImpl {
         self.send_msg(msg).await
     }
 
-    /// Shut down this circuit's reactor and mark the circuit as closed.
+    /// Shut down this circuit's reactor and send a DESTROY cell.
     ///
     /// This is idempotent and safe to call more than once.
-    fn shutdown(&mut self) {
-        self.closed = true;
+    fn shutdown_reactor(&mut self) {
         if let Some(sender) = self.sendshutdown.take() {
             // ignore the error, since it can only be canceled.
             let _ = sender.send(CtrlMsg::Shutdown);
@@ -684,7 +704,6 @@ impl PendingClientCirc {
             channel,
             crypto_out,
             hops,
-            closed: false,
             circ_closed,
             control: sendctrl,
             sendshutdown: Some(sendclosed),
@@ -692,6 +711,7 @@ impl PendingClientCirc {
             logid,
         };
         let circuit = ClientCirc {
+            closed: AtomicBool::new(false),
             c: Mutex::new(circuit_impl),
         };
         let circuit = Arc::new(circuit);
@@ -887,21 +907,19 @@ impl StreamTarget {
             self.window.take(&()).await?;
         }
         let cell = RelayCell::new(self.stream_id, msg);
-        let mut c = self.circ.c.lock().await;
-        c.send_relay_cell(self.hop, false, cell).await
+        self.circ.send_relay_cell(self.hop, false, cell).await
     }
 
     /// Called when a circuit-level protocol error has occured and the
     /// circuit needs to shut down.
     pub(crate) async fn protocol_error(&mut self) {
-        let mut c = self.circ.c.lock().await;
-        c.shutdown();
+        self.circ.protocol_error().await;
     }
 }
 
 impl Drop for ClientCircImpl {
     fn drop(&mut self) {
-        self.shutdown();
+        self.shutdown_reactor();
     }
 }
 
@@ -1137,10 +1155,9 @@ mod test {
         let (chan, mut ch) = fake_channel();
         let (circ, _reactor, _send) = newcirc(chan).await;
         let begindir = RelayCell::new(0.into(), RelayMsg::BeginDir);
-        {
-            let mut c = circ.c.lock().await;
-            c.send_relay_cell(2.into(), false, begindir).await.unwrap();
-        }
+        circ.send_relay_cell(2.into(), false, begindir)
+            .await
+            .unwrap();
 
         // Here's what we tried to put on the TLS channel.  Note that
         // we're using dummy relay crypto for testing convenience.
