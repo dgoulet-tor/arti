@@ -75,7 +75,7 @@ impl FakeChannel {
     pub fn mark_closing(&self) {
         self.chan.closing.store(true, Ordering::SeqCst)
     }
-    pub async fn check_match<T: ChanTarget>(&self, target: &T) -> Result<()> {
+    pub fn check_match<T: ChanTarget>(&self, target: &T) -> Result<()> {
         if let Some(ref id) = self.chan.want_rsa_id {
             if id != target.rsa_identity() {
                 return Err(Error::UnusableTarget("Wrong RSA".into()).into());

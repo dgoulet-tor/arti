@@ -90,10 +90,14 @@ type CellFrame<T> = futures_codec::Framed<T, crate::channel::codec::ChannelCodec
 /// An open client channel, ready to send and receive Tor cells.
 ///
 /// A channel is a direct connection to a Tor relay, implemented using TLS.
-///
-/// TODO: This is actually reference-counted counted handle.  In theory
-/// I'm supposed to give it a name to reflect that.
 pub struct Channel {
+    /// Logging identifier for this stream.  (Used for logging only.)
+    logid: LogId,
+    /// Validated Ed25519 identity for this peer.
+    ed25519_id: Ed25519Identity,
+    /// Validated RSA identity for this peer.
+    rsa_id: RSAIdentity,
+
     /// reference-counted locked wrapper around the channel object
     inner: Mutex<ChannelImpl>,
 }
@@ -107,7 +111,7 @@ struct ChannelImpl {
     /// a ChanCell onto this sink sends it over the TLS channel.
     tls: Box<dyn Sink<ChanCell, Error = tor_cell::Error> + Send + Unpin + 'static>,
     /// If true, this channel is closing.
-    closed: bool,
+    closed: bool, // !!!!
     /// A circuit map, to translate circuit IDs into circuits.
     ///
     /// The ChannelImpl side of this object only needs to use this
@@ -122,15 +126,8 @@ struct ChannelImpl {
     /// A oneshot sender used to tell the Reactor task to shut down.
     sendclosed: Option<oneshot::Sender<CtrlMsg>>,
 
-    /// Logging identifier for this stream.  (Used for logging only.)
-    logid: LogId,
-
     /// Context for allocating unique circuit log identifiers.
     circ_logid_ctx: logid::CircLogIdContext,
-    /// Validated Ed25519 identity for this peer.
-    ed25519_id: Ed25519Identity,
-    /// Validated RSA identity for this peer.
-    rsa_id: RSAIdentity,
 }
 
 /// Structure for building and launching a Tor channel.
@@ -209,13 +206,15 @@ impl Channel {
             circmap: Arc::downgrade(&circmap),
             sendctrl,
             sendclosed: Some(sendclosed),
-            logid,
             circ_logid_ctx: logid::CircLogIdContext::new(),
-            ed25519_id,
-            rsa_id,
         };
         let inner = Mutex::new(inner);
-        let channel = Channel { inner };
+        let channel = Channel {
+            logid,
+            ed25519_id,
+            rsa_id,
+            inner,
+        };
         let channel = Arc::new(channel);
 
         let reactor = reactor::Reactor::new(
@@ -232,23 +231,19 @@ impl Channel {
 
     /// Return an error if this channel is somehow mismatched with the
     /// given target.
-    ///
-    /// TODO: This really shouldn't have to be async.
-    pub async fn check_match<T: ChanTarget>(&self, target: &T) -> Result<()> {
-        let chan = self.inner.lock().await;
-
-        if &chan.ed25519_id != target.ed_identity() {
+    pub fn check_match<T: ChanTarget>(&self, target: &T) -> Result<()> {
+        if &self.ed25519_id != target.ed_identity() {
             return Err(Error::ChanMismatch(format!(
                 "Identity {} does not match target {}",
-                chan.ed25519_id,
+                self.ed25519_id,
                 target.ed_identity()
             )));
         }
 
-        if &chan.rsa_id != target.rsa_identity() {
+        if &self.rsa_id != target.rsa_identity() {
             return Err(Error::ChanMismatch(format!(
                 "Identity {} does not match target {}",
-                chan.rsa_id,
+                self.rsa_id,
                 target.rsa_identity()
             )));
         }
@@ -285,7 +280,7 @@ impl Channel {
     pub async fn send_cell(&self, cell: ChanCell) -> Result<()> {
         self.check_cell(&cell)?;
         let inner = &mut self.inner.lock().await;
-        inner.send_cell(cell).await
+        inner.send_cell(self.logid, cell).await
     }
 
     /// Return a newly allocated PendingClientCirc object with
@@ -315,7 +310,7 @@ impl Channel {
                 .await
                 .map_err(|_| Error::InternalError("Can't queue circuit closer".into()))?;
             if let Some(circmap) = inner.circmap.upgrade() {
-                let my_logid = inner.logid;
+                let my_logid = self.logid;
                 let circ_logid = inner.circ_logid_ctx.next(my_logid);
                 let mut cmap = circmap.lock().await;
                 (circ_logid, cmap.add_ent(rng, createdsender, sender)?)
@@ -362,7 +357,7 @@ impl Drop for ChannelImpl {
 
 impl ChannelImpl {
     /// Try to send `cell` on this channel.
-    async fn send_cell(&mut self, cell: ChanCell) -> Result<()> {
+    async fn send_cell(&mut self, logid: LogId, cell: ChanCell) -> Result<()> {
         if self.closed {
             return Err(Error::ChannelClosed);
         }
@@ -371,7 +366,7 @@ impl ChannelImpl {
             Relay(_) | Padding(_) | VPadding(_) => {} // too frequent to log.
             _ => trace!(
                 "{}: Sending {} for {}",
-                self.logid,
+                logid,
                 cell.msg().cmd(),
                 cell.circid()
             ),
@@ -459,12 +454,12 @@ pub(crate) mod test {
             circmap: Arc::downgrade(&circmap),
             sendctrl: ctrl_send,
             sendclosed: None,
-            logid,
             circ_logid_ctx: logid::CircLogIdContext::new(),
-            ed25519_id: [0u8; 32].into(),
-            rsa_id: [0u8; 20].into(),
         };
         let channel = Channel {
+            logid,
+            ed25519_id: [0u8; 32].into(),
+            rsa_id: [0u8; 20].into(),
             inner: Mutex::new(inner),
         };
         let handle = FakeChanHandle {

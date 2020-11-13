@@ -83,13 +83,12 @@ where
     /// We need to do this check since it's theoretically possible for
     /// a channel to (for example) match the Ed25519 key of the
     /// target, but not the RSA key.
-    async fn check_chan_match<T: ChanTarget>(
+    fn check_chan_match<T: ChanTarget>(
         &self,
         target: &T,
         ch: Arc<Channel>,
     ) -> Result<Arc<Channel>> {
-        // XXXX would prefer not to have this async.
-        ch.check_match(target).await?;
+        ch.check_match(target)?;
         Ok(ch)
     }
 
@@ -117,7 +116,7 @@ where
                         channels.insert(*ed_identity, state);
                         (true, e)
                     } else {
-                        return self.check_chan_match(target, Arc::clone(ch)).await;
+                        return self.check_chan_match(target, Arc::clone(ch));
                     }
                 }
                 Some(Building(e)) => (false, Arc::clone(e)),
@@ -151,7 +150,7 @@ where
                 .get_nowait_by_ed_id(ed_identity)
                 .await
                 .ok_or(Error::PendingFailed)?;
-            self.check_chan_match(target, chan).await
+            self.check_chan_match(target, chan)
         }
     }
 

@@ -337,7 +337,6 @@ where
             let destroy = Destroy::new(DestroyReason::NONE).into();
             let cell = ChanCell::new(id, destroy);
             if let Some(chan) = self.channel.upgrade() {
-                let mut chan = chan.inner.lock().await;
                 chan.send_cell(cell).await?;
             }
         }
