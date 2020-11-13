@@ -67,7 +67,6 @@ use lazy_static::lazy_static;
 /// In a consensus, this type describes when the consensus may safely
 /// be used.  In a vote, this type describes the proposed lifetime for a
 /// consensus.
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Lifetime {
     /// Time at which the document becomes valid
@@ -80,6 +79,43 @@ pub struct Lifetime {
     /// (In practice, Tor clients will keep using documents for a while
     /// after this expiration time, if no better one can be found.)
     valid_until: time::SystemTime,
+}
+
+impl Lifetime {
+    /// Construct a new Lifetime.
+    pub fn new(
+        valid_after: time::SystemTime,
+        fresh_until: time::SystemTime,
+        valid_until: time::SystemTime,
+    ) -> Self {
+        Lifetime {
+            valid_after,
+            fresh_until,
+            valid_until,
+        }
+    }
+    /// Return time when this consensus first becomes valid.
+    ///
+    /// (You might see a consensus a little while before this time,
+    /// since voting tries to finish up before the.)
+    pub fn valid_after(&self) -> time::SystemTime {
+        self.valid_after
+    }
+    /// Return time when this consensus is no longer fresh.
+    ///
+    /// You can use the consensus after this time, but there is (or is
+    /// supposed to be) a better one by this point.
+    pub fn fresh_until(&self) -> time::SystemTime {
+        self.fresh_until
+    }
+    /// Return the time when this consensus is no longer valid.
+    ///
+    /// You should try to get a better consensus after this time,
+    /// though it's okay to keep using this one if no more recent one
+    /// can be found.
+    pub fn valid_until(&self) -> time::SystemTime {
+        self.fresh_until
+    }
 }
 
 /// A set of named network parameters.
@@ -407,6 +443,11 @@ pub struct MDConsensus {
 }
 
 impl MDConsensus {
+    /// Return the Lifetime for this consensus.
+    pub fn lifetime(&self) -> &Lifetime {
+        &self.header.hdr.lifetime
+    }
+
     /// Return a slice of all the routerstatus entries in this consensus.
     pub fn routers(&self) -> &[MDConsensusRouterStatus] {
         &self.routers[..]
@@ -696,11 +737,7 @@ impl CommonHeader {
             .args_as_str()
             .parse::<ISO8601TimeSp>()?
             .into();
-        let lifetime = Lifetime {
-            valid_after,
-            fresh_until,
-            valid_until,
-        };
+        let lifetime = Lifetime::new(valid_after, fresh_until, valid_until);
 
         let client_versions = sec
             .maybe(CLIENT_VERSIONS)
