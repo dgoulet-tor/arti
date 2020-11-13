@@ -75,6 +75,7 @@ use futures::lock::Mutex;
 use futures::sink::{Sink, SinkExt};
 use futures::stream::Stream;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use log::trace;
@@ -97,6 +98,8 @@ pub struct Channel {
     ed25519_id: Ed25519Identity,
     /// Validated RSA identity for this peer.
     rsa_id: RSAIdentity,
+    /// If true, this channel is closing.
+    closed: AtomicBool,
 
     /// reference-counted locked wrapper around the channel object
     inner: Mutex<ChannelImpl>,
@@ -110,8 +113,6 @@ struct ChannelImpl {
     /// The underlying channel, as a Sink of ChanCell.  Writing
     /// a ChanCell onto this sink sends it over the TLS channel.
     tls: Box<dyn Sink<ChanCell, Error = tor_cell::Error> + Send + Unpin + 'static>,
-    /// If true, this channel is closing.
-    closed: bool, // !!!!
     /// A circuit map, to translate circuit IDs into circuits.
     ///
     /// The ChannelImpl side of this object only needs to use this
@@ -202,7 +203,6 @@ impl Channel {
         let inner = ChannelImpl {
             tls: tls_sink,
             link_protocol,
-            closed: false,
             circmap: Arc::downgrade(&circmap),
             sendctrl,
             sendclosed: Some(sendclosed),
@@ -213,6 +213,7 @@ impl Channel {
             logid,
             ed25519_id,
             rsa_id,
+            closed: AtomicBool::new(false),
             inner,
         };
         let channel = Arc::new(channel);
@@ -252,10 +253,8 @@ impl Channel {
     }
 
     /// Return true if this connection is closed and therefore unusable.
-    ///
-    /// TODO: This shouldn't be async.
-    pub async fn is_closing(&self) -> bool {
-        self.inner.lock().await.closed
+    pub fn is_closing(&self) -> bool {
+        self.closed.load(Ordering::SeqCst)
     }
 
     /// Check whether a cell type is acceptable on an open client channel.
@@ -278,6 +277,9 @@ impl Channel {
 
     /// Transmit a single cell on a channel.
     pub async fn send_cell(&self, cell: ChanCell) -> Result<()> {
+        if self.closed.load(Ordering::SeqCst) {
+            return Err(Error::ChannelClosed);
+        }
         self.check_cell(&cell)?;
         let inner = &mut self.inner.lock().await;
         inner.send_cell(self.logid, cell).await
@@ -294,6 +296,10 @@ impl Channel {
         self: &Arc<Self>,
         rng: &mut R,
     ) -> Result<(circuit::PendingClientCirc, circuit::reactor::Reactor)> {
+        if self.is_closing() {
+            return Err(Error::ChannelClosed);
+        }
+
         // TODO: blocking is risky, but so is unbounded.
         let (sender, receiver) = mpsc::channel(128);
         let (createdsender, createdreceiver) = oneshot::channel::<CreateResponse>();
@@ -301,9 +307,6 @@ impl Channel {
 
         let (circ_logid, id) = {
             let mut inner = self.inner.lock().await;
-            if inner.closed {
-                return Err(Error::ChannelClosed);
-            }
             inner
                 .sendctrl
                 .send(Ok(CtrlMsg::Register(recv_circ_destroy)))
@@ -342,10 +345,13 @@ impl Channel {
     /// with a channel: the channel should close on its own once nothing
     /// is using it any more.
     pub async fn terminate(&self) {
-        let mut inner = self.inner.lock().await;
-        inner.shutdown();
-        // ignore any failure to flush; we can't do anything about it.
-        let _ignore = inner.tls.flush().await;
+        let previously_closed = self.closed.compare_and_swap(false, true, Ordering::SeqCst);
+        if !previously_closed {
+            let mut inner = self.inner.lock().await;
+            inner.shutdown();
+            // ignore any failure to flush; we can't do anything about it.
+            let _ignore = inner.tls.flush().await;
+        }
     }
 }
 
@@ -358,9 +364,6 @@ impl Drop for ChannelImpl {
 impl ChannelImpl {
     /// Try to send `cell` on this channel.
     async fn send_cell(&mut self, logid: LogId, cell: ChanCell) -> Result<()> {
-        if self.closed {
-            return Err(Error::ChannelClosed);
-        }
         use msg::ChanMsg::*;
         match cell.msg() {
             Relay(_) | Padding(_) | VPadding(_) => {} // too frequent to log.
@@ -381,7 +384,6 @@ impl ChannelImpl {
         if let Some(sender) = self.sendclosed.take() {
             let _ignore = sender.send(CtrlMsg::Shutdown);
         }
-        self.closed = true;
     }
 }
 
@@ -450,7 +452,6 @@ pub(crate) mod test {
         let inner = ChannelImpl {
             link_protocol: 4,
             tls: Box::new(cell_send),
-            closed: false,
             circmap: Arc::downgrade(&circmap),
             sendctrl: ctrl_send,
             sendclosed: None,
@@ -460,6 +461,7 @@ pub(crate) mod test {
             logid,
             ed25519_id: [0u8; 32].into(),
             rsa_id: [0u8; 20].into(),
+            closed: AtomicBool::new(false),
             inner: Mutex::new(inner),
         };
         let handle = FakeChanHandle {

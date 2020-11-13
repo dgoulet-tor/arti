@@ -21,6 +21,7 @@ use futures::sink::SinkExt;
 use futures::stream::{self, Stream, StreamExt};
 
 use std::convert::TryInto;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use log::{debug, trace};
@@ -118,8 +119,7 @@ where
     /// used again.
     pub async fn run(mut self) -> Result<()> {
         if let Some(chan) = self.channel.upgrade() {
-            let chan = chan.inner.lock().await;
-            if chan.closed {
+            if chan.closed.load(Ordering::SeqCst) {
                 return Err(Error::ChannelClosed);
             }
         } else {
@@ -135,8 +135,7 @@ where
         };
         debug!("{}: Reactor stopped: {:?}", self.logid, result);
         if let Some(chan) = self.channel.upgrade() {
-            let mut chan = chan.inner.lock().await;
-            chan.closed = true;
+            chan.closed.store(true, Ordering::SeqCst);
         }
         result
     }

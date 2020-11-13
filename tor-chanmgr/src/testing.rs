@@ -1,4 +1,4 @@
-//! Testing stubs for the channel manager code.  Only enabled
+//! Testing stubs for the chahannel manager code.  Only enabled
 //! with `cfg(test)`.
 
 #![allow(missing_docs)]
@@ -69,7 +69,7 @@ impl FakeChannel {
     pub(crate) async fn finish(self) -> Result<(Arc<Self>, FakeReactor)> {
         Ok((Arc::new(self), FakeReactor {}))
     }
-    pub async fn is_closing(&self) -> bool {
+    pub fn is_closing(&self) -> bool {
         self.chan.closing.load(Ordering::SeqCst)
     }
     pub fn mark_closing(&self) {

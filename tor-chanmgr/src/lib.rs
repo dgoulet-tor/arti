@@ -109,7 +109,7 @@ where
 
             match state {
                 Some(Open(ch)) => {
-                    if ch.is_closing().await {
+                    if ch.is_closing() {
                         // duplicate with below. XXXXX
                         let e = Arc::new(event_listener::Event::new());
                         let state = Building(Arc::clone(&e));
