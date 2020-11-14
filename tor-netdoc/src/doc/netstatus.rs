@@ -1149,7 +1149,7 @@ pub type UncheckedMDConsensus = TimerangeBound<UnvalidatedMDConsensus>;
 
 impl MDConsensus {
     /// Try to parse a single networkstatus document from a string.
-    pub fn parse(s: &str) -> Result<UncheckedMDConsensus> {
+    pub fn parse<'a>(s: &'a str) -> Result<(&'a str, UncheckedMDConsensus)> {
         let mut reader = NetDocReader::new(s);
         Self::parse_from_reader(&mut reader).map_err(|e| e.within(s))
     }
@@ -1231,7 +1231,11 @@ impl MDConsensus {
     }
 
     /// Extract an entire UncheckedMDConsensus from a reader.
-    fn parse_from_reader(r: &mut NetDocReader<'_, NetstatusKW>) -> Result<UncheckedMDConsensus> {
+    ///
+    /// Returns the signed portion of the string, and an UncheckedMdConsensus.
+    fn parse_from_reader<'a>(
+        r: &mut NetDocReader<'a, NetstatusKW>,
+    ) -> Result<(&'a str, UncheckedMDConsensus)> {
         use NetstatusKW::*;
         let (header, start_pos) = {
             let mut h = r.pause_at(|i| i.is_ok_with_kwd_in(&[DIR_SOURCE]));
@@ -1306,7 +1310,7 @@ impl MDConsensus {
         let dist_interval = time::Duration::from_secs(delay.1.into());
         let starting_time = lifetime.valid_after - dist_interval;
         let timebound = TimerangeBound::new(unval, starting_time..lifetime.valid_until);
-        Ok(timebound)
+        Ok((signed_str, timebound))
     }
 }
 
@@ -1457,9 +1461,8 @@ mod test {
 
         assert_eq!(certs.len(), 3);
 
-        let consensus = MDConsensus::parse(CONSENSUS)?
-            .dangerously_assume_timely()
-            .set_n_authorities(3);
+        let (_, consensus) = MDConsensus::parse(CONSENSUS)?;
+        let consensus = consensus.dangerously_assume_timely().set_n_authorities(3);
 
         let missing = consensus.key_is_correct(&[]).err().unwrap();
         assert_eq!(3, missing.len());

@@ -270,7 +270,8 @@ impl NetDirConfig {
     ) -> Result<MDConsensus> {
         let input = store.latest_consensus()?;
         let text = input.as_str()?;
-        let consensus = MDConsensus::parse(text)?
+        let (_, consensus) = MDConsensus::parse(text)?;
+        let consensus = consensus
             .extend_tolerance(time::Duration::new(86400, 0))
             .check_valid_now()?
             .set_n_authorities(self.authorities.len() as u16)
