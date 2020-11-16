@@ -99,6 +99,22 @@ pub struct AuthCertKeyIds {
     pub sk_fingerprint: rsa::RSAIdentity,
 }
 
+impl Ord for AuthCertKeyIds {
+    fn cmp(&self, other: &AuthCertKeyIds) -> std::cmp::Ordering {
+        use std::cmp::Ordering::Equal;
+        match self.id_fingerprint.cmp(&other.id_fingerprint) {
+            Equal => self.sk_fingerprint.cmp(&other.sk_fingerprint),
+            r => r,
+        }
+    }
+}
+
+impl PartialOrd for AuthCertKeyIds {
+    fn partial_cmp(&self, other: &AuthCertKeyIds) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 /// An authority certificate whose signature and validity time we
 /// haven't checked.
 pub type UncheckedAuthCert = signed::SignatureGated<timed::TimerangeBound<AuthCert>>;
