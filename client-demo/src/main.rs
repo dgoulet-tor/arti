@@ -48,6 +48,10 @@ struct Args {
     /// run a socks proxy on port N. [WILL NOT WORK YET]
     #[argh(option)]
     socksport: Option<u16>,
+
+    /// TODO: Remove this once I have a real directory client.
+    #[argh(switch)]
+    dirclient: bool,
 }
 
 async fn test_cat(circ: Arc<ClientCirc>) -> Result<()> {
@@ -263,6 +267,15 @@ fn main() -> Result<()> {
 
         if args.socksport.is_some() {
             return run_socks_proxy(dir, circmgr, args).await;
+        }
+
+        // TODO: This is just a kludge for testing.
+        if args.dirclient {
+            let req = tor_dirclient::request::ConsensusRequest::new();
+            let contents = tor_dirclient::get_resource(req, &dir, Arc::new(circmgr)).await?;
+            dbg!(contents);
+
+            return Ok(());
         }
 
         let exit_ports = &[80];

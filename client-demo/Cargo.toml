@@ -14,6 +14,7 @@ tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*" }
 tor-socksproto = { path="../tor-socksproto", version= "*" }
+tor-dirclient = { path="../tor-dirclient", version = "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
 
 anyhow = "1.0.34"
