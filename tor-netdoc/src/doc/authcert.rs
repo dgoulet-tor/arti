@@ -86,10 +86,17 @@ pub struct AuthCert {
     /// Declared time when this certificate expires.
     expires: time::SystemTime,
 
-    /// Derived field: fingerprint of identity key
-    id_fingerprint: rsa::RSAIdentity,
-    /// Derived field: fingerprint of signing key
-    sk_fingerprint: rsa::RSAIdentity,
+    /// Derived field: fingerprints of the certificate's keys
+    key_ids: AuthCertKeyIds,
+}
+
+/// A pair of key identities that identifies a certificate.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct AuthCertKeyIds {
+    /// Fingerprint of identity key
+    pub id_fingerprint: rsa::RSAIdentity,
+    /// Fingerprint of signing key
+    pub sk_fingerprint: rsa::RSAIdentity,
 }
 
 /// An authority certificate whose signature and validity time we
@@ -124,14 +131,30 @@ impl AuthCert {
         &self.signing_key
     }
 
+    /// Return an AuthCertKeyIds object describing the keys in this
+    /// certificate.
+    pub fn key_ids(&self) -> &AuthCertKeyIds {
+        &self.key_ids
+    }
+
     /// Return an RSAIdentity for this certificate's identity key.
     pub fn id_fingerprint(&self) -> &rsa::RSAIdentity {
-        &self.id_fingerprint
+        &self.key_ids.id_fingerprint
     }
 
     /// Return an RSAIdentity for this certificate's signing key.
     pub fn sk_fingerprint(&self) -> &rsa::RSAIdentity {
-        &self.sk_fingerprint
+        &self.key_ids.sk_fingerprint
+    }
+
+    /// Return the time when this certificate says it was published.
+    pub fn published(&self) -> time::SystemTime {
+        self.published
+    }
+
+    /// Return the time when this certificate says it should expire.
+    pub fn expires(&self) -> time::SystemTime {
+        self.expires
     }
 
     /// If this AuthCert was originally parsed from `haystack`, return its
@@ -272,6 +295,10 @@ impl AuthCert {
 
         let id_fingerprint = identity_key.to_rsa_identity();
         let sk_fingerprint = signing_key.to_rsa_identity();
+        let key_ids = AuthCertKeyIds {
+            id_fingerprint,
+            sk_fingerprint,
+        };
 
         let location = {
             let s = reader.str();
@@ -290,8 +317,7 @@ impl AuthCert {
             signing_key,
             published,
             expires,
-            id_fingerprint,
-            sk_fingerprint,
+            key_ids,
         };
 
         let mut signatures: Vec<Box<dyn pk::ValidatableSignature>> = Vec::new();

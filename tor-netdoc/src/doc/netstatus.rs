@@ -43,7 +43,7 @@
 //! As with the other tor-netdoc types, I'm deferring those till I know what
 //! they should be.
 
-use crate::doc::authcert::AuthCert;
+use crate::doc::authcert::{AuthCert, AuthCertKeyIds};
 use crate::parse::keyword::Keyword;
 use crate::parse::parser::{Section, SectionRules};
 use crate::parse::tokenize::{Item, ItemResult, NetDocReader};
@@ -155,11 +155,9 @@ pub struct Signature {
     /// Currently sha1 and sh256 are recognized.  Here we only support
     /// sha256.
     digestname: String,
-    /// Fingerprint of the identity key for the authority that made
+    /// Fingerprints of the keys for the authority that made
     /// this signature.
-    id_fingerprint: RSAIdentity,
-    /// Fingerprint of the signing key used to make this signature.
-    sk_fingerprint: RSAIdentity,
+    key_ids: AuthCertKeyIds,
     /// The signature itself.
     signature: Vec<u8>,
 }
@@ -1098,12 +1096,15 @@ impl Signature {
         let digestname = alg.to_string();
         let id_fingerprint = id_fp.parse::<Fingerprint>()?.into();
         let sk_fingerprint = sk_fp.parse::<Fingerprint>()?.into();
+        let key_ids = AuthCertKeyIds {
+            id_fingerprint,
+            sk_fingerprint,
+        };
         let signature = item.obj("SIGNATURE")?;
 
         Ok(Signature {
             digestname,
-            id_fingerprint,
-            sk_fingerprint,
+            key_ids,
             signature,
         })
     }
@@ -1111,8 +1112,7 @@ impl Signature {
     /// Return true if this signature has the identity key and signing key
     /// that match a given cert.
     fn matches_cert(&self, cert: &AuthCert) -> bool {
-        cert.id_fingerprint() == &self.id_fingerprint
-            && cert.sk_fingerprint() == &self.sk_fingerprint
+        cert.key_ids() == &self.key_ids
     }
 
     /// If possible, find the right certificate for checking this signature
@@ -1347,17 +1347,14 @@ impl UnvalidatedMDConsensus {
 
 impl ExternallySigned<MDConsensus> for UnvalidatedMDConsensus {
     type Key = [AuthCert];
-    type KeyHint = Vec<(RSAIdentity, RSAIdentity)>;
+    type KeyHint = Vec<AuthCertKeyIds>;
     type Error = Error;
 
     fn key_is_correct(&self, k: &Self::Key) -> result::Result<(), Self::KeyHint> {
         let (n_ok, missing) = self.siggroup.list_missing(&k[..]);
         match self.n_authorities {
             Some(n) if n_ok > (n / 2) as usize => Ok(()),
-            _ => Err(missing
-                .iter()
-                .map(|cert| (cert.id_fingerprint.clone(), cert.sk_fingerprint.clone()))
-                .collect()),
+            _ => Err(missing.iter().map(|cert| cert.key_ids.clone()).collect()),
         }
     }
     fn is_well_signed(&self, k: &Self::Key) -> result::Result<(), Self::Error> {
@@ -1376,18 +1373,19 @@ impl ExternallySigned<MDConsensus> for UnvalidatedMDConsensus {
 }
 
 impl SignatureGroup {
-    /// Helper: Return a pair of the number of possible authorities
+    /// Helper: Return a pair of the number of possible authorities'
     /// signatures in this object for which we _could_ find certs, and
     /// a list of the signatures we couldn't find certificates for.
     fn list_missing(&self, certs: &[AuthCert]) -> (usize, Vec<&Signature>) {
         let mut ok: HashSet<RSAIdentity> = HashSet::new();
         let mut missing = Vec::new();
         for sig in self.signatures.iter() {
-            if ok.contains(&sig.id_fingerprint) {
+            let id_fingerprint = &sig.key_ids.id_fingerprint;
+            if ok.contains(id_fingerprint) {
                 continue;
             }
             if sig.find_cert(certs).is_some() {
-                ok.insert(sig.id_fingerprint.clone());
+                ok.insert(id_fingerprint.clone());
                 continue;
             }
 
@@ -1406,7 +1404,8 @@ impl SignatureGroup {
         let mut ok: HashSet<RSAIdentity> = HashSet::new();
 
         for sig in self.signatures.iter() {
-            if ok.contains(&sig.id_fingerprint) {
+            let id_fingerprint = &sig.key_ids.id_fingerprint;
+            if ok.contains(id_fingerprint) {
                 // We already checked at least one signature using this
                 // authority's identity fingerprint.
                 continue;
@@ -1420,7 +1419,7 @@ impl SignatureGroup {
 
             match sig.check_signature(&self.sha256, certs) {
                 SigCheckResult::Valid => {
-                    ok.insert(sig.id_fingerprint.clone());
+                    ok.insert(id_fingerprint.clone());
                 }
                 _ => continue,
             }
