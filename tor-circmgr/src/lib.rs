@@ -42,6 +42,7 @@ use crate::path::{dirpath::DirPathBuilder, exitpath::ExitPathBuilder, PathBuilde
 // XXXX Support circuits that go away.
 // XXXX Support timing out circuits
 // XXXX Support explicitly removing circuits
+// XXXX Make this not parameterized any more?
 pub struct CircMgr<TR>
 where
     TR: tor_chanmgr::transport::Transport,
