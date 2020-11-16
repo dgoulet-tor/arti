@@ -22,6 +22,7 @@
 
 pub mod docmeta;
 mod err;
+pub mod fallback;
 mod pick;
 mod storage;
 
