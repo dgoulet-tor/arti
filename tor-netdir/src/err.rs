@@ -33,4 +33,7 @@ pub enum Error {
     /// A schema version that says we can't read it.
     #[error("unrecognized data storage schema")]
     UnrecognizedSchema,
+    /// We don't have enough directory info to build circuits
+    #[error("not enough directory information to build circuits")]
+    NotEnoughInfo,
 }

@@ -126,7 +126,8 @@ fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
         return Err(anyhow!("Missing --tor-dir or --chutney-dir"));
     }
 
-    Ok(cfg.load().context("Loading directory from disk")?)
+    let partial = cfg.load().context("Loading directory from disk")?;
+    Ok(partial.unwrap_if_sufficient()?)
 }
 
 async fn handle_socks_conn(

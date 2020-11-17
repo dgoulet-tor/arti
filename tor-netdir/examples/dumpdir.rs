@@ -20,7 +20,7 @@ fn main() -> Result<()> {
         }
         None => cfg.add_default_authorities(),
     };
-    let dir = cfg.load()?;
+    let dir = cfg.load()?.unwrap_if_sufficient()?;
 
     for r in dir.relays() {
         println!("{}", r.rsa_id())

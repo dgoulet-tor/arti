@@ -90,6 +90,22 @@ enum WeightFn {
     MeasuredOnly,
 }
 
+impl WeightFn {
+    /// Apply this weight function to the measured or unmeasured bandwidth
+    /// of a single router.
+    fn apply(&self, w: &netstatus::RouterWeight) -> u32 {
+        use netstatus::RouterWeight::*;
+        use WeightFn::*;
+        match (self, w) {
+            (Uniform, _) => 1,
+            (IncludeUnmeasured, Unmeasured(u)) => *u,
+            (IncludeUnmeasured, Measured(u)) => *u,
+            (MeasuredOnly, Unmeasured(_)) => 0,
+            (MeasuredOnly, Measured(u)) => *u,
+        }
+    }
+}
+
 /// A view of the Tor directory, suitable for use in building
 /// circuits.
 pub struct NetDir {
@@ -99,11 +115,18 @@ pub struct NetDir {
     consensus: MDConsensus,
     /// Map from SHA256 digest of microdescriptors to the
     /// microdescriptors themselves.  May include microdescriptors not
-    /// used int the consensus: if so, they need to be ignored.
+    /// used in the consensus: if so, they need to be ignored.
     mds: HashMap<MDDigest, Microdesc>,
     /// Value describing how to find the weight to use when picking a
     /// router by weight.
     weight_fn: Option<WeightFn>,
+}
+
+/// A partially build NetDir -- it can't be unwrapped until it has
+/// enough information to build safe paths.
+pub struct PartialNetDir {
+    /// The netdir that's under construction.
+    netdir: NetDir,
 }
 
 /// A view of a relay on the Tor network, suitable for building circuits.
@@ -302,7 +325,7 @@ impl NetDirConfig {
     }
 
     /// Load and validate an entire network directory.
-    pub fn load(&mut self) -> Result<NetDir> {
+    pub fn load(&mut self) -> Result<PartialNetDir> {
         let cachedir = match &self.cache_path {
             Some(pb) => pb.clone(),
             None => {
@@ -330,13 +353,25 @@ impl NetDirConfig {
             weight_fn: None,
         };
         dir.set_weight_fn();
-        Ok(dir)
+        Ok(PartialNetDir { netdir: dir })
     }
 }
 
 impl Default for NetDirConfig {
     fn default() -> Self {
         NetDirConfig::new()
+    }
+}
+
+impl PartialNetDir {
+    /// If this directory has enough information to build multihop
+    /// circuits, return it.
+    pub fn unwrap_if_sufficient(self) -> Result<NetDir> {
+        if self.netdir.have_enough_paths() {
+            Ok(self.netdir)
+        } else {
+            Err(Error::NotEnoughInfo)
+        }
     }
 }
 
@@ -361,6 +396,24 @@ impl NetDir {
     /// Return an iterator over all usable Relays.
     pub fn relays(&self) -> impl Iterator<Item = Relay<'_>> {
         self.all_relays().filter_map(UncheckedRelay::into_relay)
+    }
+    /// Return true if there is enough information in this NetDir to build
+    /// multihop circuits.
+    fn have_enough_paths(&self) -> bool {
+        // TODO: Implement the real path-based algorithm.
+        let mut total_bw = 0_u64;
+        let mut have_bw = 0_u64;
+        let weight_fn = self.weight_fn.unwrap(); // XXXXX unwrap
+        for r in self.all_relays() {
+            let w = weight_fn.apply(r.rs.weight());
+            total_bw += w as u64;
+            if r.is_usable() {
+                have_bw += w as u64;
+            }
+        }
+
+        // TODO: Do a real calculation here.
+        have_bw > (total_bw / 2)
     }
     /// Helper: Calculate the function we should use to find
     /// initial relay weights.
@@ -458,15 +511,7 @@ impl<'a> Relay<'a> {
     }
     /// Return the weight of this Relay, according to `wf`.
     fn weight(&self, wf: WeightFn) -> u32 {
-        use netstatus::RouterWeight::*;
-        use WeightFn::*;
-        match (wf, self.rs.weight()) {
-            (Uniform, _) => 1,
-            (IncludeUnmeasured, Unmeasured(u)) => *u,
-            (IncludeUnmeasured, Measured(u)) => *u,
-            (MeasuredOnly, Unmeasured(_)) => 0,
-            (MeasuredOnly, Measured(u)) => *u,
-        }
+        wf.apply(self.rs.weight())
     }
 }
 
