@@ -35,18 +35,24 @@ pub trait PathBuilder {
 }
 
 impl<'a> TorPath<'a> {
+    /// Internal: Get the first hop of the path as a ChanTarget.
+    fn first_hop(&self) -> Result<&(dyn tor_linkspec::ChanTarget + Sync)> {
+        use TorPath::*;
+        match self {
+            OneHop(r) => Ok(r),
+            Path(p) if p.is_empty() => Err(Error::NoRelays("Path with no entries!".into()).into()),
+            Path(p) => Ok(&p[0]),
+        }
+    }
+
     /// Internal: get or create a channel for the first hop of a path.
     async fn get_channel<TR>(&self, chanmgr: &ChanMgr<TR>) -> Result<Arc<Channel>>
     where
         TR: tor_chanmgr::transport::Transport,
     {
-        use TorPath::*;
-        match self {
-            OneHop(r) => Ok(chanmgr.get_or_launch(r).await?),
-
-            Path(p) if p.is_empty() => Err(Error::NoRelays("Path with no entries!".into()).into()),
-            Path(p) => Ok(chanmgr.get_or_launch(&p[0]).await?),
-        }
+        let first_hop = self.first_hop()?;
+        let channel = chanmgr.get_or_launch(first_hop).await?;
+        Ok(channel)
     }
 
     /// Try to build a circuit corresponding to this path.

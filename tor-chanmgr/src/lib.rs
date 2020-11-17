@@ -83,7 +83,7 @@ where
     /// We need to do this check since it's theoretically possible for
     /// a channel to (for example) match the Ed25519 key of the
     /// target, but not the RSA key.
-    fn check_chan_match<T: ChanTarget>(
+    fn check_chan_match<T: ChanTarget + ?Sized>(
         &self,
         target: &T,
         ch: Arc<Channel>,
@@ -98,7 +98,10 @@ where
     /// If there is already a channel launch attempt in progress, this
     /// function will wait until that launch is complete, and succeed
     /// or fail depending on its outcome.
-    pub async fn get_or_launch<T: ChanTarget + Sync>(&self, target: &T) -> Result<Arc<Channel>> {
+    pub async fn get_or_launch<T: ChanTarget + Sync + ?Sized>(
+        &self,
+        target: &T,
+    ) -> Result<Arc<Channel>> {
         let ed_identity = target.ed_identity();
         use ChannelState::*;
 
@@ -155,7 +158,10 @@ where
     }
 
     /// Helper: construct a new channel for a target.
-    async fn build_channel<T: ChanTarget + Sync>(&self, target: &T) -> Result<Arc<Channel>> {
+    async fn build_channel<T: ChanTarget + Sync + ?Sized>(
+        &self,
+        target: &T,
+    ) -> Result<Arc<Channel>> {
         // XXXX make this a parameter.
         let timeout = Duration::new(5, 0);
 
@@ -170,7 +176,10 @@ where
 
     /// Helper: construct a new channel for a target, trying only once,
     /// and not timing out.
-    async fn build_channel_once<T: ChanTarget + Sync>(&self, target: &T) -> Result<Arc<Channel>> {
+    async fn build_channel_once<T: ChanTarget + Sync + ?Sized>(
+        &self,
+        target: &T,
+    ) -> Result<Arc<Channel>> {
         use crate::transport::CertifiedConn;
         let (addr, tls) = self.transport.connect(target).await?;
 
@@ -223,7 +232,7 @@ mod test {
     #[async_trait]
     impl crate::transport::Transport for FakeTransport {
         type Connection = FakeConnection;
-        async fn connect<T: ChanTarget + Sync>(
+        async fn connect<T: ChanTarget + Sync + ?Sized>(
             &self,
             t: &T,
         ) -> Result<(std::net::SocketAddr, FakeConnection)> {

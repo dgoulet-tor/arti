@@ -23,7 +23,7 @@ pub trait Transport {
     type Connection: AsyncRead + AsyncWrite + Send + Unpin + CertifiedConn + 'static;
 
     /// Try to connect to a given relay.
-    async fn connect<T: ChanTarget + Sync>(
+    async fn connect<T: ChanTarget + Sync + ?Sized>(
         &self,
         target: &T,
     ) -> Result<(std::net::SocketAddr, Self::Connection)>;

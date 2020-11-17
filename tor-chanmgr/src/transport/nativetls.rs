@@ -37,7 +37,7 @@ impl NativeTlsTransport {
 impl Transport for NativeTlsTransport {
     type Connection = async_native_tls::TlsStream<TcpStream>;
 
-    async fn connect<T: ChanTarget + Sync>(
+    async fn connect<T: ChanTarget + Sync + ?Sized>(
         &self,
         target: &T,
     ) -> Result<(std::net::SocketAddr, Self::Connection)> {

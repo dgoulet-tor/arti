@@ -56,7 +56,7 @@ impl FakeChannel {
     pub async fn connect(self) -> Result<Self> {
         Ok(self)
     }
-    pub fn check<T: ChanTarget>(self, _target: &T, _cert: &[u8]) -> Result<Self> {
+    pub fn check<T: ChanTarget + ?Sized>(self, _target: &T, _cert: &[u8]) -> Result<Self> {
         if self.chan.addr.port() == 8686 {
             Err(tor_proto::Error::ChanProto("86ed".into()).into())
         } else {
@@ -75,7 +75,7 @@ impl FakeChannel {
     pub fn mark_closing(&self) {
         self.chan.closing.store(true, Ordering::SeqCst)
     }
-    pub fn check_match<T: ChanTarget>(&self, target: &T) -> Result<()> {
+    pub fn check_match<T: ChanTarget + ?Sized>(&self, target: &T) -> Result<()> {
         if let Some(ref id) = self.chan.want_rsa_id {
             if id != target.rsa_identity() {
                 return Err(Error::UnusableTarget("Wrong RSA".into()).into());

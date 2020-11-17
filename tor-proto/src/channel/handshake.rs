@@ -213,14 +213,18 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
     ///
     /// This is a separate function because it's likely to be somewhat
     /// CPU-intensive.
-    pub fn check<U: ChanTarget>(self, peer: &U, peer_cert: &[u8]) -> Result<VerifiedChannel<T>> {
+    pub fn check<U: ChanTarget + ?Sized>(
+        self,
+        peer: &U,
+        peer_cert: &[u8],
+    ) -> Result<VerifiedChannel<T>> {
         let peer_cert_sha256 = ll::d::Sha256::digest(peer_cert);
         self.check_internal(peer, &peer_cert_sha256[..], None)
     }
 
     /// Same as `check`, but with a less restrictive interface, for testing
     /// purposes.
-    fn check_internal<U: ChanTarget>(
+    fn check_internal<U: ChanTarget + ?Sized>(
         self,
         peer: &U,
         peer_cert_sha256: &[u8],

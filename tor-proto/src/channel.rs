@@ -232,7 +232,7 @@ impl Channel {
 
     /// Return an error if this channel is somehow mismatched with the
     /// given target.
-    pub fn check_match<T: ChanTarget>(&self, target: &T) -> Result<()> {
+    pub fn check_match<T: ChanTarget + ?Sized>(&self, target: &T) -> Result<()> {
         if &self.ed25519_id != target.ed_identity() {
             return Err(Error::ChanMismatch(format!(
                 "Identity {} does not match target {}",
