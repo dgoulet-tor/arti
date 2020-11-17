@@ -373,6 +373,15 @@ impl PartialNetDir {
             Err(Error::NotEnoughInfo)
         }
     }
+    /// Return an iterator over the digests for all of the microdescriptors
+    /// that this netdir is missing.
+    pub fn missing_microdescs(&self) -> impl Iterator<Item = &MDDigest> {
+        self.netdir.missing_microdescs()
+    }
+    /// Add a microdescriptor to this netdir.
+    pub fn add_microdesc(&mut self, md: Microdesc) {
+        self.netdir.add_microdesc(md)
+    }
 }
 
 impl NetDir {
@@ -396,6 +405,22 @@ impl NetDir {
     /// Return an iterator over all usable Relays.
     pub fn relays(&self) -> impl Iterator<Item = Relay<'_>> {
         self.all_relays().filter_map(UncheckedRelay::into_relay)
+    }
+    /// Return an iterator over the digests for all of the microdescriptors
+    /// that this netdir is missing.
+    pub fn missing_microdescs(&self) -> impl Iterator<Item = &MDDigest> {
+        self.consensus.routers().iter().filter_map(move |rs| {
+            let d = rs.md_digest();
+            if self.mds.contains_key(d) {
+                None
+            } else {
+                Some(d)
+            }
+        })
+    }
+    /// Add a microdescriptor to this netdir.
+    pub fn add_microdesc(&mut self, md: Microdesc) {
+        self.mds.insert(*md.digest(), md);
     }
     /// Return true if there is enough information in this NetDir to build
     /// multihop circuits.
