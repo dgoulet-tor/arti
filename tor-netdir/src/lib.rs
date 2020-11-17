@@ -106,6 +106,17 @@ impl WeightFn {
     }
 }
 
+/// Internal type: wraps Option<Microdesc> to prevent confusion.
+///
+/// (Having an Option type be the value of a HashMap makes things a
+/// bit confused IMO.)
+#[derive(Clone, Debug, Default)]
+struct MDEntry {
+    /// The microdescriptor in this entry, or None if a microdescriptor
+    /// is wanted but not present.
+    md: Option<Microdesc>,
+}
+
 /// A view of the Tor directory, suitable for use in building
 /// circuits.
 pub struct NetDir {
@@ -114,12 +125,11 @@ pub struct NetDir {
     /// about it
     consensus: MDConsensus,
     /// Map from SHA256 digest of microdescriptors to the
-    /// microdescriptors themselves.  May include microdescriptors not
-    /// used in the consensus: if so, they need to be ignored.
-    mds: HashMap<MDDigest, Microdesc>,
+    /// microdescriptors themselves.
+    mds: HashMap<MDDigest, MDEntry>,
     /// Value describing how to find the weight to use when picking a
     /// router by weight.
-    weight_fn: Option<WeightFn>,
+    weight_fn: WeightFn,
 }
 
 /// A partially build NetDir -- it can't be unwrapped until it has
@@ -306,7 +316,8 @@ impl NetDirConfig {
     ///
     /// Warn about invalid microdescs, but don't give an error unless there
     /// is a complete failure.
-    fn load_mds(&self, store: &LegacyStore, res: &mut HashMap<MDDigest, Microdesc>) -> Result<()> {
+    fn load_mds(&self, store: &LegacyStore) -> Result<Vec<Microdesc>> {
+        let mut res = Vec::new();
         for input in store.microdescs().filter_map(Result::ok) {
             let text = input.as_str()?;
             for annotated in
@@ -315,13 +326,11 @@ impl NetDirConfig {
                 let r = annotated.map(microdesc::AnnotatedMicrodesc::into_microdesc);
                 match r {
                     Err(e) => warn!("bad microdesc: {}", e),
-                    Ok(md) => {
-                        res.insert(*md.digest(), md);
-                    }
+                    Ok(md) => res.push(md),
                 }
             }
         }
-        Ok(())
+        Ok(res)
     }
 
     /// Load and validate an entire network directory.
@@ -343,17 +352,19 @@ impl NetDirConfig {
         let certs = self.load_certs(&store)?;
         let consensus = self.load_consensus(&store, &certs)?;
         info!("Loaded consensus");
-        let mut mds = HashMap::new();
-        self.load_mds(&store, &mut mds)?;
-        info!("Loaded {} microdescriptors", mds.len());
+        let mut partial = PartialNetDir::new(consensus);
 
-        let mut dir = NetDir {
-            consensus,
-            mds,
-            weight_fn: None,
-        };
-        dir.set_weight_fn();
-        Ok(PartialNetDir { netdir: dir })
+        let mds = self.load_mds(&store)?;
+        info!("Loaded {} microdescriptors", mds.len());
+        let mut n_added = 0_usize;
+        for md in mds {
+            if partial.add_microdesc(md) {
+                n_added += 1;
+            }
+        }
+        info!("Used {} microdescriptors", n_added);
+
+        Ok(partial)
     }
 }
 
@@ -364,6 +375,21 @@ impl Default for NetDirConfig {
 }
 
 impl PartialNetDir {
+    /// Create a new PartialNetDir with a given consensus, and no
+    /// microdecriptors loaded.
+    fn new(consensus: MDConsensus) -> Self {
+        let weight_fn = pick_weight_fn(&consensus);
+        let mut netdir = NetDir {
+            consensus,
+            mds: HashMap::new(),
+            weight_fn,
+        };
+
+        for rs in netdir.consensus.routers().iter() {
+            netdir.mds.insert(*rs.md_digest(), MDEntry::default());
+        }
+        PartialNetDir { netdir }
+    }
     /// If this directory has enough information to build multihop
     /// circuits, return it.
     pub fn unwrap_if_sufficient(self) -> Result<NetDir> {
@@ -379,7 +405,7 @@ impl PartialNetDir {
         self.netdir.missing_microdescs()
     }
     /// Add a microdescriptor to this netdir.
-    pub fn add_microdesc(&mut self, md: Microdesc) {
+    pub fn add_microdesc(&mut self, md: Microdesc) -> bool {
         self.netdir.add_microdesc(md)
     }
 }
@@ -391,7 +417,10 @@ impl NetDir {
         &'a self,
         rs: &'a netstatus::MDConsensusRouterStatus,
     ) -> UncheckedRelay<'a> {
-        let md = self.mds.get(rs.md_digest());
+        let md = match self.mds.get(rs.md_digest()) {
+            Some(MDEntry { md: Some(md) }) => Some(md),
+            _ => None,
+        };
         UncheckedRelay { rs, md }
     }
     /// Return an iterator over all Relay objects, including invalid ones
@@ -418,9 +447,16 @@ impl NetDir {
             }
         })
     }
-    /// Add a microdescriptor to this netdir.
-    pub fn add_microdesc(&mut self, md: Microdesc) {
-        self.mds.insert(*md.digest(), md);
+    /// Add a microdescriptor to this netdir, if it was wanted.
+    ///
+    /// Return true if it was indeed wanted.
+    pub fn add_microdesc(&mut self, md: Microdesc) -> bool {
+        if let Some(entry) = self.mds.get_mut(md.digest()) {
+            entry.md = Some(md);
+            true
+        } else {
+            false
+        }
     }
     /// Return true if there is enough information in this NetDir to build
     /// multihop circuits.
@@ -428,9 +464,8 @@ impl NetDir {
         // TODO: Implement the real path-based algorithm.
         let mut total_bw = 0_u64;
         let mut have_bw = 0_u64;
-        let weight_fn = self.weight_fn.unwrap(); // XXXXX unwrap
         for r in self.all_relays() {
-            let w = weight_fn.apply(r.rs.weight());
+            let w = self.weight_fn.apply(r.rs.weight());
             total_bw += w as u64;
             if r.is_usable() {
                 have_bw += w as u64;
@@ -439,27 +474,6 @@ impl NetDir {
 
         // TODO: Do a real calculation here.
         have_bw > (total_bw / 2)
-    }
-    /// Helper: Calculate the function we should use to find
-    /// initial relay weights.
-    fn pick_weight_fn(&self) -> WeightFn {
-        let has_measured = self.relays().any(|r| r.rs.weight().is_measured());
-        let has_nonzero = self.relays().any(|r| r.rs.weight().is_nonzero());
-        if !has_nonzero {
-            WeightFn::Uniform
-        } else if !has_measured {
-            WeightFn::IncludeUnmeasured
-        } else {
-            WeightFn::MeasuredOnly
-        }
-    }
-    /// Cache the correct weighting function to use for this directory
-    pub fn set_weight_fn(&mut self) {
-        self.weight_fn = Some(self.pick_weight_fn())
-    }
-    /// Return the value of self.weight_fn that we should use.
-    fn get_weight_fn(&self) -> WeightFn {
-        self.weight_fn.unwrap_or_else(|| self.pick_weight_fn())
     }
     /// Chose a relay at random.
     ///
@@ -475,10 +489,24 @@ impl NetDir {
         R: rand::Rng,
         F: Fn(&Relay<'a>, u32) -> u32,
     {
-        let weight_fn = self.get_weight_fn();
         pick::pick_weighted(rng, self.relays(), |r| {
-            reweight(r, r.weight(weight_fn)) as u64
+            reweight(r, r.weight(self.weight_fn)) as u64
         })
+    }
+}
+
+/// Helper: Calculate the function we should use to find
+/// initial relay weights.
+fn pick_weight_fn(consensus: &MDConsensus) -> WeightFn {
+    let routers = consensus.routers();
+    let has_measured = routers.iter().any(|rs| rs.weight().is_measured());
+    let has_nonzero = routers.iter().any(|rs| rs.weight().is_nonzero());
+    if !has_nonzero {
+        WeightFn::Uniform
+    } else if !has_measured {
+        WeightFn::IncludeUnmeasured
+    } else {
+        WeightFn::MeasuredOnly
     }
 }
 
