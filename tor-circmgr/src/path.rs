@@ -7,7 +7,7 @@ pub mod dirpath;
 pub mod exitpath;
 
 use tor_chanmgr::ChanMgr;
-use tor_netdir::{NetDir, Relay};
+use tor_netdir::{fallback::FallbackDir, NetDir, Relay};
 use tor_proto::channel::Channel;
 use tor_proto::circuit::ClientCirc;
 
@@ -18,11 +18,12 @@ use crate::{Error, Result};
 
 /// A list of Tor nodes through the network.
 pub enum TorPath<'a> {
-    /// A single-hop path for use with a directory cache.
-    ///
-    /// TODO: This needs to be a more general type, to support anything that can be
-    /// a ChanTarget.
-    OneHop(Relay<'a>),
+    /// A single-hop path for use with a directory cache, when a relay is
+    /// known.
+    OneHop(Relay<'a>), // This could just be a routerstatus.
+    /// A single-hop path for use with a directory cache, when we don't have
+    /// a consensus.
+    FallbackOneHop(&'a FallbackDir),
     /// A multi-hop path, containing one or more paths.
     Path(Vec<Relay<'a>>),
 }
@@ -31,6 +32,8 @@ pub enum TorPath<'a> {
 pub trait PathBuilder {
     /// Try to create and return a path corresponding to the requirements of
     /// this builder.
+    // XXXX perhaps should have an enum that can be a netdir, or not?
+    // XXXX Perhaps we don't need this trait.
     fn pick_path<'a, R: Rng>(&self, rng: &mut R, netdir: &'a NetDir) -> Result<TorPath<'a>>;
 }
 
@@ -40,6 +43,7 @@ impl<'a> TorPath<'a> {
         use TorPath::*;
         match self {
             OneHop(r) => Ok(r),
+            FallbackOneHop(f) => Ok(*f),
             Path(p) if p.is_empty() => Err(Error::NoRelays("Path with no entries!".into()).into()),
             Path(p) => Ok(&p[0]),
         }
@@ -74,7 +78,7 @@ impl<'a> TorPath<'a> {
         });
 
         match self {
-            OneHop(_) => {
+            OneHop(_) | FallbackOneHop(_) => {
                 let circ = pcirc.create_firsthop_fast(rng).await?;
                 Ok(circ)
             }
