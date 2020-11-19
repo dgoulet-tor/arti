@@ -511,7 +511,7 @@ impl UncheckedCert {
         let signing_key = self
             .cert
             .signed_with
-            .ok_or_else(|| Error::BadMessage("Missing public key on cert"))?;
+            .ok_or(Error::BadMessage("Missing public key on cert"))?;
         let signature =
             ed25519::ValidatableEd25519Signature::new(signing_key, self.signature, &self.text[..]);
         Ok((self.dangerously_assume_wellsigned(), signature))
