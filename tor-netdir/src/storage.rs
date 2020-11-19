@@ -3,7 +3,7 @@
 #![allow(unused)]
 
 pub(crate) mod legacy;
-pub(crate) mod sqlite;
+pub mod sqlite;
 
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 // use std::collections::HashMap;
 
 #[derive(Debug)]
-pub(crate) enum InputString {
+pub enum InputString {
     Utf8(String),
     UncheckedBytes(Vec<u8>),
     MappedBytes(memmap::Mmap),

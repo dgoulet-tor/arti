@@ -127,7 +127,7 @@ fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
     }
 
     let partial = cfg.load().context("Loading directory from disk")?;
-    Ok(partial.unwrap_if_sufficient()?)
+    Ok(partial.unwrap_if_sufficient().unwrap())
 }
 
 async fn handle_socks_conn(
@@ -256,28 +256,40 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let dir = get_netdir(&args)?;
-    // TODO CONFORMANCE: we should stop now if there are required
-    // protovers we don't support.
-
     tor_rtcompat::task::block_on(async {
         let transport = NativeTlsTransport::new();
         let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(transport));
 
         let circmgr = tor_circmgr::CircMgr::new(Arc::clone(&chanmgr));
 
-        if args.socksport.is_some() {
-            return run_socks_proxy(dir, circmgr, args).await;
-        }
-
         // TODO: This is just a kludge for testing.
         if args.dirclient {
-            let req = tor_dirclient::request::ConsensusRequest::new();
-            let contents =
-                tor_dirclient::get_resource(req, (&dir).into(), Arc::new(circmgr)).await?;
-            dbg!(contents);
+            let fb = tor_netdir::fallback::FallbackSet::new();
+            let store = tor_netdir::storage::sqlite::SqliteStore::from_path("/home/nickm/.arti")?;
+            let store = tor_dirmgr::DirStoreHandle::new(store);
+            let circmgr = Arc::new(circmgr);
+            let mut cfg = tor_netdir::NetDirConfig::new();
+            cfg.add_default_authorities();
+            let authorities = cfg.into_authorities();
 
+            let outcome = tor_dirmgr::bootstrap_directory(
+                authorities,
+                store.clone(),
+                (&fb).into(),
+                Arc::clone(&circmgr),
+            )
+            .await;
+
+            outcome?;
             return Ok(());
+        }
+
+        let dir = get_netdir(&args)?;
+        // TODO CONFORMANCE: we should stop now if there are required
+        // protovers we don't support.
+
+        if args.socksport.is_some() {
+            return run_socks_proxy(dir, circmgr, args).await;
         }
 
         let exit_ports = &[80];

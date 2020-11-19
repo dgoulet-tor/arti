@@ -14,8 +14,6 @@ use std::sync::Arc;
 // XXXX Remove this.
 #[allow(unused_assignments)]
 
-// TODO: Don't take a NetDir, instead take some trait that can deal with
-// possibility of fallback dirs or missing mds.
 pub async fn get_resource<CR, TR>(
     req: CR,
     netdir: DirInfo<'_>,

@@ -35,7 +35,7 @@ impl ConsensusRequest {
         self.last_consensus_sha3_256.push(d);
     }
 
-    pub fn set_last_consensus_date<T>(&mut self, when: SystemTime) {
+    pub fn set_last_consensus_date(&mut self, when: SystemTime) {
         self.last_consensus_published = Some(when);
     }
 }
@@ -158,12 +158,16 @@ impl ClientRequest for MicrodescRequest {
     fn into_request(mut self) -> Result<http::Request<()>> {
         self.digests.sort_unstable();
 
-        let ids: Vec<String> = self.digests.iter().map(hex::encode).collect();
+        let ids: Vec<String> = self
+            .digests
+            .iter()
+            .map(|d| base64::encode_config(d, base64::STANDARD_NO_PAD))
+            .collect();
         let uri = format!("/tor/micro/d/{}.z", &ids.join("-"));
-
         let req = http::Request::builder().method("GET").uri(uri);
 
         let req = add_common_headers(req);
+
         Ok(req.body(())?)
     }
 }

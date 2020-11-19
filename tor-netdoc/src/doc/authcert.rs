@@ -68,7 +68,7 @@ lazy_static! {
 /// keys are the ones used to sign votes and consensuses; the identity
 /// keys can be kept offline.
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AuthCert {
     /// Where we found this AuthCert within the string containing it.
     ///

@@ -1333,6 +1333,7 @@ impl MDConsensus {
 /// check_siganture() on that result with the set of certs that you
 /// have.  Make sure only to provide authority certificates representing
 /// real authorities!
+#[derive(Debug, Clone)]
 pub struct UnvalidatedMDConsensus {
     /// The consensus object. We don't want to expose this until it's
     /// validated.
@@ -1355,6 +1356,11 @@ impl UnvalidatedMDConsensus {
             n_authorities: Some(n_authorities),
             ..self
         }
+    }
+
+    /// Return the lifetime of this unvalidated consensus
+    pub fn peek_lifetime(&self) -> &Lifetime {
+        self.consensus.lifetime()
     }
 }
 

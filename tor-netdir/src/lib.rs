@@ -24,12 +24,12 @@ pub mod docmeta;
 mod err;
 pub mod fallback;
 mod pick;
-mod storage;
+pub mod storage;
 
 use crate::storage::legacy::LegacyStore;
 
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
-use tor_netdoc::doc::authcert::AuthCert;
+use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
 use tor_netdoc::doc::microdesc::{self, MDDigest, Microdesc};
 use tor_netdoc::doc::netstatus::{self, MDConsensus};
 use tor_netdoc::AllowAnnotations;
@@ -55,6 +55,17 @@ pub struct Authority {
     /// this authority.
     // TODO: It would be lovely to use a better hash for these identities.
     v3ident: RSAIdentity,
+}
+
+impl Authority {
+    /// Return true if this authority matches a given certificate.
+    pub fn matches_cert(&self, cert: &AuthCert) -> bool {
+        &self.v3ident == cert.id_fingerprint()
+    }
+    /// Return true if this authority matches a given key ID.
+    pub fn matches_keyid(&self, id: &AuthCertKeyIds) -> bool {
+        self.v3ident == id.id_fingerprint
+    }
 }
 
 /// Configuration object for reading directory information from disk.
@@ -136,6 +147,7 @@ pub struct NetDir {
 
 /// A partially build NetDir -- it can't be unwrapped until it has
 /// enough information to build safe paths.
+#[derive(Debug, Clone)]
 pub struct PartialNetDir {
     /// The netdir that's under construction.
     netdir: NetDir,
@@ -218,6 +230,12 @@ impl NetDirConfig {
             .unwrap();
     }
 
+    /// Consume this configuration and return its authority list
+    /// TODO: get rid of this function,, or refactor it, or something.
+    pub fn into_authorities(self) -> Vec<Authority> {
+        self.authorities
+    }
+
     /// Read the authorities from a torrc file in a Chutney directory.
     ///
     /// # Limitations
@@ -270,10 +288,7 @@ impl NetDirConfig {
                 let r = (|| {
                     let cert = cert?.check_signature()?.check_valid_now()?;
 
-                    let found = self
-                        .authorities
-                        .iter()
-                        .any(|a| &a.v3ident == cert.id_fingerprint());
+                    let found = self.authorities.iter().any(|a| a.matches_cert(&cert));
                     if !found {
                         return Err(Error::Unwanted("no such authority"));
                     }
@@ -370,6 +385,18 @@ impl NetDirConfig {
     }
 }
 
+/// A partial or full network directory that we can download
+/// microdescriptors for.
+pub trait MDReceiver {
+    /// Return an iterator over the digests for all of the microdescriptors
+    /// that this netdir is missing.
+    fn missing_microdescs(&self) -> Box<dyn Iterator<Item = &MDDigest> + '_>;
+    /// Add a microdescriptor to this netdir, if it was wanted.
+    ///
+    /// Return true if it was indeed wanted.
+    fn add_microdesc(&mut self, md: Microdesc) -> bool;
+}
+
 impl Default for NetDirConfig {
     fn default() -> Self {
         NetDirConfig::new()
@@ -379,7 +406,7 @@ impl Default for NetDirConfig {
 impl PartialNetDir {
     /// Create a new PartialNetDir with a given consensus, and no
     /// microdecriptors loaded.
-    fn new(consensus: MDConsensus) -> Self {
+    pub fn new(consensus: MDConsensus) -> Self {
         let weight_fn = pick_weight_fn(&consensus);
         let mut netdir = NetDir {
             consensus,
@@ -394,20 +421,20 @@ impl PartialNetDir {
     }
     /// If this directory has enough information to build multihop
     /// circuits, return it.
-    pub fn unwrap_if_sufficient(self) -> Result<NetDir> {
+    pub fn unwrap_if_sufficient(self) -> std::result::Result<NetDir, PartialNetDir> {
         if self.netdir.have_enough_paths() {
             Ok(self.netdir)
         } else {
-            Err(Error::NotEnoughInfo)
+            Err(self)
         }
     }
-    /// Return an iterator over the digests for all of the microdescriptors
-    /// that this netdir is missing.
-    pub fn missing_microdescs(&self) -> impl Iterator<Item = &MDDigest> {
+}
+
+impl MDReceiver for PartialNetDir {
+    fn missing_microdescs(&self) -> Box<dyn Iterator<Item = &MDDigest> + '_> {
         self.netdir.missing_microdescs()
     }
-    /// Add a microdescriptor to this netdir.
-    pub fn add_microdesc(&mut self, md: Microdesc) -> bool {
+    fn add_microdesc(&mut self, md: Microdesc) -> bool {
         self.netdir.add_microdesc(md)
     }
 }
@@ -436,29 +463,6 @@ impl NetDir {
     /// Return an iterator over all usable Relays.
     pub fn relays(&self) -> impl Iterator<Item = Relay<'_>> {
         self.all_relays().filter_map(UncheckedRelay::into_relay)
-    }
-    /// Return an iterator over the digests for all of the microdescriptors
-    /// that this netdir is missing.
-    pub fn missing_microdescs(&self) -> impl Iterator<Item = &MDDigest> {
-        self.consensus.routers().iter().filter_map(move |rs| {
-            let d = rs.md_digest();
-            if self.mds.contains_key(d) {
-                None
-            } else {
-                Some(d)
-            }
-        })
-    }
-    /// Add a microdescriptor to this netdir, if it was wanted.
-    ///
-    /// Return true if it was indeed wanted.
-    pub fn add_microdesc(&mut self, md: Microdesc) -> bool {
-        if let Some(entry) = self.mds.get_mut(md.digest()) {
-            entry.md = Some(md);
-            true
-        } else {
-            false
-        }
     }
     /// Return true if there is enough information in this NetDir to build
     /// multihop circuits.
@@ -494,6 +498,26 @@ impl NetDir {
         pick::pick_weighted(rng, self.relays(), |r| {
             reweight(r, r.weight(self.weight_fn)) as u64
         })
+    }
+}
+
+impl MDReceiver for NetDir {
+    fn missing_microdescs(&self) -> Box<dyn Iterator<Item = &MDDigest> + '_> {
+        Box::new(self.consensus.routers().iter().filter_map(move |rs| {
+            let d = rs.md_digest();
+            match self.mds.get(d) {
+                Some(MDEntry { md: Some(_) }) => None,
+                _ => Some(d),
+            }
+        }))
+    }
+    fn add_microdesc(&mut self, md: Microdesc) -> bool {
+        if let Some(entry) = self.mds.get_mut(md.digest()) {
+            entry.md = Some(md);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -586,7 +610,6 @@ impl<'a> tor_linkspec::CircTarget for Relay<'a> {
     fn ntor_onion_key(&self) -> &ll::pk::curve25519::PublicKey {
         self.md.ntor_key()
     }
-    /// Return the subprotocols implemented by this relay.
     fn protovers(&self) -> &tor_protover::Protocols {
         self.rs.protovers()
     }

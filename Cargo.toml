@@ -19,5 +19,6 @@ members = [
     "tor-chanmgr",
     "tor-circmgr",
     "tor-dirclient",
+    "tor-dirmgr",
     "client-demo",
     ]

@@ -1,5 +1,7 @@
 //! Net document storage backed by sqlite3. DOCDOC say more
 
+// XXXX Does this belong in dirmgr instead of netdir? I think it might.
+
 use crate::docmeta::ConsensusMeta;
 use crate::storage::InputString;
 use crate::{Error, Result};
@@ -19,12 +21,23 @@ use chrono::Duration as CDuration;
 use rusqlite::ToSql;
 use rusqlite::{params, OptionalExtension, Transaction, NO_PARAMS};
 
-pub(crate) struct SqliteStore {
+pub struct SqliteStore {
     conn: rusqlite::Connection,
     path: PathBuf,
 }
 
 impl SqliteStore {
+    pub fn from_path<P>(path: P) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let path = path.as_ref();
+        let sqlpath = path.join("dir.sqlite3");
+        let blobpath = path.join("dir_blobs/");
+        let conn = rusqlite::Connection::open(&sqlpath)?;
+        SqliteStore::from_conn(conn, &blobpath)
+    }
+
     pub fn from_conn<P>(conn: rusqlite::Connection, path: P) -> Result<Self>
     where
         P: AsRef<Path>,
@@ -172,7 +185,12 @@ impl SqliteStore {
         Ok(fname)
     }
 
-    pub fn store_consensus(&mut self, cmeta: &ConsensusMeta, contents: &str) -> Result<()> {
+    pub fn store_consensus(
+        &mut self,
+        cmeta: &ConsensusMeta,
+        pending: bool,
+        contents: &str,
+    ) -> Result<()> {
         let lifetime = cmeta.lifetime();
         let sha3_256_digest = cmeta.sha3_256_of_signed();
         let valid_after: DateTime<Utc> = lifetime.valid_after().into();
@@ -200,7 +218,7 @@ impl SqliteStore {
                 fresh_until,
                 valid_until,
                 "microdesc",
-                false, // Eventually we should support pending consensuses
+                pending,
                 h.digeststr
             ],
         )?;
@@ -209,14 +227,30 @@ impl SqliteStore {
         Ok(())
     }
 
-    pub fn latest_consensus(&self) -> Result<InputString> {
-        let (va, vu, filename): (DateTime<Utc>, DateTime<Utc>, String) =
-            self.conn
-                .query_row(FIND_CONSENSUS, NO_PARAMS, |row| row.try_into())?;
-        // XXXX handle error if there is no row.
+    pub fn latest_consensus_time(&self) -> Result<Option<DateTime<Utc>>> {
+        if let Some(va) = self
+            .conn
+            .query_row(FIND_LATEST_CONSENSUS_TIME, NO_PARAMS, |row| row.get(0))
+            .optional()?
+        {
+            Ok(Some(va))
+        } else {
+            Ok(None)
+        }
+    }
 
-        let full_path = self.blob_fname(filename)?;
-        InputString::load(full_path)
+    pub fn latest_consensus(&self, pending: bool) -> Result<Option<InputString>> {
+        let rv: Option<(DateTime<Utc>, DateTime<Utc>, String)> = self
+            .conn
+            .query_row(FIND_CONSENSUS, params![pending], |row| row.try_into())
+            .optional()?;
+
+        if let Some((va, vu, filename)) = rv {
+            let full_path = self.blob_fname(filename)?;
+            Ok(Some(InputString::load(full_path)?))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn store_authcerts(&mut self, certs: &[(AuthCert, &str)]) -> Result<()> {
@@ -234,7 +268,7 @@ impl SqliteStore {
         Ok(())
     }
 
-    pub fn authcerts(&self, certs: &[&AuthCertKeyIds]) -> Result<HashMap<AuthCertKeyIds, String>> {
+    pub fn authcerts(&self, certs: &[AuthCertKeyIds]) -> Result<HashMap<AuthCertKeyIds, String>> {
         let mut result = HashMap::new();
         // XXXX Do I need to get a transaction here for performance?
         let mut stmt = self.conn.prepare(FIND_AUTHCERT)?;
@@ -407,6 +441,14 @@ const FIND_CONSENSUS: &str = "
   SELECT valid_after, valid_until, filename
   FROM Consensuses
   INNER JOIN ExtDocs ON ExtDocs.digest = Consensuses.digest
+  WHERE pending = ? AND flavor = 'microdesc'
+  ORDER BY valid_until DESC
+  LIMIT 1;
+";
+
+const FIND_LATEST_CONSENSUS_TIME: &str = "
+  SELECT valid_after
+  FROM Consensuses
   WHERE pending = 0 AND flavor = 'microdesc'
   ORDER BY valid_until DESC
   LIMIT 1;
@@ -588,9 +630,9 @@ mod test {
             [0xAB; 32],
         );
 
-        store.store_consensus(&cmeta, "Pretend this is a consensus")?;
+        store.store_consensus(&cmeta, false, "Pretend this is a consensus")?;
 
-        let consensus = store.latest_consensus()?;
+        let consensus = store.latest_consensus(false)?.unwrap();
         assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
 
         Ok(())
