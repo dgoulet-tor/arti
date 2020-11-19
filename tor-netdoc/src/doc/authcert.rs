@@ -101,11 +101,9 @@ pub struct AuthCertKeyIds {
 
 impl Ord for AuthCertKeyIds {
     fn cmp(&self, other: &AuthCertKeyIds) -> std::cmp::Ordering {
-        use std::cmp::Ordering::Equal;
-        match self.id_fingerprint.cmp(&other.id_fingerprint) {
-            Equal => self.sk_fingerprint.cmp(&other.sk_fingerprint),
-            r => r,
-        }
+        self.id_fingerprint
+            .cmp(&other.id_fingerprint)
+            .then_with(|| self.sk_fingerprint.cmp(&other.sk_fingerprint))
     }
 }
 
