@@ -67,7 +67,7 @@ use lazy_static::lazy_static;
 /// In a consensus, this type describes when the consensus may safely
 /// be used.  In a vote, this type describes the proposed lifetime for a
 /// consensus.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Lifetime {
     /// Time at which the document becomes valid
     valid_after: time::SystemTime,
@@ -124,6 +124,7 @@ impl Lifetime {
 /// current weighting parameters for path selection, and so on.  They're
 /// encoded with a space-separated K=V format.
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct NetParams<T> {
     /// Map from keys to values.
     params: HashMap<String, T>,
@@ -138,6 +139,7 @@ impl<T> NetParams<T> {
 
 /// A list of subprotocol versions that implementors should/must provide.
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct ProtoStatus {
     /// Set of protocols that are recommended; if we're missing a protocol
     /// in this list we should warn the user.
@@ -149,6 +151,7 @@ pub struct ProtoStatus {
 
 /// The signature of a single directory authority on a networkstatus document.
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct Signature {
     /// The name of the digest algorithm used to make the signature.
     ///
@@ -164,6 +167,7 @@ pub struct Signature {
 
 /// A collection of signatures that can be checked on a networkstatus document
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct SignatureGroup {
     /// The sha256 of the document itself
     sha256: [u8; 32],
@@ -173,6 +177,7 @@ pub struct SignatureGroup {
 
 /// A shared-random value produced by the directory authorities.
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 struct SharedRandVal {
     /// How many authorities revealed shares that contributed to this value.
     n_reveals: u8,
@@ -190,6 +195,7 @@ struct SharedRandVal {
 /// NOTE: this type is separate from the header parts that are only in
 /// votes or only in consensuses, even though we don't implement votes yet.
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 struct CommonHeader {
     /// What kind of consensus document is this?  Absent in votes and
     /// in ns-flavored consensuses. Currently "microdesc" and "ns" are
@@ -217,6 +223,7 @@ struct CommonHeader {
 
 /// The header of a consensus networkstatus.
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 struct ConsensusHeader {
     /// Header fields common to votes and consensuses
     hdr: CommonHeader,
@@ -234,6 +241,7 @@ struct ConsensusHeader {
 ///
 /// (Corresponds to a dir-source line.)
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 struct DirSource {
     /// human-readable nickname for this authority.
     nickname: String,
@@ -300,6 +308,7 @@ bitflags! {
 
 /// Recognized weight fields on a single relay in a consensus
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub enum RouterWeight {
     // TODO SPEC: Document that these are u32 in dir-spec.txt
     /// An unmeasured weight for a router.
@@ -326,6 +335,7 @@ impl RouterWeight {
 
 /// A single relay's status, as represented in a microdesc consensus.
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct MDConsensusRouterStatus {
     /// The nickname for this relay.
     ///
@@ -403,6 +413,7 @@ impl MDConsensusRouterStatus {
 
 /// All information about a single authority, as represented in a consensus
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 struct ConsensusVoterInfo {
     /// Contents of the dirsource line about an authority
     dir_source: DirSource,
@@ -415,6 +426,7 @@ struct ConsensusVoterInfo {
 
 /// The signed footer of a consensus netstatus.
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 struct Footer {
     /// Weights to be applied to certain classes of relays when choosing
     /// for different roles.
@@ -429,6 +441,7 @@ struct Footer {
 /// TODO: This should possibly turn into a parameterized type, to represent
 /// votes and ns consensuses.
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct MDConsensus {
     /// Part of the header shared by all consensus types.
     header: ConsensusHeader,

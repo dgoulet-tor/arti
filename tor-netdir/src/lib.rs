@@ -47,7 +47,7 @@ pub use err::Error;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// A single authority that signs a consensus directory.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Authority {
     /// A memorable nickname for this authority.
     name: String,
@@ -61,6 +61,7 @@ pub struct Authority {
 ///
 /// To read a directory, create one of these, configure it, then call
 /// its load() function.
+#[derive(Debug, Clone)]
 pub struct NetDirConfig {
     /// A list of authorities to trust.
     ///
@@ -78,7 +79,7 @@ pub struct NetDirConfig {
 /// Internal: how should we find the base weight of each relay?  This
 /// value is global over a whole directory, and depends on the bandwidth
 /// weights in the consensus.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum WeightFn {
     /// There are no weights at all in the consensus: weight every
     /// relay as 1.
@@ -119,6 +120,7 @@ struct MDEntry {
 
 /// A view of the Tor directory, suitable for use in building
 /// circuits.
+#[derive(Debug, Clone)]
 pub struct NetDir {
     /// A microdescriptor consensus that lists the members of the network,
     /// and maps each one to a 'microdescriptor' that has more information

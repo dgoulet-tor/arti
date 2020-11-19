@@ -1,7 +1,7 @@
 //! Code for building paths to an exit relay.
 
 use super::*;
-use crate::Error;
+use crate::{DirInfo, Error};
 
 /// A PathBuilder that builds a path to an exit node supporting a given
 /// set of ports.
@@ -24,13 +24,17 @@ impl ExitPathBuilder {
     fn ports_supported_by(&self, r: &Relay<'_>) -> bool {
         self.wantports.iter().all(|p| r.supports_exit_port(*p))
     }
-}
 
-impl PathBuilder for ExitPathBuilder {
-    fn pick_path<'a, R: Rng>(&self, rng: &mut R, netdir: &'a NetDir) -> Result<TorPath<'a>> {
+    /// Try to create and return a path corresponding to the requirements of
+    /// this builder.
+    pub fn pick_path<'a, R: Rng>(&self, rng: &mut R, netdir: DirInfo<'a>) -> Result<TorPath<'a>> {
         // XXXX weight correctly for each position.
         // TODO: implement families
         // TODO: implement guards
+        let netdir = match netdir {
+            DirInfo::Fallbacks(_) => return Err(Error::NeedConsensus.into()),
+            DirInfo::Directory(d) => d,
+        };
         let exit = netdir
             .pick_relay(rng, |r, weight| {
                 if self.ports_supported_by(r) {

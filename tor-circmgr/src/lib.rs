@@ -13,7 +13,7 @@
 #![deny(clippy::missing_docs_in_private_items)]
 
 use tor_chanmgr::ChanMgr;
-use tor_netdir::NetDir;
+use tor_netdir::{fallback::FallbackSet, NetDir};
 use tor_proto::circuit::ClientCirc;
 
 use anyhow::Result;
@@ -30,7 +30,7 @@ pub mod path;
 
 pub use err::Error;
 
-use crate::path::{dirpath::DirPathBuilder, exitpath::ExitPathBuilder, PathBuilder, TorPath};
+use crate::path::{dirpath::DirPathBuilder, exitpath::ExitPathBuilder, TorPath};
 
 /// A Circuit Manager (CircMgr) manages a set of circuits, returning them
 /// when they're suitable, and launching them if they don't already exist.
@@ -63,11 +63,37 @@ where
 
 /// Counter for allocating unique-ish identifiers for circuits
 static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
-#[derive(Copy, Clone, Hash, Eq, PartialEq)]
+
+/// Represents what we know about the Tor network.
+///
+/// This can either be a comlete directory, or a list of fallbacks.
+///
+/// Not every DirInfo can be used to build every kind of circuit:
+/// if you try to build a path with an inadequate DirInfo, you'll get a
+/// NeedConsensus error.
+#[derive(Debug, Copy, Clone)]
+pub enum DirInfo<'a> {
+    /// A list of fallbacks, for use when we don't know a network directory.
+    Fallbacks(&'a FallbackSet),
+    /// A complete network directory
+    Directory(&'a NetDir),
+}
+
+impl<'a> Into<DirInfo<'a>> for &'a FallbackSet {
+    fn into(self) -> DirInfo<'a> {
+        DirInfo::Fallbacks(self)
+    }
+}
+impl<'a> Into<DirInfo<'a>> for &'a NetDir {
+    fn into(self) -> DirInfo<'a> {
+        DirInfo::Directory(self)
+    }
+}
 
 /// A unique identifier for a circuit in a circuit manager.
 ///
 /// TODO: We should probably refactor not to need this.
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
 struct CircEntId {
     /// Actual identifier.
     id: usize,
@@ -110,7 +136,7 @@ enum Circ {
 
 impl CircUsage {
     /// Construct path for a given circuit purpose.
-    fn build_path<'a, R: Rng>(&self, rng: &mut R, netdir: &'a NetDir) -> Result<TorPath<'a>> {
+    fn build_path<'a, R: Rng>(&self, rng: &mut R, netdir: DirInfo<'a>) -> Result<TorPath<'a>> {
         match self {
             CircUsage::Dir => DirPathBuilder::new().pick_path(rng, netdir),
             CircUsage::Exit(p) => ExitPathBuilder::new(p.clone()).pick_path(rng, netdir),
@@ -143,7 +169,7 @@ where
 
     /// Return a circuit suitable for sending one-hop BEGINDIR streams,
     /// launching it if necessary.
-    pub async fn get_or_launch_dir(&self, netdir: &NetDir) -> Result<Arc<ClientCirc>> {
+    pub async fn get_or_launch_dir(&self, netdir: DirInfo<'_>) -> Result<Arc<ClientCirc>> {
         self.get_or_launch_by_usage(netdir, CircUsage::Dir).await
     }
 
@@ -151,7 +177,7 @@ where
     /// `ports`, launching it if necessary.
     pub async fn get_or_launch_exit(
         &self,
-        netdir: &NetDir,
+        netdir: DirInfo<'_>,
         ports: &[u16],
     ) -> Result<Arc<ClientCirc>> {
         self.get_or_launch_by_usage(netdir, CircUsage::Exit(ports.into()))
@@ -170,7 +196,7 @@ where
     /// Helper: return a a circuit for this usage, launching it if necessary.
     async fn get_or_launch_by_usage(
         &self,
-        netdir: &NetDir,
+        netdir: DirInfo<'_>,
         usage: CircUsage,
     ) -> Result<Arc<ClientCirc>> {
         // XXXX LOG.
@@ -260,7 +286,7 @@ where
     async fn build_by_usage(
         &self,
         rng: &mut StdRng,
-        netdir: &NetDir,
+        netdir: DirInfo<'_>,
         usage: &CircUsage,
     ) -> Result<Arc<ClientCirc>> {
         // This should probably be an option too.
@@ -295,7 +321,7 @@ where
     async fn build_once_by_usage(
         &self,
         rng: &mut StdRng,
-        netdir: &NetDir,
+        netdir: DirInfo<'_>,
         usage: &CircUsage,
     ) -> Result<Arc<ClientCirc>> {
         let path = usage.build_path(rng, netdir)?;

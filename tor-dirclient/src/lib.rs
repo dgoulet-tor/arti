@@ -6,8 +6,7 @@ mod util;
 
 use crate::decompress::Decompressor;
 
-use tor_circmgr::CircMgr;
-use tor_netdir::NetDir;
+use tor_circmgr::{CircMgr, DirInfo};
 
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
@@ -19,7 +18,7 @@ use std::sync::Arc;
 // possibility of fallback dirs or missing mds.
 pub async fn get_resource<CR, TR>(
     req: CR,
-    netdir: &NetDir,
+    netdir: DirInfo<'_>,
     circ_mgr: Arc<CircMgr<TR>>,
 ) -> Result<String>
 where

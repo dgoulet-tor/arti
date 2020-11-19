@@ -7,7 +7,7 @@ pub mod dirpath;
 pub mod exitpath;
 
 use tor_chanmgr::ChanMgr;
-use tor_netdir::{fallback::FallbackDir, NetDir, Relay};
+use tor_netdir::{fallback::FallbackDir, Relay};
 use tor_proto::channel::Channel;
 use tor_proto::circuit::ClientCirc;
 
@@ -26,15 +26,6 @@ pub enum TorPath<'a> {
     FallbackOneHop(&'a FallbackDir),
     /// A multi-hop path, containing one or more paths.
     Path(Vec<Relay<'a>>),
-}
-
-/// An object that knows how to build a path
-pub trait PathBuilder {
-    /// Try to create and return a path corresponding to the requirements of
-    /// this builder.
-    // XXXX perhaps should have an enum that can be a netdir, or not?
-    // XXXX Perhaps we don't need this trait.
-    fn pick_path<'a, R: Rng>(&self, rng: &mut R, netdir: &'a NetDir) -> Result<TorPath<'a>>;
 }
 
 impl<'a> TorPath<'a> {

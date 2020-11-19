@@ -27,6 +27,7 @@ caret_enum! {
     ///
     /// For the full semantics of each subprotocol, see tor-spec.txt.
     #[non_exhaustive]
+    #[derive(Debug)]
     pub enum ProtoKind as u16 {
         /// Initiating and receiving channels, and getting cells on them.
         Link = 0,
@@ -60,7 +61,7 @@ caret_enum! {
 const N_RECOGNIZED: usize = 12;
 
 /// Representation for a known or unknown protocol.
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone, Debug)]
 enum Protocol {
     /// A known protocol; represented by one of ProtoKind.
     Proto(ProtoKind),
@@ -88,6 +89,7 @@ impl Protocol {
 /// Representation of a set of versions supported by a protocol.
 ///
 /// For now, we only use this type for unrecognized protocols.
+#[derive(Debug, Clone)]
 struct SubprotocolEntry {
     /// Which protocol's versions does this describe?
     proto: Protocol,
@@ -106,6 +108,7 @@ struct SubprotocolEntry {
 /// use tor_protover::Protocols;
 /// let p: Result<Protocols,_> = "Link=1-3 LinkAuth=2-3 Relay=1-2".parse();
 /// ```
+#[derive(Debug, Clone)]
 pub struct Protocols {
     /// A mapping from protocols' integer encodings to bit-vectors.
     recognized: [u64; N_RECOGNIZED],

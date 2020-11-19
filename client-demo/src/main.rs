@@ -171,7 +171,7 @@ async fn handle_socks_conn(
 
     let exit_ports = [port];
     let circ = circmgr
-        .get_or_launch_exit(dir.as_ref(), &exit_ports)
+        .get_or_launch_exit(dir.as_ref().into(), &exit_ports)
         .await?;
     info!("Got a circuit for {}:{}", addr, port);
 
@@ -273,14 +273,17 @@ fn main() -> Result<()> {
         // TODO: This is just a kludge for testing.
         if args.dirclient {
             let req = tor_dirclient::request::ConsensusRequest::new();
-            let contents = tor_dirclient::get_resource(req, &dir, Arc::new(circmgr)).await?;
+            let contents =
+                tor_dirclient::get_resource(req, (&dir).into(), Arc::new(circmgr)).await?;
             dbg!(contents);
 
             return Ok(());
         }
 
         let exit_ports = &[80];
-        let circ = circmgr.get_or_launch_exit(&dir, exit_ports).await?;
+        let circ = circmgr
+            .get_or_launch_exit((&dir).into(), exit_ports)
+            .await?;
 
         info!("Built a three-hop circuit.");
 
