@@ -400,7 +400,6 @@ mod test {
     fn socks5_init_nothing_works() {
         let mut h = SocksHandshake::new();
         let a = h.handshake(&hex!("05 02 9988")[..]);
-        dbg!(&a);
         assert!(matches!(a, Err(Error::NoSupport)));
     }
 
