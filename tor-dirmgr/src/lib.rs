@@ -32,33 +32,28 @@ pub use authority::Authority;
 pub use config::{NetDirConfig, NetDirConfigBuilder};
 pub use err::Error;
 
-/*
-#[derive(Debug)]
-#[allow(clippy::large_enum_variant)]
-pub enum DirState {
-    NoInformation,
-    Unvalidated(UnvalidatedMDConsensus),
-    Insufficient(PartialNetDir),
-    Sufficient(NetDir),
-}
- */
-
 pub struct DirMgr {
     config: NetDirConfig,
     store: RwLock<SqliteStore>,
+    netdir: RwLock<Option<Arc<NetDir>>>,
 }
 
 impl DirMgr {
     pub fn from_config(config: NetDirConfig) -> Result<Self> {
         let store = RwLock::new(config.open_sqlite_store()?);
-        Ok(DirMgr { config, store })
+        let netdir = RwLock::new(None);
+        Ok(DirMgr {
+            config,
+            store,
+            netdir,
+        })
     }
 
     pub async fn bootstrap_directory<TR>(
         &self,
         netdir: Option<&NetDir>,
         circmgr: Arc<CircMgr<TR>>,
-    ) -> Result<NetDir>
+    ) -> Result<()>
     where
         TR: tor_chanmgr::transport::Transport,
     {
@@ -96,10 +91,22 @@ impl DirMgr {
             .fetch_mds(store, dirinfo, Arc::clone(&circmgr))
             .await?;
 
-        match partial.advance() {
-            NextState::NewState(nd) => Ok(nd),
-            NextState::NoChange(_) => Err(anyhow!("Didn't get enough mds")),
+        let nd = match partial.advance() {
+            // XXXX Retry.
+            NextState::NewState(nd) => nd,
+            NextState::NoChange(_) => return Err(anyhow!("Didn't get enough mds")),
+        };
+
+        {
+            let mut w = self.netdir.write().await;
+            *w = Some(Arc::new(nd));
         }
+
+        Ok(())
+    }
+
+    pub async fn netdir(&self) -> Option<Arc<NetDir>> {
+        self.netdir.read().await.as_ref().map(Arc::clone)
     }
 }
 
