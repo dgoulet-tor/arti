@@ -4,6 +4,7 @@
 //! information ,where to fetch it from, and how to validate it.
 
 use crate::storage::legacy::LegacyStore;
+use crate::storage::sqlite::SqliteStore;
 use crate::Authority;
 use crate::PartialNetDir;
 use crate::{Error, Result};
@@ -28,12 +29,16 @@ pub struct NetDirConfigBuilder {
     /// A consensus document is considered valid if it signed by more
     /// than half of these authorities.
     authorities: Vec<Authority>,
+
     /// The directory from which to read legacy directory information.
     ///
     /// This has to be the directory used by a Tor instance
     /// that downloads microdesc info, and has been running fairly
     /// recently.
     legacy_cache_path: Option<PathBuf>,
+
+    /// Path to use for current (sqlite) directory information.
+    cache_path: Option<PathBuf>,
 
     /// The fallback directories to use when downloading directory
     /// information
@@ -45,8 +50,6 @@ pub struct NetDirConfigBuilder {
 /// This type is immutable once constructed.
 ///
 /// To create an object of this type, use NetDirConfigBuilder.
-// XXXX Right now this has the same members as NetDirConfigBuilder, but I
-// expect them to diverge.
 #[derive(Debug, Clone)]
 pub struct NetDirConfig {
     /// A list of authorities to trust.
@@ -62,6 +65,10 @@ pub struct NetDirConfig {
     /// recently.
     legacy_cache_path: Option<PathBuf>,
 
+    /// Location to use for storing and reading current-format
+    /// directory information.
+    cache_path: PathBuf,
+
     /// A set of directories to use for fetching directory info when we
     /// don't have any directories yet.
     fallbacks: FallbackSet,
@@ -76,6 +83,7 @@ impl NetDirConfigBuilder {
         NetDirConfigBuilder {
             authorities: Vec::new(),
             legacy_cache_path: None,
+            cache_path: None,
             fallbacks: None,
         }
     }
@@ -203,7 +211,7 @@ impl NetDirConfigBuilder {
         Ok(())
     }
 
-    /// Use `path` as the directory to search for directory files.
+    /// Use `path` as the directory to search for legacy directory files.
     ///
     /// This path must contain `cached-certs`, `cached-microdesc-consensus`,
     /// and at least one of `cached-microdescs` and `cached-microdescs.new`.
@@ -211,14 +219,27 @@ impl NetDirConfigBuilder {
         self.legacy_cache_path = Some(path.to_path_buf());
     }
 
+    /// Use `path` as the directory to use for current directory files.
+    pub fn set_cache_path(&mut self, path: &Path) {
+        self.cache_path = Some(path.to_path_buf());
+    }
+
     /// Consume this builder and return a NetDirConfig that can be used
     /// to load directories
     pub fn finalize(mut self) -> NetDirConfig {
         if self.legacy_cache_path.is_none() {
+            // XXXX use dirs crate?
             let mut pb: PathBuf = std::env::var_os("HOME").unwrap().into();
             pb.push(".tor");
             self.legacy_cache_path = Some(pb);
         };
+
+        if self.cache_path.is_none() {
+            // XXXX use dirs crate?
+            let mut pb: PathBuf = std::env::var_os("HOME").unwrap().into();
+            pb.push(".arti/cache");
+            self.cache_path = Some(pb);
+        }
 
         if self.authorities.is_empty() {
             self.add_default_authorities();
@@ -229,6 +250,7 @@ impl NetDirConfigBuilder {
         NetDirConfig {
             authorities: self.authorities,
             legacy_cache_path: self.legacy_cache_path,
+            cache_path: self.cache_path.unwrap(),
             fallbacks,
         }
     }
@@ -242,15 +264,17 @@ impl Default for NetDirConfigBuilder {
 
 impl NetDirConfig {
     /// Read directory information from the configured storage location.
-    pub fn load(&self) -> Result<PartialNetDir> {
+    pub fn load_legacy(&self) -> Result<PartialNetDir> {
         let store = LegacyStore::new(self.legacy_cache_path.as_ref().unwrap().clone());
         store.load_legacy(&self.authorities[..])
     }
 
-    /// Consume this configuration and return its authority list
-    /// TODO: get rid of this function,, or refactor it, or something.
-    pub fn into_authorities(self) -> Vec<Authority> {
-        self.authorities
+    /// Create a SqliteStore from this configuration.
+    ///
+    /// Note that each time this is called, a new store object will be
+    /// created: you probably only want to call this once.
+    pub(crate) fn open_sqlite_store(&self) -> Result<SqliteStore> {
+        SqliteStore::from_path(&self.cache_path)
     }
 
     /// Return a slice of the configured authorities

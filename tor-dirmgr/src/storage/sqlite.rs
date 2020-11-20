@@ -21,6 +21,9 @@ use chrono::Duration as CDuration;
 use rusqlite::ToSql;
 use rusqlite::{params, OptionalExtension, Transaction, NO_PARAMS};
 
+#[cfg(target_family = "unix")]
+use std::os::unix::fs::DirBuilderExt;
+
 pub struct SqliteStore {
     conn: rusqlite::Connection,
     path: PathBuf,
@@ -34,6 +37,20 @@ impl SqliteStore {
         let path = path.as_ref();
         let sqlpath = path.join("dir.sqlite3");
         let blobpath = path.join("dir_blobs/");
+
+        #[cfg(target_family = "unix")]
+        {
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(&blobpath)?;
+        }
+        #[cfg(not(target_family = "unix"))]
+        {
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .create(&blobpath)?;
+        }
         let conn = rusqlite::Connection::open(&sqlpath)?;
         SqliteStore::from_conn(conn, &blobpath)
     }

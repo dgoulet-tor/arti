@@ -33,7 +33,6 @@ pub use config::{NetDirConfig, NetDirConfigBuilder};
 pub use err::Error;
 
 /*
-// XXXX shouldn't be pub.
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum DirState {
@@ -44,57 +43,76 @@ pub enum DirState {
 }
  */
 
-#[derive(Clone)]
-pub struct DirStoreHandle {
-    store: Arc<RwLock<SqliteStore>>,
+pub struct DirMgr {
+    config: NetDirConfig,
+    store: DirStoreHandle,
 }
-impl DirStoreHandle {
-    pub fn new(store: SqliteStore) -> Self {
-        DirStoreHandle {
-            store: Arc::new(RwLock::new(store)),
+
+impl DirMgr {
+    pub fn from_config(config: NetDirConfig) -> Result<Self> {
+        let store = config.open_sqlite_store()?;
+        let store = DirStoreHandle::new(store);
+        Ok(DirMgr { config, store })
+    }
+
+    pub async fn bootstrap_directory<TR>(
+        &self,
+        netdir: Option<&NetDir>,
+        circmgr: Arc<CircMgr<TR>>,
+    ) -> Result<NetDir>
+    where
+        TR: tor_chanmgr::transport::Transport,
+    {
+        let authorities = self.config.authorities().to_vec();
+        let store = &self.store;
+        let dirinfo = match netdir {
+            Some(nd) => nd.into(),
+            None => self.config.fallbacks().into(),
+        };
+
+        let noinfo = NoInformation::new(authorities);
+
+        // TODO: need to make consensus non-pending eventually.
+        let mut unval = match noinfo.load(true, store.clone()).await? {
+            NextState::NoChange(noinfo) => {
+                noinfo
+                    .fetch_consensus(store.clone(), dirinfo, Arc::clone(&circmgr))
+                    .await?
+            }
+            NextState::NewState(unval) => unval,
+        };
+
+        unval.load(store.clone()).await?;
+        unval
+            .fetch_certs(store.clone(), dirinfo, Arc::clone(&circmgr))
+            .await?;
+        let mut partial = match unval.advance()? {
+            // TODO: retry.
+            NextState::NoChange(_) => return Err(anyhow!("Couldn't get certs")),
+            NextState::NewState(p) => p,
+        };
+
+        partial.load(store.clone()).await?;
+        partial
+            .fetch_mds(store.clone(), dirinfo, Arc::clone(&circmgr))
+            .await?;
+
+        match partial.advance() {
+            NextState::NewState(nd) => Ok(nd),
+            NextState::NoChange(_) => Err(anyhow!("Didn't get enough mds")),
         }
     }
 }
 
-pub async fn bootstrap_directory<TR>(
-    authorities: Vec<Authority>,
-    store: DirStoreHandle,
-    info: DirInfo<'_>,
-    circmgr: Arc<CircMgr<TR>>,
-) -> Result<NetDir>
-where
-    TR: tor_chanmgr::transport::Transport,
-{
-    let noinfo = NoInformation::new(authorities);
-
-    // TODO: need to make consensus non-pending eventually.
-    let mut unval = match noinfo.load(true, store.clone()).await? {
-        NextState::NoChange(noinfo) => {
-            noinfo
-                .fetch_consensus(store.clone(), info, Arc::clone(&circmgr))
-                .await?
+#[derive(Clone)]
+struct DirStoreHandle {
+    store: Arc<RwLock<SqliteStore>>,
+}
+impl DirStoreHandle {
+    fn new(store: SqliteStore) -> Self {
+        DirStoreHandle {
+            store: Arc::new(RwLock::new(store)),
         }
-        NextState::NewState(unval) => unval,
-    };
-
-    unval.load(store.clone()).await?;
-    unval
-        .fetch_certs(store.clone(), info, Arc::clone(&circmgr))
-        .await?;
-    let mut partial = match unval.advance()? {
-        // TODO: retry.
-        NextState::NoChange(_) => return Err(anyhow!("Couldn't get certs")),
-        NextState::NewState(p) => p,
-    };
-
-    partial.load(store.clone()).await?;
-    partial
-        .fetch_mds(store.clone(), info, Arc::clone(&circmgr))
-        .await?;
-
-    match partial.advance() {
-        NextState::NewState(nd) => Ok(nd),
-        NextState::NoChange(_) => Err(anyhow!("Didn't get enough mds")),
     }
 }
 
@@ -128,12 +146,12 @@ pub struct PartialDir {
 }
 
 impl NoInformation {
-    pub fn new(authorities: Vec<Authority>) -> Self {
+    fn new(authorities: Vec<Authority>) -> Self {
         assert!(authorities.len() <= std::u16::MAX as usize);
         NoInformation { authorities }
     }
 
-    pub async fn load(
+    async fn load(
         self,
         pending: bool,
         store: DirStoreHandle,
@@ -164,7 +182,7 @@ impl NoInformation {
         }))
     }
 
-    pub async fn fetch_consensus<TR>(
+    async fn fetch_consensus<TR>(
         &self,
         store: DirStoreHandle,
         info: DirInfo<'_>,
@@ -223,7 +241,7 @@ impl UnvalidatedDir {
         }
     }
 
-    pub async fn load(&mut self, store: DirStoreHandle) -> Result<()> {
+    async fn load(&mut self, store: DirStoreHandle) -> Result<()> {
         let missing = self.missing_certs();
 
         let newcerts = {
@@ -244,7 +262,7 @@ impl UnvalidatedDir {
         Ok(())
     }
 
-    pub async fn fetch_certs<TR>(
+    async fn fetch_certs<TR>(
         &mut self,
         store: DirStoreHandle,
         info: DirInfo<'_>,
@@ -298,7 +316,7 @@ impl UnvalidatedDir {
         Ok(())
     }
 
-    pub fn advance(mut self) -> Result<NextState<Self, PartialDir>> {
+    fn advance(mut self) -> Result<NextState<Self, PartialDir>> {
         let missing = self.missing_certs();
 
         if missing.is_empty() {
@@ -315,13 +333,13 @@ impl UnvalidatedDir {
 }
 
 impl PartialDir {
-    pub async fn load(&mut self, store: DirStoreHandle) -> Result<()> {
+    async fn load(&mut self, store: DirStoreHandle) -> Result<()> {
         let mark_listed = Some(SystemTime::now()); // XXXX use validafter, conditionally.
 
         load_mds(&mut self.dir, mark_listed, store).await
     }
 
-    pub async fn fetch_mds<TR>(
+    async fn fetch_mds<TR>(
         &mut self,
         store: DirStoreHandle,
         info: DirInfo<'_>,
@@ -339,7 +357,7 @@ impl PartialDir {
         Ok(())
     }
 
-    pub fn advance(self) -> NextState<Self, NetDir> {
+    fn advance(self) -> NextState<Self, NetDir> {
         match self.dir.unwrap_if_sufficient() {
             Ok(netdir) => NextState::NewState(netdir),
             Err(partial) => NextState::NoChange(PartialDir {

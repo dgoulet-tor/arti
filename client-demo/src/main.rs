@@ -127,7 +127,7 @@ fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
     }
     let cfg = cfg.finalize();
 
-    let partial = cfg.load().context("Loading directory from disk")?;
+    let partial = cfg.load_legacy().context("Loading directory from disk")?;
     Ok(partial.unwrap_if_sufficient().unwrap())
 }
 
@@ -265,22 +265,12 @@ fn main() -> Result<()> {
 
         // TODO: This is just a kludge for testing.
         if args.dirclient {
-            let fb = tor_netdir::fallback::FallbackSet::new();
-            let store = tor_dirmgr::storage::sqlite::SqliteStore::from_path("/home/nickm/.arti")?;
-            let store = tor_dirmgr::DirStoreHandle::new(store);
             let circmgr = Arc::new(circmgr);
             let mut cfg = tor_dirmgr::NetDirConfigBuilder::new();
             cfg.add_default_authorities();
-            let cfg = cfg.finalize();
-            let authorities = cfg.into_authorities();
 
-            let outcome = tor_dirmgr::bootstrap_directory(
-                authorities,
-                store.clone(),
-                (&fb).into(),
-                Arc::clone(&circmgr),
-            )
-            .await;
+            let dirmgr = tor_dirmgr::DirMgr::from_config(cfg.finalize())?;
+            let outcome = dirmgr.bootstrap_directory(None, Arc::clone(&circmgr)).await;
 
             outcome?;
             return Ok(());
