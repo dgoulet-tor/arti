@@ -104,7 +104,6 @@ pub struct PartialNetDir {
 /// A view of a relay on the Tor network, suitable for building circuits.
 // TODO: This should probably be a more specific struct, with a trait
 // that implements it.
-#[allow(unused)]
 pub struct Relay<'a> {
     /// A router descriptor for this relay.
     rs: &'a netstatus::MDConsensusRouterStatus,

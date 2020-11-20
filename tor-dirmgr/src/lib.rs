@@ -1,5 +1,5 @@
-#![allow(unused_variables)]
-#![allow(unused)]
+//#![allow(unused_variables)]
+//#![allow(unused)]
 
 pub mod authority;
 // TODO: make this private.
@@ -22,9 +22,7 @@ use anyhow::{anyhow, Result};
 use async_rwlock::RwLock;
 
 use std::collections::HashSet;
-use std::convert::TryInto;
 use std::fmt::Debug;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -157,7 +155,7 @@ impl NoInformation {
         };
         let unvalidated = {
             let string = consensus_text.as_str()?;
-            let (signedval, parsed) = MDConsensus::parse(string)?;
+            let (_signedval, parsed) = MDConsensus::parse(string)?;
             if let Ok(timely) = parsed.check_valid_now() {
                 timely
             } else {
@@ -384,7 +382,7 @@ async fn load_mds<M: MDReceiver>(
 
     if let Some(when) = mark_listed {
         let mut w = store.write().await;
-        w.update_microdescs_listed(loaded, when);
+        w.update_microdescs_listed(loaded, when)?;
     }
 
     Ok(())
@@ -439,5 +437,5 @@ where
         w.store_microdescs(new_mds.iter().map(|(txt, md)| (&txt[..], md)), mark_listed)?;
     }
 
-    Ok(new_mds.into_iter().map(|(txt, md)| md).collect())
+    Ok(new_mds.into_iter().map(|(_, md)| md).collect())
 }
