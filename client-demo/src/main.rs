@@ -112,7 +112,7 @@ fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
         eprintln!("Can't specify both --tor-dir and --chutney-dir");
         return Err(anyhow!("Conflicting --tor-dir and --chutney-dir"));
     }
-    let mut cfg = tor_netdir::NetDirConfig::new();
+    let mut cfg = tor_netdir::NetDirConfigBuilder::new();
 
     if let Some(ref d) = args.tor_dir {
         cfg.add_default_authorities();
@@ -125,6 +125,7 @@ fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
         eprintln!("Must specify --tor-dir or --chutney-dir");
         return Err(anyhow!("Missing --tor-dir or --chutney-dir"));
     }
+    let cfg = cfg.finalize();
 
     let partial = cfg.load().context("Loading directory from disk")?;
     Ok(partial.unwrap_if_sufficient().unwrap())
@@ -268,8 +269,9 @@ fn main() -> Result<()> {
             let store = tor_netdir::storage::sqlite::SqliteStore::from_path("/home/nickm/.arti")?;
             let store = tor_dirmgr::DirStoreHandle::new(store);
             let circmgr = Arc::new(circmgr);
-            let mut cfg = tor_netdir::NetDirConfig::new();
+            let mut cfg = tor_netdir::NetDirConfigBuilder::new();
             cfg.add_default_authorities();
+            let cfg = cfg.finalize();
             let authorities = cfg.into_authorities();
 
             let outcome = tor_dirmgr::bootstrap_directory(

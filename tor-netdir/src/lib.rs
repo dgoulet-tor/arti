@@ -40,7 +40,7 @@ pub use err::Error;
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub use authority::Authority;
-pub use config::NetDirConfig;
+pub use config::{NetDirConfig, NetDirConfigBuilder};
 
 /// Internal: how should we find the base weight of each relay?  This
 /// value is global over a whole directory, and depends on the bandwidth
@@ -138,12 +138,6 @@ pub trait MDReceiver {
     ///
     /// Return true if it was indeed wanted.
     fn add_microdesc(&mut self, md: Microdesc) -> bool;
-}
-
-impl Default for NetDirConfig {
-    fn default() -> Self {
-        NetDirConfig::new()
-    }
 }
 
 impl PartialNetDir {
