@@ -116,11 +116,11 @@ fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
 
     if let Some(ref d) = args.tor_dir {
         cfg.add_default_authorities();
-        cfg.set_cache_path(&d);
+        cfg.set_legacy_cache_path(&d);
     } else if let Some(ref d) = args.chutney_dir {
         cfg.add_authorities_from_chutney(&d)
             .context("Loading authorities from chutney directory")?;
-        cfg.set_cache_path(&d);
+        cfg.set_legacy_cache_path(&d);
     } else {
         eprintln!("Must specify --tor-dir or --chutney-dir");
         return Err(anyhow!("Missing --tor-dir or --chutney-dir"));

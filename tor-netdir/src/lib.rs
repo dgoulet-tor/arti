@@ -20,6 +20,7 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
+mod authority;
 pub mod docmeta;
 mod err;
 pub mod fallback;
@@ -28,45 +29,21 @@ pub mod storage;
 
 use crate::storage::legacy::LegacyStore;
 
-use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
-use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
-use tor_netdoc::doc::microdesc::{self, MDDigest, Microdesc};
-use tor_netdoc::doc::netstatus::{self, MDConsensus};
-use tor_netdoc::AllowAnnotations;
-
 use ll::pk::rsa::RSAIdentity;
-use log::{debug, info, warn};
+use tor_llcrypto as ll;
+use tor_netdoc::doc::microdesc::{MDDigest, Microdesc};
+use tor_netdoc::doc::netstatus::{self, MDConsensus};
+
+use log::warn;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time;
-use tor_llcrypto as ll;
 
 pub use err::Error;
 /// A Result using the Error type from the tor-netdir crate
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// A single authority that signs a consensus directory.
-#[derive(Debug, Clone)]
-pub struct Authority {
-    /// A memorable nickname for this authority.
-    name: String,
-    /// A SHA1 digest of the DER-encoded long-term v3 RSA identity key for
-    /// this authority.
-    // TODO: It would be lovely to use a better hash for these identities.
-    v3ident: RSAIdentity,
-}
-
-impl Authority {
-    /// Return true if this authority matches a given certificate.
-    pub fn matches_cert(&self, cert: &AuthCert) -> bool {
-        &self.v3ident == cert.id_fingerprint()
-    }
-    /// Return true if this authority matches a given key ID.
-    pub fn matches_keyid(&self, id: &AuthCertKeyIds) -> bool {
-        self.v3ident == id.id_fingerprint
-    }
-}
+pub use authority::Authority;
 
 /// Configuration object for reading directory information from disk.
 ///
@@ -79,12 +56,12 @@ pub struct NetDirConfig {
     /// A consensus document is considered valid if it signed by more
     /// than half of these authorities.
     authorities: Vec<Authority>,
-    /// The directory from which to read directory information.
+    /// The directory from which to read legacy directory information.
     ///
-    /// Right now, this has to be the directory used by a Tor instance
+    /// This has to be the directory used by a Tor instance
     /// that downloads microdesc info, and has been running fairly
     /// recently.
-    cache_path: Option<PathBuf>,
+    legacy_cache_path: Option<PathBuf>,
 }
 
 /// Internal: how should we find the base weight of each relay?  This
@@ -181,7 +158,7 @@ impl NetDirConfig {
     pub fn new() -> Self {
         NetDirConfig {
             authorities: Vec::new(),
-            cache_path: None,
+            legacy_cache_path: None,
         }
     }
 
@@ -194,10 +171,8 @@ impl NetDirConfig {
             hex::decode(ident).map_err(|_| Error::BadArgument("bad hex identity"))?;
         let v3ident =
             RSAIdentity::from_bytes(&ident).ok_or(Error::BadArgument("wrong identity length"))?;
-        self.authorities.push(Authority {
-            name: name.to_string(),
-            v3ident,
-        });
+        self.authorities
+            .push(Authority::new(name.to_string(), v3ident));
 
         Ok(())
     }
@@ -268,120 +243,28 @@ impl NetDirConfig {
     ///
     /// This path must contain `cached-certs`, `cached-microdesc-consensus`,
     /// and at least one of `cached-microdescs` and `cached-microdescs.new`.
-    pub fn set_cache_path(&mut self, path: &Path) {
-        self.cache_path = Some(path.to_path_buf());
+    pub fn set_legacy_cache_path(&mut self, path: &Path) {
+        self.legacy_cache_path = Some(path.to_path_buf());
     }
 
-    /// Helper: Load the authority certificates from a store.
-    ///
-    /// Only loads the certificates that match identity keys for
-    /// authorities that we believe in.
-    ///
-    /// Warn about invalid certs, but don't give an error unless there
-    /// is a complete failure.
-    fn load_certs(&self, store: &LegacyStore) -> Result<Vec<AuthCert>> {
-        let mut res = Vec::new();
-        for input in store.authcerts().filter_map(Result::ok) {
-            let text = input.as_str()?;
-
-            for cert in AuthCert::parse_multiple(text) {
-                let r = (|| {
-                    let cert = cert?.check_signature()?.check_valid_now()?;
-
-                    let found = self.authorities.iter().any(|a| a.matches_cert(&cert));
-                    if !found {
-                        return Err(Error::Unwanted("no such authority"));
-                    }
-                    Ok(cert)
-                })();
-
-                match r {
-                    Err(e) => warn!("unwanted certificate: {}", e),
-                    Ok(cert) => {
-                        debug!(
-                            "adding cert for {} (SK={})",
-                            cert.id_fingerprint(),
-                            cert.sk_fingerprint()
-                        );
-                        res.push(cert);
-                    }
-                }
-            }
-        }
-
-        info!("Loaded {} certs", res.len());
-        Ok(res)
-    }
-
-    /// Read the consensus from a provided store, and check it
-    /// with a list of authcerts.
-    fn load_consensus(&self, store: &LegacyStore, certs: &[AuthCert]) -> Result<MDConsensus> {
-        let input = store.latest_consensus()?;
-        let text = input.as_str()?;
-        let (_, consensus) = MDConsensus::parse(text)?;
-        let consensus = consensus
-            .extend_tolerance(time::Duration::new(86400, 0))
-            .check_valid_now()?
-            .set_n_authorities(self.authorities.len() as u16)
-            .check_signature(certs)?;
-
-        Ok(consensus)
-    }
-
-    /// Read a list of microdescriptors from a provided store, and check it
-    /// with a list of authcerts.
-    ///
-    /// Warn about invalid microdescs, but don't give an error unless there
-    /// is a complete failure.
-    fn load_mds(&self, store: &LegacyStore) -> Result<Vec<Microdesc>> {
-        let mut res = Vec::new();
-        for input in store.microdescs().filter_map(Result::ok) {
-            let text = input.as_str()?;
-            for annotated in
-                microdesc::MicrodescReader::new(&text, AllowAnnotations::AnnotationsAllowed)
-            {
-                let r = annotated.map(microdesc::AnnotatedMicrodesc::into_microdesc);
-                match r {
-                    Err(e) => warn!("bad microdesc: {}", e),
-                    Ok(md) => res.push(md),
-                }
-            }
-        }
-        Ok(res)
-    }
-
-    /// Load and validate an entire network directory.
-    pub fn load(&mut self) -> Result<PartialNetDir> {
-        let cachedir = match &self.cache_path {
-            Some(pb) => pb.clone(),
-            None => {
-                let mut pb: PathBuf = std::env::var_os("HOME").unwrap().into();
-                pb.push(".tor");
-                pb
-            }
+    // DOCDOC
+    fn fill_defaults(&mut self) {
+        if self.legacy_cache_path.is_none() {
+            let mut pb: PathBuf = std::env::var_os("HOME").unwrap().into();
+            pb.push(".tor");
+            self.legacy_cache_path = Some(pb);
         };
-        let store = LegacyStore::new(cachedir);
 
         if self.authorities.is_empty() {
             self.add_default_authorities();
         }
+    }
 
-        let certs = self.load_certs(&store)?;
-        let consensus = self.load_consensus(&store, &certs)?;
-        info!("Loaded consensus");
-        let mut partial = PartialNetDir::new(consensus);
-
-        let mds = self.load_mds(&store)?;
-        info!("Loaded {} microdescriptors", mds.len());
-        let mut n_added = 0_usize;
-        for md in mds {
-            if partial.add_microdesc(md) {
-                n_added += 1;
-            }
-        }
-        info!("Used {} microdescriptors", n_added);
-
-        Ok(partial)
+    /// Read directory information from the configured storage location.
+    pub fn load(&mut self) -> Result<PartialNetDir> {
+        self.fill_defaults();
+        let store = LegacyStore::new(self.legacy_cache_path.as_ref().unwrap().clone());
+        store.load_legacy(&self.authorities[..])
     }
 }
 
