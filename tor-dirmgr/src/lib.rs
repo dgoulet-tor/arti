@@ -6,7 +6,7 @@ pub mod authority;
 mod config;
 mod docmeta;
 mod err;
-pub mod storage;
+mod storage;
 
 use crate::docmeta::ConsensusMeta;
 use crate::storage::sqlite::SqliteStore;
