@@ -3,16 +3,18 @@
 //! Directory configuration tells us where to load and store directory
 //! information ,where to fetch it from, and how to validate it.
 
-use crate::fallback::FallbackSet;
+use crate::fallback::{FallbackDir, FallbackSet};
 use crate::storage::legacy::LegacyStore;
 use crate::Authority;
 use crate::PartialNetDir;
 use crate::{Error, Result};
 
+use tor_llcrypto::pk::ed25519::Ed25519Identity;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
 use log::warn;
 use std::fs;
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
 /// Builder for a NetDirConfig.
@@ -134,10 +136,14 @@ impl NetDirConfigBuilder {
     /// This function can handle the format for DirAuthority lines
     /// that chutney generates now, but that's it.  It isn't careful
     /// about line continuations.
-    pub fn add_authorities_from_chutney(&mut self, path: &Path) -> Result<()> {
+    pub fn configure_from_chutney(&mut self, path: &Path) -> Result<()> {
         use std::io::{self, BufRead};
-        let pb = path.join("torrc");
+        let pb = path.join("000a/torrc"); // Any node directory will do.
+        dbg!(&pb);
         let f = fs::File::open(pb)?;
+
+        let mut fbinfo: Vec<(SocketAddr, RSAIdentity)> = Vec::new();
+        // Find the authorities.  These will also be the fallbacks.
         for line in io::BufReader::new(f).lines() {
             let line = line?;
             let line = line.trim();
@@ -151,7 +157,49 @@ impl NetDirConfigBuilder {
                 warn!("Chutney torrc not in expected format.");
             }
             self.add_authority(name, &v3ident[8..])?;
+
+            // XXXX These unwraps should turn into errors.
+            let sockaddr = elts[5].parse().unwrap();
+            let rsaident = hex::decode(elts[6]).unwrap();
+            let rsaident = RSAIdentity::from_bytes(&rsaident[..]).unwrap();
+
+            fbinfo.push((sockaddr, rsaident));
         }
+
+        // Now find the ed identities so we can configure the fallbacks.
+        let mut fallbacks = Vec::new();
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            if !entry.metadata()?.is_dir() {
+                continue;
+            }
+            let path = entry.path();
+            let rsapath = path.join("fingerprint");
+            let edpath = path.join("fingerprint-ed25519");
+
+            if !rsapath.exists() || !edpath.exists() {
+                continue;
+            }
+
+            // XXXX this is ugly
+            // XXXX These unwraps can be crashy.
+            let rsa = std::fs::read_to_string(rsapath)?;
+            let ed = std::fs::read_to_string(edpath)?;
+            let rsa = rsa.split_ascii_whitespace().nth(1).unwrap();
+            let ed = ed.split_ascii_whitespace().nth(1).unwrap();
+            let rsa = hex::decode(rsa).unwrap();
+            let ed = base64::decode(ed).unwrap();
+            let rsa = RSAIdentity::from_bytes(&rsa).unwrap();
+            let ed = Ed25519Identity::from_bytes(&ed).unwrap();
+
+            if let Some((sa, _)) = fbinfo.iter().find(|(_, rsaid)| rsaid == &rsa) {
+                fallbacks.push(FallbackDir::new(rsa, ed, vec![*sa]));
+            }
+        }
+
+        let fallbacks = FallbackSet::from_fallbacks(fallbacks);
+        self.set_fallback_list(fallbacks);
+
         Ok(())
     }
 

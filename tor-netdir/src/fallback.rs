@@ -29,6 +29,21 @@ pub struct FallbackDir {
     orports: Vec<SocketAddr>,
 }
 
+impl FallbackDir {
+    /// Construct a new FallbackDir
+    pub fn new(
+        rsa_identity: RSAIdentity,
+        ed_identity: Ed25519Identity,
+        orports: Vec<SocketAddr>,
+    ) -> Self {
+        FallbackDir {
+            rsa_identity,
+            ed_identity,
+            orports,
+        }
+    }
+}
+
 impl tor_linkspec::ChanTarget for FallbackDir {
     fn addrs(&self) -> &[SocketAddr] {
         &self.orports[..]
