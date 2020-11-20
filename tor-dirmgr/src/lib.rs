@@ -49,18 +49,16 @@ impl DirMgr {
         })
     }
 
-    pub async fn bootstrap_directory<TR>(
-        &self,
-        netdir: Option<&NetDir>,
-        circmgr: Arc<CircMgr<TR>>,
-    ) -> Result<()>
+    pub async fn bootstrap_directory<TR>(&self, circmgr: Arc<CircMgr<TR>>) -> Result<()>
     where
         TR: tor_chanmgr::transport::Transport,
     {
         let authorities = self.config.authorities().to_vec();
         let store = &self.store;
-        let dirinfo = match netdir {
-            Some(nd) => nd.into(),
+
+        let current_netdir = self.netdir().await;
+        let dirinfo = match current_netdir {
+            Some(ref nd) => nd.as_ref().into(),
             None => self.config.fallbacks().into(),
         };
 

@@ -270,7 +270,7 @@ fn main() -> Result<()> {
             cfg.add_default_authorities();
 
             let dirmgr = tor_dirmgr::DirMgr::from_config(cfg.finalize())?;
-            let outcome = dirmgr.bootstrap_directory(None, Arc::clone(&circmgr)).await;
+            let outcome = dirmgr.bootstrap_directory(Arc::clone(&circmgr)).await;
 
             outcome?;
             return Ok(());
