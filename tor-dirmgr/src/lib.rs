@@ -45,13 +45,12 @@ pub enum DirState {
 
 pub struct DirMgr {
     config: NetDirConfig,
-    store: DirStoreHandle,
+    store: RwLock<SqliteStore>,
 }
 
 impl DirMgr {
     pub fn from_config(config: NetDirConfig) -> Result<Self> {
-        let store = config.open_sqlite_store()?;
-        let store = DirStoreHandle::new(store);
+        let store = RwLock::new(config.open_sqlite_store()?);
         Ok(DirMgr { config, store })
     }
 
@@ -73,18 +72,18 @@ impl DirMgr {
         let noinfo = NoInformation::new(authorities);
 
         // TODO: need to make consensus non-pending eventually.
-        let mut unval = match noinfo.load(true, store.clone()).await? {
+        let mut unval = match noinfo.load(true, store).await? {
             NextState::NoChange(noinfo) => {
                 noinfo
-                    .fetch_consensus(store.clone(), dirinfo, Arc::clone(&circmgr))
+                    .fetch_consensus(store, dirinfo, Arc::clone(&circmgr))
                     .await?
             }
             NextState::NewState(unval) => unval,
         };
 
-        unval.load(store.clone()).await?;
+        unval.load(store).await?;
         unval
-            .fetch_certs(store.clone(), dirinfo, Arc::clone(&circmgr))
+            .fetch_certs(store, dirinfo, Arc::clone(&circmgr))
             .await?;
         let mut partial = match unval.advance()? {
             // TODO: retry.
@@ -92,26 +91,14 @@ impl DirMgr {
             NextState::NewState(p) => p,
         };
 
-        partial.load(store.clone()).await?;
+        partial.load(store).await?;
         partial
-            .fetch_mds(store.clone(), dirinfo, Arc::clone(&circmgr))
+            .fetch_mds(store, dirinfo, Arc::clone(&circmgr))
             .await?;
 
         match partial.advance() {
             NextState::NewState(nd) => Ok(nd),
             NextState::NoChange(_) => Err(anyhow!("Didn't get enough mds")),
-        }
-    }
-}
-
-#[derive(Clone)]
-struct DirStoreHandle {
-    store: Arc<RwLock<SqliteStore>>,
-}
-impl DirStoreHandle {
-    fn new(store: SqliteStore) -> Self {
-        DirStoreHandle {
-            store: Arc::new(RwLock::new(store)),
         }
     }
 }
@@ -154,10 +141,10 @@ impl NoInformation {
     async fn load(
         self,
         pending: bool,
-        store: DirStoreHandle,
+        store: &RwLock<SqliteStore>,
     ) -> Result<NextState<Self, UnvalidatedDir>> {
         let consensus_text = {
-            let store = store.store.read().await;
+            let store = store.read().await;
             match store.latest_consensus(pending)? {
                 Some(c) => c,
                 None => return Ok(NextState::NoChange(self)),
@@ -184,7 +171,7 @@ impl NoInformation {
 
     async fn fetch_consensus<TR>(
         &self,
-        store: DirStoreHandle,
+        store: &RwLock<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr<TR>>,
     ) -> Result<UnvalidatedDir>
@@ -194,7 +181,7 @@ impl NoInformation {
         let mut resource = tor_dirclient::request::ConsensusRequest::new();
 
         {
-            let r = store.store.read().await;
+            let r = store.read().await;
             if let Some(valid_after) = r.latest_consensus_time()? {
                 resource.set_last_consensus_date(valid_after.into());
             }
@@ -206,7 +193,7 @@ impl NoInformation {
         let meta = ConsensusMeta::from_unvalidated(signedval, &unvalidated);
 
         {
-            let mut w = store.store.write().await;
+            let mut w = store.write().await;
             w.store_consensus(&meta, true, &text)?;
         }
         let n_authorities = self.authorities.len() as u16;
@@ -241,11 +228,11 @@ impl UnvalidatedDir {
         }
     }
 
-    async fn load(&mut self, store: DirStoreHandle) -> Result<()> {
+    async fn load(&mut self, store: &RwLock<SqliteStore>) -> Result<()> {
         let missing = self.missing_certs();
 
         let newcerts = {
-            let r = store.store.read().await;
+            let r = store.read().await;
             r.authcerts(&missing[..])?
         };
 
@@ -264,7 +251,7 @@ impl UnvalidatedDir {
 
     async fn fetch_certs<TR>(
         &mut self,
-        store: DirStoreHandle,
+        store: &RwLock<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr<TR>>,
     ) -> Result<()>
@@ -302,7 +289,7 @@ impl UnvalidatedDir {
         // XXXX warn on discard.
 
         {
-            let mut w = store.store.write().await;
+            let mut w = store.write().await;
             w.store_authcerts(&newcerts[..])?;
         }
 
@@ -333,7 +320,7 @@ impl UnvalidatedDir {
 }
 
 impl PartialDir {
-    async fn load(&mut self, store: DirStoreHandle) -> Result<()> {
+    async fn load(&mut self, store: &RwLock<SqliteStore>) -> Result<()> {
         let mark_listed = Some(SystemTime::now()); // XXXX use validafter, conditionally.
 
         load_mds(&mut self.dir, mark_listed, store).await
@@ -341,7 +328,7 @@ impl PartialDir {
 
     async fn fetch_mds<TR>(
         &mut self,
-        store: DirStoreHandle,
+        store: &RwLock<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr<TR>>,
     ) -> Result<()>
@@ -371,10 +358,10 @@ impl PartialDir {
 async fn load_mds<M: MDReceiver>(
     doc: &mut M,
     mark_listed: Option<SystemTime>,
-    store: DirStoreHandle,
+    store: &RwLock<SqliteStore>,
 ) -> Result<()> {
     let microdescs = {
-        let r = store.store.read().await;
+        let r = store.read().await;
         r.microdescs(doc.missing_microdescs())?
     };
 
@@ -391,7 +378,7 @@ async fn load_mds<M: MDReceiver>(
     }
 
     if let Some(when) = mark_listed {
-        let mut w = store.store.write().await;
+        let mut w = store.write().await;
         w.update_microdescs_listed(loaded, when);
     }
 
@@ -401,7 +388,7 @@ async fn load_mds<M: MDReceiver>(
 async fn download_mds<TR>(
     mut missing: Vec<MDDigest>,
     mark_listed: SystemTime,
-    store: DirStoreHandle,
+    store: &RwLock<SqliteStore>,
     info: DirInfo<'_>,
     circmgr: Arc<CircMgr<TR>>,
 ) -> Result<Vec<Microdesc>>
@@ -443,7 +430,7 @@ where
 
     // Now save it to the database
     {
-        let mut w = store.store.write().await;
+        let mut w = store.write().await;
         w.store_microdescs(new_mds.iter().map(|(txt, md)| (&txt[..], md)), mark_listed)?;
     }
 
