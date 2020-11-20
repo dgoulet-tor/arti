@@ -61,12 +61,12 @@ impl LegacyStore {
             let text = input.as_str()?;
 
             for cert in AuthCert::parse_multiple(text) {
-                let r = (|| {
+                let r: Result<_> = (|| {
                     let cert = cert?.check_signature()?.check_valid_now()?;
 
                     let found = authorities.iter().any(|a| a.matches_cert(&cert));
                     if !found {
-                        return Err(Error::Unwanted("no such authority"));
+                        return Err(Error::Unwanted("no such authority").into());
                     }
                     Ok(cert)
                 })();

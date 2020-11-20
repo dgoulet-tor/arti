@@ -24,7 +24,7 @@ impl InputString {
             InputString::UncheckedBytes(v) => std::str::from_utf8(&v[..]),
             InputString::MappedBytes(m) => std::str::from_utf8(&m[..]),
         }
-        .map_err(|_| Error::CacheCorruption("Invalid UTF-8"))
+        .map_err(|_| Error::CacheCorruption("Invalid UTF-8").into())
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {

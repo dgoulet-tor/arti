@@ -3,11 +3,11 @@
 //! Directory configuration tells us where to load and store directory
 //! information ,where to fetch it from, and how to validate it.
 
-use crate::fallback::{FallbackDir, FallbackSet};
 use crate::storage::legacy::LegacyStore;
 use crate::Authority;
 use crate::PartialNetDir;
 use crate::{Error, Result};
+use tor_netdir::fallback::{FallbackDir, FallbackSet};
 
 use tor_llcrypto::pk::ed25519::Ed25519Identity;
 use tor_llcrypto::pk::rsa::RSAIdentity;

@@ -1,17 +1,24 @@
 #![allow(unused_variables)]
 #![allow(unused)]
 
+pub mod authority;
+// TODO: make this private.
+mod config;
+mod docmeta;
+mod err;
+pub mod storage;
+
+use crate::docmeta::ConsensusMeta;
+use crate::storage::sqlite::SqliteStore;
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
 use tor_circmgr::{CircMgr, DirInfo};
-use tor_netdir::docmeta::ConsensusMeta;
-use tor_netdir::storage::sqlite::SqliteStore;
-use tor_netdir::{Authority, MDReceiver, NetDir, PartialNetDir};
+use tor_netdir::{MDReceiver, NetDir, PartialNetDir};
 use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
 use tor_netdoc::doc::microdesc::{MDDigest, Microdesc, MicrodescReader};
 use tor_netdoc::doc::netstatus::{MDConsensus, UnvalidatedMDConsensus};
 use tor_netdoc::AllowAnnotations;
 
-use anyhow::{anyhow, Error, Result};
+use anyhow::{anyhow, Result};
 use async_rwlock::RwLock;
 
 use std::collections::HashSet;
@@ -20,6 +27,10 @@ use std::fmt::Debug;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::SystemTime;
+
+pub use authority::Authority;
+pub use config::{NetDirConfig, NetDirConfigBuilder};
+pub use err::Error;
 
 /*
 // XXXX shouldn't be pub.

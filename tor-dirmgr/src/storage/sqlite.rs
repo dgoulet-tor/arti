@@ -80,7 +80,7 @@ impl SqliteStore {
             return Ok(())
         } else */
         if readable_by > SCHEMA_VERSION {
-            return Err(Error::UnrecognizedSchema);
+            return Err(Error::UnrecognizedSchema.into());
         }
 
         // rolls back the transaction, but nothing was done.
@@ -121,7 +121,7 @@ impl SqliteStore {
             .components()
             .all(|c| matches!(c, path::Component::Normal(_)))
         {
-            return Err(Error::CacheCorruption("Invalid path in database"));
+            return Err(Error::CacheCorruption("Invalid path in database").into());
         }
 
         let mut result = self.path.clone();

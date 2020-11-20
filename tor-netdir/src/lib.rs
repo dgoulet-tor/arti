@@ -20,13 +20,9 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
-mod authority;
-mod config;
-pub mod docmeta;
 mod err;
 pub mod fallback;
 mod pick;
-pub mod storage;
 
 use ll::pk::rsa::RSAIdentity;
 use tor_llcrypto as ll;
@@ -38,9 +34,6 @@ use std::collections::HashMap;
 pub use err::Error;
 /// A Result using the Error type from the tor-netdir crate
 pub type Result<T> = std::result::Result<T, Error>;
-
-pub use authority::Authority;
-pub use config::{NetDirConfig, NetDirConfigBuilder};
 
 /// Internal: how should we find the base weight of each relay?  This
 /// value is global over a whole directory, and depends on the bandwidth

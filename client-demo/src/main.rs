@@ -112,7 +112,7 @@ fn get_netdir(args: &Args) -> Result<tor_netdir::NetDir> {
         eprintln!("Can't specify both --tor-dir and --chutney-dir");
         return Err(anyhow!("Conflicting --tor-dir and --chutney-dir"));
     }
-    let mut cfg = tor_netdir::NetDirConfigBuilder::new();
+    let mut cfg = tor_dirmgr::NetDirConfigBuilder::new();
 
     if let Some(ref d) = args.tor_dir {
         cfg.add_default_authorities();
@@ -266,10 +266,10 @@ fn main() -> Result<()> {
         // TODO: This is just a kludge for testing.
         if args.dirclient {
             let fb = tor_netdir::fallback::FallbackSet::new();
-            let store = tor_netdir::storage::sqlite::SqliteStore::from_path("/home/nickm/.arti")?;
+            let store = tor_dirmgr::storage::sqlite::SqliteStore::from_path("/home/nickm/.arti")?;
             let store = tor_dirmgr::DirStoreHandle::new(store);
             let circmgr = Arc::new(circmgr);
-            let mut cfg = tor_netdir::NetDirConfigBuilder::new();
+            let mut cfg = tor_dirmgr::NetDirConfigBuilder::new();
             cfg.add_default_authorities();
             let cfg = cfg.finalize();
             let authorities = cfg.into_authorities();
