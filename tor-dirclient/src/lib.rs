@@ -1,4 +1,18 @@
+//! Implements a directory client for Tor.
+//!
+//! Tor makes directory requests as HTTP/1.0 requests tunneled over Tor circuits.
+//! For most objects, Tor uses a one-hop tunnel.
+//!
+//! # Limitations
+//!
+//! Multi-hop tunnels are not supported.
+//!
+//! Only zlib compression is supported.
+
 // XXXX THIS CODE IS HORRIBLE AND NEEDS REFACTORING.
+
+#![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
 
 mod decompress;
 pub mod request;
@@ -11,12 +25,13 @@ use tor_circmgr::{CircMgr, DirInfo};
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
 
-// XXXX Remove this.
-#[allow(unused_assignments)]
-
+/// Fetch the resource described by `req` over the Tor network.
+///
+/// Circuits are built or found using `circ_mgr`, using paths
+/// constructed using `dirinfo`.
 pub async fn get_resource<CR, TR>(
     req: CR,
-    netdir: DirInfo<'_>,
+    dirinfo: DirInfo<'_>,
     circ_mgr: Arc<CircMgr<TR>>,
 ) -> Result<String>
 where
@@ -26,7 +41,7 @@ where
     let req = req.into_request()?;
     let encoded = util::encode_request(req);
 
-    let circuit = circ_mgr.get_or_launch_dir(netdir).await?;
+    let circuit = circ_mgr.get_or_launch_dir(dirinfo).await?;
     let mut stream = circuit.begin_dir_stream().await?;
 
     stream.write_bytes(encoded.as_bytes()).await?;
@@ -36,8 +51,6 @@ where
     let mut buf = vec![0; 1024];
     let mut n_in_buf = 0;
     let mut encoding: Option<String> = None;
-    #[allow(unused_variables)]
-    let mut length: Option<usize> = None;
 
     loop {
         let n = stream.read_bytes(&mut buf[n_in_buf..]).await?;
@@ -72,10 +85,12 @@ where
             {
                 encoding = Some(String::from_utf8(enc.value.to_vec())?);
             }
+            /*
             if let Some(clen) = response.headers.iter().find(|h| h.name == "Content-Length") {
                 let clen = std::str::from_utf8(clen.value)?;
                 length = Some(clen.parse()?);
             }
+            */
             let n_parsed = res.unwrap();
             n_in_buf -= n_parsed;
             buf.copy_within(n_parsed.., 0);
