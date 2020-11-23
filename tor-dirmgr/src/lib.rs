@@ -1,5 +1,12 @@
-//#![allow(unused_variables)]
-//#![allow(unused)]
+//! Code to fetch, store, and update directory information.
+//!
+//! In its current design, Tor requires a set of up-to-date
+//! authenticated directory documents in order to build multi-hop
+//! anonymized circuits through the network.
+//!
+//! This directory manager crate is responsible for figuring out which
+//! directory information we lack, downloading what we're missing, and
+//! keeping a cache of it on disk.
 
 pub mod authority;
 // TODO: make this private.
@@ -30,13 +37,22 @@ pub use authority::Authority;
 pub use config::{NetDirConfig, NetDirConfigBuilder};
 pub use err::Error;
 
+/// A directory manager to download, fetch, and cache a Tor directory
 pub struct DirMgr {
+    /// Configuration information: where to find directories, how to
+    /// validate them, and so on.
     config: NetDirConfig,
+    /// Handle to our sqlite cache.
     store: RwLock<SqliteStore>,
+    /// Our latest sufficiently bootstrapped directory, if we have one.
+    ///
+    /// We use the RwLock so that we can give this out to a bunch of other
+    /// users, and replace it once a new directory is bootstrapped.
     netdir: RwLock<Option<Arc<NetDir>>>,
 }
 
 impl DirMgr {
+    /// Construct a DirMgr from a NetDirConfig.
     pub fn from_config(config: NetDirConfig) -> Result<Self> {
         let store = RwLock::new(config.open_sqlite_store()?);
         let netdir = RwLock::new(None);
@@ -47,6 +63,11 @@ impl DirMgr {
         })
     }
 
+    /// Run a complete bootstrapping process, using information from our
+    /// cache when it is up-to-date enough.  When complete, update our
+    /// NetDir with the one we've fetched.
+    ///
+    // TODO: We'll likely need to refactor this before too long.
     pub async fn bootstrap_directory<TR>(&self, circmgr: Arc<CircMgr<TR>>) -> Result<()>
     where
         TR: tor_chanmgr::transport::Transport,
@@ -64,7 +85,7 @@ impl DirMgr {
 
         // TODO: need to make consensus non-pending eventually.
         let mut unval = match noinfo.load(true, store).await? {
-            NextState::NoChange(noinfo) => {
+            NextState::SameState(noinfo) => {
                 noinfo
                     .fetch_consensus(store, dirinfo, Arc::clone(&circmgr))
                     .await?
@@ -78,7 +99,7 @@ impl DirMgr {
             .await?;
         let mut partial = match unval.advance()? {
             // TODO: retry.
-            NextState::NoChange(_) => return Err(anyhow!("Couldn't get certs")),
+            NextState::SameState(_) => return Err(anyhow!("Couldn't get certs")),
             NextState::NewState(p) => p,
         };
 
@@ -90,7 +111,7 @@ impl DirMgr {
         let nd = match partial.advance() {
             // XXXX Retry.
             NextState::NewState(nd) => nd,
-            NextState::NoChange(_) => return Err(anyhow!("Didn't get enough mds")),
+            NextState::SameState(_) => return Err(anyhow!("Didn't get enough mds")),
         };
 
         {
@@ -101,28 +122,37 @@ impl DirMgr {
         Ok(())
     }
 
+    /// Return an Arc handle to our latest sufficiently up-to-date directory.
+    ///
+    // TODO: make sure it's still up to date?
     pub async fn netdir(&self) -> Option<Arc<NetDir>> {
         self.netdir.read().await.as_ref().map(Arc::clone)
     }
 }
 
+/// Abstraction to handle the idea of a possible state transition
+/// after fetching or loading directory information.
 #[derive(Clone, Debug)]
-pub enum NextState<A, B>
+enum NextState<A, B>
 where
     A: Clone + Debug,
     B: Clone + Debug,
 {
-    NoChange(A),
+    /// We either got no new info, or we didn't get enough info to update
+    /// to a new state.
+    SameState(A),
+    /// We found enough information to transition to a new state.
     NewState(B),
 }
 
+/// Initial directory state when no information is known.
 #[derive(Debug, Clone, Default)]
-pub struct NoInformation {
+struct NoInformation {
     authorities: Vec<Authority>,
 }
 
 #[derive(Debug, Clone)]
-pub struct UnvalidatedDir {
+struct UnvalidatedDir {
     from_cache: bool,
     authorities: Vec<Authority>,
     consensus: UnvalidatedMDConsensus,
@@ -130,7 +160,7 @@ pub struct UnvalidatedDir {
 }
 
 #[derive(Debug, Clone)]
-pub struct PartialDir {
+struct PartialDir {
     from_cache: bool,
     dir: PartialNetDir,
 }
@@ -150,7 +180,7 @@ impl NoInformation {
             let store = store.read().await;
             match store.latest_consensus(pending)? {
                 Some(c) => c,
-                None => return Ok(NextState::NoChange(self)),
+                None => return Ok(NextState::SameState(self)),
             }
         };
         let unvalidated = {
@@ -159,7 +189,7 @@ impl NoInformation {
             if let Ok(timely) = parsed.check_valid_now() {
                 timely
             } else {
-                return Ok(NextState::NoChange(self));
+                return Ok(NextState::SameState(self));
             }
         };
         let n_authorities = self.authorities.len() as u16;
@@ -317,7 +347,7 @@ impl UnvalidatedDir {
                 dir: PartialNetDir::new(validated),
             }))
         } else {
-            Ok(NextState::NoChange(self))
+            Ok(NextState::SameState(self))
         }
     }
 }
@@ -350,7 +380,7 @@ impl PartialDir {
     fn advance(self) -> NextState<Self, NetDir> {
         match self.dir.unwrap_if_sufficient() {
             Ok(netdir) => NextState::NewState(netdir),
-            Err(partial) => NextState::NoChange(PartialDir {
+            Err(partial) => NextState::SameState(PartialDir {
                 from_cache: self.from_cache,
                 dir: partial,
             }),
