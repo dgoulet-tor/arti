@@ -150,6 +150,7 @@ where
     Ok(String::from_utf8(result)?)
 }
 
+/// Return a decompressor object corresponding to a given Content-Encoding.
 fn get_decompressor(encoding: Option<&str>) -> Result<Box<dyn Decompressor>> {
     match encoding {
         None | Some("identity") => Ok(Box::new(decompress::identity::Identity)),
