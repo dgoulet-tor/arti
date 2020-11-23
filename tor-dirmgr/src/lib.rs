@@ -72,7 +72,6 @@ impl DirMgr {
     where
         TR: tor_chanmgr::transport::Transport,
     {
-        let authorities = self.config.authorities().to_vec();
         let store = &self.store;
 
         let current_netdir = self.netdir().await;
@@ -81,23 +80,23 @@ impl DirMgr {
             None => self.config.fallbacks().into(),
         };
 
-        let noinfo = NoInformation::new(authorities);
+        let noinfo = NoInformation::new();
 
         // TODO: need to make consensus non-pending eventually.
-        let mut unval = match noinfo.load(true, store).await? {
+        let mut unval = match noinfo.load(true, &self.config, store).await? {
             NextState::SameState(noinfo) => {
                 noinfo
-                    .fetch_consensus(store, dirinfo, Arc::clone(&circmgr))
+                    .fetch_consensus(&self.config, store, dirinfo, Arc::clone(&circmgr))
                     .await?
             }
             NextState::NewState(unval) => unval,
         };
 
-        unval.load(store).await?;
+        unval.load(&self.config, store).await?;
         unval
-            .fetch_certs(store, dirinfo, Arc::clone(&circmgr))
+            .fetch_certs(&self.config, store, dirinfo, Arc::clone(&circmgr))
             .await?;
-        let mut partial = match unval.advance()? {
+        let mut partial = match unval.advance(&self.config)? {
             // TODO: retry.
             NextState::SameState(_) => return Err(anyhow!("Couldn't get certs")),
             NextState::NewState(p) => p,
@@ -147,14 +146,11 @@ where
 
 /// Initial directory state when no information is known.
 #[derive(Debug, Clone, Default)]
-struct NoInformation {
-    authorities: Vec<Authority>,
-}
+struct NoInformation {}
 
 #[derive(Debug, Clone)]
 struct UnvalidatedDir {
     from_cache: bool,
-    authorities: Vec<Authority>,
     consensus: UnvalidatedMDConsensus,
     certs: Vec<AuthCert>,
 }
@@ -166,14 +162,14 @@ struct PartialDir {
 }
 
 impl NoInformation {
-    fn new(authorities: Vec<Authority>) -> Self {
-        assert!(authorities.len() <= std::u16::MAX as usize);
-        NoInformation { authorities }
+    fn new() -> Self {
+        NoInformation {}
     }
 
     async fn load(
         self,
         pending: bool,
+        config: &NetDirConfig,
         store: &RwLock<SqliteStore>,
     ) -> Result<NextState<Self, UnvalidatedDir>> {
         let consensus_text = {
@@ -192,11 +188,10 @@ impl NoInformation {
                 return Ok(NextState::SameState(self));
             }
         };
-        let n_authorities = self.authorities.len() as u16;
+        let n_authorities = config.authorities().len() as u16;
         let unvalidated = unvalidated.set_n_authorities(n_authorities);
         Ok(NextState::NewState(UnvalidatedDir {
             from_cache: true,
-            authorities: self.authorities,
             consensus: unvalidated,
             certs: Vec::new(),
         }))
@@ -204,6 +199,7 @@ impl NoInformation {
 
     async fn fetch_consensus<TR>(
         &self,
+        config: &NetDirConfig,
         store: &RwLock<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr<TR>>,
@@ -229,12 +225,10 @@ impl NoInformation {
             let mut w = store.write().await;
             w.store_consensus(&meta, true, &text)?;
         }
-        let n_authorities = self.authorities.len() as u16;
+        let n_authorities = config.authorities().len() as u16;
         let unvalidated = unvalidated.set_n_authorities(n_authorities);
-        let authorities = self.authorities.clone(); // TODO: I dislike this clone.
         Ok(UnvalidatedDir {
             from_cache: false,
-            authorities,
             consensus: unvalidated,
             certs: Vec::new(),
         })
@@ -242,27 +236,28 @@ impl NoInformation {
 }
 
 impl UnvalidatedDir {
-    fn prune_certs(&mut self) {
+    fn prune_certs(&mut self, config: &NetDirConfig) {
         // Quadratic, but should be fine.
-        let authorities = &self.authorities;
+        let authorities = &config.authorities();
         self.certs
             .retain(|cert| authorities.iter().any(|a| a.matches_cert(cert)));
     }
 
-    fn missing_certs(&mut self) -> Vec<AuthCertKeyIds> {
-        self.prune_certs();
+    fn missing_certs(&mut self, config: &NetDirConfig) -> Vec<AuthCertKeyIds> {
+        self.prune_certs(config);
+        let authorities = config.authorities();
 
         match self.consensus.key_is_correct(&self.certs[..]) {
             Ok(()) => Vec::new(),
             Err(mut missing) => {
-                missing.retain(|m| self.authorities.iter().any(|a| a.matches_keyid(m)));
+                missing.retain(|m| authorities.iter().any(|a| a.matches_keyid(m)));
                 missing
             }
         }
     }
 
-    async fn load(&mut self, store: &RwLock<SqliteStore>) -> Result<()> {
-        let missing = self.missing_certs();
+    async fn load(&mut self, config: &NetDirConfig, store: &RwLock<SqliteStore>) -> Result<()> {
+        let missing = self.missing_certs(config);
 
         let newcerts = {
             let r = store.read().await;
@@ -277,13 +272,14 @@ impl UnvalidatedDir {
             }
         }
 
-        self.prune_certs();
+        self.prune_certs(config);
 
         Ok(())
     }
 
     async fn fetch_certs<TR>(
         &mut self,
+        config: &NetDirConfig,
         store: &RwLock<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr<TR>>,
@@ -291,7 +287,7 @@ impl UnvalidatedDir {
     where
         TR: tor_chanmgr::transport::Transport,
     {
-        let missing = self.missing_certs();
+        let missing = self.missing_certs(config);
         if missing.is_empty() {
             return Ok(());
         }
@@ -331,13 +327,13 @@ impl UnvalidatedDir {
         }
 
         // This should be redundant.
-        self.prune_certs();
+        self.prune_certs(config);
 
         Ok(())
     }
 
-    fn advance(mut self) -> Result<NextState<Self, PartialDir>> {
-        let missing = self.missing_certs();
+    fn advance(mut self, config: &NetDirConfig) -> Result<NextState<Self, PartialDir>> {
+        let missing = self.missing_certs(config);
 
         if missing.is_empty() {
             // Either we can validate, or we never will.
