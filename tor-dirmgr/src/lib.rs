@@ -8,6 +8,9 @@
 //! directory information we lack, downloading what we're missing, and
 //! keeping a cache of it on disk.
 
+#![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
+
 pub mod authority;
 // TODO: make this private.
 mod config;
@@ -145,27 +148,53 @@ where
 }
 
 /// Initial directory state when no information is known.
+///
+/// We can advance from this state by loading or fetching a consensus
+/// document.
 #[derive(Debug, Clone, Default)]
 struct NoInformation {}
 
+/// Second directory state: We know a consensus directory document,
+/// but not the certs to validate it.
+///
+/// We can advance from this state by loading or fetching certificates.
 #[derive(Debug, Clone)]
 struct UnvalidatedDir {
+    /// True if we loaded this consensus from our local cache.
     from_cache: bool,
+    /// The consensus we've received
     consensus: UnvalidatedMDConsensus,
+    /// The certificates that we've received for this consensus.
+    ///
+    /// We ensure that certificates are only included in this list if
+    /// they are for authorities we believe in.
     certs: Vec<AuthCert>,
 }
 
+/// Third directory state: we've validated the consensus, but don't have
+/// enough microdescs for it yet.
+///
+/// We advance from this state by loading or detching microdescriptors.
 #[derive(Debug, Clone)]
 struct PartialDir {
+    /// True if we loaded the consensus from our local cache.
     from_cache: bool,
+    /// The consensus directory, partially filled in with microdescriptors.
     dir: PartialNetDir,
 }
 
 impl NoInformation {
+    /// Construct a new `NoInformation` into which directory information
+    /// can loaded or fetched.
     fn new() -> Self {
         NoInformation {}
     }
 
+    /// Try to fetch a currently timely consensus directory document
+    /// from the local cache in `store`.  If `pending`, then we'll
+    /// happily return a pending document; otherwise, we'll only
+    /// return a document that has been marked as having been completely
+    /// bootstrapped.
     async fn load(
         self,
         pending: bool,
@@ -197,6 +226,8 @@ impl NoInformation {
         }))
     }
 
+    /// Try to fetch a currently timely consensus directory document
+    /// from a randomly chosen directory cache server on the network.
     async fn fetch_consensus<TR>(
         &self,
         config: &NetDirConfig,
@@ -236,6 +267,8 @@ impl NoInformation {
 }
 
 impl UnvalidatedDir {
+    /// Helper: Remove every member of self.certs that does not match
+    /// some authority listed in `config`.
     fn prune_certs(&mut self, config: &NetDirConfig) {
         // Quadratic, but should be fine.
         let authorities = &config.authorities();
@@ -243,6 +276,12 @@ impl UnvalidatedDir {
             .retain(|cert| authorities.iter().any(|a| a.matches_cert(cert)));
     }
 
+    /// Helper: Return a list of certificate key identities for the
+    /// certificates we should download in order to check this
+    /// consensus.
+    ///
+    /// This function will return an empty list when we have enough
+    /// certificates, whether or not it is a _complete_ list.
     fn missing_certs(&mut self, config: &NetDirConfig) -> Vec<AuthCertKeyIds> {
         self.prune_certs(config);
         let authorities = config.authorities();
@@ -256,6 +295,7 @@ impl UnvalidatedDir {
         }
     }
 
+    /// Load authority certificates from our local cache.
     async fn load(&mut self, config: &NetDirConfig, store: &RwLock<SqliteStore>) -> Result<()> {
         let missing = self.missing_certs(config);
 
@@ -277,6 +317,7 @@ impl UnvalidatedDir {
         Ok(())
     }
 
+    /// Fetch authority certificates from the network.
     async fn fetch_certs<TR>(
         &mut self,
         config: &NetDirConfig,
@@ -332,6 +373,8 @@ impl UnvalidatedDir {
         Ok(())
     }
 
+    /// If we have enough certificates, check this document and return
+    /// a PartialDir.  Otherwise remain in the same state.
     fn advance(mut self, config: &NetDirConfig) -> Result<NextState<Self, PartialDir>> {
         let missing = self.missing_certs(config);
 
@@ -349,12 +392,14 @@ impl UnvalidatedDir {
 }
 
 impl PartialDir {
+    /// Try to load microdescriptors from our local cache.
     async fn load(&mut self, store: &RwLock<SqliteStore>) -> Result<()> {
         let mark_listed = Some(SystemTime::now()); // XXXX use validafter, conditionally.
 
         load_mds(&mut self.dir, mark_listed, store).await
     }
 
+    /// Try to fetch microdescriptors from the network.
     async fn fetch_mds<TR>(
         &mut self,
         store: &RwLock<SqliteStore>,
@@ -373,6 +418,8 @@ impl PartialDir {
         Ok(())
     }
 
+    /// If we have enough microdescriptors to build circuits, return a NetDir.
+    /// Otherwise, return this same document.
     fn advance(self) -> NextState<Self, NetDir> {
         match self.dir.unwrap_if_sufficient() {
             Ok(netdir) => NextState::NewState(netdir),
@@ -384,6 +431,8 @@ impl PartialDir {
     }
 }
 
+/// Helper to load microdescriptors from the cache and store them either
+/// into a PartialNetDir or a NetDir.
 async fn load_mds<M: MDReceiver>(
     doc: &mut M,
     mark_listed: Option<SystemTime>,
@@ -414,6 +463,8 @@ async fn load_mds<M: MDReceiver>(
     Ok(())
 }
 
+/// Helper to fetch microdescriptors from the network and store them either
+/// into a PartialNetDir or a NetDir.
 async fn download_mds<TR>(
     mut missing: Vec<MDDigest>,
     mark_listed: SystemTime,

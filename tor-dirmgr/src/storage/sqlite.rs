@@ -1,35 +1,39 @@
-//! Net document storage backed by sqlite3. DOCDOC say more
-
-// XXXX Does this belong in dirmgr instead of netdir? I think it might.
+//! Net document storage backed by sqlite3.
+//!
+//! We store most objects in sqlite tables, except for very large ones,
+//! which we store as "blob" files in a separate directory.
 
 use crate::docmeta::ConsensusMeta;
 use crate::storage::InputString;
 use crate::{Error, Result};
 
-use tor_llcrypto::pk::rsa::RSAIdentity;
 use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
 use tor_netdoc::doc::microdesc::{MDDigest, Microdesc};
-use tor_netdoc::doc::netstatus::{self, MDConsensus};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::{self, Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use chrono::prelude::*;
 use chrono::Duration as CDuration;
-use rusqlite::ToSql;
 use rusqlite::{params, OptionalExtension, Transaction, NO_PARAMS};
 
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::DirBuilderExt;
 
+/// Local directory cache using a Sqlite3 connection.
 pub struct SqliteStore {
+    /// Connection to the sqlite3 database.
     conn: rusqlite::Connection,
+    /// Location to store blob files.
     path: PathBuf,
 }
 
 impl SqliteStore {
+    /// Construct a new SquliteStore from a location on disk.  The provided
+    /// location must be a directory, or a possible location for a directory:
+    /// the directory will be created if necessary.
     pub fn from_path<P>(path: P) -> Result<Self>
     where
         P: AsRef<Path>,
@@ -55,6 +59,8 @@ impl SqliteStore {
         SqliteStore::from_conn(conn, &blobpath)
     }
 
+    /// Construct a new SqliteStore from a location on disk, and a location
+    /// for blob files.
     pub fn from_conn<P>(conn: rusqlite::Connection, path: P) -> Result<Self>
     where
         P: AsRef<Path>,
@@ -63,10 +69,13 @@ impl SqliteStore {
         let mut result = SqliteStore { conn, path };
 
         result.check_schema()?;
+        result.expire_all()?;
 
         Ok(result)
     }
 
+    /// Check whether this database has a schema format we can read, and
+    /// install or upgrade the schema if necessary.
     fn check_schema(&mut self) -> Result<()> {
         let tx = self.conn.transaction()?;
         let db_n_tables: u32 = tx.query_row(
@@ -84,7 +93,7 @@ impl SqliteStore {
             return Ok(());
         }
 
-        let (version, readable_by): (u32, u32) = tx.query_row(
+        let (_version, readable_by): (u32, u32) = tx.query_row(
             "SELECT version, readable_by FROM TorSchemaMeta
              WHERE name = 'TorDirStorage'",
             NO_PARAMS,
@@ -104,6 +113,10 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Delete all completely-expired objects from the database.
+    ///
+    /// This is pretty conservative, and only removes things that are
+    /// definitely past their good-by date.
     fn expire_all(&mut self) -> Result<()> {
         let tx = self.conn.transaction()?;
         let expired_blobs: Vec<String> = {
@@ -119,7 +132,7 @@ impl SqliteStore {
         tx.execute(DROP_OLD_MICRODESCS, NO_PARAMS)?;
         tx.execute(DROP_OLD_AUTHCERTS, NO_PARAMS)?;
         tx.execute(DROP_OLD_CONSENSUSES, NO_PARAMS)?;
-        tx.commit();
+        tx.commit()?;
         for name in expired_blobs {
             let fname = self.blob_fname(name);
             if let Ok(fname) = fname {
@@ -129,6 +142,8 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Return the correct filename for a given blob, based on the filename
+    /// from the ExtDocs table.
     fn blob_fname<P>(&self, path: P) -> Result<PathBuf>
     where
         P: AsRef<Path>,
@@ -146,6 +161,7 @@ impl SqliteStore {
         Ok(result)
     }
 
+    /// Read a blob from disk, mmapping it if possible.
     fn read_blob<P>(&self, path: P) -> Result<InputString>
     where
         P: AsRef<Path>,
@@ -154,6 +170,10 @@ impl SqliteStore {
         InputString::load(full_path)
     }
 
+    /// Write a file to disk as a blob, and record it in the ExtDocs table.
+    ///
+    /// Return a SavedBlobHandle that describes where the blob is, and which
+    /// can be used either to commit the blob or delete it.
     fn save_blob_internal(
         &mut self,
         contents: &[u8],
@@ -171,16 +191,17 @@ impl SqliteStore {
         std::fs::write(full_path, contents)?;
 
         let tx = self.conn.unchecked_transaction()?;
-        tx.execute(INSERT_EXTDOC, params![digeststr, expires, dtype, fname]);
+        tx.execute(INSERT_EXTDOC, params![digeststr, expires, dtype, fname])?;
 
         Ok(SavedBlobHandle {
             tx,
-            digeststr,
             fname,
+            digeststr,
             unlinker,
         })
     }
 
+    /// Save a blob to disk and commit it.
     #[cfg(test)]
     fn save_blob(
         &mut self,
@@ -197,11 +218,13 @@ impl SqliteStore {
             fname,
             unlinker,
         } = h;
+        let _ = digeststr;
         tx.commit()?;
         unlinker.forget();
         Ok(fname)
     }
 
+    /// Write a consensus to disk.
     pub fn store_consensus(
         &mut self,
         cmeta: &ConsensusMeta,
@@ -244,6 +267,8 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Return the latest `valid-after` time for any non-pending consensus.
+    // TODO: Take a pending argument?
     pub fn latest_consensus_time(&self) -> Result<Option<DateTime<Utc>>> {
         if let Some(va) = self
             .conn
@@ -256,20 +281,25 @@ impl SqliteStore {
         }
     }
 
+    /// Load the latest consensus from disk.  If `pending` is true, we
+    /// can fetch a consensus that hasn't got enough microdescs yet.
+    /// Otherwise, we only want a consensus where we got full
+    /// directory information.
     pub fn latest_consensus(&self, pending: bool) -> Result<Option<InputString>> {
         let rv: Option<(DateTime<Utc>, DateTime<Utc>, String)> = self
             .conn
             .query_row(FIND_CONSENSUS, params![pending], |row| row.try_into())
             .optional()?;
 
-        if let Some((va, vu, filename)) = rv {
-            let full_path = self.blob_fname(filename)?;
-            Ok(Some(InputString::load(full_path)?))
+        if let Some((_va, _vu, filename)) = rv {
+            // XXXX check va and vu.
+            self.read_blob(filename).map(Option::Some)
         } else {
             Ok(None)
         }
     }
 
+    /// Save a list of authority certificates to the cache.
     pub fn store_authcerts(&mut self, certs: &[(AuthCert, &str)]) -> Result<()> {
         let tx = self.conn.transaction()?;
         let mut stmt = tx.prepare(INSERT_AUTHCERT)?;
@@ -285,6 +315,7 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Read all of the specified authority certs from the cache.
     pub fn authcerts(&self, certs: &[AuthCertKeyIds]) -> Result<HashMap<AuthCertKeyIds, String>> {
         let mut result = HashMap::new();
         // XXXX Do I need to get a transaction here for performance?
@@ -304,6 +335,7 @@ impl SqliteStore {
         Ok(result)
     }
 
+    /// Read all the microdescriptors listed in `input` from the cache.
     pub fn microdescs<'a, I>(&self, input: I) -> Result<HashMap<MDDigest, String>>
     where
         I: IntoIterator<Item = &'a MDDigest>,
@@ -326,11 +358,13 @@ impl SqliteStore {
         Ok(result)
     }
 
+    /// Update the `last-listed` time of every microdescriptor in
+    /// `input` to `when`.
     pub fn update_microdescs_listed<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
     where
         I: IntoIterator<Item = &'a MDDigest>,
     {
-        let mut tx = self.conn.transaction()?;
+        let tx = self.conn.transaction()?;
         let mut stmt = tx.prepare(UPDATE_MD_LISTED)?;
         let when: DateTime<Utc> = when.into();
 
@@ -344,13 +378,15 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Store every microdescriptor in `input` into the cache, and say that
+    /// it was last listed at `when`.
     pub fn store_microdescs<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
     where
         I: IntoIterator<Item = (&'a str, &'a Microdesc)>,
     {
         let when: DateTime<Utc> = when.into();
 
-        let mut tx = self.conn.transaction()?;
+        let tx = self.conn.transaction()?;
         let mut stmt = tx.prepare(INSERT_MD)?;
 
         for (content, md) in input.into_iter() {
@@ -363,22 +399,39 @@ impl SqliteStore {
     }
 }
 
+/// Handle to a blob that we have saved to disk but not yet committed to
+/// the database.
 struct SavedBlobHandle<'a> {
+    /// Transaction we're using to add the blob to the ExtDocs table.
     tx: Transaction<'a>,
-    digeststr: String,
+    /// Filename for the file, with respect to the the blob directory.
+    #[allow(unused)]
     fname: String,
+    /// Declared digest string for this blob. Of the format
+    /// "digesttype-hexstr".
+    digeststr: String,
+    /// An 'unlinker' for the blob file.
     unlinker: Unlinker,
 }
 
+/// Handle to a file which we might have to delete.
+///
+/// When this handle is dropped, the file gets deleted, unless you have
+/// first called [`Unlinker::forget`].
 struct Unlinker {
+    /// The location of the file to remove, or None if we shouldn't
+    /// remove it.
     p: Option<PathBuf>,
 }
 impl Unlinker {
+    /// Make a new Unlinker for a given filename.
     fn new<P: AsRef<Path>>(p: P) -> Self {
         Unlinker {
             p: Some(p.as_ref().to_path_buf()),
         }
     }
+    /// Forget about this unlinker, so that the corresponding file won't
+    /// get dropped.
     fn forget(mut self) {
         self.p = None
     }
@@ -391,25 +444,14 @@ impl Drop for Unlinker {
     }
 }
 
-/*
-impl ReadableStore for SqliteStore {
-
-
-}
- */
-
-fn sys_to_naive(t: SystemTime) -> NaiveDateTime {
-    let t: DateTime<Utc> = t.into();
-    t.naive_utc()
-}
-fn naive_to_sys(t: NaiveDateTime) -> SystemTime {
-    let t = DateTime::<Utc>::from_utc(t, Utc);
-    t.into()
-}
-
+/// Version number used for this version of the arti cache schema.
 const SCHEMA_VERSION: u32 = 0;
 
+/// Set up the tables for the arti cache schema in a sqlite database.
 const INSTALL_SCHEMA: &str = "
+  -- Helps us version the schema.  The schema here corresponds to a
+  -- version number called 'version', and it should be readable by
+  -- anybody who is compliant with versions of at least 'readable_by'.
   CREATE TABLE TorSchemaMeta (
      name TEXT NOT NULL PRIMARY KEY,
      version INTEGER NOT NULL,
@@ -418,20 +460,28 @@ const INSTALL_SCHEMA: &str = "
 
   INSERT INTO TorSchemaMeta (name, version, readable_by) VALUES ( 'TorDirStorage', 0, 0 );
 
+  -- Keeps track of external blobs on disk.
   CREATE TABLE ExtDocs (
+    -- Records a digest of the file contents, in the form 'dtype-hexstr'
     digest TEXT PRIMARY KEY NOT NULL,
+    -- When was this file created?
     created DATE NOT NULL,
+    -- After what time will this file definitely be useless?
     expires DATE NOT NULL,
+    -- What is the type of this file? Currently supported are 'mdcon'.
     type TEXT NOT NULL,
+    -- Filename for this file within our blob directory.
     filename TEXT NOT NULL
   );
 
+  -- All the microdescriptors we know about.
   CREATE TABLE Microdescs (
     sha256_digest TEXT PRIMARY KEY NOT NULL,
     last_listed DATE NOT NULL,
     contents BLOB NOT NULL
   );
 
+  -- All the authority certificates we know.
   CREATE TABLE Authcerts (
     id_digest TEXT NOT NULL,
     sk_digest TEXT NOT NULL,
@@ -441,6 +491,7 @@ const INSTALL_SCHEMA: &str = "
     PRIMARY KEY (id_digest, sk_digest)
   );
 
+  -- All the consensuses we're storing.
   CREATE TABLE Consensuses (
     valid_after DATE NOT NULL,
     fresh_until DATE NOT NULL,
@@ -454,6 +505,7 @@ const INSTALL_SCHEMA: &str = "
 
 ";
 
+/// Query: find the latest-expiring microdesc with a given pending status.
 const FIND_CONSENSUS: &str = "
   SELECT valid_after, valid_until, filename
   FROM Consensuses
@@ -463,6 +515,8 @@ const FIND_CONSENSUS: &str = "
   LIMIT 1;
 ";
 
+/// Query: Find the valid-after time for the latest-expiring
+/// non-pending microdesc consensus.
 const FIND_LATEST_CONSENSUS_TIME: &str = "
   SELECT valid_after
   FROM Consensuses
@@ -471,52 +525,72 @@ const FIND_LATEST_CONSENSUS_TIME: &str = "
   LIMIT 1;
 ";
 
+/// Query: Find the authority certificate with given key digests.
 const FIND_AUTHCERT: &str = "
   SELECT contents FROM AuthCerts WHERE id_digest = ? AND sk_digest = ?;
 ";
+
+/// Query: find the microdescriptor with a given hex-encoded sha256 digest
 const FIND_MD: &str = "
   SELECT contents
   FROM Microdescs
   WHERE sha256_digest = ?
 ";
+
+/// Query: find every ExtDocs member that has expired.
 const FIND_EXPIRED_EXTDOCS: &str = "
   SELECT filename FROM Extdocs where expires < datetime('now');
 ";
 
+/// Query: Add a new entry to ExtDocs.
 const INSERT_EXTDOC: &str = "
   INSERT INTO ExtDocs ( digest, created, expires, type, filename )
   VALUES ( ?, datetime('now'), ?, ?, ? );
 ";
+
+/// Qury: Add a new consensus.
 const INSERT_CONSENSUS: &str = "
   INSERT INTO Consensuses
     ( valid_after, fresh_until, valid_until, flavor, pending, digest )
   VALUES ( ?, ?, ?, ?, ?, ? );
 ";
+
+/// Query: Add a new AuthCert
 const INSERT_AUTHCERT: &str = "
   INSERT INTO Authcerts
     ( id_digest, sk_digest, published, expires, contents)
   VALUES ( ?, ?, ?, ?, ? );
 ";
+
+/// Query: Add a new microdescriptor
 const INSERT_MD: &str = "
   INSERT INTO Microdescs ( sha256_digest, last_listed, contents )
   VALUES ( ?, ?, ? );
 ";
 
+/// Query: Change the time when a given microdescriptor was last listed.
 const UPDATE_MD_LISTED: &str = "
   UPDATE Microdescs
   SET last_listed = ?
   WHERE sha256_digest = ?;
 ";
 
+/// Query: Discard every expired extdoc.
 const DROP_OLD_EXTDOCS: &str = "
   DELETE FROM ExtDocs WHERE expires < datetime('now');
 ";
+
+/// Query: Discard every microdescriptor that hasn't been listed for 3 months.
+// TODO: Choose a more realistic time.
 const DROP_OLD_MICRODESCS: &str = "
   DELETE FROM Microdescs WHERE last_listed < datetime('now','-3 months');
 ";
+/// Query: Discard every expired authority certificate.
 const DROP_OLD_AUTHCERTS: &str = "
   DELETE FROM Authcerts WHERE expires < datetime('now');
 ";
+/// Query: Discard every consensus that's been expired for at least
+/// two days.
 const DROP_OLD_CONSENSUSES: &str = "
   DELETE FROM Consensuses WHERE valid_until < datetime('now','-2 days');
 ";
@@ -543,18 +617,18 @@ mod test {
         // Initial setup: everything should work.
         {
             let conn = rusqlite::Connection::open(&sql_path)?;
-            let store = SqliteStore::from_conn(conn, &tmp_dir)?;
+            let _store = SqliteStore::from_conn(conn, &tmp_dir)?;
         }
         // Second setup: shouldn't need to upgrade.
         {
             let conn = rusqlite::Connection::open(&sql_path)?;
-            let store = SqliteStore::from_conn(conn, &tmp_dir)?;
+            let _store = SqliteStore::from_conn(conn, &tmp_dir)?;
         }
         // Third setup: shouldn't need to upgrade.
         {
             let conn = rusqlite::Connection::open(&sql_path)?;
             conn.execute_batch("UPDATE TorSchemaMeta SET version = 9002;")?;
-            let store = SqliteStore::from_conn(conn, &tmp_dir)?;
+            let _store = SqliteStore::from_conn(conn, &tmp_dir)?;
         }
         // Fourth: this says we can't read it, so we'll get an error.
         {
@@ -634,7 +708,9 @@ mod test {
 
     #[test]
     fn consensus() -> Result<()> {
-        let (tmp_dir, mut store) = new_empty()?;
+        use tor_netdoc::doc::netstatus;
+
+        let (_tmp_dir, mut store) = new_empty()?;
         let now = Utc::now();
         let one_hour = CDuration::hours(1);
 

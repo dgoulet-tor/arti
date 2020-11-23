@@ -1,4 +1,4 @@
-//! Declare an error type for the dirmgr crate.
+//! Declare an error type for the tor-dirmgr crate.
 
 use thiserror::Error;
 
