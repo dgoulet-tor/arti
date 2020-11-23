@@ -117,7 +117,7 @@ impl LegacyStore {
     fn load_consensus(&self, certs: &[AuthCert], authorities: &[Authority]) -> Result<MDConsensus> {
         let input = self.latest_consensus()?;
         let text = input.as_str()?;
-        let (_, consensus) = MDConsensus::parse(text)?;
+        let (_, _, consensus) = MDConsensus::parse(text)?;
         let consensus = consensus
             .extend_tolerance(time::Duration::new(86400, 0))
             .check_valid_now()?

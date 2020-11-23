@@ -232,7 +232,8 @@ impl SqliteStore {
         contents: &str,
     ) -> Result<()> {
         let lifetime = cmeta.lifetime();
-        let sha3_256_digest = cmeta.sha3_256_of_signed();
+        let sha3_of_signed = cmeta.sha3_256_of_signed();
+        let sha3_of_whole = cmeta.sha3_256_of_whole();
         let valid_after: DateTime<Utc> = lifetime.valid_after().into();
         let fresh_until: DateTime<Utc> = lifetime.fresh_until().into();
         let valid_until: DateTime<Utc> = lifetime.valid_after().into();
@@ -241,14 +242,11 @@ impl SqliteStore {
         // anything at all, not even diffs.
         let expires = valid_until + CDuration::days(4);
 
-        // We should probably use a different digest for indexing, since
-        // this sha3_256_digest doesn't cover the whole document. XXXX
-
         let h = self.save_blob_internal(
             contents.as_bytes(),
             "mdcon",
             "sha3-256",
-            &sha3_256_digest[..],
+            &sha3_of_whole[..],
             expires,
         )?;
         h.tx.execute(
@@ -259,6 +257,7 @@ impl SqliteStore {
                 valid_until,
                 "microdesc",
                 pending,
+                hex::encode(&sha3_of_signed),
                 h.digeststr
             ],
         )?;
@@ -498,6 +497,7 @@ const INSTALL_SCHEMA: &str = "
     valid_until DATE NOT NULL,
     flavor TEXT NOT NULL,
     pending BOOLEAN NOT NULL,
+    sha3_of_signed_part TEXT NOT NULL,
     digest TEXT NOT NULL,
     FOREIGN KEY (digest) REFERENCES ExtDocs (digest) ON DELETE CASCADE
   );
@@ -551,8 +551,8 @@ const INSERT_EXTDOC: &str = "
 /// Qury: Add a new consensus.
 const INSERT_CONSENSUS: &str = "
   INSERT INTO Consensuses
-    ( valid_after, fresh_until, valid_until, flavor, pending, digest )
-  VALUES ( ?, ?, ?, ?, ?, ? );
+    ( valid_after, fresh_until, valid_until, flavor, pending, sha3_of_signed_part, digest )
+  VALUES ( ?, ?, ?, ?, ?, ?, ? );
 ";
 
 /// Query: Add a new AuthCert
@@ -721,6 +721,7 @@ mod test {
                 (now + one_hour * 2).into(),
             ),
             [0xAB; 32],
+            [0xBC; 32],
         );
 
         store.store_consensus(&cmeta, false, "Pretend this is a consensus")?;

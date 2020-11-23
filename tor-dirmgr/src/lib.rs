@@ -210,7 +210,7 @@ impl NoInformation {
         };
         let unvalidated = {
             let string = consensus_text.as_str()?;
-            let (_signedval, parsed) = MDConsensus::parse(string)?;
+            let (_signedval, _remainder, parsed) = MDConsensus::parse(string)?;
             if let Ok(timely) = parsed.check_valid_now() {
                 timely
             } else {
@@ -248,9 +248,9 @@ impl NoInformation {
         }
         let text = tor_dirclient::get_resource(resource, info, circmgr).await?;
 
-        let (signedval, parsed) = MDConsensus::parse(&text)?;
+        let (signedval, remainder, parsed) = MDConsensus::parse(&text)?;
         let unvalidated = parsed.check_valid_now()?;
-        let meta = ConsensusMeta::from_unvalidated(signedval, &unvalidated);
+        let meta = ConsensusMeta::from_unvalidated(signedval, remainder, &unvalidated);
 
         {
             let mut w = store.write().await;
