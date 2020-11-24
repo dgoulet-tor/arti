@@ -153,7 +153,7 @@ async fn run_socks_proxy(
         tor_rtcompat::task::spawn(async move {
             let res = handle_socks_conn(d, ci, stream).await;
             if let Err(e) = res {
-                warn!("connection edited with error: {}", e);
+                warn!("connection exited with error: {}", e);
             }
         });
     }
