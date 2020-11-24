@@ -148,6 +148,11 @@ impl PartialNetDir {
         }
         PartialNetDir { netdir }
     }
+    /// Return true if this are enough information in this directory
+    /// to build multihop paths.
+    pub fn have_enough_paths(&self) -> bool {
+        self.netdir.have_enough_paths()
+    }
     /// If this directory has enough information to build multihop
     /// circuits, return it.
     pub fn unwrap_if_sufficient(self) -> std::result::Result<NetDir, PartialNetDir> {

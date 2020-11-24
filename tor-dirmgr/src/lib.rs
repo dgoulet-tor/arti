@@ -164,6 +164,8 @@ struct UnvalidatedDir {
     from_cache: bool,
     /// The consensus we've received
     consensus: UnvalidatedMDConsensus,
+    /// Information about digests and lifetimes of that consensus,
+    consensus_meta: ConsensusMeta,
     /// The certificates that we've received for this consensus.
     ///
     /// We ensure that certificates are only included in this list if
@@ -179,6 +181,8 @@ struct UnvalidatedDir {
 struct PartialDir {
     /// True if we loaded the consensus from our local cache.
     from_cache: bool,
+    /// Information about digests and lifetimes of the consensus.
+    consensus_meta: ConsensusMeta,
     /// The consensus directory, partially filled in with microdescriptors.
     dir: PartialNetDir,
 }
@@ -208,11 +212,13 @@ impl NoInformation {
                 None => return Ok(NextState::SameState(self)),
             }
         };
-        let unvalidated = {
+        let (consensus_meta, unvalidated) = {
             let string = consensus_text.as_str()?;
-            let (_signedval, _remainder, parsed) = MDConsensus::parse(string)?;
+            let (signedval, remainder, parsed) = MDConsensus::parse(string)?;
             if let Ok(timely) = parsed.check_valid_now() {
-                timely
+                let meta = ConsensusMeta::from_unvalidated(signedval, remainder, &timely);
+
+                (meta, timely)
             } else {
                 return Ok(NextState::SameState(self));
             }
@@ -221,6 +227,7 @@ impl NoInformation {
         let unvalidated = unvalidated.set_n_authorities(n_authorities);
         Ok(NextState::NewState(UnvalidatedDir {
             from_cache: true,
+            consensus_meta,
             consensus: unvalidated,
             certs: Vec::new(),
         }))
@@ -261,6 +268,7 @@ impl NoInformation {
         Ok(UnvalidatedDir {
             from_cache: false,
             consensus: unvalidated,
+            consensus_meta: meta,
             certs: Vec::new(),
         })
     }
@@ -383,6 +391,7 @@ impl UnvalidatedDir {
             let validated = self.consensus.check_signature(&self.certs[..])?;
             Ok(NextState::NewState(PartialDir {
                 from_cache: self.from_cache,
+                consensus_meta: self.consensus_meta,
                 dir: PartialNetDir::new(validated),
             }))
         } else {
@@ -415,6 +424,12 @@ impl PartialDir {
         for md in mds {
             self.dir.add_microdesc(md);
         }
+        if self.dir.have_enough_paths() {
+            // XXXX no need to do this if it was already non-pending.
+            // XXXX this calculation is redundant with the one in advance().
+            let mut w = store.write().await;
+            w.mark_consensus_usable(&self.consensus_meta)?;
+        }
         Ok(())
     }
 
@@ -425,6 +440,7 @@ impl PartialDir {
             Ok(netdir) => NextState::NewState(netdir),
             Err(partial) => NextState::SameState(PartialDir {
                 from_cache: self.from_cache,
+                consensus_meta: self.consensus_meta,
                 dir: partial,
             }),
         }

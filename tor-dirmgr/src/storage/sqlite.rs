@@ -298,6 +298,18 @@ impl SqliteStore {
         }
     }
 
+    /// Mark the consensus generated from `cmeta` as no longer pending.
+    pub fn mark_consensus_usable(&mut self, cmeta: &ConsensusMeta) -> Result<()> {
+        let d = hex::encode(cmeta.sha3_256_of_whole());
+        let digest = format!("sha3-256-{}", d);
+
+        let tx = self.conn.transaction()?;
+        tx.execute(MARK_CONSENSUS_NON_PENDING, params![digest])?;
+        tx.commit()?;
+
+        Ok(())
+    }
+
     /// Save a list of authority certificates to the cache.
     pub fn store_authcerts(&mut self, certs: &[(AuthCert, &str)]) -> Result<()> {
         let tx = self.conn.transaction()?;
@@ -525,6 +537,14 @@ const FIND_LATEST_CONSENSUS_TIME: &str = "
   LIMIT 1;
 ";
 
+/// Query: Update the consensus whose digest field is 'digest' to call it
+/// no longer pending.
+const MARK_CONSENSUS_NON_PENDING: &str = "
+  UPDATE Consensuses
+  SET pending = 0
+  WHERE digest = ?;
+";
+
 /// Query: Find the authority certificate with given key digests.
 const FIND_AUTHCERT: &str = "
   SELECT contents FROM AuthCerts WHERE id_digest = ? AND sk_digest = ?;
@@ -724,11 +744,21 @@ mod test {
             [0xBC; 32],
         );
 
-        store.store_consensus(&cmeta, false, "Pretend this is a consensus")?;
+        store.store_consensus(&cmeta, true, "Pretend this is a consensus")?;
 
-        let consensus = store.latest_consensus(false)?.unwrap();
-        assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
+        {
+            let consensus = store.latest_consensus(true)?.unwrap();
+            assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
+        }
 
+        store.mark_consensus_usable(&cmeta)?;
+
+        {
+            let consensus = store.latest_consensus(true)?;
+            assert!(consensus.is_none());
+            let consensus = store.latest_consensus(false)?.unwrap();
+            assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
+        }
         Ok(())
     }
 }
