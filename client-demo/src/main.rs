@@ -27,7 +27,7 @@ struct Args {
     #[argh(switch)]
     trace: bool,
     /// run a socks proxy on port N.
-    #[argh(option, default = "9051")]
+    #[argh(option, default = "9150")]
     socksport: u16,
 }
 
