@@ -184,8 +184,13 @@ fn main() -> Result<()> {
         let circmgr = Arc::new(tor_circmgr::CircMgr::new(Arc::clone(&chanmgr)));
         let dirmgr = tor_dirmgr::DirMgr::from_config(dircfg.finalize())?;
 
-        dirmgr.load_directory().await?;
-        dirmgr.bootstrap_directory(Arc::clone(&circmgr)).await?;
+        if dirmgr.load_directory().await? {
+            info!("Loaded a good directory from disk.")
+        } else {
+            info!("Didn't find a usable directory on disk. Trying to booststrap.");
+            dirmgr.bootstrap_directory(Arc::clone(&circmgr)).await?;
+            info!("Bootstrapped successfully.");
+        }
 
         // TODO CONFORMANCE: we should stop now if there are required
         // protovers we don't support.

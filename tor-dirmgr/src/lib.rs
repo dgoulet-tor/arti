@@ -30,6 +30,7 @@ use tor_netdoc::AllowAnnotations;
 
 use anyhow::{anyhow, Result};
 use async_rwlock::RwLock;
+use log::info;
 
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -140,6 +141,7 @@ impl DirMgr {
         // TODO: Also check the age of our current one.
         let mut unval = match noinfo.load(true, &self.config, store).await? {
             NextState::SameState(noinfo) => {
+                info!("Fetching a consensus directory.");
                 noinfo
                     .fetch_consensus(&self.config, store, dirinfo, Arc::clone(&circmgr))
                     .await?
@@ -148,6 +150,7 @@ impl DirMgr {
         };
 
         unval.load(&self.config, store).await?;
+        info!("Fetching a certificates.");
         unval
             .fetch_certs(&self.config, store, dirinfo, Arc::clone(&circmgr))
             .await?;
@@ -564,6 +567,7 @@ where
     let mut new_mds: Vec<_> = Vec::new();
     for chunk in missing[..].chunks(chunksize) {
         // TODO: Do these in parallel.
+        info!("Fetching {} microdescriptors...", chunksize);
         let mut resource = tor_dirclient::request::MicrodescRequest::new();
         for md in chunk.iter() {
             resource.push(*md);

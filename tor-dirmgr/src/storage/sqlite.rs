@@ -15,6 +15,7 @@ use std::convert::TryInto;
 use std::path::{self, Path, PathBuf};
 use std::time::SystemTime;
 
+use anyhow::Context;
 use chrono::prelude::*;
 use chrono::Duration as CDuration;
 use rusqlite::{params, OptionalExtension, Transaction, NO_PARAMS};
@@ -47,13 +48,15 @@ impl SqliteStore {
             std::fs::DirBuilder::new()
                 .recursive(true)
                 .mode(0o700)
-                .create(&blobpath)?;
+                .create(&blobpath)
+                .with_context(|| format!("Creating directory at {:?}", &blobpath))?;
         }
         #[cfg(not(target_family = "unix"))]
         {
             std::fs::DirBuilder::new()
                 .recursive(true)
-                .create(&blobpath)?;
+                .create(&blobpath)
+                .with_context(|| format!("Creating directory at {:?}", &blobpath))?;
         }
         let conn = rusqlite::Connection::open(&sqlpath)?;
         SqliteStore::from_conn(conn, &blobpath)
@@ -166,8 +169,10 @@ impl SqliteStore {
     where
         P: AsRef<Path>,
     {
+        let path = path.as_ref();
         let full_path = self.blob_fname(path)?;
-        InputString::load(full_path)
+        InputString::load(&full_path)
+            .with_context(|| format!("Loading blob {:?} from storage at {:?}", path, full_path))
     }
 
     /// Write a file to disk as a blob, and record it in the ExtDocs table.
@@ -292,6 +297,7 @@ impl SqliteStore {
 
         if let Some((_va, _vu, filename)) = rv {
             // XXXX check va and vu.
+            // XXXX Some error cases should also be 'None'
             self.read_blob(filename).map(Option::Some)
         } else {
             Ok(None)
