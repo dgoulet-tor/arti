@@ -156,6 +156,16 @@ impl CircUsage {
     }
 }
 
+impl CircEntry {
+    /// Return true if this entry contains the circuit `c`.
+    fn matches_circ(&self, c: &ClientCirc) -> bool {
+        match &self.circ {
+            Circ::Open(x) => std::ptr::eq(x.as_ref(), c),
+            Circ::Pending(_) => false,
+        }
+    }
+}
+
 impl<TR> CircMgr<TR>
 where
     TR: tor_chanmgr::transport::Transport,
@@ -327,5 +337,24 @@ where
         let path = usage.build_path(rng, netdir)?;
         let circ = path.build_circuit(rng, &self.chanmgr).await?;
         Ok(circ)
+    }
+
+    /// If 'circ' is a circuit that we're keeping track of, don't give
+    /// it out for any future requests.
+    pub async fn retire_circ(&self, circ: &ClientCirc) {
+        let mut circs = self.circuits.lock().await;
+        // XXXX This implementation is awful.  Looking over the whole pile
+        // XXXX of circuits!?
+        let id = {
+            if let Some((id, _)) = circs.iter_mut().find(|(_, c)| c.matches_circ(circ)) {
+                id.clone()
+            } else {
+                return;
+            }
+        };
+
+        // We just remove this circuit from the map. Doing so will ensure
+        // that it will go away when there are no other references to it.
+        circs.remove(&id);
     }
 }
