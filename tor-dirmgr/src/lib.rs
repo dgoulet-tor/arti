@@ -30,6 +30,7 @@ use tor_netdoc::AllowAnnotations;
 
 use anyhow::{anyhow, Result};
 use async_rwlock::RwLock;
+use futures::stream::StreamExt;
 use log::info;
 
 use std::collections::HashSet;
@@ -564,39 +565,62 @@ where
     }
     let chunksize: usize = std::cmp::min(500, (missing.len() + 2) / 3);
 
-    let mut new_mds: Vec<_> = Vec::new();
-    for chunk in missing[..].chunks(chunksize) {
-        // TODO: Do these in parallel.
-        info!("Fetching {} microdescriptors...", chunksize);
-        let mut resource = tor_dirclient::request::MicrodescRequest::new();
-        for md in chunk.iter() {
-            resource.push(*md);
-        }
-        let want: HashSet<_> = chunk.iter().collect();
-        let cm = Arc::clone(&circmgr);
+    let n_parallel_requests = 4; // TODO make this configurable.
 
-        let res = tor_dirclient::get_resource(resource, info, cm).await;
+    // Now we're going to fetch the descriptors up to 500 at a time,
+    // in up to n_parallel_requests requests.
 
-        // XXXX log error.
-        if let Ok(text) = res {
-            for annot in MicrodescReader::new(&text, AllowAnnotations::AnnotationsNotAllowed) {
-                if let Ok(anno) = annot {
-                    let txt = anno.within(&text).unwrap().to_string(); //XXXX ugly copy
-                    let md = anno.into_microdesc();
-                    if want.contains(md.digest()) {
-                        new_mds.push((txt, md))
-                    } // XXX warn if we didn't want this.
+    // TODO: we should maybe exit early if we wind up with a working
+    // list.
+    // TODO: we should maybe try to keep concurrent requests on
+    // separate circuits?
+    let new_mds: Vec<_> = futures::stream::iter(missing[..].chunks(chunksize))
+        .map(|chunk| {
+            let cm = Arc::clone(&circmgr);
+            async move {
+                info!("Fetching {} microdescriptors...", chunksize);
+                let mut resource = tor_dirclient::request::MicrodescRequest::new();
+                for md in chunk.iter() {
+                    resource.push(*md);
                 }
-                // XXXX log error
+                let want: HashSet<_> = chunk.iter().collect();
+
+                let res = tor_dirclient::get_resource(resource, info, cm).await;
+
+                let mut my_new_mds = Vec::new();
+
+                // XXXX log error.
+                if let Ok(text) = res {
+                    for annot in
+                        MicrodescReader::new(&text, AllowAnnotations::AnnotationsNotAllowed)
+                    {
+                        if let Ok(anno) = annot {
+                            let txt = anno.within(&text).unwrap().to_string(); //XXXX ugly copy
+                            let md = anno.into_microdesc();
+                            if want.contains(md.digest()) {
+                                my_new_mds.push((txt, md))
+                            } // XXX warn if we didn't want this.
+                        }
+                        // XXXX log error
+                    }
+                }
+
+                info!("Received {} microdescriptors.", my_new_mds.len());
+                my_new_mds
             }
-        }
-    }
+        })
+        .buffer_unordered(n_parallel_requests)
+        .collect()
+        .await;
 
     // Now save it to the database
     {
         let mut w = store.write().await;
-        w.store_microdescs(new_mds.iter().map(|(txt, md)| (&txt[..], md)), mark_listed)?;
+        w.store_microdescs(
+            new_mds.iter().flatten().map(|(txt, md)| (&txt[..], md)),
+            mark_listed,
+        )?;
     }
 
-    Ok(new_mds.into_iter().map(|(_, md)| md).collect())
+    Ok(new_mds.into_iter().flatten().map(|(_, md)| md).collect())
 }
