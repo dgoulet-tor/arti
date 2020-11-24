@@ -3,6 +3,7 @@
 //! We have code implemented for two methods: the legacy format used by
 //! the C Tor implementation, and a more flexible format based on sqlite.
 
+#[cfg(feature = "legacy-storage")]
 pub(crate) mod legacy;
 pub(crate) mod sqlite;
 

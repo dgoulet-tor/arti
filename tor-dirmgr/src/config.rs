@@ -3,10 +3,10 @@
 //! Directory configuration tells us where to load and store directory
 //! information ,where to fetch it from, and how to validate it.
 
+#[cfg(feature = "legacy-storage")]
 use crate::storage::legacy::LegacyStore;
 use crate::storage::sqlite::SqliteStore;
 use crate::Authority;
-use crate::PartialNetDir;
 use crate::{Error, Result};
 use tor_netdir::fallback::{FallbackDir, FallbackSet};
 
@@ -266,8 +266,9 @@ impl Default for NetDirConfigBuilder {
 }
 
 impl NetDirConfig {
+    #[cfg(feature = "legacy-storage")]
     /// Read directory information from the configured storage location.
-    pub fn load_legacy(&self) -> Result<PartialNetDir> {
+    pub fn load_legacy(&self) -> Result<tor_netdir::PartialNetDir> {
         let store = LegacyStore::new(self.legacy_cache_path.as_ref().unwrap().clone());
         store.load_legacy(&self.authorities[..])
     }
