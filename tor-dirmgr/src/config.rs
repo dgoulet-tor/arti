@@ -144,9 +144,12 @@ impl NetDirConfigBuilder {
     /// This function can handle the format for DirAuthority lines
     /// that chutney generates now, but that's it.  It isn't careful
     /// about line continuations.
-    pub fn configure_from_chutney(&mut self, path: &Path) -> Result<()> {
+    pub fn configure_from_chutney<P>(&mut self, path: P) -> Result<()>
+    where
+        P: AsRef<Path>,
+    {
         use std::io::{self, BufRead};
-        let pb = path.join("000a/torrc"); // Any node directory will do.
+        let pb = path.as_ref().join("000a/torrc"); // Any node directory will do.
         dbg!(&pb);
         let f = fs::File::open(pb)?;
 
