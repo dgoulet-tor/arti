@@ -69,6 +69,11 @@ async fn handle_socks_conn(
     let port = request.port();
     info!("Got a socks request for {}:{}", addr, port);
 
+    if addr.to_lowercase().ends_with(".onion") {
+        info!("That's an onion address; rejecting it.");
+        return Ok(());
+    }
+
     let exit_ports = [port];
     let circ = circmgr
         .get_or_launch_exit(dir.as_ref().into(), &exit_ports)
