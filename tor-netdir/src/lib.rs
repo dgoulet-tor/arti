@@ -174,6 +174,11 @@ impl MDReceiver for PartialNetDir {
 }
 
 impl NetDir {
+    /// Return the declared lifetime of this NetDir.
+    pub fn lifetime(&self) -> &netstatus::Lifetime {
+        &self.consensus.lifetime()
+    }
+
     /// Construct a (possibly invalid) Relay object from a routerstatus and its
     /// microdescriptor (if any).
     fn relay_from_rs<'a>(

@@ -66,6 +66,57 @@ impl DirMgr {
         })
     }
 
+    /// Load the latest non-pending non-expired directory from the
+    /// cache, if it is newer than the one we have.
+    ///
+    /// Return false if there is no such consensus.
+    pub async fn load_directory(&self) -> Result<bool> {
+        let store = &self.store;
+
+        let noinfo = NoInformation::new();
+
+        let mut unval = match noinfo.load(false, &self.config, store).await? {
+            NextState::SameState(_) => return Ok(false),
+            NextState::NewState(unval) => unval,
+        };
+
+        let cached_vu = unval.consensus.peek_lifetime().valid_until();
+        {
+            if self.current_netdir_lasts_past(cached_vu).await {
+                return Ok(false);
+            }
+        }
+
+        unval.load(&self.config, store).await?;
+        let mut partial = match unval.advance(&self.config)? {
+            NextState::SameState(_) => {
+                return Err(Error::CacheCorruption(
+                    "Couldn't get certs for supposedly complete consensus",
+                )
+                .into());
+            }
+            NextState::NewState(p) => p,
+        };
+
+        partial.load(store).await?;
+        let nd = match partial.advance() {
+            NextState::NewState(nd) => nd,
+            NextState::SameState(_) => {
+                return Err(Error::CacheCorruption(
+                    "Couldn't get microdescs for supposedly complete consensus",
+                )
+                .into());
+            }
+        };
+
+        {
+            let mut w = self.netdir.write().await;
+            *w = Some(Arc::new(nd));
+        }
+
+        Ok(true)
+    }
+
     /// Run a complete bootstrapping process, using information from our
     /// cache when it is up-to-date enough.  When complete, update our
     /// NetDir with the one we've fetched.
@@ -85,7 +136,8 @@ impl DirMgr {
 
         let noinfo = NoInformation::new();
 
-        // TODO: need to make consensus non-pending eventually.
+        // TODO: we might not want the pending one if it's too old. add a flag.
+        // TODO: Also check the age of our current one.
         let mut unval = match noinfo.load(true, &self.config, store).await? {
             NextState::SameState(noinfo) => {
                 noinfo
@@ -122,6 +174,18 @@ impl DirMgr {
         }
 
         Ok(())
+    }
+
+    /// Return true if we have a netdir, and it will be valid at least
+    /// till 'when'.
+    async fn current_netdir_lasts_past(&self, when: SystemTime) -> bool {
+        let r = self.netdir.read().await;
+        if let Some(current_netdir) = r.as_ref() {
+            let current_vu = current_netdir.lifetime().valid_until();
+            current_vu >= when
+        } else {
+            false
+        }
     }
 
     /// Return an Arc handle to our latest sufficiently up-to-date directory.
