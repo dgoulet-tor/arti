@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use tor_chanmgr::transport::nativetls::NativeTlsTransport;
+use tor_socksproto::SocksCmd;
 
 use anyhow::Result;
 
@@ -68,6 +69,10 @@ async fn handle_socks_conn(
     let addr = request.addr().to_string();
     let port = request.port();
     info!("Got a socks request for {}:{}", addr, port);
+    if request.command() != SocksCmd::CONNECT {
+        warn!("Dropping request; {:?} is unsupported", request.command());
+        return Ok(());
+    }
 
     if addr.to_lowercase().ends_with(".onion") {
         info!("That's an onion address; rejecting it.");
