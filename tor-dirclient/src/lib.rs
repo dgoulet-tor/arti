@@ -51,11 +51,31 @@ where
 
     stream.write_bytes(encoded.as_bytes()).await?;
 
-    // XXXX Break the rest of this up onto functions.
+    let (encoding, buf, n_in_buf) = read_headers(&mut stream).await?;
 
+    let decompressor = get_decompressor(encoding.as_deref())?;
+    let mut result = vec![0_u8; 2048];
+    let ok = read_and_decompress(stream, decompressor, buf, n_in_buf, &mut result).await;
+    match (partial_ok, ok, result.len()) {
+        (true, Err(e), n) if n > 0 => info!("Error while downloading: {}", e),
+        (_, Err(e), _) => return Err(e),
+        (_, _, _) => (),
+    }
+    Ok(String::from_utf8(result)?)
+}
+
+/// Read and parse HTTP/1 headers from `stream`.
+///
+/// On success, return the Content-Encoding header, a buffer containing
+/// leftover data beyond what was in the header, and the number of usable
+/// bytes in that buffer.
+///
+/// TODO: fix up this complicated return type!
+async fn read_headers(
+    stream: &mut tor_proto::stream::DataStream,
+) -> Result<(Option<String>, Vec<u8>, usize)> {
     let mut buf = vec![0; 1024];
     let mut n_in_buf = 0;
-    let mut encoding: Option<String> = None;
 
     loop {
         let n = stream.read_bytes(&mut buf[n_in_buf..]).await?;
@@ -81,13 +101,15 @@ where
             if response.code != Some(200) {
                 return Err(Error::HttpStatus(response.code).into());
             }
-            if let Some(enc) = response
+            let encoding = if let Some(enc) = response
                 .headers
                 .iter()
                 .find(|h| h.name == "Content-Encoding")
             {
-                encoding = Some(String::from_utf8(enc.value.to_vec())?);
-            }
+                Some(String::from_utf8(enc.value.to_vec())?)
+            } else {
+                None
+            };
             /*
             if let Some(clen) = response.headers.iter().find(|h| h.name == "Content-Length") {
                 let clen = std::str::from_utf8(clen.value)?;
@@ -97,22 +119,12 @@ where
             let n_parsed = res.unwrap();
             n_in_buf -= n_parsed;
             buf.copy_within(n_parsed.., 0);
-            break;
+            return Ok((encoding, buf, n_in_buf));
         }
         if n == 0 {
             return Err(Error::TruncatedHeaders.into());
         }
     }
-
-    let decompressor = get_decompressor(encoding.as_deref())?;
-    let mut result = vec![0_u8; 2048];
-    let ok = read_and_decompress(stream, decompressor, buf, n_in_buf, &mut result).await;
-    match (partial_ok, ok, result.len()) {
-        (true, Err(e), n) if n > 0 => info!("Error while downloading: {}", e),
-        (_, Err(e), _) => return Err(e),
-        (_, _, _) => (),
-    }
-    Ok(String::from_utf8(result)?)
 }
 
 /// Helper: download directory information from `stream` and
