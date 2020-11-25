@@ -99,7 +99,7 @@ mod miniz_oxide {
                 Ok(MZStatus::StreamEnd) => StatusKind::Done,
                 Ok(MZStatus::Ok) => StatusKind::Written,
                 Err(MZError::Buf) => StatusKind::OutOfSpace,
-                other => return Err(anyhow!("compression error: {:?}", other)),
+                other => return Err(anyhow!("miniz compression error: {:?}", other)),
             };
 
             Ok(Status {

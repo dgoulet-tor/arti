@@ -15,6 +15,7 @@
 #![deny(clippy::missing_docs_in_private_items)]
 
 mod decompress;
+mod err;
 pub mod request;
 mod util;
 
@@ -22,9 +23,11 @@ use crate::decompress::Decompressor;
 
 use tor_circmgr::{CircMgr, DirInfo};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use log::info;
 use std::sync::Arc;
+
+pub use err::Error;
 
 /// Fetch the resource described by `req` over the Tor network.
 ///
@@ -76,9 +79,7 @@ where
             }
         } else {
             if response.code != Some(200) {
-                // XXXX Turn all anyhow! instances in this crate into
-                // real errors.
-                return Err(anyhow!("Unexpected {} error", response.code.unwrap()));
+                return Err(Error::HttpStatus(response.code).into());
             }
             if let Some(enc) = response
                 .headers
@@ -99,7 +100,7 @@ where
             break;
         }
         if n == 0 {
-            return Err(anyhow!("Unexpected EOF when parsing headers."));
+            return Err(Error::TruncatedHeaders.into());
         }
     }
 
@@ -169,7 +170,7 @@ async fn read_and_decompress(
 
         if written_total > 2048 && written_total > read_total * 20 {
             result.resize(written_total, 0);
-            return Err(anyhow!("looks like a compression bomb"));
+            return Err(Error::CompressionBomb.into());
         }
 
         match st.status {
@@ -190,6 +191,6 @@ fn get_decompressor(encoding: Option<&str>) -> Result<Box<dyn Decompressor>> {
         Some("deflate") => Ok(miniz_oxide::inflate::stream::InflateState::new_boxed(
             miniz_oxide::DataFormat::Zlib,
         )),
-        Some(other) => Err(anyhow!("Unrecognized compression type '{}'", other)),
+        Some(other) => Err(Error::BadEncoding(other.into()).into()),
     }
 }
