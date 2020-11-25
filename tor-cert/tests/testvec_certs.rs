@@ -1,5 +1,5 @@
 use tor_cert::rsa::RSACrosscert;
-use tor_cert::Ed25519Cert;
+use tor_cert::{Ed25519Cert, KeyType};
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
 
 use std::time::{Duration, SystemTime};
@@ -37,6 +37,7 @@ fn test_valid_ed() {
         .check_valid_at(&notional_time)
         .unwrap();
 
+    assert_eq!(cert.subject_key().key_type(), KeyType::ED25519_KEY);
     assert_eq!(cert.subject_key().as_ed25519(), Some(&signing_key));
     assert_eq!(cert.signing_key().unwrap(), &identity_key);
     assert_eq!(cert.cert_type(), 4.into());
@@ -64,7 +65,9 @@ fn test_valid_ed() {
         .unwrap()
         .check_valid_at(&notional_time)
         .unwrap();
+    assert_eq!(cert.subject_key().key_type(), KeyType::SHA256_OF_X509);
     assert_eq!(cert.subject_key().as_bytes(), &tls_cert_digest[..]);
+    assert_eq!(cert.subject_key().as_ed25519(), None);
     assert_eq!(cert.signing_key().unwrap(), &signing_key);
     assert_eq!(cert.cert_type(), 5.into());
     assert_eq!(
@@ -79,6 +82,9 @@ fn test_valid_rsa_cc() {
     let pk = hex!("30818902818100d38b1e6ceb946e0db0751f4cbace3dcb9688b6c25304227b4710c35afb73627e50500f5913e158b621802612d1c75827003703338375237552eb3cd3c12f6ab3604e60c1a2d26bb1fbad206ff023969a90909d6a65a5458a5312c26ebd3a3dad30302d4515cdcd264146ac18e6fc60a04bd3ec327f04294d96ba5aa25b464c3f0203010001");
     let pk = tor_llcrypto::pk::rsa::PublicKey::from_der(&pk[..]).unwrap();
 
+    let wrong_pk = hex!("30818902818100d38b1e6ceb946e0db0751f4cbace3dcb9688b6c25304227b4710c35afb73627e50500f5913e158b621802612d1c75827003703338375237552eb3cd3c12f6ab3604e60c1a2d26bb1fbad206ff023969a90909d6a65a5458a5312c26ebd6a3dad30302d4515cdcd264146ac18e6fc60a04bd3ec327f04294d96ba5aa25b464c3f0203010001");
+    let wrong_pk = tor_llcrypto::pk::rsa::PublicKey::from_der(&wrong_pk[..]).unwrap();
+
     let ed_identity = hex!("DCB604DB2034B00FD16986D4ADB9D16B21CB4E4457A33DEC0F538903683E96E9");
     let ed_identity = tor_llcrypto::pk::ed25519::PublicKey::from_bytes(&ed_identity[..]).unwrap();
 
@@ -91,6 +97,14 @@ fn test_valid_rsa_cc() {
          88DD5B39409B23FC3EB7B2C9F7328EB18DA36D54D80575899EA6507CCBFCDF1F"
     );
     let cert = RSACrosscert::decode(&c[..]).unwrap();
+
+    // This returns correct for all keys.
+    assert!(cert.key_is_correct(&pk).is_ok());
+    assert!(cert.key_is_correct(&wrong_pk).is_ok());
+
+    // But it isn't well-signed with the wrong pk.
+    assert!(cert.is_well_signed(&wrong_pk).is_err());
+
     let cert = cert
         .check_signature(&pk)
         .unwrap()
