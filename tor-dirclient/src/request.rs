@@ -14,7 +14,10 @@ pub trait ClientRequest {
     /// it is well-formed.
     fn into_request(self) -> Result<http::Request<()>>;
 
-    // TODO: add a flag to say whether partial documents would be useful.
+    /// Return true if partial downloads are potentially useful.  This
+    /// is true for request types where we're going to be downloading
+    /// multiple documents.
+    fn partial_docs_ok(&self) -> bool;
 }
 
 /// A Request for a consensus directory.
@@ -119,6 +122,10 @@ impl ClientRequest for ConsensusRequest {
 
         Ok(req.body(())?)
     }
+
+    fn partial_docs_ok(&self) -> bool {
+        false
+    }
 }
 
 /// A request for one or more authority certificates.
@@ -169,6 +176,10 @@ impl ClientRequest for AuthCertRequest {
 
         Ok(req.body(())?)
     }
+
+    fn partial_docs_ok(&self) -> bool {
+        self.ids.len() > 1
+    }
 }
 
 /// A request for one or more microdescriptors
@@ -212,6 +223,10 @@ impl ClientRequest for MicrodescRequest {
         let req = add_common_headers(req);
 
         Ok(req.body(())?)
+    }
+
+    fn partial_docs_ok(&self) -> bool {
+        self.digests.len() > 1
     }
 }
 

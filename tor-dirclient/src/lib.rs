@@ -23,6 +23,7 @@ use crate::decompress::Decompressor;
 use tor_circmgr::{CircMgr, DirInfo};
 
 use anyhow::{anyhow, Result};
+use log::info;
 use std::sync::Arc;
 
 /// Fetch the resource described by `req` over the Tor network.
@@ -38,6 +39,7 @@ where
     CR: request::ClientRequest,
     TR: tor_chanmgr::transport::Transport,
 {
+    let partial_ok = req.partial_docs_ok();
     let req = req.into_request()?;
     let encoded = util::encode_request(req);
 
@@ -101,53 +103,84 @@ where
         }
     }
 
+    let decompressor = get_decompressor(encoding.as_deref())?;
     let mut result = vec![0_u8; 2048];
-    let mut read_total = n_in_buf;
-    let mut written_total = 0;
-    {
-        let mut decompressor = get_decompressor(encoding.as_deref())?;
-        let mut done_reading = false;
-        use decompress::StatusKind;
-        // XXXX Impose a maximum size!
-        loop {
-            let status = stream.read_bytes(&mut buf[n_in_buf..]).await;
-            let n = match status {
-                Ok(n) => n,
-                Err(tor_proto::Error::StreamClosed(_)) => 0,
-                Err(other) => return Err(other.into()),
-            };
-            if n == 0 {
-                done_reading = true;
-            }
-            read_total += n;
-            n_in_buf += n;
-
-            if result.len() == written_total {
-                result.resize(result.len() * 2, 0);
-            }
-
-            let st = decompressor.process(
-                &buf[..n_in_buf],
-                &mut result[written_total..],
-                done_reading,
-            )?;
-            n_in_buf -= st.consumed;
-            buf.copy_within(st.consumed.., 0);
-            written_total += st.written;
-
-            if written_total > 2048 && written_total > read_total * 20 {
-                return Err(anyhow!("looks like a compression bomb"));
-            }
-
-            match st.status {
-                StatusKind::Done => break,
-                StatusKind::Written => (),
-                StatusKind::OutOfSpace => result.resize(result.len() * 2, 0),
-            }
-        }
-        result.resize(written_total, 0);
+    let ok = read_and_decompress(stream, decompressor, buf, n_in_buf, &mut result).await;
+    match (partial_ok, ok, result.len()) {
+        (true, Err(e), n) if n > 0 => info!("Error while downloading: {}", e),
+        (_, Err(e), _) => return Err(e),
+        (_, _, _) => (),
     }
     Ok(String::from_utf8(result)?)
+}
+
+/// Helper: download directory information from `stream` and
+/// decompress it into a result buffer.  Assumes we've started with
+/// n_in_buf bytes of partially downloaded data in `buf`.
+///
+/// Returns the status of our download attempt, stores any data that
+/// we were able to download into `result`.  Existing contents of
+/// `result` are overwritten.
+async fn read_and_decompress(
+    mut stream: tor_proto::stream::DataStream,
+    mut decompressor: Box<dyn Decompressor>,
+    mut buf: Vec<u8>,
+    mut n_in_buf: usize,
+    result: &mut Vec<u8>,
+) -> Result<()> {
+    let mut read_total = n_in_buf;
+    let mut written_total = 0;
+
+    let mut done_reading = false;
+    use decompress::StatusKind;
+
+    // XXXX Impose a maximum size!
+    loop {
+        let status = stream.read_bytes(&mut buf[n_in_buf..]).await;
+        let n = match status {
+            Ok(n) => n,
+            Err(tor_proto::Error::StreamClosed(_)) => 0,
+            Err(other) => {
+                result.resize(written_total, 0);
+                return Err(other.into());
+            }
+        };
+        if n == 0 {
+            done_reading = true;
+        }
+        read_total += n;
+        n_in_buf += n;
+
+        if result.len() == written_total {
+            result.resize(result.len() * 2, 0);
+        }
+
+        let st = decompressor.process(&buf[..n_in_buf], &mut result[written_total..], done_reading);
+        let st = match st {
+            Ok(st) => st,
+            Err(e) => {
+                result.resize(written_total, 0);
+                return Err(e);
+            }
+        };
+        n_in_buf -= st.consumed;
+        buf.copy_within(st.consumed.., 0);
+        written_total += st.written;
+
+        if written_total > 2048 && written_total > read_total * 20 {
+            result.resize(written_total, 0);
+            return Err(anyhow!("looks like a compression bomb"));
+        }
+
+        match st.status {
+            StatusKind::Done => break,
+            StatusKind::Written => (),
+            StatusKind::OutOfSpace => result.resize(result.len() * 2, 0),
+        }
+    }
+    result.resize(written_total, 0);
+
+    Ok(())
 }
 
 /// Return a decompressor object corresponding to a given Content-Encoding.
