@@ -21,17 +21,18 @@ Tor might break this; no users should expect source compatibility.
 
 ## What the demo can do if you run it.
 
-There is a demo program that takes the location of a chutney directory or a
-tor directory. If it finds one, it reads the directory info from
-disk, builds a random three hop circuit, and sends a request for
-http://www.torproject.org:80/.  Then it displays the answer on stdout.
+It can act as a SOCKS proxy that uses the Tor network.  (Not a very
+secure or anonymous one!)  It knows how to download directory
+information and how to load it from cache, but it doesn't try to
+download more than one directory per run.
 
-Example:
-   % cargo run -- --tor-dir ~/.tor/
+To try it out, run the demo program in client-demo.   It will open a
+SOCKS proxy on port 9150.
 
-Remember that rust builds without optimizations by default, so it
-may be a bit slow.  You can try an optimized build with
-   % cargo run --release -- --tor-dir ~/.tor/
+    % cargo run --release
+
+Again, do not use this program if you need anonymity, privacy, security,
+or stability.
 
 ## What's here and what isn't.
 
@@ -49,6 +50,7 @@ So far the code has untested or under-tested implementations of:
   * building circuits from chosen hops
   * a slightly wonky circuit abstraction
   * a slightly wonky stream abstraction
+  * Downloading and caching directory documents
 
 Before I share it more broadly, I think it needs more work on:
 
@@ -66,7 +68,8 @@ There is no support yet for:
   * creating network documents
   * v2 onion service anything
   * v3 onion service anything
-  * the directory protocol (downloading or uploading)
+  * Keeping directory documents up-to-date while running
+  * Acting as a directory cache server
   * lots of optimizations that Tor does
   * lots of security stuff that Tor does
   * pluggable transports
@@ -153,10 +156,9 @@ You can make documentation with `cargo doc`.  I prefer
 `cargo doc --no-deps --document-private-items`, to include documentation for
 private members but not for dependencies.
 
-You can try running the demo code in `client-demo` with `cd
-client-demo && cargo run`.  You'll need to have a running local
-chutney network or an up-to-date tor directory first; see the
-documentation for that program.
+You can try running the demo SOCKS proxy code in `client-demo` with
+`cargo run`.  Since rust builds code without optimization by default,
+you'll probably want to say `cargo run --release`.
 
 ## I want to help. What _should_ I do with this?
 
