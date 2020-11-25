@@ -20,4 +20,8 @@ pub enum Error {
     /// Unrecognized Content-Encoding value.
     #[error("unsupported HTTP encoding {0:?}")]
     BadEncoding(String),
+
+    /// Received a response that was longer than we expected.
+    #[error("response too long; gave up after {0} bytes")]
+    ResponseTooLong(usize),
 }

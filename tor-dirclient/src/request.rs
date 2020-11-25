@@ -18,6 +18,12 @@ pub trait ClientRequest {
     /// is true for request types where we're going to be downloading
     /// multiple documents.
     fn partial_docs_ok(&self) -> bool;
+
+    /// Return the maximum allowable response length we'll accept for this
+    /// request.
+    fn max_response_len(&self) -> usize {
+        (16 * 1024 * 1024) - 1
+    }
 }
 
 /// A Request for a consensus directory.
@@ -180,6 +186,11 @@ impl ClientRequest for AuthCertRequest {
     fn partial_docs_ok(&self) -> bool {
         self.ids.len() > 1
     }
+
+    fn max_response_len(&self) -> usize {
+        // TODO: Pick a more principled number; I just made this one up.
+        self.ids.len().saturating_mul(16 * 1024)
+    }
 }
 
 /// A request for one or more microdescriptors
@@ -227,6 +238,11 @@ impl ClientRequest for MicrodescRequest {
 
     fn partial_docs_ok(&self) -> bool {
         self.digests.len() > 1
+    }
+
+    fn max_response_len(&self) -> usize {
+        // TODO: Pick a more principled number; I just made this one up.
+        self.digests.len().saturating_mul(8 * 1024)
     }
 }
 
