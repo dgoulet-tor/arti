@@ -216,9 +216,14 @@ The current crates are:
 `caret`: A utility for generating enumerations with helpful trait
 implementations
 
-`tor-llcrypto`: Wrappers and re-imports of cryptographic code that Tor needs in
+`tor-llcrypto`: Wrappers and re-exports of cryptographic code that Tor needs in
 various ways.  Other crates should use this crate, and not actually
-use any crypto crates directly.
+use any crypto implementation crates directly.  (It's okay to use crates that
+define cryptographic traits.)
+
+`tor-rtcompat`: Wrappers and re-exports of asynchronous runtime
+code. Currently it only has async-std, but in the long  run we'll want to
+support at least tokio too.
 
 `tor-bytes`: Byte-by-byte encoder and decoder functions and traits.  We use
 this to safely parse cells, certs, and other byte-oriented things.
@@ -228,6 +233,12 @@ this to safely parse cells, certs, and other byte-oriented things.
 `tor-protover`: Minimal implementation of the Tor subprotocol verisoning
 system.  Less complete than the one in Tor's current src/rust, but more
 simple.
+
+`tor-socksproto`: Implements the server side of the SOCKS protocol, along
+with Tor-specific extensions.
+
+`tor-checkable`: Defines traits and types used to represent things that you
+can't use until verifying their signatures and checking their timeliness.
 
 `tor-netdoc`: Parsing for Tor's network documents.  Underdocumented and too
 big.
@@ -245,12 +256,21 @@ logical.)
 
 `tor-netdir`: Wraps tor-netdoc to expose a "tor network directory" interface.
 Doesn't touch the network itself.  Right now it only handles microdesc-based
-directories, and reads all its information from disk.
+directories.
 
-`client-demo`: A simple tor client program.  Right now it requires that you
-already have a datadir full of directory information.  It does a client->relay
-handshake, builds a three-hop circuit, fetches http://www.torproject.org:80/,
-and exits.
+`tor-chanmgr`: Creates channels as necessary, returning existing channels
+when they already exist.
+
+`tor-circmgr`: Creates circuits as requested, returning existing circuits
+when they already exist.
+
+`tor-dirclient`: Downloads directory information over a one-hop circuit.
+
+`tor-dirmgr`: Uses `tor-dirclient` to fetch directory information as needed
+to download, cache, and maintain an up-to-date network view. Exposes the
+network view as an instance of `tor-netdir::NetDir`.
+
+`client-demo`: A simple Tor client program that can runs as a SOCKS proxy.
 
 ## Intended architecture
 
