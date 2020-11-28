@@ -347,7 +347,7 @@ where
         // XXXX of circuits!?
         let id = {
             if let Some((id, _)) = circs.iter_mut().find(|(_, c)| c.matches_circ(circ)) {
-                id.clone()
+                *id
             } else {
                 return;
             }

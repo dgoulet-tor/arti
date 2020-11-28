@@ -200,6 +200,6 @@ fn main() -> Result<()> {
         // TODO CONFORMANCE: we should stop now if there are required
         // protovers we don't support.
 
-        return run_socks_proxy(dirmgr, circmgr, args).await;
+        run_socks_proxy(dirmgr, circmgr, args).await
     })
 }
