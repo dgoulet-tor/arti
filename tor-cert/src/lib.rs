@@ -305,7 +305,7 @@ impl Readable for CertExt {
             _ => {
                 if (flags & 1) != 0 {
                     return Err(Error::BadMessage(
-                        "unrecognized certificate extension, with 'affect_validation' flag set.",
+                        "unrecognized certificate extension, with 'affects_validation' flag set.",
                     ));
                 }
                 CertExt::Unrecognized(UnrecognizedExt {
@@ -547,8 +547,8 @@ impl tor_checkable::SelfSigned<SigCheckedCert> for UncheckedCert {
 impl tor_checkable::Timebound<Ed25519Cert> for SigCheckedCert {
     type Error = tor_checkable::TimeValidityError;
     fn is_valid_at(&self, t: &time::SystemTime) -> std::result::Result<(), Self::Error> {
-        let expiry = self.cert.expiry();
-        if t >= &expiry {
+        if self.cert.is_expired_at(*t) {
+            let expiry = self.cert.expiry();
             Err(Self::Error::Expired(t.duration_since(expiry).unwrap()))
         } else {
             Ok(())
@@ -557,5 +557,57 @@ impl tor_checkable::Timebound<Ed25519Cert> for SigCheckedCert {
 
     fn dangerously_assume_timely(self) -> Ed25519Cert {
         self.cert
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use hex_literal::hex;
+
+    #[test]
+    fn parse_unrecognized_ext() -> Result<()> {
+        // case one: a flag is set but we don't know it
+        let b = hex!("0009 99 10 657874656e73696f6e");
+        let mut r = Reader::from_slice(&b);
+        let e: CertExt = r.extract()?;
+        r.should_be_exhausted()?;
+
+        assert_eq!(e.ext_id(), 0x99.into());
+
+        // case two: we've been told to ignore the cert if we can't
+        // handle the extension.
+        let b = hex!("0009 99 11 657874656e73696f6e");
+        let mut r = Reader::from_slice(&b);
+        let e: Result<CertExt> = r.extract();
+        assert!(e.is_err());
+        assert_eq!(
+            e.err().unwrap(),
+            Error::BadMessage(
+                "unrecognized certificate extension, with 'affects_validation' flag set."
+            )
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    pub fn certified_key() -> Result<()> {
+        let b =
+            hex!("4c27616d6f757220756e6974206365757820717527656e636861c3ae6e616974206c6520666572");
+        let mut r = Reader::from_slice(&b);
+
+        let ck = CertifiedKey::from_reader(KeyType::SHA256_OF_RSA, &mut r)?;
+        assert_eq!(ck.as_bytes(), &b[..32]);
+        assert_eq!(ck.key_type(), KeyType::SHA256_OF_RSA);
+        assert_eq!(r.remaining(), 7);
+
+        let mut r = Reader::from_slice(&b);
+        let ck = CertifiedKey::from_reader(42.into(), &mut r)?;
+        assert_eq!(ck.as_bytes(), &b[..32]);
+        assert_eq!(ck.key_type(), 42.into());
+        assert_eq!(r.remaining(), 7);
+
+        Ok(())
     }
 }
