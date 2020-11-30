@@ -8,7 +8,7 @@ use crate::storage::InputString;
 use crate::{Error, Result};
 
 use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
-use tor_netdoc::doc::microdesc::{MDDigest, Microdesc};
+use tor_netdoc::doc::microdesc::MDDigest;
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -399,15 +399,15 @@ impl SqliteStore {
     /// it was last listed at `when`.
     pub fn store_microdescs<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
     where
-        I: IntoIterator<Item = (&'a str, &'a Microdesc)>,
+        I: IntoIterator<Item = (&'a str, &'a MDDigest)>,
     {
         let when: DateTime<Utc> = when.into();
 
         let tx = self.conn.transaction()?;
         let mut stmt = tx.prepare(INSERT_MD)?;
 
-        for (content, md) in input.into_iter() {
-            let h_digest = hex::encode(md.digest());
+        for (content, md_digest) in input.into_iter() {
+            let h_digest = hex::encode(md_digest);
             stmt.execute(params![h_digest, when, content])?;
         }
         stmt.finalize()?;

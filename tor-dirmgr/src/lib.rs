@@ -12,7 +12,6 @@
 #![deny(clippy::missing_docs_in_private_items)]
 
 pub mod authority;
-// TODO: make this private.
 mod config;
 mod docmeta;
 mod err;
@@ -617,7 +616,10 @@ where
     {
         let mut w = store.write().await;
         w.store_microdescs(
-            new_mds.iter().flatten().map(|(txt, md)| (&txt[..], md)),
+            new_mds
+                .iter()
+                .flatten()
+                .map(|(txt, md)| (&txt[..], md.digest())),
             mark_listed,
         )?;
     }

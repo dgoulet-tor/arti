@@ -1,10 +1,13 @@
 //! Types to describe information about other downloaded directory
 //! documents, without necessarily having the full document.
-
-use tor_llcrypto as ll;
-use tor_netdoc::doc::netstatus::{Lifetime, MDConsensus, UnvalidatedMDConsensus};
+//!
+//! These types are all local within tor-dirmgr.  They're used so that
+//! the storage code doesn't need to know about all of the parsed
+//! types from tor-netdoc.
 
 use digest::Digest;
+use tor_llcrypto as ll;
+use tor_netdoc::doc::netstatus::{Lifetime, MDConsensus, UnvalidatedMDConsensus};
 
 /// Information about a consensus that we have in storage.
 ///
