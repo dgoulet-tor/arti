@@ -72,7 +72,7 @@ impl SqliteStore {
         let mut result = SqliteStore { conn, path };
 
         result.check_schema()?;
-        result.expire_all()?;
+        result.expire_all()?; // TODO: Maybe wait till we're bootstrapped.
 
         Ok(result)
     }
@@ -377,7 +377,7 @@ impl SqliteStore {
     }
 
     /// Update the `last-listed` time of every microdescriptor in
-    /// `input` to `when`.
+    /// `input` to `when` or later.
     pub fn update_microdescs_listed<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
     where
         I: IntoIterator<Item = &'a MDDigest>,
@@ -598,7 +598,7 @@ const INSERT_MD: &str = "
 /// Query: Change the time when a given microdescriptor was last listed.
 const UPDATE_MD_LISTED: &str = "
   UPDATE Microdescs
-  SET last_listed = ?
+  SET last_listed = max(last_listed, ?)
   WHERE sha256_digest = ?;
 ";
 
@@ -741,6 +741,8 @@ mod test {
         let now = Utc::now();
         let one_hour = CDuration::hours(1);
 
+        assert_eq!(store.latest_consensus_time()?, None);
+
         let cmeta = ConsensusMeta::new(
             netstatus::Lifetime::new(
                 now.into(),
@@ -754,6 +756,7 @@ mod test {
         store.store_consensus(&cmeta, true, "Pretend this is a consensus")?;
 
         {
+            assert_eq!(store.latest_consensus_time()?, None);
             let consensus = store.latest_consensus(true)?.unwrap();
             assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
         }
@@ -761,6 +764,7 @@ mod test {
         store.mark_consensus_usable(&cmeta)?;
 
         {
+            assert_eq!(store.latest_consensus_time()?, now.into());
             let consensus = store.latest_consensus(true)?;
             assert!(consensus.is_none());
             let consensus = store.latest_consensus(false)?.unwrap();
@@ -791,6 +795,45 @@ mod test {
         let certs = store.authcerts(&[keyids.clone(), keyids2])?;
         assert_eq!(certs.len(), 1);
         assert_eq!(certs.get(&keyids).unwrap(), "Pretend this is a cert");
+
+        Ok(())
+    }
+
+    #[test]
+    fn microdescs() -> Result<()> {
+        let (_tmp_dir, mut store) = new_empty()?;
+
+        let now = Utc::now();
+        let one_day = CDuration::days(1);
+
+        let d1 = [5_u8; 32];
+        let d2 = [7; 32];
+        let d3 = [42; 32];
+        let d4 = [99; 32];
+
+        store.store_microdescs(
+            vec![
+                ("Fake micro 1", &d1),
+                ("Fake micro 2", &d2),
+                ("Fake micro 3", &d3),
+            ],
+            (now - one_day * 100).into(),
+        )?;
+
+        store.update_microdescs_listed(&[d2], now.into())?;
+
+        let mds = store.microdescs(&[d2, d3, d4])?;
+        assert_eq!(mds.len(), 2);
+        assert_eq!(mds.get(&d1), None);
+        assert_eq!(mds.get(&d2).unwrap(), "Fake micro 2");
+        assert_eq!(mds.get(&d3).unwrap(), "Fake micro 3");
+        assert_eq!(mds.get(&d4), None);
+
+        // Now we'll expire.  that should drop everything but d2.
+        store.expire_all()?;
+        let mds = store.microdescs(&[d2, d3, d4])?;
+        assert_eq!(mds.len(), 1);
+        assert_eq!(mds.get(&d2).unwrap(), "Fake micro 2");
 
         Ok(())
     }
