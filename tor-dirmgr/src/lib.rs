@@ -17,7 +17,7 @@ mod docmeta;
 mod err;
 mod storage;
 
-use crate::docmeta::ConsensusMeta;
+use crate::docmeta::{AuthCertMeta, ConsensusMeta};
 use crate::storage::sqlite::SqliteStore;
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
 use tor_circmgr::{CircMgr, DirInfo};
@@ -434,8 +434,12 @@ impl UnvalidatedDir {
         // XXXX warn on discard.
 
         {
+            let v: Vec<_> = newcerts[..]
+                .iter()
+                .map(|(cert, s)| (AuthCertMeta::from_authcert(cert), *s))
+                .collect();
             let mut w = store.write().await;
-            w.store_authcerts(&newcerts[..])?;
+            w.store_authcerts(&v[..])?;
         }
 
         for (cert, _) in newcerts {

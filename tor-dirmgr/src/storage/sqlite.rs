@@ -3,11 +3,11 @@
 //! We store most objects in sqlite tables, except for very large ones,
 //! which we store as "blob" files in a separate directory.
 
-use crate::docmeta::ConsensusMeta;
+use crate::docmeta::{AuthCertMeta, ConsensusMeta};
 use crate::storage::InputString;
 use crate::{Error, Result};
 
-use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
+use tor_netdoc::doc::authcert::AuthCertKeyIds;
 use tor_netdoc::doc::microdesc::MDDigest;
 
 use std::collections::HashMap;
@@ -317,14 +317,15 @@ impl SqliteStore {
     }
 
     /// Save a list of authority certificates to the cache.
-    pub fn store_authcerts(&mut self, certs: &[(AuthCert, &str)]) -> Result<()> {
+    pub fn store_authcerts(&mut self, certs: &[(AuthCertMeta, &str)]) -> Result<()> {
         let tx = self.conn.transaction()?;
         let mut stmt = tx.prepare(INSERT_AUTHCERT)?;
-        for (cert, content) in certs {
-            let id_digest = hex::encode(cert.id_fingerprint().as_bytes());
-            let sk_digest = hex::encode(cert.sk_fingerprint().as_bytes());
-            let published: DateTime<Utc> = cert.published().into();
-            let expires: DateTime<Utc> = cert.expires().into();
+        for (meta, content) in certs {
+            let ids = meta.key_ids();
+            let id_digest = hex::encode(ids.id_fingerprint.as_bytes());
+            let sk_digest = hex::encode(ids.sk_fingerprint.as_bytes());
+            let published: DateTime<Utc> = meta.published().into();
+            let expires: DateTime<Utc> = meta.expires().into();
             stmt.execute(params![id_digest, sk_digest, published, expires, content])?;
         }
         stmt.finalize()?;

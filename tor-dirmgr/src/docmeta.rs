@@ -7,7 +7,12 @@
 
 use digest::Digest;
 use tor_llcrypto as ll;
-use tor_netdoc::doc::netstatus::{Lifetime, MDConsensus, UnvalidatedMDConsensus};
+use tor_netdoc::doc::{
+    authcert::{AuthCert, AuthCertKeyIds},
+    netstatus::{Lifetime, MDConsensus, UnvalidatedMDConsensus},
+};
+
+use std::time::SystemTime;
 
 /// Information about a consensus that we have in storage.
 ///
@@ -80,6 +85,48 @@ fn sha3_dual(signed_part: impl AsRef<[u8]>, remainder: impl AsRef<[u8]>) -> ([u8
     d.update(remainder.as_ref());
     let sha3_of_whole = d.finalize().into();
     (sha3_of_signed, sha3_of_whole)
+}
+
+/// Information about an authority certificate that we have in storage.
+///
+/// This information is ordinarily derived from the authority cert, but it
+/// doesn't have to be.
+pub struct AuthCertMeta {
+    /// Key IDs (identity and signing) for the certificate.
+    ids: AuthCertKeyIds,
+    /// Time of publication.
+    published: SystemTime,
+    /// Expiration time.
+    expires: SystemTime,
+}
+
+impl AuthCertMeta {
+    /// Construct a new AuthCertMeta from its components
+    pub fn new(ids: AuthCertKeyIds, published: SystemTime, expires: SystemTime) -> Self {
+        AuthCertMeta {
+            ids,
+            published,
+            expires,
+        }
+    }
+
+    /// Construct a new AuthCertMeta from a certificate.
+    pub fn from_authcert(cert: &AuthCert) -> Self {
+        AuthCertMeta::new(cert.key_ids().clone(), cert.published(), cert.expires())
+    }
+
+    /// Return the key IDs for this certificate
+    pub fn key_ids(&self) -> &AuthCertKeyIds {
+        &self.ids
+    }
+    /// Return the published time for this certificate
+    pub fn published(&self) -> SystemTime {
+        self.published
+    }
+    /// Return the expiration time for this certificate
+    pub fn expires(&self) -> SystemTime {
+        self.expires
+    }
 }
 
 #[cfg(test)]
