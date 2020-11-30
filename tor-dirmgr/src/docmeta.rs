@@ -6,7 +6,10 @@ use tor_netdoc::doc::netstatus::{Lifetime, MDConsensus, UnvalidatedMDConsensus};
 
 use digest::Digest;
 
-/// Information about a consensus that we have
+/// Information about a consensus that we have in storage.
+///
+/// This information is ordinarily derived from the consensus, but doesn't
+/// have to be.
 #[derive(Debug, Clone)]
 pub struct ConsensusMeta {
     /// The time over which the consensus is valid.
@@ -67,11 +70,30 @@ impl ConsensusMeta {
 
 /// Compute the sha3-256 digests of signed_part on its own, and of
 /// signed_part concatenated with remainder.
-fn sha3_dual(signed_part: &str, remainder: &str) -> ([u8; 32], [u8; 32]) {
+fn sha3_dual(signed_part: impl AsRef<[u8]>, remainder: impl AsRef<[u8]>) -> ([u8; 32], [u8; 32]) {
     let mut d = ll::d::Sha3_256::new();
-    d.update(signed_part);
+    d.update(signed_part.as_ref());
     let sha3_of_signed = d.clone().finalize().into();
-    d.update(remainder);
+    d.update(remainder.as_ref());
     let sha3_of_whole = d.finalize().into();
     (sha3_of_signed, sha3_of_whole)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn t_sha3_dual() {
+        let s = b"Loarax ipsum gruvvulus thneed amet, snergelly once-ler lerkim, sed do barbaloot tempor gluppitus ut labore et truffula magna aliqua. Ut enim ad grickle-grass veniam, quis miff-muffered ga-zumpco laboris nisi ut cruffulus ex ea schloppity consequat. Duis aute snarggle in swomeeswans in voluptate axe-hacker esse rippulus crummii eu moof nulla snuvv.";
+
+        let sha3_of_whole: [u8; 32] = ll::d::Sha3_256::digest(s).into();
+
+        for idx in 0..s.len() {
+            let sha3_of_part: [u8; 32] = ll::d::Sha3_256::digest(&s[..idx]).into();
+            let (a, b) = sha3_dual(&s[..idx], &s[idx..]);
+            assert_eq!(a, sha3_of_part);
+            assert_eq!(b, sha3_of_whole);
+        }
+    }
 }
