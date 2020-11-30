@@ -72,7 +72,6 @@ impl SqliteStore {
         let mut result = SqliteStore { conn, path };
 
         result.check_schema()?;
-        result.expire_all()?; // TODO: Maybe wait till we're bootstrapped.
 
         Ok(result)
     }
@@ -120,7 +119,7 @@ impl SqliteStore {
     ///
     /// This is pretty conservative, and only removes things that are
     /// definitely past their good-by date.
-    fn expire_all(&mut self) -> Result<()> {
+    pub fn expire_all(&mut self) -> Result<()> {
         let tx = self.conn.transaction()?;
         let expired_blobs: Vec<String> = {
             let mut stmt = tx.prepare(FIND_EXPIRED_EXTDOCS)?;

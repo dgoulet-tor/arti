@@ -500,6 +500,8 @@ impl PartialDir {
             // XXXX this calculation is redundant with the one in advance().
             let mut w = store.write().await;
             w.mark_consensus_usable(&self.consensus_meta)?;
+            // Expire on getting a valid directory.
+            w.expire_all()?;
         }
         Ok(())
     }
