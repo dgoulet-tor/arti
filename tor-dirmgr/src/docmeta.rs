@@ -91,6 +91,7 @@ fn sha3_dual(signed_part: impl AsRef<[u8]>, remainder: impl AsRef<[u8]>) -> ([u8
 ///
 /// This information is ordinarily derived from the authority cert, but it
 /// doesn't have to be.
+#[derive(Clone, Debug)]
 pub struct AuthCertMeta {
     /// Key IDs (identity and signing) for the certificate.
     ids: AuthCertKeyIds,

@@ -571,27 +571,27 @@ const FIND_EXPIRED_EXTDOCS: &str = "
 
 /// Query: Add a new entry to ExtDocs.
 const INSERT_EXTDOC: &str = "
-  INSERT INTO ExtDocs ( digest, created, expires, type, filename )
+  INSERT OR REPLACE INTO ExtDocs ( digest, created, expires, type, filename )
   VALUES ( ?, datetime('now'), ?, ?, ? );
 ";
 
 /// Qury: Add a new consensus.
 const INSERT_CONSENSUS: &str = "
-  INSERT INTO Consensuses
+  INSERT OR REPLACE INTO Consensuses
     ( valid_after, fresh_until, valid_until, flavor, pending, sha3_of_signed_part, digest )
   VALUES ( ?, ?, ?, ?, ?, ?, ? );
 ";
 
 /// Query: Add a new AuthCert
 const INSERT_AUTHCERT: &str = "
-  INSERT INTO Authcerts
+  INSERT OR REPLACE INTO Authcerts
     ( id_digest, sk_digest, published, expires, contents)
   VALUES ( ?, ?, ?, ?, ? );
 ";
 
 /// Query: Add a new microdescriptor
 const INSERT_MD: &str = "
-  INSERT INTO Microdescs ( sha256_digest, last_listed, contents )
+  INSERT OR REPLACE INTO Microdescs ( sha256_digest, last_listed, contents )
   VALUES ( ?, ?, ? );
 ";
 
@@ -766,6 +766,32 @@ mod test {
             let consensus = store.latest_consensus(false)?.unwrap();
             assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
         }
+        Ok(())
+    }
+
+    #[test]
+    fn authcerts() -> Result<()> {
+        let (_tmp_dir, mut store) = new_empty()?;
+        let now = Utc::now();
+        let one_hour = CDuration::hours(1);
+
+        let keyids = AuthCertKeyIds {
+            id_fingerprint: [3; 20].into(),
+            sk_fingerprint: [4; 20].into(),
+        };
+        let keyids2 = AuthCertKeyIds {
+            id_fingerprint: [4; 20].into(),
+            sk_fingerprint: [3; 20].into(),
+        };
+
+        let m1 = AuthCertMeta::new(keyids.clone(), now.into(), (now + one_hour * 24).into());
+
+        store.store_authcerts(&[(m1, "Pretend this is a cert")])?;
+
+        let certs = store.authcerts(&[keyids.clone(), keyids2])?;
+        assert_eq!(certs.len(), 1);
+        assert_eq!(certs.get(&keyids).unwrap(), "Pretend this is a cert");
+
         Ok(())
     }
 }
