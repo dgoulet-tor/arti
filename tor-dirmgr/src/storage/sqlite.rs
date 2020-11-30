@@ -668,6 +668,23 @@ mod test {
     }
 
     #[test]
+    fn bad_blob_fnames() -> Result<()> {
+        let (_tmp_dir, store) = new_empty()?;
+
+        assert!(store.blob_fname("abcd").is_ok());
+        assert!(store.blob_fname("abcd..").is_ok());
+        assert!(store.blob_fname("..abcd..").is_ok());
+        assert!(store.blob_fname(".abcd").is_ok());
+
+        assert!(store.blob_fname(".").is_err());
+        assert!(store.blob_fname("..").is_err());
+        assert!(store.blob_fname("../abcd").is_err());
+        assert!(store.blob_fname("/abcd").is_err());
+
+        Ok(())
+    }
+
+    #[test]
     fn blobs() -> Result<()> {
         let (tmp_dir, mut store) = new_empty()?;
 
