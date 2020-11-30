@@ -15,6 +15,8 @@ pub mod authority;
 mod config;
 mod docmeta;
 mod err;
+#[allow(unused, dead_code)]
+mod retry;
 mod storage;
 
 use crate::docmeta::{AuthCertMeta, ConsensusMeta};
