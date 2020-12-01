@@ -14,7 +14,7 @@
 
 use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackSet, NetDir};
-use tor_proto::circuit::ClientCirc;
+use tor_proto::circuit::{ClientCirc, UniqId};
 
 use anyhow::Result;
 use futures::lock::Mutex;
@@ -157,10 +157,10 @@ impl CircUsage {
 }
 
 impl CircEntry {
-    /// Return true if this entry contains the circuit `c`.
-    fn matches_circ(&self, c: &ClientCirc) -> bool {
+    /// Return true if this entry contains the circuit identified with c
+    fn matches_id(&self, c: &UniqId) -> bool {
         match &self.circ {
-            Circ::Open(x) => std::ptr::eq(x.as_ref(), c),
+            Circ::Open(x) => &x.unique_id() == c,
             Circ::Pending(_) => false,
         }
     }
@@ -339,14 +339,14 @@ where
         Ok(circ)
     }
 
-    /// If 'circ' is a circuit that we're keeping track of, don't give
-    /// it out for any future requests.
-    pub async fn retire_circ(&self, circ: &ClientCirc) {
+    /// If `circ_id` is the unique identifier for a circuit that we're
+    /// keeping track of, don't give it out for any future requests.
+    pub async fn retire_circ(&self, circ_id: &UniqId) {
         let mut circs = self.circuits.lock().await;
         // XXXX This implementation is awful.  Looking over the whole pile
         // XXXX of circuits!?
         let id = {
-            if let Some((id, _)) = circs.iter_mut().find(|(_, c)| c.matches_circ(circ)) {
+            if let Some((id, _)) = circs.iter_mut().find(|(_, c)| c.matches_id(circ_id)) {
                 *id
             } else {
                 return;
