@@ -12,7 +12,7 @@ static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
 /// it's possible to exhast them if you do nothing but create channels
 /// for a very long time; if you do, we detect that and exit with an
 /// assertion failure.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LogId(usize);
 
 impl LogId {

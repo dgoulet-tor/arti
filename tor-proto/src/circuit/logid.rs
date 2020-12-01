@@ -7,7 +7,7 @@ use std::fmt::{Display, Formatter};
 /// We could use channel_id.circid here, but the circid is a large
 /// random number, and can be reused over time.  This is less likely
 /// to repeat.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct LogId {
     /// Channel that this circuit is on.
     chan: usize,
