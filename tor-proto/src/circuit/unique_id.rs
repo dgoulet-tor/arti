@@ -1,12 +1,13 @@
-//! Logging-only identifiers for circuits
+//! Unique identifiers for circuits.
 
 use std::fmt::{Display, Formatter};
 
-/// Identifier for this circuit for logging purposes.
+/// Process-unique identifier for a circuit.
 ///
-/// We could use channel_id.circid here, but the circid is a large
-/// random number, and can be reused over time.  This is less likely
-/// to repeat.
+/// We could use channel_id.circid here, but the circid can be reused
+/// over time.  This won't ever repeat on a 64-bit architecture, and
+/// is super-unlikely to repeat on a 32-bit architectecture.  (If
+/// we're about to return a repeat value, we assert instead.)
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct UniqId {
     /// Channel that this circuit is on.

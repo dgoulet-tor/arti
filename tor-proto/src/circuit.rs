@@ -49,7 +49,7 @@ mod unique_id;
 use crate::channel::{Channel, CircDestroyHandle};
 use crate::circuit::celltypes::*;
 use crate::circuit::reactor::{CtrlMsg, CtrlResult};
-pub(crate) use crate::circuit::unique_id::UniqId;
+pub use crate::circuit::unique_id::UniqId;
 use crate::crypto::cell::{
     ClientLayer, CryptInit, HopNum, InboundClientLayer, OutboundClientCrypt, OutboundClientLayer,
     RelayCellBody,
@@ -79,6 +79,8 @@ pub struct ClientCirc {
     /// This circuit can't be used because it has been closed, locally
     /// or remotely.
     closed: AtomicBool,
+    /// A unique identifier for this circuit.
+    unique_id: UniqId,
 
     /// Reference-counted locked reference to the inner circuit object.
     c: Mutex<ClientCircImpl>,
@@ -128,7 +130,9 @@ struct ClientCircImpl {
     /// For the purposes of this implementation, a "meta" cell
     /// is a RELAY cell with a stream ID value of 0.
     sendmeta: Option<oneshot::Sender<MetaResult>>,
+
     /// An identifier for this circuit, for logging purposes.
+    /// TODO: Make this field go away in favor of the one in ClientCirc.
     unique_id: UniqId,
 }
 
@@ -552,6 +556,11 @@ impl ClientCirc {
     pub fn is_closing(&self) -> bool {
         self.closed.load(Ordering::SeqCst)
     }
+
+    /// Return a process-unique identifier for this circui.
+    pub fn unique_id(&self) -> UniqId {
+        self.unique_id
+    }
 }
 
 impl ClientCircImpl {
@@ -716,6 +725,7 @@ impl PendingClientCirc {
         let circuit = ClientCirc {
             closed: AtomicBool::new(false),
             c: Mutex::new(circuit_impl),
+            unique_id,
         };
         let circuit = Arc::new(circuit);
         let pending = PendingClientCirc {

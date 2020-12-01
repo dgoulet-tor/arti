@@ -1,4 +1,4 @@
-//! Helper for logging about channels.
+//! Helper for unique identifiers for channels.
 
 use std::fmt::{Display, Formatter};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// Counter for allocating unique-ish identifiers for channels.
 static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
 
-/// Identifier for a channel for logging purposes.
+/// Unique identifier for a channel.
 ///
 /// These identifiers are unique per process.  On 32-bit architectures
 /// it's possible to exhast them if you do nothing but create channels
@@ -17,7 +17,7 @@ pub struct UniqId(usize);
 
 impl UniqId {
     /// Construct a new UniqId.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         // Relaxed ordering is fine; we don't care about how this
         // is instantiated with respoect to other channels.
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
@@ -32,10 +32,10 @@ impl Display for UniqId {
     }
 }
 
-/// Counter for allocating circuit log ids.
+/// Counter for allocating circuit unique ids.
 ///
-/// We don't use circuit IDs here, because they tend are huge and
-/// random and can be reused more readily.
+/// We don't use circuit IDs here, because they can be huge, and they're
+/// random, and can get reused.
 #[derive(Debug)]
 pub(crate) struct CircUniqIdContext {
     /// Next value to be handed out for this channel's circuits.

@@ -60,7 +60,7 @@ mod reactor;
 mod unique_id;
 
 use crate::channel::reactor::{CtrlMsg, CtrlResult};
-pub(crate) use crate::channel::unique_id::UniqId;
+pub use crate::channel::unique_id::UniqId;
 use crate::circuit;
 use crate::circuit::celltypes::CreateResponse;
 use crate::{Error, Result};
@@ -92,7 +92,7 @@ type CellFrame<T> = futures_codec::Framed<T, crate::channel::codec::ChannelCodec
 ///
 /// A channel is a direct connection to a Tor relay, implemented using TLS.
 pub struct Channel {
-    /// Logging identifier for this stream.  (Used for logging only.)
+    /// A unique identifier for this channel.
     unique_id: UniqId,
     /// Validated Ed25519 identity for this peer.
     ed25519_id: Ed25519Identity,
@@ -228,6 +228,11 @@ impl Channel {
         );
 
         (channel, reactor)
+    }
+
+    /// Return a process-unique identifier for this channel.
+    pub fn unique_id(&self) -> UniqId {
+        self.unique_id
     }
 
     /// Return an error if this channel is somehow mismatched with the
