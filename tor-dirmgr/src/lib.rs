@@ -15,11 +15,11 @@ pub mod authority;
 mod config;
 mod docmeta;
 mod err;
-#[allow(unused, dead_code)]
 mod retry;
 mod storage;
 
 use crate::docmeta::{AuthCertMeta, ConsensusMeta};
+use crate::retry::RetryDelay;
 use crate::storage::sqlite::SqliteStore;
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
 use tor_circmgr::{CircMgr, DirInfo};
@@ -157,7 +157,6 @@ impl DirMgr {
             .fetch_certs(&self.config, store, dirinfo, Arc::clone(&circmgr))
             .await?;
         let mut partial = match unval.advance(&self.config)? {
-            // TODO: retry.
             NextState::SameState(_) => return Err(anyhow!("Couldn't get certs")),
             NextState::NewState(p) => p,
         };
@@ -168,7 +167,6 @@ impl DirMgr {
             .await?;
 
         let nd = match partial.advance() {
-            // XXXX Retry.
             NextState::NewState(nd) => nd,
             NextState::SameState(_) => return Err(anyhow!("Didn't get enough mds")),
         };
@@ -304,7 +302,42 @@ impl NoInformation {
 
     /// Try to fetch a currently timely consensus directory document
     /// from a randomly chosen directory cache server on the network.
+    ///
+    /// On failure, retry.
     async fn fetch_consensus<TR>(
+        &self,
+        config: &NetDirConfig,
+        store: &RwLock<SqliteStore>,
+        info: DirInfo<'_>,
+        circmgr: Arc<CircMgr<TR>>,
+    ) -> Result<UnvalidatedDir>
+    where
+        TR: tor_chanmgr::transport::Transport,
+    {
+        // XXXX make this configurable.
+        let n_retries = 3_u32;
+        let mut retry_delay = RetryDelay::default();
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _ in 0..n_retries {
+            let cm = Arc::clone(&circmgr);
+            match self.fetch_consensus_once(config, store, info, cm).await {
+                Ok(v) => return Ok(v),
+                Err(e) => {
+                    last_err = Some(e);
+                    let delay = retry_delay.next_delay(&mut rand::thread_rng());
+                    tor_rtcompat::task::sleep(delay).await;
+                }
+            }
+        }
+
+        // TODO: don't forget all the other errors.
+        Err(last_err.unwrap())
+    }
+
+    /// Try to fetch a currently timely consensus directory document
+    /// from a randomly chosen directory cache server on the network.
+    async fn fetch_consensus_once<TR>(
         &self,
         config: &NetDirConfig,
         store: &RwLock<SqliteStore>,
@@ -394,8 +427,46 @@ impl UnvalidatedDir {
         Ok(())
     }
 
-    /// Fetch authority certificates from the network.
+    /// Try to fetch authority certificates from the network.
+    ///
+    /// Retry if we couldn't get enough certs to validate the consensus.
     async fn fetch_certs<TR>(
+        &mut self,
+        config: &NetDirConfig,
+        store: &RwLock<SqliteStore>,
+        info: DirInfo<'_>,
+        circmgr: Arc<CircMgr<TR>>,
+    ) -> Result<()>
+    where
+        TR: tor_chanmgr::transport::Transport,
+    {
+        // XXXX make this configurable
+        let n_retries = 3_u32;
+        let mut retry_delay = RetryDelay::default();
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _ in 0..n_retries {
+            let cm = Arc::clone(&circmgr);
+            if let Err(e) = self.fetch_certs_once(config, store, info, cm).await {
+                last_err = Some(e);
+            }
+
+            if self.missing_certs(config).is_empty() {
+                // We have enough certificates to validate the consensus.
+                return Ok(());
+            }
+            let delay = retry_delay.next_delay(&mut rand::thread_rng());
+            tor_rtcompat::task::sleep(delay).await;
+        }
+
+        match last_err {
+            Some(e) => Err(e),
+            None => Err(anyhow!("Couldn't get certs after retries.")),
+        }
+    }
+
+    /// Try to fetch authority certificates from the network.
+    async fn fetch_certs_once<TR>(
         &mut self,
         config: &NetDirConfig,
         store: &RwLock<SqliteStore>,
@@ -482,7 +553,43 @@ impl PartialDir {
     }
 
     /// Try to fetch microdescriptors from the network.
+    ///
+    /// Retry if we didn't get enough to build circuits.
     async fn fetch_mds<TR>(
+        &mut self,
+        store: &RwLock<SqliteStore>,
+        info: DirInfo<'_>,
+        circmgr: Arc<CircMgr<TR>>,
+    ) -> Result<()>
+    where
+        TR: tor_chanmgr::transport::Transport,
+    {
+        // XXXX Make this configurable
+        let n_retries = 3_u32;
+        let mut retry_delay = RetryDelay::default();
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _ in 0..n_retries {
+            let cm = Arc::clone(&circmgr);
+            if let Err(e) = self.fetch_mds_once(store, info, cm).await {
+                last_err = Some(e);
+            }
+
+            if self.dir.have_enough_paths() {
+                // We can build circuits; return!
+                return Ok(());
+            }
+            let delay = retry_delay.next_delay(&mut rand::thread_rng());
+            tor_rtcompat::task::sleep(delay).await;
+        }
+
+        match last_err {
+            Some(e) => Err(e),
+            None => Err(anyhow!("Couldn't get microdescs after retries.")),
+        }
+    }
+    /// Try to fetch microdescriptors from the network.
+    async fn fetch_mds_once<TR>(
         &mut self,
         store: &RwLock<SqliteStore>,
         info: DirInfo<'_>,

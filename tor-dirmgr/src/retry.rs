@@ -60,6 +60,7 @@ impl RetryDelay {
     /// Construct a new RetryDelay from a given base delay.
     ///
     /// See from_msec for more information.
+    #[allow(unused)]
     pub fn from_duration(d: Duration) -> Self {
         let msec = d.as_millis();
         let msec = std::cmp::min(msec, std::u32::MAX as u128) as u32;
@@ -94,6 +95,12 @@ impl RetryDelay {
     /// according to a given random number generator.
     pub fn next_delay<R: Rng>(&mut self, rng: &mut R) -> Duration {
         Duration::from_millis(self.next_delay_msec(rng) as u64)
+    }
+}
+
+impl Default for RetryDelay {
+    fn default() -> Self {
+        RetryDelay::from_msec(0)
     }
 }
 
