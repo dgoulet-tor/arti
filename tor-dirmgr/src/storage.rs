@@ -18,6 +18,7 @@ pub enum InputString {
     Utf8(String),
     /// A set of unvalidated bytes.
     UncheckedBytes(Vec<u8>),
+    #[cfg(feature = "mmap")]
     /// A set of memory-mapped bytes (not yet validated as UTF-8).
     MappedBytes(memmap::Mmap),
 }
@@ -28,6 +29,7 @@ impl InputString {
         match self {
             InputString::Utf8(s) => Ok(&s[..]),
             InputString::UncheckedBytes(v) => std::str::from_utf8(&v[..]),
+            #[cfg(feature = "mmap")]
             InputString::MappedBytes(m) => std::str::from_utf8(&m[..]),
         }
         .map_err(|_| Error::CacheCorruption("Invalid UTF-8").into())
@@ -37,15 +39,17 @@ impl InputString {
     /// memory-map the file if possible.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let f = std::fs::File::open(path)?;
-        let mapping = unsafe {
-            // I'd rather have a safe option, but the crate that provides
-            // a safe API here is unix-only.
-            memmap::Mmap::map(&f)
-        };
-        if let Ok(m) = mapping {
-            return Ok(InputString::MappedBytes(m));
+        #[cfg(feature = "mmap")]
+        {
+            let mapping = unsafe {
+                // I'd rather have a safe option, but the crate that provides
+                // a safe API here is unix-only.
+                memmap::Mmap::map(&f)
+            };
+            if let Ok(m) = mapping {
+                return Ok(InputString::MappedBytes(m));
+            }
         }
-
         use std::io::{BufReader, Read};
         let mut f = BufReader::new(f);
         let mut result = String::new();
