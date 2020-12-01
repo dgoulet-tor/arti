@@ -65,3 +65,41 @@ impl From<Vec<u8>> for InputString {
         InputString::UncheckedBytes(v)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use tempdir::TempDir;
+
+    #[test]
+    fn strings() {
+        let s: InputString = "Hello world".to_string().into();
+        assert_eq!(s.as_str().unwrap(), "Hello world");
+
+        let s: InputString = b"Hello world".to_vec().into();
+        assert_eq!(s.as_str().unwrap(), "Hello world");
+
+        // bad utf-8
+        let s: InputString = b"Hello \xff world".to_vec().into();
+        assert!(s.as_str().is_err());
+    }
+
+    #[test]
+    fn files() {
+        let td = TempDir::new("arti-nd").unwrap();
+
+        let absent = td.path().join("absent");
+        let s = InputString::load(&absent);
+        assert!(s.is_err());
+
+        let goodstr = td.path().join("goodstr");
+        std::fs::write(&goodstr, "This is a reasonable file.\n").unwrap();
+        let s = InputString::load(&goodstr);
+        assert_eq!(s.unwrap().as_str().unwrap(), "This is a reasonable file.\n");
+
+        let badutf8 = td.path().join("badutf8");
+        std::fs::write(&badutf8, b"Not good \xff UTF-8.\n").unwrap();
+        let s = InputString::load(&badutf8);
+        assert!(s.is_err() || s.unwrap().as_str().is_err());
+    }
+}
