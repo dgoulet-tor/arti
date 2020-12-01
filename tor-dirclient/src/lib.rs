@@ -24,8 +24,10 @@ use crate::decompress::Decompressor;
 use tor_circmgr::{CircMgr, DirInfo};
 
 use anyhow::Result;
+use futures::FutureExt;
 use log::info;
 use std::sync::Arc;
+use std::time::Duration;
 
 pub use err::Error;
 
@@ -42,20 +44,30 @@ where
     CR: request::ClientRequest,
     TR: tor_chanmgr::transport::Transport,
 {
+    use tor_rtcompat::timer::timeout;
+
     let partial_ok = req.partial_docs_ok();
     let maxlen = req.max_response_len();
     let req = req.into_request()?;
     let encoded = util::encode_request(req);
 
     let circuit = circ_mgr.get_or_launch_dir(dirinfo).await?;
-    let mut stream = circuit.begin_dir_stream().await?;
 
-    stream.write_bytes(encoded.as_bytes()).await?;
-
-    let (encoding, buf, n_in_buf) = read_headers(&mut stream).await?;
+    let (stream, encoding, buf, n_in_buf) = {
+        // XXXX should be an option, and is too long.
+        let begin_timeout = Duration::from_secs(5);
+        timeout(begin_timeout, async {
+            let mut stream = circuit.begin_dir_stream().await?;
+            stream.write_bytes(encoded.as_bytes()).await?;
+            let (encoding, buf, n_in_buf) = read_headers(&mut stream).await?;
+            Result::<_, anyhow::Error>::Ok((stream, encoding, buf, n_in_buf))
+        })
+        .await??
+    };
 
     let decompressor = get_decompressor(encoding.as_deref())?;
     let mut result = vec![0_u8; 2048];
+
     let ok = read_and_decompress(stream, maxlen, decompressor, buf, n_in_buf, &mut result).await;
     match (partial_ok, ok, result.len()) {
         (true, Err(e), n) if n > 0 => info!("Error while downloading: {}", e),
@@ -151,8 +163,18 @@ async fn read_and_decompress(
     let mut done_reading = false;
     use decompress::StatusKind;
 
+    // XXX should be an option and is too long.
+    let read_timeout = Duration::from_secs(10);
+    let mut timer = tor_rtcompat::timer::Timer::after(read_timeout).fuse();
+
     loop {
-        let status = stream.read_bytes(&mut buf[n_in_buf..]).await;
+        let status = futures::select! {
+            status = stream.read_bytes(&mut buf[n_in_buf..]).fuse() => status,
+            _ = timer => {
+                result.resize(written_total, 0);
+                return Err(Error::DirTimeout.into());
+            }
+        };
         let n = match status {
             Ok(n) => n,
             Err(tor_proto::Error::StreamClosed(_)) => 0,

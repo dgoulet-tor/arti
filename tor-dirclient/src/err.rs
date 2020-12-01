@@ -1,6 +1,7 @@
 //! Declare dirclient-specific errors.
 
 use thiserror::Error;
+use tor_rtcompat::timer::TimeoutError;
 
 /// An error originating from the tor-dirclient crate.
 #[derive(Error, Debug, Clone)]
@@ -8,6 +9,10 @@ pub enum Error {
     /// We received an object with a suspiciously good compression ratio
     #[error("possible compression bomb")]
     CompressionBomb,
+
+    /// The directory cache took too long to reply to us.
+    #[error("directory timed out")]
+    DirTimeout,
 
     /// We got an EOF before we were done with the headers.
     #[error("truncated HTTP headers")]
@@ -24,4 +29,10 @@ pub enum Error {
     /// Received a response that was longer than we expected.
     #[error("response too long; gave up after {0} bytes")]
     ResponseTooLong(usize),
+}
+
+impl From<TimeoutError> for Error {
+    fn from(_: TimeoutError) -> Self {
+        Error::DirTimeout
+    }
 }

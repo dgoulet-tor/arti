@@ -18,5 +18,5 @@ pub mod task {
 /// Functions and types for manipulating timers (async_std implementation)
 pub mod timer {
     pub use async_io::Timer;
-    pub use async_std_crate::future::timeout;
+    pub use async_std_crate::future::{timeout, TimeoutError};
 }

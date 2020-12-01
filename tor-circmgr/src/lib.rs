@@ -299,9 +299,9 @@ where
         netdir: DirInfo<'_>,
         usage: &CircUsage,
     ) -> Result<Arc<ClientCirc>> {
-        // This should probably be an option too.
+        // TODO: This should probably be an option too.
         let n_tries: usize = 3;
-        // This is way too long, AND it should be an option.
+        // TODO: This is way too long, AND it should be an option.
         let timeout = Duration::new(10, 0);
         let mut last_err = None;
 
