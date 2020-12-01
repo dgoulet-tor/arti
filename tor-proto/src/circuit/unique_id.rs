@@ -8,21 +8,21 @@ use std::fmt::{Display, Formatter};
 /// random number, and can be reused over time.  This is less likely
 /// to repeat.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct LogId {
+pub struct UniqId {
     /// Channel that this circuit is on.
     chan: usize,
     /// ID for the circuit on the channel
     circ: usize,
 }
 
-impl LogId {
-    /// Construct a new circuit LogId from its parts
+impl UniqId {
+    /// Construct a new circuit UniqId from its parts
     pub(crate) fn new(chan: usize, circ: usize) -> Self {
-        LogId { chan, circ }
+        UniqId { chan, circ }
     }
 }
 
-impl Display for LogId {
+impl Display for UniqId {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Circ {}.{}", self.chan, self.circ)
     }

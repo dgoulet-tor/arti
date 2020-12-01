@@ -41,15 +41,15 @@
 pub(crate) mod celltypes;
 pub(crate) mod halfcirc;
 mod halfstream;
-mod logid;
 pub(crate) mod reactor;
 pub(crate) mod sendme;
 mod streammap;
+mod unique_id;
 
 use crate::channel::{Channel, CircDestroyHandle};
 use crate::circuit::celltypes::*;
-pub(crate) use crate::circuit::logid::LogId;
 use crate::circuit::reactor::{CtrlMsg, CtrlResult};
+pub(crate) use crate::circuit::unique_id::UniqId;
 use crate::crypto::cell::{
     ClientLayer, CryptInit, HopNum, InboundClientLayer, OutboundClientCrypt, OutboundClientLayer,
     RelayCellBody,
@@ -129,7 +129,7 @@ struct ClientCircImpl {
     /// is a RELAY cell with a stream ID value of 0.
     sendmeta: Option<oneshot::Sender<MetaResult>>,
     /// An identifier for this circuit, for logging purposes.
-    logid: LogId,
+    unique_id: UniqId,
 }
 
 /// A handle to a circuit as held by a stream. Used to send cells.
@@ -217,7 +217,7 @@ impl ClientCirc {
         }
         circ.sendmeta = Some(sender);
 
-        trace!("{}: Registered a meta-cell handler", circ.logid);
+        trace!("{}: Registered a meta-cell handler", circ.unique_id);
 
         Ok(receiver)
     }
@@ -265,13 +265,13 @@ impl ClientCirc {
         let receiver = self.register_meta_handler().await?;
 
         // Now send the EXTEND2 cell to the the last hop...
-        let (logid, hop) = {
+        let (unique_id, hop) = {
             let mut c = self.c.lock().await;
             let n_hops = c.crypto_out.n_layers();
             let hop = ((n_hops - 1) as u8).into();
             debug!(
                 "{}: Extending circuit to hop {} with {:?}",
-                c.logid,
+                c.unique_id,
                 n_hops + 1,
                 linkspecs
             );
@@ -283,12 +283,12 @@ impl ClientCirc {
             )
             .await?;
 
-            (c.logid, hop)
+            (c.unique_id, hop)
             // note that we're dropping the lock here, since we're going
             // to wait for a response.
         };
 
-        trace!("{}: waiting for EXTENDED2 cell", logid);
+        trace!("{}: waiting for EXTENDED2 cell", unique_id);
         // ... and now we wait for a response.
         let (from_hop, msg) = receiver.await.map_err(|_| {
             Error::CircDestroy("Circuit closed while waiting for extended cell".into())
@@ -320,13 +320,16 @@ impl ClientCirc {
         };
         let server_handshake = msg.into_body();
 
-        trace!("{}: Received EXTENDED2 cell; completing handshake.", logid);
+        trace!(
+            "{}: Received EXTENDED2 cell; completing handshake.",
+            unique_id
+        );
         // Now perform the second part of the handshake, and see if it
         // succeeded.
         let keygen = H::client2(state, server_handshake)?;
         let layer = L::construct(keygen)?;
 
-        debug!("{}: Handshake complete; circuit extended.", logid);
+        debug!("{}: Handshake complete; circuit extended.", unique_id);
 
         // If we get here, it succeeded.  Add a new hop to the circuit.
         let (layer_fwd, layer_back) = layer.split();
@@ -570,7 +573,7 @@ impl ClientCircImpl {
             return Err(Error::CircuitClosed);
         }
 
-        trace!("{}: Received meta-cell {:?}", self.logid, msg);
+        trace!("{}: Received meta-cell {:?}", self.unique_id, msg);
 
         // For all other command types, we'll only get them in response
         // to another command, which should have registered a responder.
@@ -691,7 +694,7 @@ impl PendingClientCirc {
         createdreceiver: oneshot::Receiver<CreateResponse>,
         circ_closed: Option<CircDestroyHandle>,
         input: mpsc::Receiver<ClientCircChanMsg>,
-        logid: LogId,
+        unique_id: UniqId,
     ) -> (PendingClientCirc, reactor::Reactor) {
         let crypto_out = OutboundClientCrypt::new();
         let (sendclosed, recvclosed) = oneshot::channel::<CtrlMsg>();
@@ -708,7 +711,7 @@ impl PendingClientCirc {
             control: sendctrl,
             sendshutdown: Some(sendclosed),
             sendmeta: None,
-            logid,
+            unique_id,
         };
         let circuit = ClientCirc {
             closed: AtomicBool::new(false),
@@ -719,7 +722,7 @@ impl PendingClientCirc {
             recvcreated: createdreceiver,
             circ: Arc::clone(&circuit),
         };
-        let reactor = reactor::Reactor::new(circuit, recvctrl, recvclosed, input, logid);
+        let reactor = reactor::Reactor::new(circuit, recvctrl, recvclosed, input, unique_id);
         (pending, reactor)
     }
 
@@ -759,11 +762,15 @@ impl PendingClientCirc {
         let PendingClientCirc { circ, recvcreated } = self;
         let (state, msg) = H::client1(rng, &key)?;
         let create_cell = wrap.to_chanmsg(msg);
-        let logid = {
+        let unique_id = {
             let mut c = circ.c.lock().await;
-            debug!("{}: Extending to hop 1 with {}", c.logid, create_cell.cmd());
+            debug!(
+                "{}: Extending to hop 1 with {}",
+                c.unique_id,
+                create_cell.cmd()
+            );
             c.send_msg(create_cell).await?;
-            c.logid
+            c.unique_id
         };
 
         let reply = recvcreated
@@ -775,7 +782,7 @@ impl PendingClientCirc {
 
         let layer = L::construct(keygen)?;
 
-        debug!("{}: Handshake complete; circuit created.", logid);
+        debug!("{}: Handshake complete; circuit created.", unique_id);
 
         let (layer_fwd, layer_back) = layer.split();
         circ.add_hop(
@@ -1007,7 +1014,7 @@ mod test {
         let circid = 128.into();
         let (created_send, created_recv) = oneshot::channel();
         let (_circmsg_send, circmsg_recv) = mpsc::channel(64);
-        let logid = LogId::new(23, 17);
+        let unique_id = UniqId::new(23, 17);
 
         let (pending, reactor) = PendingClientCirc::new(
             circid,
@@ -1015,7 +1022,7 @@ mod test {
             created_recv,
             None, // circ_closed.
             circmsg_recv,
-            logid,
+            unique_id,
         );
 
         // one to reply as a relay, and one to be the reactor.
@@ -1117,7 +1124,7 @@ mod test {
         let circid = 128.into();
         let (_created_send, created_recv) = oneshot::channel();
         let (circmsg_send, circmsg_recv) = mpsc::channel(64);
-        let logid = LogId::new(23, 17);
+        let unique_id = UniqId::new(23, 17);
 
         let (pending, mut reactor) = PendingClientCirc::new(
             circid,
@@ -1125,7 +1132,7 @@ mod test {
             created_recv,
             None, // circ_closed.
             circmsg_recv,
-            logid,
+            unique_id,
         );
 
         let PendingClientCirc {

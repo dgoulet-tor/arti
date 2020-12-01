@@ -56,11 +56,11 @@
 mod circmap;
 mod codec;
 mod handshake;
-mod logid;
 mod reactor;
+mod unique_id;
 
-pub(crate) use crate::channel::logid::LogId;
 use crate::channel::reactor::{CtrlMsg, CtrlResult};
+pub(crate) use crate::channel::unique_id::UniqId;
 use crate::circuit;
 use crate::circuit::celltypes::CreateResponse;
 use crate::{Error, Result};
@@ -93,7 +93,7 @@ type CellFrame<T> = futures_codec::Framed<T, crate::channel::codec::ChannelCodec
 /// A channel is a direct connection to a Tor relay, implemented using TLS.
 pub struct Channel {
     /// Logging identifier for this stream.  (Used for logging only.)
-    logid: LogId,
+    unique_id: UniqId,
     /// Validated Ed25519 identity for this peer.
     ed25519_id: Ed25519Identity,
     /// Validated RSA identity for this peer.
@@ -128,7 +128,7 @@ struct ChannelImpl {
     sendclosed: Option<oneshot::Sender<CtrlMsg>>,
 
     /// Context for allocating unique circuit log identifiers.
-    circ_logid_ctx: logid::CircLogIdContext,
+    circ_unique_id_ctx: unique_id::CircUniqIdContext,
 }
 
 /// Structure for building and launching a Tor channel.
@@ -187,7 +187,7 @@ impl Channel {
         link_protocol: u16,
         tls_sink: Box<dyn Sink<ChanCell, Error = tor_cell::Error> + Send + Unpin + 'static>,
         tls_stream: T,
-        logid: LogId,
+        unique_id: UniqId,
         ed25519_id: Ed25519Identity,
         rsa_id: RSAIdentity,
     ) -> (Arc<Self>, reactor::Reactor<T>)
@@ -206,11 +206,11 @@ impl Channel {
             circmap: Arc::downgrade(&circmap),
             sendctrl,
             sendclosed: Some(sendclosed),
-            circ_logid_ctx: logid::CircLogIdContext::new(),
+            circ_unique_id_ctx: unique_id::CircUniqIdContext::new(),
         };
         let inner = Mutex::new(inner);
         let channel = Channel {
-            logid,
+            unique_id,
             ed25519_id,
             rsa_id,
             closed: AtomicBool::new(false),
@@ -224,7 +224,7 @@ impl Channel {
             recvctrl,
             recvclosed,
             tls_stream,
-            logid,
+            unique_id,
         );
 
         (channel, reactor)
@@ -287,7 +287,7 @@ impl Channel {
                 Relay(_) | Padding(_) | VPadding(_) => {} // too frequent to log.
                 _ => trace!(
                     "{}: Sending {} for {}",
-                    self.logid,
+                    self.unique_id,
                     cell.msg().cmd(),
                     cell.circid()
                 ),
@@ -320,7 +320,7 @@ impl Channel {
         let (createdsender, createdreceiver) = oneshot::channel::<CreateResponse>();
         let (send_circ_destroy, recv_circ_destroy) = oneshot::channel();
 
-        let (circ_logid, id) = {
+        let (circ_unique_id, id) = {
             let mut inner = self.inner.lock().await;
             inner
                 .sendctrl
@@ -328,15 +328,15 @@ impl Channel {
                 .await
                 .map_err(|_| Error::InternalError("Can't queue circuit closer".into()))?;
             if let Some(circmap) = inner.circmap.upgrade() {
-                let my_logid = self.logid;
-                let circ_logid = inner.circ_logid_ctx.next(my_logid);
+                let my_unique_id = self.unique_id;
+                let circ_unique_id = inner.circ_unique_id_ctx.next(my_unique_id);
                 let mut cmap = circmap.lock().await;
-                (circ_logid, cmap.add_ent(rng, createdsender, sender)?)
+                (circ_unique_id, cmap.add_ent(rng, createdsender, sender)?)
             } else {
                 return Err(Error::ChannelClosed);
             }
         };
-        trace!("{}: Allocated CircId {}", circ_logid, id);
+        trace!("{}: Allocated CircId {}", circ_unique_id, id);
 
         let destroy_handle = CircDestroyHandle::new(id, send_circ_destroy);
 
@@ -346,7 +346,7 @@ impl Channel {
             createdreceiver,
             Some(destroy_handle),
             receiver,
-            circ_logid,
+            circ_unique_id,
         ))
     }
 
@@ -447,17 +447,17 @@ pub(crate) mod test {
 
         let circmap = circmap::CircMap::new(circmap::CircIdRange::High);
         let circmap = Arc::new(Mutex::new(circmap));
-        let logid = LogId::new();
+        let unique_id = UniqId::new();
         let inner = ChannelImpl {
             link_protocol: 4,
             tls: Box::new(cell_send),
             circmap: Arc::downgrade(&circmap),
             sendctrl: ctrl_send,
             sendclosed: None,
-            circ_logid_ctx: logid::CircLogIdContext::new(),
+            circ_unique_id_ctx: unique_id::CircUniqIdContext::new(),
         };
         let channel = Channel {
-            logid,
+            unique_id,
             ed25519_id: [0u8; 32].into(),
             rsa_id: [0u8; 20].into(),
             closed: AtomicBool::new(false),

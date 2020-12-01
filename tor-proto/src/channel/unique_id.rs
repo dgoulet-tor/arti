@@ -13,20 +13,20 @@ static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
 /// for a very long time; if you do, we detect that and exit with an
 /// assertion failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct LogId(usize);
+pub struct UniqId(usize);
 
-impl LogId {
-    /// Construct a new LogId.
+impl UniqId {
+    /// Construct a new UniqId.
     pub fn new() -> Self {
         // Relaxed ordering is fine; we don't care about how this
         // is instantiated with respoect to other channels.
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         assert!(id != std::usize::MAX, "Exhausted the channel ID namespace");
-        LogId(id)
+        UniqId(id)
     }
 }
 
-impl Display for LogId {
+impl Display for UniqId {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Chan {}", self.0)
     }
@@ -37,25 +37,25 @@ impl Display for LogId {
 /// We don't use circuit IDs here, because they tend are huge and
 /// random and can be reused more readily.
 #[derive(Debug)]
-pub(crate) struct CircLogIdContext {
+pub(crate) struct CircUniqIdContext {
     /// Next value to be handed out for this channel's circuits.
     next_circ_id: usize,
 }
 
-impl CircLogIdContext {
-    /// Create a new CircLogIdContext
+impl CircUniqIdContext {
+    /// Create a new CircUniqIdContext
     pub(super) fn new() -> Self {
-        CircLogIdContext { next_circ_id: 0 }
+        CircUniqIdContext { next_circ_id: 0 }
     }
-    /// Construct a new, unique-ish circuit LogId
-    pub(super) fn next(&mut self, logid: LogId) -> crate::circuit::LogId {
-        let circ_logid = self.next_circ_id;
+    /// Construct a new, unique-ish circuit UniqId
+    pub(super) fn next(&mut self, unique_id: UniqId) -> crate::circuit::UniqId {
+        let circ_unique_id = self.next_circ_id;
         self.next_circ_id += 1;
         assert!(
             self.next_circ_id != 0,
             "Exhaused the unique circuit ID namespace on a channel"
         );
-        crate::circuit::LogId::new(logid.0, circ_logid)
+        crate::circuit::UniqId::new(unique_id.0, circ_unique_id)
     }
 }
 
@@ -63,8 +63,8 @@ impl CircLogIdContext {
 mod test {
     use super::*;
     #[test]
-    fn chan_logid() {
-        let ids: Vec<LogId> = (0..10).map(|_| LogId::new()).collect();
+    fn chan_unique_id() {
+        let ids: Vec<UniqId> = (0..10).map(|_| UniqId::new()).collect();
 
         // Make sure we got distinct numbers
         let mut all_nums: Vec<_> = ids.iter().map(|x| x.0).collect();
@@ -77,8 +77,8 @@ mod test {
 
     #[test]
     fn chan_circid() {
-        let chan_id99 = LogId(99);
-        let mut ctx = CircLogIdContext::new();
+        let chan_id99 = UniqId(99);
+        let mut ctx = CircUniqIdContext::new();
 
         let _id0 = ctx.next(chan_id99);
         let _id1 = ctx.next(chan_id99);

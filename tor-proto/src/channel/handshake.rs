@@ -6,7 +6,7 @@ use futures::sink::SinkExt;
 use futures::stream::{self, StreamExt};
 
 use crate::channel::codec::ChannelCodec;
-use crate::channel::LogId;
+use crate::channel::UniqId;
 use crate::{Error, Result};
 use tor_cell::chancell::{msg, ChanCmd};
 
@@ -40,7 +40,7 @@ pub struct OutboundClientHandshake<T: AsyncRead + AsyncWrite + Send + Unpin + 's
     target_addr: Option<SocketAddr>,
 
     /// Logging identifier for this stream.  (Used for logging only.)
-    logid: LogId,
+    unique_id: UniqId,
 }
 
 /// A client channel on which versions have been negotiated and the
@@ -59,7 +59,7 @@ pub struct UnverifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static>
     #[allow(dead_code)] // Relays will need this.
     netinfo_cell: msg::Netinfo,
     /// Logging identifier for this stream.  (Used for logging only.)
-    logid: LogId,
+    unique_id: UniqId,
 }
 
 /// A client channel on which versions have been negotiated,
@@ -77,7 +77,7 @@ pub struct VerifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// Declared target for this stream, if any.
     target_addr: Option<SocketAddr>,
     /// Logging identifier for this stream.  (Used for logging only.)
-    logid: LogId,
+    unique_id: UniqId,
     /// Validated Ed25519 identity for this peer.
     ed25519_id: Ed25519Identity,
     /// Validated RSA identity for this peer.
@@ -90,7 +90,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         Self {
             tls,
             target_addr,
-            logid: LogId::new(),
+            unique_id: UniqId::new(),
         }
     }
 
@@ -98,10 +98,10 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
     /// the relay's handshake information.
     pub async fn connect(mut self) -> Result<UnverifiedChannel<T>> {
         match self.target_addr {
-            Some(addr) => debug!("{}: starting Tor handshake with {}", self.logid, addr),
-            None => debug!("{}: starting Tor handshake", self.logid),
+            Some(addr) => debug!("{}: starting Tor handshake with {}", self.unique_id, addr),
+            None => debug!("{}: starting Tor handshake", self.unique_id),
         }
-        trace!("{}: sending versions", self.logid);
+        trace!("{}: sending versions", self.unique_id);
         // Send versions cell
         {
             let my_versions = msg::Versions::new(LINK_PROTOCOLS);
@@ -110,7 +110,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         }
 
         // Get versions cell.
-        trace!("{}: waiting for versions", self.logid);
+        trace!("{}: waiting for versions", self.unique_id);
         let their_versions: msg::Versions = {
             // TODO: this could be turned into another function, I suppose.
             let mut hdr = [0u8; 5];
@@ -124,13 +124,13 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
             let mut reader = Reader::from_slice(&msg);
             reader.extract()?
         };
-        trace!("{}: received {:?}", self.logid, their_versions);
+        trace!("{}: received {:?}", self.unique_id, their_versions);
 
         // Determine which link protocol we negotiated.
         let link_protocol = their_versions
             .best_shared_link_protocol(LINK_PROTOCOLS)
             .ok_or_else(|| Error::ChanProto("No shared link protocols".into()))?;
-        trace!("{}: negotiated version {}", self.logid, link_protocol);
+        trace!("{}: negotiated version {}", self.unique_id, link_protocol);
 
         // Now we can switch to using a "Framed". We can ignore the
         // AsyncRead/AsyncWrite aspects of the tls, and just treat it
@@ -144,11 +144,11 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         let mut seen_authchallenge = false;
 
         // Loop: reject duplicate and unexpected cells
-        trace!("{}: waiting for rest of handshake.", self.logid);
+        trace!("{}: waiting for rest of handshake.", self.unique_id);
         while let Some(m) = tls.next().await {
             use msg::ChanMsg::*;
             let (_, m) = m?.into_circid_and_msg();
-            trace!("{}: received a {} cell.", self.logid, m.cmd());
+            trace!("{}: received a {} cell.", self.unique_id, m.cmd());
             match m {
                 // Are these technically allowed?
                 Padding(_) | VPadding(_) => (),
@@ -187,14 +187,14 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
             (Some(_), None) => Err(Error::ChanProto("Missing netinfo or closed stream".into())),
             (None, _) => Err(Error::ChanProto("Missing certs cell".into())),
             (Some(certs_cell), Some(netinfo_cell)) => {
-                trace!("{}: receieved handshake, ready to verify.", self.logid);
+                trace!("{}: receieved handshake, ready to verify.", self.unique_id);
                 Ok(UnverifiedChannel {
                     link_protocol,
                     tls,
                     certs_cell,
                     netinfo_cell,
                     target_addr: self.target_addr,
-                    logid: self.logid,
+                    unique_id: self.unique_id,
                 })
             }
         }
@@ -337,7 +337,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
 
         trace!(
             "{}: Validated identity as {} [{}]",
-            self.logid,
+            self.unique_id,
             ed25519_id,
             rsa_id
         );
@@ -361,7 +361,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         Ok(VerifiedChannel {
             link_protocol: self.link_protocol,
             tls: self.tls,
-            logid: self.logid,
+            unique_id: self.unique_id,
             target_addr: self.target_addr,
             ed25519_id,
             rsa_id,
@@ -382,13 +382,13 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> VerifiedChannel<T> {
         Arc<super::Channel>,
         super::reactor::Reactor<stream::SplitStream<CellFrame<T>>>,
     )> {
-        trace!("{}: Sending netinfo cell.", self.logid);
+        trace!("{}: Sending netinfo cell.", self.unique_id);
         let netinfo = msg::Netinfo::for_client(self.target_addr.as_ref().map(SocketAddr::ip));
         self.tls.send(netinfo.into()).await?;
 
         debug!(
             "{}: Completed handshake with {} [{}]",
-            self.logid, self.ed25519_id, self.rsa_id
+            self.unique_id, self.ed25519_id, self.rsa_id
         );
 
         let (tls_sink, tls_stream) = self.tls.split();
@@ -397,7 +397,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> VerifiedChannel<T> {
             self.link_protocol,
             Box::new(tls_sink),
             tls_stream,
-            self.logid,
+            self.unique_id,
             self.ed25519_id,
             self.rsa_id,
         ))
@@ -572,7 +572,7 @@ pub(super) mod test {
             certs_cell: certs,
             netinfo_cell,
             target_addr: None,
-            logid: LogId::new(),
+            unique_id: UniqId::new(),
         }
     }
 
@@ -817,7 +817,7 @@ pub(super) mod test {
         let ver = VerifiedChannel {
             link_protocol: 4,
             tls: futures_codec::Framed::new(MsgBuf::new(&b""[..]), ChannelCodec::new(4)),
-            logid: LogId::new(),
+            unique_id: UniqId::new(),
             target_addr: Some(peer_addr),
             ed25519_id,
             rsa_id,

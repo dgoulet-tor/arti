@@ -8,7 +8,7 @@
 
 use super::streammap::{ShouldSendEnd, StreamEnt};
 use crate::circuit::celltypes::ClientCircChanMsg;
-use crate::circuit::logid::LogId;
+use crate::circuit::unique_id::UniqId;
 use crate::circuit::{sendme, streammap};
 use crate::crypto::cell::{HopNum, InboundClientCrypt, InboundClientLayer};
 use crate::util::err::ReactorError;
@@ -138,7 +138,7 @@ pub struct Reactor {
     /// List of hops state objects used by the reactor
     hops: Vec<InboundHop>,
     /// An identifier for logging about this reactor's circuit.
-    logid: LogId,
+    unique_id: UniqId,
 }
 
 impl Reactor {
@@ -148,7 +148,7 @@ impl Reactor {
         control: mpsc::Receiver<CtrlResult>,
         closeflag: oneshot::Receiver<CtrlMsg>,
         input: mpsc::Receiver<ClientCircChanMsg>,
-        logid: LogId,
+        unique_id: UniqId,
     ) -> Self {
         let mut oneshots = stream::SelectAll::new();
         oneshots.push(stream::once(closeflag));
@@ -159,7 +159,7 @@ impl Reactor {
             circuit: Arc::downgrade(&circuit),
             crypto_in: InboundClientCrypt::new(),
             hops: Vec::new(),
-            logid,
+            unique_id,
         }
     }
 
@@ -176,7 +176,7 @@ impl Reactor {
         } else {
             return Err(Error::CircuitClosed);
         }
-        debug!("{}: Running circuit reactor", self.logid);
+        debug!("{}: Running circuit reactor", self.unique_id);
         let result: Result<()> = loop {
             match self.run_once().await {
                 Ok(()) => (),
@@ -184,7 +184,7 @@ impl Reactor {
                 Err(ReactorError::Err(e)) => break Err(e),
             }
         };
-        debug!("{}: Circuit reactor stopped: {:?}", self.logid, result);
+        debug!("{}: Circuit reactor stopped: {:?}", self.unique_id, result);
         if let Some(circ) = self.circuit.upgrade() {
             // TODO: should this call terminate?
             circ.closed.store(true, Ordering::SeqCst);
@@ -230,7 +230,7 @@ impl Reactor {
 
     /// Handle a CtrlMsg other than Shutdown.
     async fn handle_control(&mut self, msg: CtrlMsg) -> Result<()> {
-        trace!("{}: reactor received {:?}", self.logid, msg);
+        trace!("{}: reactor received {:?}", self.unique_id, msg);
         match msg {
             CtrlMsg::Shutdown => panic!(), // was handled in reactor loop.
             CtrlMsg::CloseStream(hop, id, recvwindow) => {
@@ -275,7 +275,7 @@ impl Reactor {
         let should_send_end = hop.map.terminate(id, window)?;
         trace!(
             "{}: Ending stream {}; should_send_end={:?}",
-            self.logid,
+            self.unique_id,
             id,
             should_send_end
         );

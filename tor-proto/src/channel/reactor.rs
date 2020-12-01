@@ -7,7 +7,7 @@
 //! or in the error handling behavior.
 
 use super::circmap::{CircEnt, CircMap};
-use super::LogId;
+use super::UniqId;
 use crate::circuit::halfcirc::HalfCirc;
 use crate::util::err::ReactorError;
 use crate::{Error, Result};
@@ -80,7 +80,7 @@ where
     channel: Weak<super::Channel>,
 
     /// Logging identifier for this channel
-    logid: LogId,
+    unique_id: UniqId,
 }
 
 impl<T> Reactor<T>
@@ -98,7 +98,7 @@ where
         control: mpsc::Receiver<CtrlResult>,
         closeflag: oneshot::Receiver<CtrlMsg>,
         input: T,
-        logid: LogId,
+        unique_id: UniqId,
     ) -> Self {
         let mut oneshots = stream::SelectAll::new();
         oneshots.push(stream::once(closeflag));
@@ -108,7 +108,7 @@ where
             input: input.fuse(),
             channel: Arc::downgrade(&channel),
             circs: circmap,
-            logid,
+            unique_id,
         }
     }
 
@@ -125,7 +125,7 @@ where
         } else {
             return Err(Error::ChannelClosed);
         }
-        debug!("{}: Running reactor", self.logid);
+        debug!("{}: Running reactor", self.unique_id);
         let result: Result<()> = loop {
             match self.run_once().await {
                 Ok(()) => (),
@@ -133,7 +133,7 @@ where
                 Err(ReactorError::Err(e)) => break Err(e),
             }
         };
-        debug!("{}: Reactor stopped: {:?}", self.logid, result);
+        debug!("{}: Reactor stopped: {:?}", self.unique_id, result);
         if let Some(chan) = self.channel.upgrade() {
             chan.closed.store(true, Ordering::SeqCst);
         }
@@ -173,7 +173,7 @@ where
 
     /// Handle a CtrlMsg other than Shutdown.
     async fn handle_control(&mut self, msg: CtrlMsg) -> Result<()> {
-        trace!("{}: reactor received {:?}", self.logid, msg);
+        trace!("{}: reactor received {:?}", self.unique_id, msg);
         match msg {
             CtrlMsg::Shutdown => panic!(), // was handled in reactor loop.
             CtrlMsg::Register(ch) => self.register(ch),
@@ -196,7 +196,7 @@ where
 
         match msg {
             Relay(_) | Padding(_) | VPadding(_) => {} // too frequent to log.
-            _ => trace!("{}: received {} for {}", self.logid, msg.cmd(), circid),
+            _ => trace!("{}: received {} for {}", self.unique_id, msg.cmd(), circid),
         }
 
         match msg {
@@ -286,7 +286,7 @@ where
             Some(CircEnt::Opening(oneshot, _)) => {
                 trace!(
                     "{}: Passing destroy to pending circuit {}",
-                    self.logid,
+                    self.unique_id,
                     circid
                 );
                 oneshot
@@ -301,7 +301,11 @@ where
             }
             // It's an open circuit: tell it that it got a DESTROY cell.
             Some(CircEnt::Open(mut sink)) => {
-                trace!("{}: Passing destroy to open circuit {}", self.logid, circid);
+                trace!(
+                    "{}: Passing destroy to open circuit {}",
+                    self.unique_id,
+                    circid
+                );
                 sink.send(msg.try_into()?)
                     .await
                     // XXXX I think that this one actually means the other side
@@ -314,7 +318,11 @@ where
             Some(CircEnt::DestroySent(_)) => Ok(()),
             // Got a DESTROY cell for a circuit we don't have.
             None => {
-                trace!("{}: Destroy for nonexistent circuit {}", self.logid, circid);
+                trace!(
+                    "{}: Destroy for nonexistent circuit {}",
+                    self.unique_id,
+                    circid
+                );
                 Err(Error::ChanProto("Destroy for nonexistent circuit".into()))
             }
         }
@@ -323,7 +331,11 @@ where
     /// Called when a circuit goes away: sends a DESTROY cell and removes
     /// the circuit.
     async fn outbound_destroy_circ(&mut self, id: CircId) -> Result<()> {
-        trace!("{}: Circuit {} is gone; sending DESTROY", self.logid, id);
+        trace!(
+            "{}: Circuit {} is gone; sending DESTROY",
+            self.unique_id,
+            id
+        );
         {
             let mut map = self.circs.lock().await;
             // Remove the circuit's entry from the map: nothing more
@@ -362,7 +374,7 @@ pub(crate) mod test {
         let link_protocol = 4;
         let (send1, recv1) = mpsc::channel(32);
         let (send2, recv2) = mpsc::channel(32);
-        let logid = LogId::new();
+        let unique_id = UniqId::new();
         let ed_id = [0x1; 32].into();
         let rsa_id = [0x2; 20].into();
         let send1 = send1.sink_map_err(|_| tor_cell::Error::ChanProto("dummy message".into()));
@@ -370,7 +382,7 @@ pub(crate) mod test {
             link_protocol,
             Box::new(send1),
             recv2,
-            logid,
+            unique_id,
             ed_id,
             rsa_id,
         );
