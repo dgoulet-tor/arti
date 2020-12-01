@@ -8,8 +8,10 @@ static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
 
 /// Identifier for a channel for logging purposes.
 ///
-/// It should be unique, but collisions are possible on 32-bit
-/// architectures under certain very weird circumstances.
+/// These identifiers are unique per process.  On 32-bit architectures
+/// it's possible to exhast them if you do nothing but create channels
+/// for a very long time; if you do, we detect that and exit with an
+/// assertion failure.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LogId(usize);
 
@@ -19,6 +21,7 @@ impl LogId {
         // Relaxed ordering is fine; we don't care about how this
         // is instantiated with respoect to other channels.
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+        assert!(id != std::usize::MAX, "Exhausted the channel ID namespace");
         LogId(id)
     }
 }
@@ -48,6 +51,10 @@ impl CircLogIdContext {
     pub(super) fn next(&mut self, logid: LogId) -> crate::circuit::LogId {
         let circ_logid = self.next_circ_id;
         self.next_circ_id += 1;
+        assert!(
+            self.next_circ_id != 0,
+            "Exhaused the unique circuit ID namespace on a channel"
+        );
         crate::circuit::LogId::new(logid.0, circ_logid)
     }
 }
@@ -57,7 +64,6 @@ mod test {
     use super::*;
     #[test]
     fn chan_logid() {
-        // make sure nothing else has messed with this.
         let ids: Vec<LogId> = (0..10).map(|_| LogId::new()).collect();
 
         // Make sure we got distinct numbers
