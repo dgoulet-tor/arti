@@ -16,10 +16,12 @@ use tor_netdoc::doc::netstatus::{MDConsensus, MDConsensusRouterStatus, NetParams
 
 /// Helper: Calculate the function we should use to find initial relay
 /// bandwidths.
-fn pick_bandwidth_fn(consensus: &MDConsensus) -> BandwidthFn {
-    let routers = consensus.routers();
-    let has_measured = routers.iter().any(|rs| rs.weight().is_measured());
-    let has_nonzero = routers.iter().any(|rs| rs.weight().is_nonzero());
+fn pick_bandwidth_fn<'a, I>(mut weights: I) -> BandwidthFn
+where
+    I: Clone + Iterator<Item = &'a RouterWeight>,
+{
+    let has_measured = weights.clone().any(|w| w.is_measured());
+    let has_nonzero = weights.any(|w| w.is_nonzero());
     if !has_nonzero {
         // If every value is zero, we should just pretend everything has
         // bandwidht == 1.
@@ -210,7 +212,7 @@ impl WeightSet {
 
     /// Compute the correct WeightSet for a provided MDConsensus.
     pub(crate) fn from_consensus(consensus: &MDConsensus) -> Self {
-        let bandwidth_fn = pick_bandwidth_fn(consensus);
+        let bandwidth_fn = pick_bandwidth_fn(consensus.routers().iter().map(|rs| rs.weight()));
         let total_bw = consensus
             .routers()
             .iter()
@@ -218,6 +220,13 @@ impl WeightSet {
             .sum();
         let p = consensus.bandwidth_weights();
 
+        Self::from_parts(bandwidth_fn, total_bw, p)
+    }
+
+    /// Compute the correct WeightSet given a bandwidth function,
+    /// a total amount of bandwidth for all relays in the consensus,
+    /// and a set of bandwidth parameters.
+    fn from_parts(bandwidth_fn: BandwidthFn, total_bw: u64, p: &NetParams<i32>) -> Self {
         /// Find a single RelayWeight, given the names that its bandwidth
         /// parameters have. The `g` parameter is the weight as a guard, the
         /// `m` parameter is the weight as a middle node, the `e` parameter is
