@@ -286,7 +286,10 @@ impl WeightSet {
 
 /// The value to return if a weight parameter is absent.
 ///
-/// XXXX:This "1" might need to be "0".
+/// (If there are no weights at all, then it's correct to set them all to 1,
+/// and just use the bandwidths.  If _some_ are present and some are absent,
+/// then the spec doesn't say what to do, but this behavior appears
+/// reasonable.)
 const DFLT_WEIGHT: i32 = 1;
 
 /// Return the weight param named 'kwd' in p.
