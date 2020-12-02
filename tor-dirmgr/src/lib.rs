@@ -355,7 +355,10 @@ impl NoInformation {
                 resource.set_last_consensus_date(valid_after.into());
             }
         }
-        let text = tor_dirclient::get_resource(resource, info, circmgr).await?;
+        let response = tor_dirclient::get_resource(resource, info, circmgr).await?;
+        let text = response.output();
+        // XXXX In some of the below error cases we should retire the circuit
+        // to the cache that gave us this stuff.
 
         let (signedval, remainder, parsed) = MDConsensus::parse(&text)?;
         let unvalidated = parsed.check_valid_now()?;
@@ -486,7 +489,10 @@ impl UnvalidatedDir {
             resource.push(m.clone());
         }
 
-        let text = tor_dirclient::get_resource(resource, info, circmgr).await?;
+        let response = tor_dirclient::get_resource(resource, info, circmgr).await?;
+        let text = response.output();
+        // XXXX In some of the below error cases we should retire the circuit
+        // to the cache that gave us this stuff.
 
         let mut newcerts = Vec::new();
         for cert in AuthCert::parse_multiple(&text) {
@@ -704,7 +710,12 @@ where
                 let mut my_new_mds = Vec::new();
 
                 // XXXX log error.
-                if let Ok(text) = res {
+                if let Ok(response) = res {
+                    let text = response.output();
+                    // XXXX In some of the below error cases we should
+                    // retire the circuit to the cache that gave us
+                    // this stuff.
+
                     for annot in
                         MicrodescReader::new(&text, AllowAnnotations::AnnotationsNotAllowed)
                     {

@@ -17,6 +17,7 @@
 mod decompress;
 mod err;
 pub mod request;
+mod response;
 mod util;
 
 use crate::decompress::Decompressor;
@@ -30,6 +31,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub use err::Error;
+pub use response::{DirResponse, SourceInfo};
 
 /// Fetch the resource described by `req` over the Tor network.
 ///
@@ -39,7 +41,7 @@ pub async fn get_resource<CR, TR>(
     req: CR,
     dirinfo: DirInfo<'_>,
     circ_mgr: Arc<CircMgr<TR>>,
-) -> Result<String>
+) -> Result<DirResponse>
 where
     CR: request::ClientRequest,
     TR: tor_chanmgr::transport::Transport,
@@ -52,41 +54,76 @@ where
     let encoded = util::encode_request(req);
 
     let circuit = circ_mgr.get_or_launch_dir(dirinfo).await?;
+    let source = SourceInfo::new(circuit.unique_id());
 
-    let (stream, encoding, buf, n_in_buf) = {
+    let (header, stream) = {
         // XXXX should be an option, and is too long.
         let begin_timeout = Duration::from_secs(5);
-        timeout(begin_timeout, async {
+        let r = timeout(begin_timeout, async {
             let mut stream = circuit.begin_dir_stream().await?;
             stream.write_bytes(encoded.as_bytes()).await?;
-            let (encoding, buf, n_in_buf) = read_headers(&mut stream).await?;
-            Result::<_, anyhow::Error>::Ok((stream, encoding, buf, n_in_buf))
+            let hdr = read_headers(&mut stream).await?;
+            Result::<_, anyhow::Error>::Ok((hdr, stream))
         })
-        .await??
+        .await;
+
+        match r {
+            Err(e) => {
+                retire_circ(circ_mgr, &source, &e).await;
+                return Err(e.into());
+            }
+            Ok(Err(e)) => {
+                retire_circ(circ_mgr, &source, &e).await;
+                return Err(e.into());
+            }
+            Ok(Ok((hdr, stream))) => {
+                if hdr.status != Some(200) {
+                    // XXXX we should retire the circuit in some of
+                    // these cases, and return a response in others.
+                    return Err(Error::HttpStatus(hdr.status).into());
+                }
+                (hdr, stream)
+            }
+        }
+    };
+    let encoding = header.encoding;
+    let buf = header.pending;
+    let n_in_buf = header.n_pending;
+
+    let decompressor = match get_decompressor(encoding.as_deref()) {
+        Err(e) => {
+            retire_circ(circ_mgr, &source, &e).await;
+            return Err(e.into());
+        }
+        Ok(x) => x,
     };
 
-    let decompressor = get_decompressor(encoding.as_deref())?;
     let mut result = vec![0_u8; 2048];
 
     let ok = read_and_decompress(stream, maxlen, decompressor, buf, n_in_buf, &mut result).await;
     match (partial_ok, ok, result.len()) {
-        (true, Err(e), n) if n > 0 => info!("Error while downloading: {}", e),
-        (_, Err(e), _) => return Err(e),
+        (true, Err(e), n) if n > 0 => {
+            retire_circ(Arc::clone(&circ_mgr), &source, &e).await;
+            // Note that we _don't_ return here: we want the partial response.
+        }
+        (_, Err(e), _) => {
+            retire_circ(circ_mgr, &source, &e).await;
+            return Err(e);
+        }
         (_, _, _) => (),
     }
-    Ok(String::from_utf8(result)?)
+
+    match String::from_utf8(result) {
+        Err(e) => {
+            retire_circ(circ_mgr, &source, &e).await;
+            Err(e.into())
+        }
+        Ok(output) => Ok(DirResponse::new(200, output, source)),
+    }
 }
 
 /// Read and parse HTTP/1 headers from `stream`.
-///
-/// On success, return the Content-Encoding header, a buffer containing
-/// leftover data beyond what was in the header, and the number of usable
-/// bytes in that buffer.
-///
-/// TODO: fix up this complicated return type!
-async fn read_headers(
-    stream: &mut tor_proto::stream::DataStream,
-) -> Result<(Option<String>, Vec<u8>, usize)> {
+async fn read_headers(stream: &mut tor_proto::stream::DataStream) -> Result<HeaderStatus> {
     let mut buf = vec![0; 1024];
     let mut n_in_buf = 0;
 
@@ -112,7 +149,12 @@ async fn read_headers(
             }
         } else {
             if response.code != Some(200) {
-                return Err(Error::HttpStatus(response.code).into());
+                return Ok(HeaderStatus {
+                    status: response.code,
+                    encoding: None,
+                    pending: Vec::new(),
+                    n_pending: 0,
+                });
             }
             let encoding = if let Some(enc) = response
                 .headers
@@ -132,12 +174,29 @@ async fn read_headers(
             let n_parsed = res.unwrap();
             n_in_buf -= n_parsed;
             buf.copy_within(n_parsed.., 0);
-            return Ok((encoding, buf, n_in_buf));
+            return Ok(HeaderStatus {
+                status: Some(200),
+                encoding,
+                pending: buf,
+                n_pending: n_in_buf,
+            });
         }
         if n == 0 {
             return Err(Error::TruncatedHeaders.into());
         }
     }
+}
+
+/// Return value from read_headers
+struct HeaderStatus {
+    /// HTTP status code.
+    status: Option<u16>,
+    /// The Content-Encoding header, if any.
+    encoding: Option<String>,
+    /// A buffer containing leftover data beyond what was in the header.
+    pending: Vec<u8>,
+    /// The number of usable bytes in `pending`.
+    n_pending: usize,
 }
 
 /// Helper: download directory information from `stream` and
@@ -234,4 +293,18 @@ fn get_decompressor(encoding: Option<&str>) -> Result<Box<dyn Decompressor>> {
         )),
         Some(other) => Err(Error::BadEncoding(other.into()).into()),
     }
+}
+
+/// Retire a directory circuit because of an error we've encountered on it.
+async fn retire_circ<TR, E>(circ_mgr: Arc<CircMgr<TR>>, source_info: &SourceInfo, error: &E)
+where
+    TR: tor_chanmgr::transport::Transport,
+    E: std::fmt::Display,
+{
+    let id = source_info.unique_circ_id();
+    info!(
+        "{}: Retiring circuit because of directory failure: {}",
+        &id, &error
+    );
+    circ_mgr.retire_circ(&id).await;
 }
