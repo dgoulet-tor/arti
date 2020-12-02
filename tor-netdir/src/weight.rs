@@ -117,9 +117,10 @@ impl std::ops::Mul<u32> for RelayWeight {
 impl RelayWeight {
     /// Return the largest weight that we give for this kind of relay.
     fn max_weight(&self) -> u32 {
-        *[self.as_guard, self.as_middle, self.as_exit, self.as_dir]
+        [self.as_guard, self.as_middle, self.as_exit, self.as_dir]
             .iter()
             .max()
+            .copied()
             .unwrap()
     }
     /// Return the weight we should give this kind of relay's
