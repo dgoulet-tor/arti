@@ -485,5 +485,41 @@ mod test {
             ),
             7777 * 5904
         );
+
+        assert_eq!(
+            ws.weight_bw_for_role(
+                WeightKind(FLG_GUARD | FLG_DIR),
+                &RouterWeight::Measured(7777),
+                WeightRole::Middle
+            ),
+            7777 * 4096
+        );
+
+        assert_eq!(
+            ws.weight_bw_for_role(
+                WeightKind(FLG_GUARD | FLG_DIR),
+                &RouterWeight::Measured(7777),
+                WeightRole::Exit
+            ),
+            7777 * 10000
+        );
+
+        assert_eq!(
+            ws.weight_bw_for_role(
+                WeightKind(FLG_GUARD | FLG_DIR),
+                &RouterWeight::Measured(7777),
+                WeightRole::BeginDir
+            ),
+            7777 * 4096
+        );
+
+        assert_eq!(
+            ws.weight_bw_for_role(
+                WeightKind(FLG_GUARD | FLG_DIR),
+                &RouterWeight::Measured(7777),
+                WeightRole::Unweighted
+            ),
+            7777
+        );
     }
 }
