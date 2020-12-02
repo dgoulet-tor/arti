@@ -1,6 +1,7 @@
 //! Code to construct paths to a directory for non-anonymous downloads
 use super::*;
 use crate::{DirInfo, Error};
+use tor_netdir::{Relay, WeightRole};
 
 /// A PathBuilder that can connect to a directory.
 pub struct DirPathBuilder {}
@@ -22,8 +23,6 @@ impl DirPathBuilder {
     pub fn pick_path<'a, R: Rng>(&self, rng: &mut R, netdir: DirInfo<'a>) -> Result<TorPath<'a>> {
         // TODO: this will need to learn about directory guards.
         // TODO: this needs to work with fallback directories.
-
-        // XXXX Weight correctly.
         match netdir {
             DirInfo::Fallbacks(f) => {
                 let relay = f.pick(rng);
@@ -32,7 +31,7 @@ impl DirPathBuilder {
                 }
             }
             DirInfo::Directory(netdir) => {
-                let relay = netdir.pick_relay(rng, |r, w| if r.is_dir_cache() { w } else { 0 });
+                let relay = netdir.pick_relay(rng, WeightRole::BeginDir, Relay::is_dir_cache);
                 if let Some(r) = relay {
                     return Ok(TorPath::OneHop(r));
                 }

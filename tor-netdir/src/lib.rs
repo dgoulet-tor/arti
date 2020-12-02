@@ -23,6 +23,7 @@
 mod err;
 pub mod fallback;
 mod pick;
+mod weight;
 
 use ll::pk::rsa::RSAIdentity;
 use tor_llcrypto as ll;
@@ -32,39 +33,9 @@ use tor_netdoc::doc::netstatus::{self, MDConsensus};
 use std::collections::HashMap;
 
 pub use err::Error;
+pub use weight::WeightRole;
 /// A Result using the Error type from the tor-netdir crate
 pub type Result<T> = std::result::Result<T, Error>;
-
-/// Internal: how should we find the base weight of each relay?  This
-/// value is global over a whole directory, and depends on the bandwidth
-/// weights in the consensus.
-#[derive(Copy, Clone, Debug)]
-enum WeightFn {
-    /// There are no weights at all in the consensus: weight every
-    /// relay as 1.
-    Uniform,
-    /// There are no measured weights in the consensus: count
-    /// unmeasured weights as the weights for relays.
-    IncludeUnmeasured,
-    /// There are measured relays in the consensus; only use those.
-    MeasuredOnly,
-}
-
-impl WeightFn {
-    /// Apply this weight function to the measured or unmeasured bandwidth
-    /// of a single router.
-    fn apply(&self, w: &netstatus::RouterWeight) -> u32 {
-        use netstatus::RouterWeight::*;
-        use WeightFn::*;
-        match (self, w) {
-            (Uniform, _) => 1,
-            (IncludeUnmeasured, Unmeasured(u)) => *u,
-            (IncludeUnmeasured, Measured(u)) => *u,
-            (MeasuredOnly, Unmeasured(_)) => 0,
-            (MeasuredOnly, Measured(u)) => *u,
-        }
-    }
-}
 
 /// Internal type: wraps Option<Microdesc> to prevent confusion.
 ///
@@ -88,9 +59,9 @@ pub struct NetDir {
     /// Map from SHA256 digest of microdescriptors to the
     /// microdescriptors themselves.
     mds: HashMap<MDDigest, MDEntry>,
-    /// Value describing how to find the weight to use when picking a
-    /// router by weight.
-    weight_fn: WeightFn,
+    /// Weight values to apply to a given relay when deciding how frequently
+    /// to choose it for a given role.
+    weights: weight::WeightSet,
 }
 
 /// A partially build NetDir -- it can't be unwrapped until it has
@@ -136,11 +107,13 @@ impl PartialNetDir {
     /// Create a new PartialNetDir with a given consensus, and no
     /// microdecriptors loaded.
     pub fn new(consensus: MDConsensus) -> Self {
-        let weight_fn = pick_weight_fn(&consensus);
+        // Compute the weights we'll want to use for these routers.
+        let weights = weight::WeightSet::from_consensus(&consensus);
+
         let mut netdir = NetDir {
             consensus,
             mds: HashMap::new(),
-            weight_fn,
+            weights,
         };
 
         for rs in netdir.consensus.routers().iter() {
@@ -210,10 +183,10 @@ impl NetDir {
         let mut total_bw = 0_u64;
         let mut have_bw = 0_u64;
         for r in self.all_relays() {
-            let w = self.weight_fn.apply(r.rs.weight());
-            total_bw += w as u64;
+            let w = self.weights.weight_rs_for_role(&r.rs, WeightRole::Middle);
+            total_bw += w;
             if r.is_usable() {
-                have_bw += w as u64;
+                have_bw += w;
             }
         }
 
@@ -222,20 +195,28 @@ impl NetDir {
     }
     /// Chose a relay at random.
     ///
-    /// Each relay is chosen with probability proportional to a function
-    /// `reweight` of the relay and its weight in the consensus.
+    /// Each relay is chosen with probability proportional to its weight
+    /// in the role `role`, and is only selected if the predicate `usable`
+    /// returns true for it.
     ///
     /// This function returns None if (and only if) there are no relays
-    /// with nonzero weight.
-    //
-    // TODO: This API is powerful but tricky; there should be wrappers.
-    pub fn pick_relay<'a, R, F>(&'a self, rng: &mut R, reweight: F) -> Option<Relay<'a>>
+    /// with nonzero weight where `usable` returned true.
+    pub fn pick_relay<'a, R, P>(
+        &'a self,
+        rng: &mut R,
+        role: WeightRole,
+        usable: P,
+    ) -> Option<Relay<'a>>
     where
         R: rand::Rng,
-        F: Fn(&Relay<'a>, u32) -> u32,
+        P: Fn(&Relay<'a>) -> bool,
     {
         pick::pick_weighted(rng, self.relays(), |r| {
-            reweight(r, r.weight(self.weight_fn)) as u64
+            if usable(r) {
+                self.weights.weight_rs_for_role(&r.rs, role)
+            } else {
+                0
+            }
         })
     }
 }
@@ -257,21 +238,6 @@ impl MDReceiver for NetDir {
         } else {
             false
         }
-    }
-}
-
-/// Helper: Calculate the function we should use to find
-/// initial relay weights.
-fn pick_weight_fn(consensus: &MDConsensus) -> WeightFn {
-    let routers = consensus.routers();
-    let has_measured = routers.iter().any(|rs| rs.weight().is_measured());
-    let has_nonzero = routers.iter().any(|rs| rs.weight().is_nonzero());
-    if !has_nonzero {
-        WeightFn::Uniform
-    } else if !has_measured {
-        WeightFn::IncludeUnmeasured
-    } else {
-        WeightFn::MeasuredOnly
     }
 }
 
@@ -326,10 +292,6 @@ impl<'a> Relay<'a> {
                 .rs
                 .protovers()
                 .supports_known_subver(ProtoKind::DirCache, 2)
-    }
-    /// Return the weight of this Relay, according to `wf`.
-    fn weight(&self, wf: WeightFn) -> u32 {
-        wf.apply(self.rs.weight())
     }
 }
 

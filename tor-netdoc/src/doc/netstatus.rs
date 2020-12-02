@@ -401,13 +401,21 @@ impl MDConsensusRouterStatus {
     pub fn ed25519_id_is_usable(&self) -> bool {
         !self.flags.contains(RouterFlags::NO_ED_CONSENSUS)
     }
-    /// Return true if this routerstatus is listed with the BadExit
+    /// Return true if this routerstatus is listed with the BadExit flag.
     pub fn is_flagged_bad_exit(&self) -> bool {
         self.flags.contains(RouterFlags::BAD_EXIT)
     }
     /// Return true if this routerstatus is listed with the v2dir flag.
     pub fn is_flagged_v2dir(&self) -> bool {
         self.flags.contains(RouterFlags::V2DIR)
+    }
+    /// Return true if this routerstatus is listed with the Exit flag.
+    pub fn is_flagged_exit(&self) -> bool {
+        self.flags.contains(RouterFlags::EXIT)
+    }
+    /// Return true if this routerstatus is listed with the Guard flag.
+    pub fn is_flagged_guard(&self) -> bool {
+        self.flags.contains(RouterFlags::GUARD)
     }
 }
 
@@ -462,6 +470,12 @@ impl MDConsensus {
     /// Return a slice of all the routerstatus entries in this consensus.
     pub fn routers(&self) -> &[MDConsensusRouterStatus] {
         &self.routers[..]
+    }
+
+    /// Return a mapping from keywords to integers representing how
+    /// to weight different kinds of relays in different path positions.
+    pub fn bandwidth_weights(&self) -> &NetParams<i32> {
+        &self.footer.weights
     }
 }
 

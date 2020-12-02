@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::{DirInfo, Error};
+use tor_netdir::WeightRole;
 
 /// A PathBuilder that builds a path to an exit node supporting a given
 /// set of ports.
@@ -28,7 +29,6 @@ impl ExitPathBuilder {
     /// Try to create and return a path corresponding to the requirements of
     /// this builder.
     pub fn pick_path<'a, R: Rng>(&self, rng: &mut R, netdir: DirInfo<'a>) -> Result<TorPath<'a>> {
-        // XXXX weight correctly for each position.
         // TODO: implement families
         // TODO: implement guards
         let netdir = match netdir {
@@ -36,29 +36,16 @@ impl ExitPathBuilder {
             DirInfo::Directory(d) => d,
         };
         let exit = netdir
-            .pick_relay(rng, |r, weight| {
-                if self.ports_supported_by(r) {
-                    weight
-                } else {
-                    0
-                }
-            })
+            .pick_relay(rng, WeightRole::Exit, |r| self.ports_supported_by(r))
             .ok_or_else(|| Error::NoRelays("No exit relay found".into()))?;
 
         let middle = netdir
-            .pick_relay(
-                rng,
-                |r, weight| if r.same_relay(&exit) { 0 } else { weight },
-            )
+            .pick_relay(rng, WeightRole::Middle, |r| !r.same_relay(&exit))
             .ok_or_else(|| Error::NoRelays("No exit relay found".into()))?;
 
         let entry = netdir
-            .pick_relay(rng, |r, weight| {
-                if r.same_relay(&exit) || r.same_relay(&middle) {
-                    0
-                } else {
-                    weight
-                }
+            .pick_relay(rng, WeightRole::Guard, |r| {
+                !(r.same_relay(&exit) || r.same_relay(&middle))
             })
             .ok_or_else(|| Error::NoRelays("No entry relay found".into()))?;
 
