@@ -115,6 +115,17 @@ impl std::ops::Mul<u32> for RelayWeight {
         }
     }
 }
+impl std::ops::Div<u32> for RelayWeight {
+    type Output = Self;
+    fn div(self, rhs: u32) -> Self {
+        RelayWeight {
+            as_guard: self.as_guard / rhs,
+            as_middle: self.as_middle / rhs,
+            as_exit: self.as_exit / rhs,
+            as_dir: self.as_dir / rhs,
+        }
+    }
+}
 
 impl RelayWeight {
     /// Return the largest weight that we give for this kind of relay.
@@ -219,6 +230,10 @@ impl WeightSet {
     /// Compute the correct WeightSet for a provided MDConsensus.
     pub(crate) fn from_consensus(consensus: &MDConsensus) -> Self {
         let bandwidth_fn = pick_bandwidth_fn(consensus.routers().iter().map(|rs| rs.weight()));
+        let weight_scale = consensus
+            .params()
+            .get_clamped("bwweightscale", 1, std::u32::MAX)
+            .unwrap_or(10000);
         let total_bw = consensus
             .routers()
             .iter()
@@ -226,13 +241,18 @@ impl WeightSet {
             .sum();
         let p = consensus.bandwidth_weights();
 
-        Self::from_parts(bandwidth_fn, total_bw, p)
+        Self::from_parts(bandwidth_fn, total_bw, weight_scale, p)
     }
 
-    /// Compute the correct WeightSet given a bandwidth function,
-    /// a total amount of bandwidth for all relays in the consensus,
-    /// and a set of bandwidth parameters.
-    fn from_parts(bandwidth_fn: BandwidthFn, total_bw: u64, p: &NetParams<i32>) -> Self {
+    /// Compute the correct WeightSet given a bandwidth function, a
+    /// weight-scaling parameter, a total amount of bandwidth for all
+    /// relays in the consensus, and a set of bandwidth parameters.
+    fn from_parts(
+        bandwidth_fn: BandwidthFn,
+        total_bw: u64,
+        weight_scale: u32,
+        p: &NetParams<i32>,
+    ) -> Self {
         /// Find a single RelayWeight, given the names that its bandwidth
         /// parameters have. The `g` parameter is the weight as a guard, the
         /// `m` parameter is the weight as a middle node, the `e` parameter is
@@ -270,10 +290,10 @@ impl WeightSet {
             //
             // (We don't need to check for overflow here, since the
             // authorities make sure that the inputs don't get too big.)
-            w_none * w_param(p, "Wmb"),
-            w_guard * w_param(p, "Wgb"),
-            w_exit * w_param(p, "Web"),
-            w_both * w_param(p, "Wdb"),
+            (w_none * w_param(p, "Wmb")) / weight_scale,
+            (w_guard * w_param(p, "Wgb")) / weight_scale,
+            (w_exit * w_param(p, "Web")) / weight_scale,
+            (w_both * w_param(p, "Wdb")) / weight_scale,
         ];
 
         // This is the largest weight value.
@@ -436,7 +456,7 @@ mod test {
     fn t_weightset_basic() {
         let total_bandwidth = 1_000_000_000;
         let params = TESTVEC_PARAMS.parse().unwrap();
-        let ws = WeightSet::from_parts(BandwidthFn::MeasuredOnly, total_bandwidth, &params);
+        let ws = WeightSet::from_parts(BandwidthFn::MeasuredOnly, total_bandwidth, 10000, &params);
 
         assert_eq!(ws.bandwidth_fn, BandwidthFn::MeasuredOnly);
         assert_eq!(ws.shift, 0);
@@ -446,11 +466,7 @@ mod test {
         assert_eq!(ws.w[(FLG_EXIT) as usize].as_exit, 10000);
         assert_eq!(ws.w[(FLG_EXIT | FLG_GUARD) as usize].as_dir, 0);
         assert_eq!(ws.w[(FLG_GUARD) as usize].as_dir, 4096);
-        // This troubles me.  If I'm reading this right, non-V2Dir relays
-        // will almost never get picked for anything! (XXXX)
-
-        // XXXX Need to implement bwweightscale!!
-        assert_eq!(ws.w[(FLG_GUARD | FLG_DIR) as usize].as_dir, 40960000);
+        assert_eq!(ws.w[(FLG_GUARD | FLG_DIR) as usize].as_dir, 4096);
 
         assert_eq!(
             ws.weight_bw_for_role(
@@ -467,7 +483,7 @@ mod test {
                 &RouterWeight::Measured(7777),
                 WeightRole::Guard
             ),
-            7777 * 5904 * 10000
+            7777 * 5904
         );
     }
 }
