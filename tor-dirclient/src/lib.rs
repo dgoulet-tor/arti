@@ -232,6 +232,9 @@ fn get_decompressor(encoding: Option<&str>) -> Result<Box<dyn Decompressor>> {
         Some("deflate") => Ok(miniz_oxide::inflate::stream::InflateState::new_boxed(
             miniz_oxide::DataFormat::Zlib,
         )),
+        Some("lzma") | Some("xz") => Ok(Box::new(
+            xz2::stream::Stream::new_lzma_decoder(u64::max_value()).unwrap(),
+        )),
         Some(other) => Err(Error::BadEncoding(other.into()).into()),
     }
 }

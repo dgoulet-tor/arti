@@ -110,3 +110,40 @@ mod miniz_oxide {
         }
     }
 }
+
+/// Implementation for the [`Decompressor`] trait on [`xz2::Stream`].
+///
+/// This implements lzma compression as used in Tor.
+mod xz2 {
+    use super::{Decompressor, Status, StatusKind};
+
+    use anyhow::{anyhow, Result};
+    use xz2::stream::{Action, Error, Status as Xz2Status, Stream};
+
+    impl Decompressor for Stream {
+        fn process(&mut self, inp: &[u8], out: &mut [u8], finished: bool) -> Result<Status> {
+            let action = if finished {
+                Action::Finish
+            } else {
+                Action::Run
+            };
+            let res = xz2::stream::Stream::process(self, inp, out, action);
+
+            let statuskind = match res {
+                Ok(Xz2Status::StreamEnd) => StatusKind::Done,
+                Ok(Xz2Status::Ok) => StatusKind::Written,
+                Ok(Xz2Status::GetCheck) => StatusKind::Written,
+                Ok(Xz2Status::MemNeeded) => StatusKind::OutOfSpace,
+                Err(Error::MemLimit) => StatusKind::OutOfSpace,
+                Err(Error::Mem) => StatusKind::OutOfSpace,
+                other => return Err(anyhow!("xz2 compression error: {:?}", other)),
+            };
+
+            Ok(Status {
+                status: statuskind,
+                consumed: xz2::stream::Stream::total_in(self) as usize,
+                written: xz2::stream::Stream::total_out(self) as usize,
+            })
+        }
+    }
+}
