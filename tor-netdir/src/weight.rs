@@ -43,7 +43,7 @@ where
 /// Internal: how should we find the base bandwidth of each relay?  This
 /// value is global over a whole directory, and depends on the bandwidth
 /// weights in the consensus.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum BandwidthFn {
     /// There are no weights at all in the consensus: weight every
     /// relay as 1.
@@ -372,5 +372,59 @@ mod test {
         assert!(((432_u64 << 40) >> 38)
             .checked_mul(7777_u64 << 40)
             .is_some());
+    }
+
+    #[test]
+    fn t_pick_bwfunc() {
+        let empty = [];
+        assert_eq!(pick_bandwidth_fn(empty.iter()), BandwidthFn::Uniform);
+
+        let all_zero = [
+            RouterWeight::Unmeasured(0),
+            RouterWeight::Measured(0),
+            RouterWeight::Unmeasured(0),
+        ];
+        assert_eq!(pick_bandwidth_fn(all_zero.iter()), BandwidthFn::Uniform);
+
+        let all_unmeasured = [RouterWeight::Unmeasured(9), RouterWeight::Unmeasured(2222)];
+        assert_eq!(
+            pick_bandwidth_fn(all_unmeasured.iter()),
+            BandwidthFn::IncludeUnmeasured
+        );
+
+        let some_measured = [
+            RouterWeight::Unmeasured(10),
+            RouterWeight::Measured(7),
+            RouterWeight::Measured(4),
+            RouterWeight::Unmeasured(0),
+        ];
+        assert_eq!(
+            pick_bandwidth_fn(some_measured.iter()),
+            BandwidthFn::MeasuredOnly
+        );
+
+        // This corresponds to an open question in
+        // `pick_bandwidth_fn`, about what to do when the only nonzero
+        // weights are unmeasured.
+        let measured_all_zero = [RouterWeight::Unmeasured(10), RouterWeight::Measured(0)];
+        assert_eq!(
+            pick_bandwidth_fn(measured_all_zero.iter()),
+            BandwidthFn::MeasuredOnly
+        );
+    }
+
+    #[test]
+    fn t_apply_bw() {
+        use BandwidthFn::*;
+        use RouterWeight::*;
+
+        assert_eq!(Uniform.apply(&Measured(7)), 1);
+        assert_eq!(Uniform.apply(&Unmeasured(0)), 1);
+
+        assert_eq!(IncludeUnmeasured.apply(&Measured(7)), 7);
+        assert_eq!(IncludeUnmeasured.apply(&Unmeasured(8)), 8);
+
+        assert_eq!(MeasuredOnly.apply(&Measured(9)), 9);
+        assert_eq!(MeasuredOnly.apply(&Unmeasured(10)), 0);
     }
 }

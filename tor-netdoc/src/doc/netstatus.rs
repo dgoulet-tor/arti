@@ -346,8 +346,7 @@ pub enum RouterWeight {
 impl RouterWeight {
     /// Return true if this weight is the result of a successful measurement
     pub fn is_measured(&self) -> bool {
-        matches!(self,
-                 RouterWeight::Measured(x) if x > &0)
+        matches!(self, RouterWeight::Measured(_))
     }
     /// Return true if this weight is nonzero
     pub fn is_nonzero(&self) -> bool {
