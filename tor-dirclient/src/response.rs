@@ -23,6 +23,7 @@ pub struct DirResponse {
 /// remember that the cache isn't working.)
 #[derive(Debug, Clone)]
 pub struct SourceInfo {
+    /// Unique identifier for the circuit we're using
     circuit: UniqId,
 }
 

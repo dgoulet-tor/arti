@@ -74,7 +74,7 @@ where
             }
             Ok(Err(e)) => {
                 retire_circ(circ_mgr, &source, &e).await;
-                return Err(e.into());
+                return Err(e);
             }
             Ok(Ok((hdr, stream))) => {
                 if hdr.status != Some(200) {
@@ -93,7 +93,7 @@ where
     let decompressor = match get_decompressor(encoding.as_deref()) {
         Err(e) => {
             retire_circ(circ_mgr, &source, &e).await;
-            return Err(e.into());
+            return Err(e);
         }
         Ok(x) => x,
     };
