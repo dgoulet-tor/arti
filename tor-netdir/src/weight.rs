@@ -262,8 +262,8 @@ impl WeightSet {
             // The V2Dir values are the same as the non-V2Dir values, except
             // each is multiplied by an additional factor.
             //
-            // TODO: Should we check for overflow here, or can we rely
-            // on the authorities to have done it for us?
+            // (We don't need to check for overflow here, since the
+            // authorities make sure that the inputs don't get too big.)
             w_none * w_param(p, "Wmb"),
             w_guard * w_param(p, "Wgb"),
             w_exit * w_param(p, "Web"),
@@ -303,7 +303,8 @@ fn w_param(p: &NetParams<i32>, kwd: &str) -> u32 {
 
 /// If `inp` is less than 0, return 0.  Otherwise return `inp` as a u32.
 fn clamp_to_pos(inp: i32) -> u32 {
-    // XXXX todo spec why do we even allow negative values?
+    // (The spec says that we might encounter negative values here, though
+    // we never actually generate them, and don't plan to generate them.)
     if inp < 0 {
         0
     } else {
