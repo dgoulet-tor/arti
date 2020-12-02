@@ -97,7 +97,7 @@ impl PartialEq<Ed25519Identity> for Ed25519Identity {
 impl Eq for Ed25519Identity {}
 
 impl Display for Ed25519Identity {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{}",
@@ -107,7 +107,7 @@ impl Display for Ed25519Identity {
 }
 
 impl Debug for Ed25519Identity {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "Ed25519Identity {{ {} }}", self)
     }
 }

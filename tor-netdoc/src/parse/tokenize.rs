@@ -668,7 +668,7 @@ cherry 6
 -----END CHERRY SYNOPSIS-----
 plum hello there
 ";
-        let mut r: NetDocReader<Fruit> = NetDocReader::new(s);
+        let mut r: NetDocReader<'_, Fruit> = NetDocReader::new(s);
 
         assert_eq!(r.str(), s);
         assert!(r.should_be_exhausted().is_err()); // it's not exhausted.
@@ -749,7 +749,7 @@ cherry
 
 truncated line";
 
-        let mut r: NetDocReader<Fruit> = NetDocReader::new(s);
+        let mut r: NetDocReader<'_, Fruit> = NetDocReader::new(s);
         let toks: Vec<_> = r.iter().collect();
 
         assert!(toks[0].is_err());

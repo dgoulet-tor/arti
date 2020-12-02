@@ -230,7 +230,7 @@ pub enum Error {
 }
 
 impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::InvalidInteger => write!(f, "Integer was not member of this enumeration"),
             Error::InvalidString => write!(f, "String was not member of this enumeration"),

@@ -184,7 +184,7 @@ impl SocksRequest {
 impl fmt::Display for SocksAddr {
     /// Format a string (a hostname or IP address) corresponding to this
     /// SocksAddr.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SocksAddr::Ip(a) => write!(f, "{}", a),
             SocksAddr::Hostname(h) => write!(f, "{}", h),

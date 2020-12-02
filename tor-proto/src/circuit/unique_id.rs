@@ -24,7 +24,7 @@ impl UniqId {
 }
 
 impl Display for UniqId {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Circ {}.{}", self.chan, self.circ)
     }
 }

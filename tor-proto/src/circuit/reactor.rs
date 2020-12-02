@@ -58,7 +58,7 @@ pub(super) enum CtrlMsg {
 }
 
 impl std::fmt::Debug for CtrlMsg {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use CtrlMsg::*;
         match self {
             Shutdown => write!(f, "Shutdown"),
