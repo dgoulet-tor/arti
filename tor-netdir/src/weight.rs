@@ -54,7 +54,7 @@ enum BandwidthFn {
 }
 
 impl BandwidthFn {
-    /// Apply this weight function to the measured or unmeasured bandwidth
+    /// Apply this function to the measured or unmeasured bandwidth
     /// of a single router.
     fn apply(&self, w: &RouterWeight) -> u32 {
         use BandwidthFn::*;
@@ -122,7 +122,8 @@ impl RelayWeight {
             .max()
             .unwrap()
     }
-    /// Return the weight we should give this kind of relay for a given role.
+    /// Return the weight we should give this kind of relay's
+    /// bandwidth for a given role.
     fn for_role(&self, role: WeightRole) -> u32 {
         match role {
             WeightRole::Guard => self.as_guard,
@@ -172,10 +173,11 @@ impl WeightKind {
 /// weighted bandwidth.
 #[derive(Debug, Clone)]
 pub(crate) struct WeightSet {
-    /// How to find the weight to use when picking a router by weight.
+    /// How to find the bandwidth to use when picking a router by weighted
+    /// bandwidth.
     ///
-    /// (Tell us us whether to count unmeasured relays, whether to look at
-    /// bandwidths at all, etc.)
+    /// (This tells us us whether to count unmeasured relays, whether
+    /// to look at bandwidths at all, etc.)
     bandwidth_fn: BandwidthFn,
     /// Number of bits that we need to right-shift our weighted products
     /// so that their sum won't overflow u64::MAX.
@@ -191,11 +193,12 @@ impl WeightSet {
     pub(crate) fn weight_rs_for_role(&self, rs: &MDConsensusRouterStatus, role: WeightRole) -> u64 {
         let ws = self.weight_for_rs(rs);
 
-        let router_weight = self.bandwidth_fn.apply(rs.weight());
-        // Note a subtlety here: we multiply the two values before we shift, to
-        // improve accuracy.  We know that this will be safe, since the inputs
-        // are both u32, and so cannot overflow a u64.
-        let router_weight = (router_weight as u64) * (ws.for_role(role) as u64);
+        let router_bw = self.bandwidth_fn.apply(rs.weight());
+        // Note a subtlety here: we multiply the two values _before_
+        // we shift, to improve accuracy.  We know that this will be
+        // safe, since the inputs are both u32, and so cannot overflow
+        // a u64.
+        let router_weight = (router_bw as u64) * (ws.for_role(role) as u64);
         router_weight >> self.shift
     }
 
@@ -249,7 +252,8 @@ impl WeightSet {
             // The V2Dir values are the same as the non-V2Dir values, except
             // each is multiplied by an additional factor.
             //
-            // TODO: Should we check for overflow here?
+            // TODO: Should we check for overflow here, or can we rely
+            // on the authorities to have done it for us?
             w_none * w_param(p, "Wmb"),
             w_guard * w_param(p, "Wgb"),
             w_exit * w_param(p, "Web"),
@@ -297,7 +301,8 @@ fn clamp_to_pos(inp: i32) -> u32 {
     }
 }
 
-/// Compute a 'shift' value such that `(a>>shift) * b` will not overflow.
+/// Compute a 'shift' value such that `(a * b) >> shift` will be contained
+/// inside 64 bits.
 fn calculate_shift(a: u64, b: u64) -> u32 {
     let bits_for_product = log2_upper(a) + log2_upper(b);
     if bits_for_product < 64 {
