@@ -194,20 +194,26 @@ impl WeightSet {
     /// Find the actual 64-bit weight to use for a given routerstatus when
     /// considering it for a given role.
     pub(crate) fn weight_rs_for_role(&self, rs: &MDConsensusRouterStatus, role: WeightRole) -> u64 {
-        let ws = self.weight_for_rs(rs);
+        self.weight_bw_for_role(WeightKind::for_rs(&rs), rs.weight(), role)
+    }
 
-        let router_bw = self.bandwidth_fn.apply(rs.weight());
+    /// Find the 64-bit weight to report for a relay of `kind` whose weight in
+    /// the consensus is `router_weight` when using it for `role`.
+    fn weight_bw_for_role(
+        &self,
+        kind: WeightKind,
+        router_weight: &RouterWeight,
+        role: WeightRole,
+    ) -> u64 {
+        let ws = &self.w[kind.idx()];
+
+        let router_bw = self.bandwidth_fn.apply(router_weight);
         // Note a subtlety here: we multiply the two values _before_
         // we shift, to improve accuracy.  We know that this will be
         // safe, since the inputs are both u32, and so cannot overflow
         // a u64.
         let router_weight = (router_bw as u64) * (ws.for_role(role) as u64);
         router_weight >> self.shift
-    }
-
-    /// Find the RelayWeight to use for a given routerstatus.
-    fn weight_for_rs(&self, rs: &MDConsensusRouterStatus) -> &RelayWeight {
-        &self.w[WeightKind::for_rs(&rs).idx()]
     }
 
     /// Compute the correct WeightSet for a provided MDConsensus.
