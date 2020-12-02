@@ -414,7 +414,7 @@ mod test {
     }
 
     #[test]
-    fn t_apply_bw() {
+    fn t_apply_bwfn() {
         use BandwidthFn::*;
         use RouterWeight::*;
 
@@ -426,5 +426,48 @@ mod test {
 
         assert_eq!(MeasuredOnly.apply(&Measured(9)), 9);
         assert_eq!(MeasuredOnly.apply(&Unmeasured(10)), 0);
+    }
+
+    // From a fairly recent Tor consensus.
+    const TESTVEC_PARAMS: &str =
+        "Wbd=0 Wbe=0 Wbg=4096 Wbm=10000 Wdb=10000 Web=10000 Wed=10000 Wee=10000 Weg=10000 Wem=10000 Wgb=10000 Wgd=0 Wgg=5904 Wgm=5904 Wmb=10000 Wmd=0 Wme=0 Wmg=4096 Wmm=10000";
+
+    #[test]
+    fn t_weightset_basic() {
+        let total_bandwidth = 1_000_000_000;
+        let params = TESTVEC_PARAMS.parse().unwrap();
+        let ws = WeightSet::from_parts(BandwidthFn::MeasuredOnly, total_bandwidth, &params);
+
+        assert_eq!(ws.bandwidth_fn, BandwidthFn::MeasuredOnly);
+        assert_eq!(ws.shift, 0);
+
+        assert_eq!(ws.w[0].as_guard, 5904);
+        assert_eq!(ws.w[(FLG_GUARD) as usize].as_guard, 5904);
+        assert_eq!(ws.w[(FLG_EXIT) as usize].as_exit, 10000);
+        assert_eq!(ws.w[(FLG_EXIT | FLG_GUARD) as usize].as_dir, 0);
+        assert_eq!(ws.w[(FLG_GUARD) as usize].as_dir, 4096);
+        // This troubles me.  If I'm reading this right, non-V2Dir relays
+        // will almost never get picked for anything! (XXXX)
+
+        // XXXX Need to implement bwweightscale!!
+        assert_eq!(ws.w[(FLG_GUARD | FLG_DIR) as usize].as_dir, 40960000);
+
+        assert_eq!(
+            ws.weight_bw_for_role(
+                WeightKind(FLG_GUARD | FLG_DIR),
+                &RouterWeight::Unmeasured(7777),
+                WeightRole::Guard
+            ),
+            0
+        );
+
+        assert_eq!(
+            ws.weight_bw_for_role(
+                WeightKind(FLG_GUARD | FLG_DIR),
+                &RouterWeight::Measured(7777),
+                WeightRole::Guard
+            ),
+            7777 * 5904 * 10000
+        );
     }
 }
