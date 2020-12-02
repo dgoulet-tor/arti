@@ -176,22 +176,41 @@ impl NetDir {
     pub fn relays(&self) -> impl Iterator<Item = Relay<'_>> {
         self.all_relays().filter_map(UncheckedRelay::into_relay)
     }
-    /// Return true if there is enough information in this NetDir to build
-    /// multihop circuits.
-    fn have_enough_paths(&self) -> bool {
-        // TODO: Implement the real path-based algorithm.
-        let mut total_bw = 0_u64;
-        let mut have_bw = 0_u64;
+    /// Return the fraction of total bandwidth weight for a given role
+    /// that we have available information for in this NetDir.
+    fn frac_for_role(&self, role: WeightRole) -> f64 {
+        let mut total_weight = 0_u64;
+        let mut have_weight = 0_u64;
+
         for r in self.all_relays() {
-            let w = self.weights.weight_rs_for_role(&r.rs, WeightRole::Middle);
-            total_bw += w;
+            let w = self.weights.weight_rs_for_role(&r.rs, role);
+            total_weight += w;
             if r.is_usable() {
-                have_bw += w;
+                have_weight += w
             }
         }
 
-        // TODO: Do a real calculation here.
-        have_bw > (total_bw / 2)
+        (have_weight as f64) / (total_weight as f64)
+    }
+    /// Return true if there is enough information in this NetDir to build
+    /// multihop circuits.
+    fn have_enough_paths(&self) -> bool {
+        // If we can build a randomly chosen path with at least this
+        // probability, we know enough information to participate
+        // on the network.
+        let min_pct = self
+            .consensus
+            .params()
+            .get_clamped("min_paths_for_circs_pct", 25, 95)
+            .unwrap_or(60);
+        let min_frac_paths = (min_pct as f64) / 100.0;
+
+        // What fraction of paths can we build?
+        let available = self.frac_for_role(WeightRole::Guard)
+            * self.frac_for_role(WeightRole::Middle)
+            * self.frac_for_role(WeightRole::Exit);
+
+        available >= min_frac_paths
     }
     /// Chose a relay at random.
     ///
