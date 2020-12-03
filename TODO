@@ -73,15 +73,16 @@ MILESTONE 3: Clean and tidy
         o [arti#24 to resolve them]
    o expand documentation in tor-proto, tor-netdir, tor-netdoc,
      tor-cell. arti#16 (0.5)
-   - Is this "reactor" business a sensible design?  Is there a better one?
+   X Is this "reactor" business a sensible design?  Is there a better one?
      What else would a rustacean object to?  arti#17 (??)
 
 MILESTONE A1: Dogfooding a socksport
-   - Make connections on demand (1)
-   - Build circuits on demand (2)
-   - Downloading directory information, using compression and diffs. (3)
-   - coverage on important parts of netdir (0.5)
-   - Optionally, expose a socks port (0.5)
+   o Make connections on demand (1)
+   o Build circuits on demand (2)
+   o Downloading directory information, using compression
+   - Support consensus diffs
+   . coverage on important parts of netdir (0.5)
+   o Optionally, expose a socks port (0.5)
 
 MILESTONE A2: Experimental embedded client use
    - Minimal stable API. (2)
@@ -89,10 +90,10 @@ MILESTONE A2: Experimental embedded client use
    - Get a data-oriented stream API. arti#10 (3)
 
 MILESTONE B: Secure minimal client
-   - Correct path selection (2)
+   . Correct path selection (2)
    - Timeouts
-      - Circuit timeout logic (2??)
-      - Connection timeout logic. (2??)
+      . Circuit timeout logic (2??)
+      . Connection timeout logic. (2??)
       - What other kinds of timeouts?
    - Connection padding (link protocol 5) (2)
    - Circuit padding (with padding machines) (4???)
@@ -101,7 +102,7 @@ MILESTONE B: Secure minimal client
    - Change behavior depending on network parameters (3???)
    - CBT logic? (4???)
    - Pathbias logic (4???)
-   - Figure out where to put a specific async executor and/or TLS
+   . Figure out where to put a specific async executor and/or TLS
      implementation in our stack. (3???)
 
 MILESTONE C: Client feature parity
