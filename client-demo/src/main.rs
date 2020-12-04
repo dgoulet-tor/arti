@@ -126,7 +126,7 @@ async fn handle_socks_conn(
 }
 
 async fn run_socks_proxy(
-    dir: tor_dirmgr::DirMgr,
+    dir: Arc<tor_dirmgr::DirMgr>,
     circmgr: Arc<tor_circmgr::CircMgr<NativeTlsTransport>>,
     args: Args,
 ) -> Result<()> {
@@ -187,7 +187,7 @@ fn main() -> Result<()> {
         let transport = NativeTlsTransport::new();
         let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(transport));
         let circmgr = Arc::new(tor_circmgr::CircMgr::new(Arc::clone(&chanmgr)));
-        let dirmgr = tor_dirmgr::DirMgr::from_config(dircfg.finalize())?;
+        let dirmgr = Arc::new(tor_dirmgr::DirMgr::from_config(dircfg.finalize())?);
 
         if dirmgr.load_directory().await? {
             info!("Loaded a good directory from disk.")
@@ -196,9 +196,10 @@ fn main() -> Result<()> {
             dirmgr.bootstrap_directory(Arc::clone(&circmgr)).await?;
             info!("Bootstrapped successfully.");
         }
-
         // TODO CONFORMANCE: we should stop now if there are required
         // protovers we don't support.
+
+        Arc::clone(&dirmgr).launch_updater(Arc::clone(&circmgr));
 
         run_socks_proxy(dirmgr, circmgr, args).await
     })

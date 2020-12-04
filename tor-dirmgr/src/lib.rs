@@ -17,6 +17,7 @@ mod docmeta;
 mod err;
 mod retry;
 mod storage;
+mod updater;
 
 use crate::docmeta::{AuthCertMeta, ConsensusMeta};
 use crate::retry::RetryDelay;
@@ -31,6 +32,7 @@ use tor_netdoc::AllowAnnotations;
 
 use anyhow::{anyhow, Result};
 use async_rwlock::RwLock;
+use futures::lock::Mutex;
 use futures::stream::StreamExt;
 use log::info;
 
@@ -42,6 +44,7 @@ use std::time::SystemTime;
 pub use authority::Authority;
 pub use config::{NetDirConfig, NetDirConfigBuilder};
 pub use err::Error;
+pub use updater::DirectoryUpdater;
 
 /// A directory manager to download, fetch, and cache a Tor directory
 pub struct DirMgr {
@@ -49,7 +52,9 @@ pub struct DirMgr {
     /// validate them, and so on.
     config: NetDirConfig,
     /// Handle to our sqlite cache.
-    store: RwLock<SqliteStore>,
+    // XXX I'd like to use an rwlock, but that's not feasible, since
+    // rusqlite::Connection isn't Sync.
+    store: Mutex<SqliteStore>,
     /// Our latest sufficiently bootstrapped directory, if we have one.
     ///
     /// We use the RwLock so that we can give this out to a bunch of other
@@ -60,7 +65,7 @@ pub struct DirMgr {
 impl DirMgr {
     /// Construct a DirMgr from a NetDirConfig.
     pub fn from_config(config: NetDirConfig) -> Result<Self> {
-        let store = RwLock::new(config.open_sqlite_store()?);
+        let store = Mutex::new(config.open_sqlite_store()?);
         let netdir = RwLock::new(None);
         Ok(DirMgr {
             config,
@@ -121,11 +126,56 @@ impl DirMgr {
     }
 
     /// Run a complete bootstrapping process, using information from our
+    /// cache when it is up-to-date enough.
+    pub async fn bootstrap_directory<TR>(&self, circmgr: Arc<CircMgr<TR>>) -> Result<()>
+    where
+        TR: tor_chanmgr::transport::Transport,
+    {
+        self.fetch_directory(circmgr, true).await
+    }
+
+    /// Update our directory, starting with a fresh consensus
+    /// download.
+    async fn update_directory<TR>(&self, circmgr: Arc<CircMgr<TR>>) -> Result<()>
+    where
+        TR: tor_chanmgr::transport::Transport,
+    {
+        self.fetch_directory(circmgr, false).await
+    }
+
+    /// Launch an updater task that periodically re-fetches the
+    /// directory to keep it up-to-date.
+    pub fn launch_updater<TR>(
+        self: Arc<Self>,
+        circmgr: Arc<CircMgr<TR>>,
+    ) -> Arc<DirectoryUpdater<TR>>
+    where
+        TR: tor_chanmgr::transport::Transport + Send + Sync + 'static,
+    {
+        // TODO: XXXX: Need some way  to keep two of these from running at once.
+        let updater = Arc::new(updater::DirectoryUpdater::new(self, circmgr));
+
+        let updater_ref = Arc::clone(&updater);
+        tor_rtcompat::task::spawn(async move {
+            let _ = updater_ref.run().await;
+        });
+
+        updater
+    }
+
+    /// Run a complete bootstrapping process, using information from our
     /// cache when it is up-to-date enough.  When complete, update our
     /// NetDir with the one we've fetched.
     ///
+    /// If use_cached_consensus is true, we start with a cached
+    /// consensus if it is live; otherwise, we start with a consensus
+    /// download.
     // TODO: We'll likely need to refactor this before too long.
-    pub async fn bootstrap_directory<TR>(&self, circmgr: Arc<CircMgr<TR>>) -> Result<()>
+    pub async fn fetch_directory<TR>(
+        &self,
+        circmgr: Arc<CircMgr<TR>>,
+        use_cached_consensus: bool,
+    ) -> Result<()>
     where
         TR: tor_chanmgr::transport::Transport,
     {
@@ -138,10 +188,14 @@ impl DirMgr {
         };
 
         let noinfo = NoInformation::new();
+        let nextstate = if use_cached_consensus {
+            noinfo.load(true, &self.config, store).await?
+        } else {
+            NextState::SameState(noinfo)
+        };
 
-        // TODO: we might not want the pending one if it's too old. add a flag.
         // TODO: Also check the age of our current one.
-        let mut unval = match noinfo.load(true, &self.config, store).await? {
+        let mut unval = match nextstate {
             NextState::SameState(noinfo) => {
                 info!("Fetching a consensus directory.");
                 noinfo
@@ -270,10 +324,10 @@ impl NoInformation {
         self,
         pending: bool,
         config: &NetDirConfig,
-        store: &RwLock<SqliteStore>,
+        store: &Mutex<SqliteStore>,
     ) -> Result<NextState<Self, UnvalidatedDir>> {
         let consensus_text = {
-            let store = store.read().await;
+            let store = store.lock().await;
             match store.latest_consensus(pending)? {
                 Some(c) => c,
                 None => return Ok(NextState::SameState(self)),
@@ -307,7 +361,7 @@ impl NoInformation {
     async fn fetch_consensus<TR>(
         &self,
         config: &NetDirConfig,
-        store: &RwLock<SqliteStore>,
+        store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr<TR>>,
     ) -> Result<UnvalidatedDir>
@@ -340,7 +394,7 @@ impl NoInformation {
     async fn fetch_consensus_once<TR>(
         &self,
         config: &NetDirConfig,
-        store: &RwLock<SqliteStore>,
+        store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr<TR>>,
     ) -> Result<UnvalidatedDir>
@@ -350,7 +404,7 @@ impl NoInformation {
         let mut resource = tor_dirclient::request::ConsensusRequest::new();
 
         {
-            let r = store.read().await;
+            let r = store.lock().await;
             if let Some(valid_after) = r.latest_consensus_time()? {
                 resource.set_last_consensus_date(valid_after.into());
             }
@@ -365,7 +419,7 @@ impl NoInformation {
         let meta = ConsensusMeta::from_unvalidated(signedval, remainder, &unvalidated);
 
         {
-            let mut w = store.write().await;
+            let mut w = store.lock().await;
             w.store_consensus(&meta, true, &text)?;
         }
         let n_authorities = config.authorities().len() as u16;
@@ -409,11 +463,11 @@ impl UnvalidatedDir {
     }
 
     /// Load authority certificates from our local cache.
-    async fn load(&mut self, config: &NetDirConfig, store: &RwLock<SqliteStore>) -> Result<()> {
+    async fn load(&mut self, config: &NetDirConfig, store: &Mutex<SqliteStore>) -> Result<()> {
         let missing = self.missing_certs(config);
 
         let newcerts = {
-            let r = store.read().await;
+            let r = store.lock().await;
             r.authcerts(&missing[..])?
         };
 
@@ -436,7 +490,7 @@ impl UnvalidatedDir {
     async fn fetch_certs<TR>(
         &mut self,
         config: &NetDirConfig,
-        store: &RwLock<SqliteStore>,
+        store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr<TR>>,
     ) -> Result<()>
@@ -472,7 +526,7 @@ impl UnvalidatedDir {
     async fn fetch_certs_once<TR>(
         &mut self,
         config: &NetDirConfig,
-        store: &RwLock<SqliteStore>,
+        store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr<TR>>,
     ) -> Result<()>
@@ -497,9 +551,9 @@ impl UnvalidatedDir {
         let mut newcerts = Vec::new();
         for cert in AuthCert::parse_multiple(&text) {
             if let Ok(parsed) = cert {
+                let s = parsed.within(&text).unwrap();
                 if let Ok(wellsigned) = parsed.check_signature() {
                     if let Ok(timely) = wellsigned.check_valid_now() {
-                        let s = timely.within(&text).unwrap();
                         newcerts.push((timely, s));
                     }
                 }
@@ -517,7 +571,7 @@ impl UnvalidatedDir {
                 .iter()
                 .map(|(cert, s)| (AuthCertMeta::from_authcert(cert), *s))
                 .collect();
-            let mut w = store.write().await;
+            let mut w = store.lock().await;
             w.store_authcerts(&v[..])?;
         }
 
@@ -552,7 +606,7 @@ impl UnvalidatedDir {
 
 impl PartialDir {
     /// Try to load microdescriptors from our local cache.
-    async fn load(&mut self, store: &RwLock<SqliteStore>) -> Result<()> {
+    async fn load(&mut self, store: &Mutex<SqliteStore>) -> Result<()> {
         let mark_listed = Some(SystemTime::now()); // XXXX use validafter, conditionally.
 
         load_mds(&mut self.dir, mark_listed, store).await
@@ -563,7 +617,7 @@ impl PartialDir {
     /// Retry if we didn't get enough to build circuits.
     async fn fetch_mds<TR>(
         &mut self,
-        store: &RwLock<SqliteStore>,
+        store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr<TR>>,
     ) -> Result<()>
@@ -597,7 +651,7 @@ impl PartialDir {
     /// Try to fetch microdescriptors from the network.
     async fn fetch_mds_once<TR>(
         &mut self,
-        store: &RwLock<SqliteStore>,
+        store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr<TR>>,
     ) -> Result<()>
@@ -613,7 +667,7 @@ impl PartialDir {
         if self.dir.have_enough_paths() {
             // XXXX no need to do this if it was already non-pending.
             // XXXX this calculation is redundant with the one in advance().
-            let mut w = store.write().await;
+            let mut w = store.lock().await;
             w.mark_consensus_usable(&self.consensus_meta)?;
             // Expire on getting a valid directory.
             w.expire_all()?;
@@ -640,10 +694,10 @@ impl PartialDir {
 async fn load_mds<M: MDReceiver>(
     doc: &mut M,
     mark_listed: Option<SystemTime>,
-    store: &RwLock<SqliteStore>,
+    store: &Mutex<SqliteStore>,
 ) -> Result<()> {
     let microdescs = {
-        let r = store.read().await;
+        let r = store.lock().await;
         r.microdescs(doc.missing_microdescs())?
     };
 
@@ -660,7 +714,7 @@ async fn load_mds<M: MDReceiver>(
     }
 
     if let Some(when) = mark_listed {
-        let mut w = store.write().await;
+        let mut w = store.lock().await;
         w.update_microdescs_listed(loaded, when)?;
     }
 
@@ -672,7 +726,7 @@ async fn load_mds<M: MDReceiver>(
 async fn download_mds<TR>(
     mut missing: Vec<MDDigest>,
     mark_listed: SystemTime,
-    store: &RwLock<SqliteStore>,
+    store: &Mutex<SqliteStore>,
     info: DirInfo<'_>,
     circmgr: Arc<CircMgr<TR>>,
 ) -> Result<Vec<Microdesc>>
@@ -694,7 +748,13 @@ where
     // list.
     // TODO: we should maybe try to keep concurrent requests on
     // separate circuits?
-    let new_mds: Vec<_> = futures::stream::iter(missing[..].chunks(chunksize))
+
+    // Break 'missing' into the chunks we're going to fetch.
+    // XXXX: I hate having to do all these copies, but otherwise I
+    // wind up with lifetime issues.
+    let missing: Vec<Vec<_>> = missing[..].chunks(chunksize).map(|s| s.to_vec()).collect();
+
+    let new_mds: Vec<_> = futures::stream::iter(missing.into_iter())
         .map(|chunk| {
             let cm = Arc::clone(&circmgr);
             async move {
@@ -740,7 +800,7 @@ where
 
     // Now save it to the database
     {
-        let mut w = store.write().await;
+        let mut w = store.lock().await;
         w.store_microdescs(
             new_mds
                 .iter()
