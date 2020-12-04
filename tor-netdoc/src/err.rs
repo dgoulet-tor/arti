@@ -265,6 +265,9 @@ pub enum Error {
     /// Items not sorted as expected
     #[error("Incorrect sort order{0}")]
     WrongSortOrder(Pos),
+    /// A consensus lifetime was ill-formed.
+    #[error("Invalid consensus lifetime")]
+    InvalidLifetime,
 }
 
 impl Error {
@@ -302,6 +305,7 @@ impl Error {
             WrongStartingToken(_, p) => Some(p),
             WrongEndingToken(_, p) => Some(p),
             WrongSortOrder(p) => Some(p),
+            InvalidLifetime => None,
         }
     }
 
@@ -341,6 +345,7 @@ impl Error {
             WrongStartingToken(_, p) => Some(p),
             WrongEndingToken(_, p) => Some(p),
             WrongSortOrder(p) => Some(p),
+            InvalidLifetime => None,
         };
         *pos.unwrap_or(&Pos::Unknown)
     }

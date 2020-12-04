@@ -764,7 +764,8 @@ mod test {
                 now.into(),
                 (now + one_hour).into(),
                 (now + one_hour * 2).into(),
-            ),
+            )
+            .unwrap(),
             [0xAB; 32],
             [0xBC; 32],
         );

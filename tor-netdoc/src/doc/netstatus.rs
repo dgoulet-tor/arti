@@ -87,11 +87,15 @@ impl Lifetime {
         valid_after: time::SystemTime,
         fresh_until: time::SystemTime,
         valid_until: time::SystemTime,
-    ) -> Self {
-        Lifetime {
-            valid_after,
-            fresh_until,
-            valid_until,
+    ) -> Result<Self> {
+        if valid_after < fresh_until && fresh_until < valid_until {
+            Ok(Lifetime {
+                valid_after,
+                fresh_until,
+                valid_until,
+            })
+        } else {
+            Err(Error::InvalidLifetime)
         }
     }
     /// Return time when this consensus first becomes valid.
@@ -792,7 +796,7 @@ impl CommonHeader {
             .args_as_str()
             .parse::<ISO8601TimeSp>()?
             .into();
-        let lifetime = Lifetime::new(valid_after, fresh_until, valid_until);
+        let lifetime = Lifetime::new(valid_after, fresh_until, valid_until)?;
 
         let client_versions = sec
             .maybe(CLIENT_VERSIONS)
