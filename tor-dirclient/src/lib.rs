@@ -211,7 +211,7 @@ struct HeaderStatus {
 async fn read_and_decompress(
     mut stream: tor_proto::stream::DataStream,
     maxlen: usize,
-    mut decompressor: Box<dyn Decompressor>,
+    mut decompressor: Box<dyn Decompressor + Send>,
     mut buf: Vec<u8>,
     mut n_in_buf: usize,
     result: &mut Vec<u8>,
@@ -285,7 +285,7 @@ async fn read_and_decompress(
 }
 
 /// Return a decompressor object corresponding to a given Content-Encoding.
-fn get_decompressor(encoding: Option<&str>) -> Result<Box<dyn Decompressor>> {
+fn get_decompressor(encoding: Option<&str>) -> Result<Box<dyn Decompressor + Send>> {
     match encoding {
         None | Some("identity") => Ok(Box::new(decompress::identity::Identity)),
         Some("deflate") => Ok(miniz_oxide::inflate::stream::InflateState::new_boxed(
