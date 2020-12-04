@@ -134,12 +134,22 @@ impl DirMgr {
         self.fetch_directory(circmgr, true).await
     }
 
-    /// Update our directory, starting with a fresh consensus
-    /// download.
+    /// Update our directory, starting with a fresh consensus download.
+    ///
     async fn update_directory<TR>(&self, circmgr: Arc<CircMgr<TR>>) -> Result<()>
     where
         TR: tor_chanmgr::transport::Transport,
     {
+        // NOTE:
+        //
+        // Right now, all sharing between directory update attempts happens in
+        // the database: if the directory download fails, then the disk cache
+        // is the only place where we actually remember the partial
+        // information we had.
+        //
+        // This causes us to reload and re-validate some stuff that's already
+        // in RAM, like authcerts and microdescs.  Eventually, we might want
+        // to fix that.
         self.fetch_directory(circmgr, false).await
     }
 
@@ -152,7 +162,8 @@ impl DirMgr {
     where
         TR: tor_chanmgr::transport::Transport + Send + Sync + 'static,
     {
-        // TODO: XXXX: Need some way  to keep two of these from running at once.
+        // TODO: XXXX: Need some way to keep two of these from running at
+        // once.
         let updater = Arc::new(updater::DirectoryUpdater::new(self, circmgr));
 
         let updater_ref = Arc::clone(&updater);
@@ -171,6 +182,8 @@ impl DirMgr {
     /// consensus if it is live; otherwise, we start with a consensus
     /// download.
     // TODO: We'll likely need to refactor this before too long.
+    // TODO: This needs to exit with a failure if the consensus expires
+    // partway through the process.
     pub async fn fetch_directory<TR>(
         &self,
         circmgr: Arc<CircMgr<TR>>,
