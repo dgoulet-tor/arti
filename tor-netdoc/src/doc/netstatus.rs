@@ -114,7 +114,7 @@ impl Lifetime {
     /// though it's okay to keep using this one if no more recent one
     /// can be found.
     pub fn valid_until(&self) -> time::SystemTime {
-        self.fresh_until
+        self.valid_until
     }
 }
 
