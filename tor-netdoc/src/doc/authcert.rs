@@ -70,11 +70,6 @@ lazy_static! {
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct AuthCert {
-    /// Where we found this AuthCert within the string containing it.
-    ///
-    /// (Perhaps this field should be within some other wrapper type?)
-    location: Option<Extent>,
-
     /// An IPv4 address for this authority.
     address: Option<net::SocketAddrV4>,
     /// The long-term RSA identity key for this authority
@@ -115,7 +110,29 @@ impl PartialOrd for AuthCertKeyIds {
 
 /// An authority certificate whose signature and validity time we
 /// haven't checked.
-pub type UncheckedAuthCert = signed::SignatureGated<timed::TimerangeBound<AuthCert>>;
+pub struct UncheckedAuthCert {
+    /// Where we found this AuthCert within the string containing it.
+    location: Option<Extent>,
+
+    /// The actual unchecked certificate.
+    c: signed::SignatureGated<timed::TimerangeBound<AuthCert>>,
+}
+
+impl UncheckedAuthCert {
+    /// If this AuthCert was originally parsed from `haystack`, return its
+    /// text.
+    ///
+    /// TODO: This is a pretty bogus interface; there should be a
+    /// better way to remember where to look for this thing if we want
+    /// it without keeping the input alive forever.  We should
+    /// refactor.
+    pub fn within<'a>(&self, haystack: &'a str) -> Option<&'a str> {
+        self.location
+            .as_ref()
+            .map(|ext| ext.reconstruct(haystack))
+            .flatten()
+    }
+}
 
 impl AuthCert {
     /// Parse an authority certificate from a string.
@@ -169,20 +186,6 @@ impl AuthCert {
     /// Return the time when this certificate says it should expire.
     pub fn expires(&self) -> time::SystemTime {
         self.expires
-    }
-
-    /// If this AuthCert was originally parsed from `haystack`, return its
-    /// text.
-    ///
-    /// TODO: This is a pretty bogus interface; there should be a
-    /// better way to remember where to look for this thing if we want
-    /// it without keeping the input alive forever.  We should
-    /// refactor.
-    pub fn within<'a>(&self, haystack: &'a str) -> Option<&'a str> {
-        self.location
-            .as_ref()
-            .map(|ext| ext.reconstruct(haystack))
-            .flatten()
     }
 
     /// Parse an authority certificate from a reader.
@@ -325,7 +328,6 @@ impl AuthCert {
         };
 
         let authcert = AuthCert {
-            location,
             address,
             identity_key,
             signing_key,
@@ -340,7 +342,11 @@ impl AuthCert {
 
         let timed = timed::TimerangeBound::new(authcert, published..expires);
         let signed = signed::SignatureGated::new(timed, signatures);
-        Ok(signed)
+        let unchecked = UncheckedAuthCert {
+            location,
+            c: signed,
+        };
+        Ok(unchecked)
     }
 
     /// Skip tokens from the reader until the next token (if any) is
@@ -360,6 +366,17 @@ impl AuthCert {
 /// Iterator type to read a series of concatenated certificates from a
 /// string.
 struct AuthCertIterator<'a>(NetDocReader<'a, AuthCertKW>);
+
+impl tor_checkable::SelfSigned<timed::TimerangeBound<AuthCert>> for UncheckedAuthCert {
+    type Error = signature::Error;
+
+    fn dangerously_assume_wellsigned(self) -> timed::TimerangeBound<AuthCert> {
+        self.c.dangerously_assume_wellsigned()
+    }
+    fn is_well_signed(&self) -> std::result::Result<(), Self::Error> {
+        self.c.is_well_signed()
+    }
+}
 
 impl<'a> Iterator for AuthCertIterator<'a> {
     type Item = Result<UncheckedAuthCert>;
