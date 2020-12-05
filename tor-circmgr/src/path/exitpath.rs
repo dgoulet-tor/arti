@@ -41,7 +41,7 @@ impl ExitPathBuilder {
 
         let middle = netdir
             .pick_relay(rng, WeightRole::Middle, |r| !r.same_relay(&exit))
-            .ok_or_else(|| Error::NoRelays("No exit relay found".into()))?;
+            .ok_or_else(|| Error::NoRelays("No middle relay found".into()))?;
 
         let entry = netdir
             .pick_relay(rng, WeightRole::Guard, |r| {
