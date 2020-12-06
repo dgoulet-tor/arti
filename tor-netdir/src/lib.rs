@@ -30,22 +30,66 @@ use tor_llcrypto as ll;
 use tor_netdoc::doc::microdesc::{MDDigest, Microdesc};
 use tor_netdoc::doc::netstatus::{self, MDConsensus};
 
-use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::Arc;
 
 pub use err::Error;
 pub use weight::WeightRole;
 /// A Result using the Error type from the tor-netdir crate
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Internal type: wraps Option<Microdesc> to prevent confusion.
+/// Internal type: either a microdescriptor, or the digest for a
+/// microdescriptor that we want.
 ///
-/// (Having an Option type be the value of a HashMap makes things a
-/// bit confused IMO.)
-#[derive(Clone, Debug, Default)]
-struct MDEntry {
-    /// The microdescriptor in this entry, or None if a microdescriptor
-    /// is wanted but not present.
-    md: Option<Microdesc>,
+/// This is a separate type so we can use a HashSet instead of
+/// HashMap.
+#[derive(Clone, Debug)]
+enum MDEntry {
+    /// The digest for a microdescriptor that is wanted
+    /// but not present.
+    // TODO: I'd like to make thtis a reference, but that's nontrivial.
+    Absent(MDDigest),
+    /// A microdescriptor that we have.
+    Present(Arc<Microdesc>),
+}
+
+impl std::borrow::Borrow<MDDigest> for MDEntry {
+    fn borrow(&self) -> &MDDigest {
+        self.digest()
+    }
+}
+
+impl MDEntry {
+    fn digest(&self) -> &MDDigest {
+        match self {
+            MDEntry::Absent(d) => d,
+            MDEntry::Present(md) => md.digest(),
+        }
+    }
+}
+
+impl From<Microdesc> for MDEntry {
+    fn from(md: Microdesc) -> MDEntry {
+        MDEntry::Present(Arc::new(md))
+    }
+}
+impl From<MDDigest> for MDEntry {
+    fn from(d: MDDigest) -> MDEntry {
+        MDEntry::Absent(d)
+    }
+}
+
+impl PartialEq for MDEntry {
+    fn eq(&self, rhs: &MDEntry) -> bool {
+        self.digest() == rhs.digest()
+    }
+}
+impl Eq for MDEntry {}
+
+impl std::hash::Hash for MDEntry {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.digest().hash(state);
+    }
 }
 
 /// A view of the Tor directory, suitable for use in building
@@ -55,10 +99,10 @@ pub struct NetDir {
     /// A microdescriptor consensus that lists the members of the network,
     /// and maps each one to a 'microdescriptor' that has more information
     /// about it
-    consensus: MDConsensus,
+    consensus: Arc<MDConsensus>,
     /// Map from SHA256 digest of microdescriptors to the
     /// microdescriptors themselves.
-    mds: HashMap<MDDigest, MDEntry>,
+    mds: HashSet<MDEntry>,
     /// Weight values to apply to a given relay when deciding how frequently
     /// to choose it for a given role.
     weights: weight::WeightSet,
@@ -111,15 +155,26 @@ impl PartialNetDir {
         let weights = weight::WeightSet::from_consensus(&consensus);
 
         let mut netdir = NetDir {
-            consensus,
-            mds: HashMap::new(),
+            consensus: Arc::new(consensus),
+            mds: HashSet::new(),
             weights,
         };
 
         for rs in netdir.consensus.routers().iter() {
-            netdir.mds.insert(*rs.md_digest(), MDEntry::default());
+            netdir.mds.insert(MDEntry::Absent(*rs.md_digest()));
         }
         PartialNetDir { netdir }
+    }
+    /// Fill in as many missing microdescriptors as possible in this
+    /// netdir, using the microdescriptors from the previous netdir.
+    pub fn fill_from_previous_netdir(&mut self, prev: &NetDir) {
+        for ent in prev.mds.iter() {
+            if let MDEntry::Present(md) = ent {
+                if self.netdir.mds.contains(md.digest()) {
+                    self.netdir.mds.replace(ent.clone());
+                }
+            }
+        }
     }
     /// Return true if this are enough information in this directory
     /// to build multihop paths.
@@ -159,7 +214,7 @@ impl NetDir {
         rs: &'a netstatus::MDConsensusRouterStatus,
     ) -> UncheckedRelay<'a> {
         let md = match self.mds.get(rs.md_digest()) {
-            Some(MDEntry { md: Some(md) }) => Some(md),
+            Some(MDEntry::Present(md)) => Some(Arc::as_ref(md)),
             _ => None,
         };
         UncheckedRelay { rs, md }
@@ -167,6 +222,8 @@ impl NetDir {
     /// Return an iterator over all Relay objects, including invalid ones
     /// that we can't use.
     fn all_relays(&self) -> impl Iterator<Item = UncheckedRelay<'_>> {
+        // TODO: I'd like if if we could memoize this so we don't have to
+        // do so many hashtable lookups.
         self.consensus
             .routers()
             .iter()
@@ -238,6 +295,25 @@ impl NetDir {
             }
         })
     }
+
+    /// Add the provided microdescriptors to this netdir, doing as
+    /// little copying as possible.  May return a new netdir, or may
+    /// return the same one if there was only one references.
+    pub fn extend<I>(self: Arc<NetDir>, mds: I) -> NetDir
+    where
+        I: IntoIterator<Item = Microdesc>,
+    {
+        // Get a version of self that we have exclusive access to, either
+        // by unwrapping or cloning.
+        let mut exclusive = match Arc::try_unwrap(self) {
+            Ok(ex) => ex,
+            Err(t) => NetDir::clone(&t),
+        };
+        for md in mds.into_iter() {
+            exclusive.add_microdesc(md);
+        }
+        exclusive
+    }
 }
 
 impl MDReceiver for NetDir {
@@ -245,14 +321,15 @@ impl MDReceiver for NetDir {
         Box::new(self.consensus.routers().iter().filter_map(move |rs| {
             let d = rs.md_digest();
             match self.mds.get(d) {
-                Some(MDEntry { md: Some(_) }) => None,
-                _ => Some(d),
+                Some(MDEntry::Absent(d)) => Some(d),
+                _ => None,
             }
         }))
     }
     fn add_microdesc(&mut self, md: Microdesc) -> bool {
-        if let Some(entry) = self.mds.get_mut(md.digest()) {
-            entry.md = Some(md);
+        let ent = md.into();
+        if self.mds.remove(&ent) {
+            self.mds.insert(ent);
             true
         } else {
             false
