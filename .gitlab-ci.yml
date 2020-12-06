@@ -9,7 +9,7 @@ rust-latest:
   stage: build
   image: rust:latest
   script:
-    - cargo build --verbose
+    - cargo build --verbose --target x86_64-unknown-linux-gnu
     - cargo test --verbose
 
 rust-nightly:
@@ -17,5 +17,5 @@ rust-nightly:
   image: rustlang/rust:nightly
   allow_failure: true
   script:
-    - cargo build --verbose
+    - cargo build --verbose --target x86_64-unknown-linux-gnu
     - cargo test --verbose
