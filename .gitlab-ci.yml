@@ -5,7 +5,6 @@ rust-latest:
   stage: build
   image: rust:latest
   script:
-    - apt install libsqlite3-dev
     - cargo build --verbose
     - cargo test --verbose
 
@@ -14,6 +13,5 @@ rust-nightly:
   image: rustlang/rust:nightly
   allow_failure: true
   script:
-    - apt install libsqlite3-dev
     - cargo build --verbose
     - cargo test --verbose
