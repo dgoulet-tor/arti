@@ -1,6 +1,10 @@
 stages:
   - build
 
+variables:
+  # We don't need Husky to install the Git hooks for CI.
+  CARGO_HUSKY_DONT_INSTALL_HOOKS: "true"
+
 rust-latest:
   stage: build
   image: rust:latest
