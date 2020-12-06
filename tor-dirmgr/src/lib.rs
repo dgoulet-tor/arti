@@ -106,7 +106,7 @@ impl DirMgr {
             NextState::NewState(p) => p,
         };
 
-        partial.load(store).await?;
+        partial.load(store, self.netdir().await).await?;
         let nd = match partial.advance() {
             NextState::NewState(nd) => nd,
             NextState::SameState(_) => {
@@ -228,7 +228,7 @@ impl DirMgr {
             NextState::NewState(p) => p,
         };
 
-        partial.load(store).await?;
+        partial.load(store, self.netdir().await).await?;
         partial
             .fetch_mds(store, dirinfo, Arc::clone(&circmgr))
             .await?;
@@ -619,10 +619,10 @@ impl UnvalidatedDir {
 
 impl PartialDir {
     /// Try to load microdescriptors from our local cache.
-    async fn load(&mut self, store: &Mutex<SqliteStore>) -> Result<()> {
+    async fn load(&mut self, store: &Mutex<SqliteStore>, prev: Option<Arc<NetDir>>) -> Result<()> {
         let mark_listed = Some(SystemTime::now()); // XXXX use validafter, conditionally.
 
-        load_mds(&mut self.dir, mark_listed, store).await
+        load_mds(&mut self.dir, prev, mark_listed, store).await
     }
 
     /// Try to fetch microdescriptors from the network.
@@ -702,19 +702,25 @@ impl PartialDir {
     }
 }
 
-/// Helper to load microdescriptors from the cache and store them either
-/// into a PartialNetDir or a NetDir.
-async fn load_mds<M: MDReceiver>(
-    doc: &mut M,
+/// Helper to load microdescriptors from the cache and store them into
+/// a PartialNetDir.
+async fn load_mds(
+    doc: &mut PartialNetDir,
+    prev: Option<Arc<NetDir>>,
     mark_listed: Option<SystemTime>,
     store: &Mutex<SqliteStore>,
 ) -> Result<()> {
+    let mut loaded = if let Some(ref prev_netdir) = prev {
+        doc.fill_from_previous_netdir(prev_netdir.as_ref())
+    } else {
+        Vec::new()
+    };
+
     let microdescs = {
         let r = store.lock().await;
         r.microdescs(doc.missing_microdescs())?
     };
 
-    let mut loaded = Vec::new();
     for (digest, text) in microdescs.iter() {
         let md = Microdesc::parse(text)?; // XXX recover from this
         if md.digest() != digest {
@@ -722,7 +728,7 @@ async fn load_mds<M: MDReceiver>(
             continue;
         }
         if doc.add_microdesc(md) {
-            loaded.push(digest)
+            loaded.push(digest);
         }
     }
 

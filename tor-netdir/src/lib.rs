@@ -167,14 +167,17 @@ impl PartialNetDir {
     }
     /// Fill in as many missing microdescriptors as possible in this
     /// netdir, using the microdescriptors from the previous netdir.
-    pub fn fill_from_previous_netdir(&mut self, prev: &NetDir) {
+    pub fn fill_from_previous_netdir<'a>(&mut self, prev: &'a NetDir) -> Vec<&'a MDDigest> {
+        let mut loaded = Vec::new();
         for ent in prev.mds.iter() {
             if let MDEntry::Present(md) = ent {
                 if self.netdir.mds.contains(md.digest()) {
+                    loaded.push(md.digest());
                     self.netdir.mds.replace(ent.clone());
                 }
             }
         }
+        loaded
     }
     /// Return true if this are enough information in this directory
     /// to build multihop paths.
