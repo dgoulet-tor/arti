@@ -34,7 +34,7 @@ use anyhow::{anyhow, Result};
 use async_rwlock::RwLock;
 use futures::lock::Mutex;
 use futures::stream::StreamExt;
-use log::info;
+use log::{debug, info};
 
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -168,6 +168,10 @@ impl DirMgr {
                 return Ok(0);
             }
 
+            debug!(
+                "{} missing microdescsriptors. Attempting to download...",
+                n_missing
+            );
             let mds = download_mds(
                 missing,
                 mark_listed,

@@ -10,7 +10,7 @@ use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
 use chrono::{DateTime, Utc};
-use log::{info, warn};
+use log::{debug, info, warn};
 use rand::Rng;
 
 /// A SirectoryUpdater runs in a background task to periodically re-fetch
@@ -64,10 +64,12 @@ where
                 while SystemTime::now() < download_time {
                     let again = self.fetch_more_microdescs().await?;
                     if !again {
+                        debug!("We have all the microdescriptors for our current consensus");
                         break;
                     }
                     let delay = retry.next_delay(&mut rand::thread_rng());
                     if SystemTime::now() + delay > download_time {
+                        debug!("Out of time to fetch additional microdescriptors.");
                         break;
                     }
                     tor_rtcompat::task::sleep(delay).await;
@@ -75,6 +77,10 @@ where
 
                 // We're done with the updating phase: we either got all the mds or
                 // ran out of time.
+                debug!(
+                    "Waiting till {}, when we download the next directory.",
+                    DateTime::<Utc>::from(download_time)
+                );
                 tor_rtcompat::timer::sleep_until_wallclock(download_time).await;
             }
 
