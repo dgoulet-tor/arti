@@ -60,6 +60,7 @@ impl std::borrow::Borrow<MDDigest> for MDEntry {
 }
 
 impl MDEntry {
+    /// Return the digest for this entry.
     fn digest(&self) -> &MDDigest {
         match self {
             MDEntry::Absent(d) => d,
