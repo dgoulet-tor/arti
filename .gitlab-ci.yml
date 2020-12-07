@@ -11,7 +11,7 @@ rust-latest:
   script:
     - cargo build --verbose --target x86_64-unknown-linux-gnu --all
     - cargo test --verbose --all
-    - rustup component add clippy
+    - rustup component add clippy rustfmt
     - cargo clippy
     - cargo fmt --all -- --check
 
@@ -22,6 +22,6 @@ rust-nightly:
   script:
     - cargo build --verbose --target x86_64-unknown-linux-gnu --all
     - cargo test --verbose --all
-    - rustup component add clippy
+    - rustup component add clippy rustfmt
     - cargo clippy
     - cargo fmt --all -- --check
