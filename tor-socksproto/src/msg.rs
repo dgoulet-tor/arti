@@ -103,12 +103,10 @@ caret_int! {
 impl SocksCmd {
     /// Return true if this is a supported command.
     fn recognized(self) -> bool {
-        match self {
-            SocksCmd::CONNECT => true,
-            SocksCmd::RESOLVE => true,
-            SocksCmd::RESOLVE_PTR => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            SocksCmd::CONNECT | SocksCmd::RESOLVE | SocksCmd::RESOLVE_PTR
+        )
     }
 }
 

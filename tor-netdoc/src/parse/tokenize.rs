@@ -256,13 +256,7 @@ impl<'a, K: Keyword> NetDocReaderBase<'a, K> {
 fn keyword_ok(mut s: &str, anno_ok: bool) -> bool {
     /// Helper: return true if this character can appear in keywords.
     fn kwd_char_ok(c: char) -> bool {
-        match c {
-            'A'..='Z' => true,
-            'a'..='z' => true,
-            '0'..='9' => true,
-            '-' => true,
-            _ => false,
-        }
+        matches!(c,'A'..='Z' | 'a'..='z' |'0'..='9' | '-')
     }
 
     if s.is_empty() {

@@ -54,6 +54,8 @@
 
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![allow(clippy::unknown_clippy_lints)]
+#![allow(clippy::unnecessary_wraps)]
 
 pub mod channel;
 pub mod circuit;

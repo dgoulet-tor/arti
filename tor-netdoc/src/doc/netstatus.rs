@@ -354,11 +354,10 @@ impl RouterWeight {
     }
     /// Return true if this weight is nonzero
     pub fn is_nonzero(&self) -> bool {
-        match self {
-            RouterWeight::Unmeasured(0) => false,
-            RouterWeight::Measured(0) => false,
-            _ => true,
-        }
+        !matches!(
+            self,
+            RouterWeight::Unmeasured(0) | RouterWeight::Measured(0)
+        )
     }
 }
 
@@ -1210,7 +1209,7 @@ pub type UncheckedMDConsensus = TimerangeBound<UnvalidatedMDConsensus>;
 
 impl MDConsensus {
     /// Try to parse a single networkstatus document from a string.
-    pub fn parse<'a>(s: &'a str) -> Result<(&'a str, &'a str, UncheckedMDConsensus)> {
+    pub fn parse(s: &str) -> Result<(&str, &str, UncheckedMDConsensus)> {
         let mut reader = NetDocReader::new(s);
         Self::parse_from_reader(&mut reader).map_err(|e| e.within(s))
     }
