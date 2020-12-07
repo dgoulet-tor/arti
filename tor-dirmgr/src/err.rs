@@ -21,4 +21,7 @@ pub enum Error {
     /// A schema version that says we can't read it.
     #[error("unrecognized data storage schema")]
     UnrecognizedSchema,
+    /// An updater no longer has anything to update.
+    #[error("directory updater has shut down")]
+    UpdaterShutdown,
 }

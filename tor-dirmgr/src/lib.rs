@@ -52,13 +52,15 @@ pub struct DirMgr {
     /// validate them, and so on.
     config: NetDirConfig,
     /// Handle to our sqlite cache.
-    // XXX I'd like to use an rwlock, but that's not feasible, since
+    // XXXX I'd like to use an rwlock, but that's not feasible, since
     // rusqlite::Connection isn't Sync.
     store: Mutex<SqliteStore>,
     /// Our latest sufficiently bootstrapped directory, if we have one.
     ///
     /// We use the RwLock so that we can give this out to a bunch of other
     /// users, and replace it once a new directory is bootstrapped.
+    // XXXX I'd like this not to be an Option, or not to visibly be an
+    // option once the NetDir is handed off to a user.
     netdir: RwLock<Option<Arc<NetDir>>>,
 }
 
@@ -134,23 +136,66 @@ impl DirMgr {
         self.fetch_directory(circmgr, true).await
     }
 
-    /// Update our directory, starting with a fresh consensus download.
+    /// Get a new directory, starting with a fresh consensus download.
     ///
-    async fn update_directory<TR>(&self, circmgr: Arc<CircMgr<TR>>) -> Result<()>
+    async fn fetch_new_directory<TR>(&self, circmgr: Arc<CircMgr<TR>>) -> Result<()>
     where
         TR: tor_chanmgr::transport::Transport,
     {
-        // NOTE:
-        //
-        // Right now, all sharing between directory update attempts happens in
-        // the database: if the directory download fails, then the disk cache
-        // is the only place where we actually remember the partial
-        // information we had.
-        //
-        // This causes us to reload and re-validate some stuff that's already
-        // in RAM, like authcerts and microdescs.  Eventually, we might want
-        // to fix that.
         self.fetch_directory(circmgr, false).await
+    }
+
+    /// Try to fetch and add a new set of microdescriptors to the
+    /// current NetDir.  On success, return the number of
+    /// microdescriptors that are still missing.
+    async fn fetch_additional_microdescs<TR>(&self, circmgr: Arc<CircMgr<TR>>) -> Result<usize>
+    where
+        TR: tor_chanmgr::transport::Transport,
+    {
+        let new_microdescs = {
+            // We introduce a scope here so that we'll drop our reference
+            // to the old netdir when we're done downloading.
+            let netdir = match self.netdir().await {
+                Some(nd) => nd,
+                None => return Ok(0),
+            };
+
+            let mark_listed = netdir.lifetime().valid_after();
+
+            let missing: Vec<_> = netdir.missing_microdescs().map(Clone::clone).collect();
+            let n_missing = missing.len();
+            if n_missing == 0 {
+                return Ok(0);
+            }
+
+            let mds = download_mds(
+                missing,
+                mark_listed,
+                &self.store,
+                netdir.as_ref().into(),
+                circmgr,
+            )
+            .await?;
+            if mds.is_empty() {
+                return Ok(n_missing);
+            }
+            mds
+        };
+
+        // Now we update the netdir.
+        let new_netdir = {
+            let mut w = self.netdir.write().await;
+            if let Some(old_netdir) = w.take() {
+                let new_netdir = Arc::new(old_netdir.extend(new_microdescs));
+                *w = Some(Arc::clone(&new_netdir));
+                new_netdir
+            } else {
+                // programming error here; warn?
+                return Ok(0);
+            }
+        };
+
+        Ok(new_netdir.missing_microdescs().count())
     }
 
     /// Launch an updater task that periodically re-fetches the
@@ -260,7 +305,9 @@ impl DirMgr {
 
     /// Return an Arc handle to our latest sufficiently up-to-date directory.
     ///
-    // TODO: make sure it's still up to date?
+    // TODO: Add variants of this that make sure that it's up-to-date?
+    //
+    // TODO: I'd like this not to ever return None
     pub async fn netdir(&self) -> Option<Arc<NetDir>> {
         self.netdir.read().await.as_ref().map(Arc::clone)
     }

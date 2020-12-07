@@ -1,7 +1,7 @@
 //! Code to run as a background task and keep a directory up-to-date.
 
 use crate::retry::RetryDelay;
-use crate::{DirMgr, Result};
+use crate::{DirMgr, Error, Result};
 use tor_circmgr::CircMgr;
 use tor_netdoc::doc::netstatus::Lifetime;
 
@@ -53,52 +53,80 @@ where
 
     /// Run in a loop, and keep the directory manager's directory up-to-date.
     pub(crate) async fn run(&self) -> Result<()> {
-        // This is either "None" if we have a valid directory, or a RetryDelay
-        // if we're trying to fetch one.
-        let mut retry: Option<RetryDelay> = None;
-
         loop {
-            self.wait(&mut retry).await;
+            let download_time = self.pick_download_time().await;
+
+            // Updating phase: try to add microdescriptors to the directory.
+            // Do this until we have all the microdescriptors, or it's time
+            // to download the next thing.
+            if let Some(download_time) = download_time {
+                let mut retry = RetryDelay::from_msec(1000);
+                while SystemTime::now() < download_time {
+                    let again = self.fetch_more_microdescs().await?;
+                    if !again {
+                        break;
+                    }
+                    let delay = retry.next_delay(&mut rand::thread_rng());
+                    if SystemTime::now() + delay > download_time {
+                        break;
+                    }
+                    tor_rtcompat::task::sleep(delay).await;
+                }
+
+                // We're done with the updating phase: we either got all the mds or
+                // ran out of time.
+                tor_rtcompat::timer::sleep_until_wallclock(download_time).await;
+            }
+
+            // Time to get a new directory!
+            self.fetch_new_directory().await?;
+        }
+    }
+
+    /// Keep trying to get a new consensus until we have one, along with any
+    /// other directory objects we need to use that consensus.
+    async fn fetch_new_directory(&self) -> Result<()> {
+        let mut retry = RetryDelay::from_msec(1000);
+        loop {
             if self.stopping.load(Ordering::SeqCst) {
-                // XXXX log something here.
-                return Ok(());
+                return Err(Error::UpdaterShutdown.into());
             }
 
             if let (Some(dm), Some(cm)) = (self.dir_mgr.upgrade(), self.circ_mgr.upgrade()) {
-                let res = dm.update_directory(cm).await;
-                if let Err(e) = res {
-                    warn!("Directory fetch failed: {}. Will retry later", e);
+                let result = dm.fetch_new_directory(cm).await;
+                if let Err(e) = result {
+                    warn!("Directory fetch failed: {}. Will retry in later.", e);
+                    let delay = retry.next_delay(&mut rand::thread_rng());
+                    tor_rtcompat::task::sleep(delay).await;
                 } else {
-                    // Since we got a directory, we clear 'retry'.
-                    retry = None;
+                    return Ok(());
                 }
             } else {
-                // XXXX log something here.
                 return Ok(());
             }
         }
     }
 
-    /// Delay until it's time to try fetching again.
-    async fn wait(&self, retry: &mut Option<RetryDelay>) {
-        if let Some(ref mut r) = retry {
-            // In this case, we have a retry schedule, so we follow it.
-            let delay = r.next_delay(&mut rand::thread_rng());
-            tor_rtcompat::task::sleep(delay).await;
-            return;
+    /// Perform a _single_ attempt to download any missing microdescriptors for the
+    /// current NetDir.  Return true if we are still missing microdescriptors,
+    /// and false if we have received them all.
+    async fn fetch_more_microdescs(&self) -> Result<bool> {
+        if self.stopping.load(Ordering::SeqCst) {
+            return Err(Error::UpdaterShutdown.into());
         }
 
-        // Okay, we aren't currently downloading a directory.  Pick when we
-        // would like to download a directory, and wait until then.
-        if let Some(download_time) = self.pick_download_time().await {
-            if SystemTime::now() < download_time {
-                tor_rtcompat::timer::sleep_until_wallclock(download_time).await;
+        if let (Some(dm), Some(cm)) = (self.dir_mgr.upgrade(), self.circ_mgr.upgrade()) {
+            let result = dm.fetch_additional_microdescs(cm).await;
+            match result {
+                Ok(n_missing) => Ok(n_missing != 0),
+                Err(e) => {
+                    warn!("Microdescriptor fetch failed: {}. Will retry later.", e);
+                    Ok(true)
+                }
             }
+        } else {
+            Err(Error::UpdaterShutdown.into())
         }
-
-        // Oops -- pick_download_time() didn't work.  That probably means
-        // we didn't actually have a directory after all?  Return right away.
-        *retry = Some(RetryDelay::from_msec(1000));
     }
 
     /// Select a random time to start fetching the next directory, based on the
