@@ -1,12 +1,15 @@
 stages:
   - build
 
+variables:
+  # We don't need Husky to install the Git hooks for CI.
+  CARGO_HUSKY_DONT_INSTALL_HOOKS: "true"
+
 rust-latest:
   stage: build
   image: rust:latest
   script:
-    - apt install libsqlite3-dev
-    - cargo build --verbose
+    - cargo build --verbose --target x86_64-unknown-linux-gnu
     - cargo test --verbose
 
 rust-nightly:
@@ -14,6 +17,5 @@ rust-nightly:
   image: rustlang/rust:nightly
   allow_failure: true
   script:
-    - apt install libsqlite3-dev
-    - cargo build --verbose
+    - cargo build --verbose --target x86_64-unknown-linux-gnu
     - cargo test --verbose
