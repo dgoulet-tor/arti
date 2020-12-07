@@ -1,7 +1,7 @@
 //! Types for managing directory configuration.
 //!
 //! Directory configuration tells us where to load and store directory
-//! information ,where to fetch it from, and how to validate it.
+//! information, where to fetch it from, and how to validate it.
 
 #[cfg(feature = "legacy-storage")]
 use crate::storage::legacy::LegacyStore;
@@ -150,7 +150,6 @@ impl NetDirConfigBuilder {
     {
         use std::io::{self, BufRead};
         let pb = path.as_ref().join("000a/torrc"); // Any node directory will do.
-        dbg!(&pb);
         let f = fs::File::open(pb)?;
 
         let mut fbinfo: Vec<(SocketAddr, RSAIdentity)> = Vec::new();
@@ -163,14 +162,17 @@ impl NetDirConfigBuilder {
             }
             let elts: Vec<_> = line.split_ascii_whitespace().collect();
             let name = elts[1];
+            let orport = elts[2];
             let v3ident = elts[4];
-            if !v3ident.starts_with("v3ident=") {
+            if !v3ident.starts_with("v3ident=") || !orport.starts_with("orport=") {
                 warn!("Chutney torrc not in expected format.");
             }
             self.add_authority(name, &v3ident[8..])?;
 
             // XXXX These unwraps should turn into errors.
-            let sockaddr = elts[5].parse().unwrap();
+            let dir_addr: SocketAddr = elts[5].parse().unwrap();
+            let port: u16 = orport[7..].parse().unwrap();
+            let sockaddr = SocketAddr::new(dir_addr.ip(), port);
             let rsaident = hex::decode(elts[6]).unwrap();
             let rsaident = RSAIdentity::from_bytes(&rsaident[..]).unwrap();
 
