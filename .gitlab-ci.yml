@@ -9,13 +9,19 @@ rust-latest:
   stage: build
   image: rust:latest
   script:
-    - cargo build --verbose --target x86_64-unknown-linux-gnu
-    - cargo test --verbose
+    - cargo build --verbose --target x86_64-unknown-linux-gnu --all
+    - cargo test --verbose --all
+    - rustup component add clippy rustfmt
+    - cargo clippy
+    - cargo fmt --all -- --check
 
 rust-nightly:
   stage: build
   image: rustlang/rust:nightly
   allow_failure: true
   script:
-    - cargo build --verbose --target x86_64-unknown-linux-gnu
-    - cargo test --verbose
+    - cargo build --verbose --target x86_64-unknown-linux-gnu --all
+    - cargo test --verbose --all
+    - rustup component add clippy
+    - cargo clippy
+
