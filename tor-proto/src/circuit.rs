@@ -183,7 +183,7 @@ impl CircHop {
         CircHop {
             auth_sendme_optional,
             // TODO: this value should come from the consensus and not be
-            // hardcoded. XXXXA1
+            // hardcoded. XXXX-A1
             sendwindow: sendme::CircSendWindow::new(1000),
         }
     }

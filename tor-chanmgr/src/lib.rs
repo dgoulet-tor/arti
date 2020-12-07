@@ -183,7 +183,7 @@ where
         use crate::transport::CertifiedConn;
         let (addr, tls) = self.transport.connect(target).await?;
 
-        // XXXX wrong error
+        // XXXX-A1 wrong error
         let peer_cert = tls
             .peer_cert()?
             .ok_or_else(|| Error::UnusableTarget("No peer certificate!?".into()))?;

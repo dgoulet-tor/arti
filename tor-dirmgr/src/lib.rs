@@ -59,7 +59,7 @@ pub struct DirMgr {
     ///
     /// We use the RwLock so that we can give this out to a bunch of other
     /// users, and replace it once a new directory is bootstrapped.
-    // XXXX I'd like this not to be an Option, or not to visibly be an
+    // XXXX-A1 I'd like this not to be an Option, or not to visibly be an
     // option once the NetDir is handed off to a user.
     netdir: RwLock<Option<Arc<NetDir>>>,
 }
@@ -256,7 +256,7 @@ impl DirMgr {
             NextState::SameState(noinfo)
         };
 
-        // TODO: Also check the age of our current one.
+        // TODO: XXXX-A1: Also check the age of our current one.
         let mut unval = match nextstate {
             NextState::SameState(noinfo) => {
                 info!("Fetching a consensus directory.");
@@ -311,7 +311,7 @@ impl DirMgr {
     ///
     // TODO: Add variants of this that make sure that it's up-to-date?
     //
-    // TODO: I'd like this not to ever return None
+    // TODO: XXXX-A1: I'd like this not to ever return None
     pub async fn netdir(&self) -> Option<Arc<NetDir>> {
         self.netdir.read().await.as_ref().map(Arc::clone)
     }
@@ -433,6 +433,7 @@ impl NoInformation {
         TR: tor_chanmgr::transport::Transport,
     {
         // XXXX make this configurable.
+        // XXXX-A1 add a "keep trying forever" option for when we have no consensus.
         let n_retries = 3_u32;
         let mut retry_delay = RetryDelay::default();
 
@@ -449,7 +450,7 @@ impl NoInformation {
             }
         }
 
-        // TODO: don't forget all the other errors.
+        // TODO: XXXX-A1: don't forget all the other errors.
         Err(last_err.unwrap())
     }
 
@@ -475,7 +476,7 @@ impl NoInformation {
         }
         let response = tor_dirclient::get_resource(resource, info, circmgr).await?;
         let text = response.output();
-        // XXXX In some of the below error cases we should retire the circuit
+        // XXXX-A1 In some of the below error cases we should retire the circuit
         // to the cache that gave us this stuff.
 
         let (signedval, remainder, parsed) = MDConsensus::parse(&text)?;
@@ -538,7 +539,7 @@ impl UnvalidatedDir {
         for c in newcerts.values() {
             let cert = AuthCert::parse(c)?.check_signature()?;
             if let Ok(cert) = cert.check_valid_now() {
-                // TODO: Complain if we find a cert we didn't want. That's a bug.
+                // XXXX-A1: Complain if we find a cert we didn't want. That's a bug.
                 self.certs.push(cert);
             }
         }
@@ -562,6 +563,7 @@ impl UnvalidatedDir {
         TR: tor_chanmgr::transport::Transport,
     {
         // XXXX make this configurable
+        // XXXX-A1 add a "keep trying forever" option for when we have no consensus.
         let n_retries = 3_u32;
         let mut retry_delay = RetryDelay::default();
 
@@ -609,7 +611,7 @@ impl UnvalidatedDir {
 
         let response = tor_dirclient::get_resource(resource, info, circmgr).await?;
         let text = response.output();
-        // XXXX In some of the below error cases we should retire the circuit
+        // XXXX-A1 In some of the below error cases we should retire the circuit
         // to the cache that gave us this stuff.
 
         let mut newcerts = Vec::new();
@@ -622,13 +624,13 @@ impl UnvalidatedDir {
                     }
                 }
             }
-            // XXXX warn on error.
+            // XXXX-A1 warn on error.
         }
 
         // Throw away any that we didn't ask for.
         self.certs
             .retain(|cert| missing.iter().any(|m| m == cert.key_ids()));
-        // XXXX warn on discard.
+        // XXXX-A1 warn on discard.
 
         {
             let v: Vec<_> = newcerts[..]
@@ -671,7 +673,7 @@ impl UnvalidatedDir {
 impl PartialDir {
     /// Try to load microdescriptors from our local cache.
     async fn load(&mut self, store: &Mutex<SqliteStore>, prev: Option<Arc<NetDir>>) -> Result<()> {
-        let mark_listed = Some(SystemTime::now()); // XXXX use validafter, conditionally.
+        let mark_listed = Some(SystemTime::now()); // XXXX-A1 use validafter, conditionally.
 
         load_mds(&mut self.dir, prev, mark_listed, store).await
     }
@@ -689,6 +691,7 @@ impl PartialDir {
         TR: tor_chanmgr::transport::Transport,
     {
         // XXXX Make this configurable
+        // XXXX-A1 add a "keep trying forever" option for when we have no consensus.
         let n_retries = 3_u32;
         let mut retry_delay = RetryDelay::default();
 
@@ -722,7 +725,7 @@ impl PartialDir {
     where
         TR: tor_chanmgr::transport::Transport,
     {
-        let mark_listed = SystemTime::now(); // XXXX use validafter
+        let mark_listed = SystemTime::now(); // XXXX-A1 use validafter
         let missing: Vec<MDDigest> = self.dir.missing_microdescs().map(Clone::clone).collect();
         let mds = download_mds(missing, mark_listed, store, info, circmgr).await?;
         for md in mds {
@@ -773,7 +776,7 @@ async fn load_mds(
     };
 
     for (digest, text) in microdescs.iter() {
-        let md = Microdesc::parse(text)?; // XXX recover from this
+        let md = Microdesc::parse(text)?; // XXXX-A1 recover from this
         if md.digest() != digest {
             // whoa! XXXX Log something about this.
             continue;
@@ -839,10 +842,10 @@ where
 
                 let mut my_new_mds = Vec::new();
 
-                // XXXX log error.
+                // XXXX-A1 log error.
                 if let Ok(response) = res {
                     let text = response.output();
-                    // XXXX In some of the below error cases we should
+                    // XXXX-A1 In some of the below error cases we should
                     // retire the circuit to the cache that gave us
                     // this stuff.
 
@@ -854,9 +857,9 @@ where
                             let md = anno.into_microdesc();
                             if want.contains(md.digest()) {
                                 my_new_mds.push((txt, md))
-                            } // XXX warn if we didn't want this.
+                            } // XXXX-A1 warn if we didn't want this.
                         }
-                        // XXXX log error
+                        // XXXX-A1 log error
                     }
                 }
 

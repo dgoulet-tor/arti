@@ -7,7 +7,7 @@ use tor_netdir::WeightRole;
 /// A PathBuilder that builds a path to an exit node supporting a given
 /// set of ports.
 ///
-/// TODO: IPv6 support
+/// TODO: XXXX-A1 IPv6 support
 pub struct ExitPathBuilder {
     /// List of ports that the exit needs to support
     wantports: Vec<u16>,

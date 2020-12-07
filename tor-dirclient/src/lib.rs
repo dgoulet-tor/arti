@@ -78,7 +78,7 @@ where
             }
             Ok(Ok((hdr, stream))) => {
                 if hdr.status != Some(200) {
-                    // XXXX we should retire the circuit in some of
+                    // XXXX-A1 we should retire the circuit in some of
                     // these cases, and return a response in others.
                     return Err(Error::HttpStatus(hdr.status).into());
                 }

@@ -28,7 +28,7 @@ where
         if w == 0 {
             continue;
         }
-        // TODO: panics on overflow. Probably not best.
+        // TODO-A1: panics on overflow. Probably not best.
         weight_so_far = weight_so_far.checked_add(w).unwrap();
 
         let x = rng.gen_range(0, weight_so_far);

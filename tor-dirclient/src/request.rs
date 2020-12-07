@@ -39,7 +39,6 @@ pub struct ConsensusRequest {
     /// The publication time of the most recent consensus we have.  Used to
     /// generate an If-Modified-Since header so that we don't get a document
     /// we already have.
-    // TODO Actually use this!
     last_consensus_published: Option<SystemTime>,
     /// A set of SHA3-256 digests of the _signed portion_ of consensuses we have.
     /// Used to declare what diffs we would accept.

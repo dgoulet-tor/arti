@@ -313,7 +313,7 @@ impl Writeable for SocksAddr {
                 w.write(ip);
             }
             SocksAddr::Hostname(h) => {
-                assert!(h.len() < 256); // XXXX make sure we catch this earlier!
+                assert!(h.len() < 256); // XXXX-A1 make sure we catch this earlier!
                 let hlen = h.len() as u8;
                 w.write_u8(3);
                 w.write_u8(hlen);

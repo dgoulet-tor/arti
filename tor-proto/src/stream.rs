@@ -33,7 +33,7 @@ pub struct TorStream {
     receiver: Mutex<mpsc::Receiver<RelayMsg>>,
     /// Have we been informed that this stream is closed?  If so this is
     /// the message or the error that told us.
-    #[allow(dead_code)] //XXXXXX
+    #[allow(dead_code)] //XXXXXX-A1
     received_end: Option<Result<RelayMsg>>,
 }
 
@@ -201,7 +201,7 @@ impl DataReader {
             }
         }
 
-        /* XXXX RESTORE THIS
+        /* XXXX-A1 RESTORE THIS
                 if self.s.received_end.is_some() {
                     return Err(Error::StreamClosed("Stream is closed."));
                 }
@@ -228,7 +228,7 @@ impl DataReader {
                 Ok(n)
             }
             Err(_) | Ok(RelayMsg::End(_)) => {
-                /* XXXXX RESTORE THIS
+                /* XXXXX-A1 RESTORE THIS
                 self.s.received_end = Some(cell);
                  */
                 Err(Error::StreamClosed("received an end cell"))

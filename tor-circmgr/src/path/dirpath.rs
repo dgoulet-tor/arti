@@ -22,7 +22,6 @@ impl DirPathBuilder {
     /// this builder.
     pub fn pick_path<'a, R: Rng>(&self, rng: &mut R, netdir: DirInfo<'a>) -> Result<TorPath<'a>> {
         // TODO: this will need to learn about directory guards.
-        // TODO: this needs to work with fallback directories.
         match netdir {
             DirInfo::Fallbacks(f) => {
                 let relay = f.pick(rng);

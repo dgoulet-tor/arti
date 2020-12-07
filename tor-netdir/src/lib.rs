@@ -379,7 +379,7 @@ impl<'a> Relay<'a> {
         self.id() == other.id() && self.rsa_id() == other.rsa_id()
     }
     /// Return true if this relay allows exiting to `port` on IPv4.
-    // XXXX ipv4/ipv6
+    // XXXX-A1 ipv4/ipv6
     pub fn supports_exit_port(&self, port: u16) -> bool {
         !self.rs.is_flagged_bad_exit() && self.md.ipv4_policy().allows_port(port)
     }

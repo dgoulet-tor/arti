@@ -87,7 +87,7 @@ async fn handle_socks_conn(
 
     let stream = circ.begin_stream(&addr, port).await?;
     info!("Got a stream for {}:{}", addr, port);
-    // TODO: Should send a SOCKS reply if something fails.
+    // TODO: XXXX-A1 Should send a SOCKS reply if something fails.
 
     let reply = request.reply(tor_socksproto::SocksStatus::SUCCEEDED, None);
     w.write(&reply[..]).await?;
@@ -120,7 +120,7 @@ async fn handle_socks_conn(
         }
     });
 
-    // TODO: we should close the TCP stream if either task fails.
+    // TODO: XXXX-A1 we should close the TCP stream if either task fails.
 
     Ok(())
 }

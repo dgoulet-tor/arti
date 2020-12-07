@@ -39,9 +39,7 @@ use crate::path::{dirpath::DirPathBuilder, exitpath::ExitPathBuilder, TorPath};
 /// believes in two kinds of circuits: Exit circuits, and directory
 /// circuits.  Exit circuits are ones that were created to connect to
 /// a set of ports; directory circuits were made to talk to directory caches.
-// XXXX Support circuits that go away.
-// XXXX Support timing out circuits
-// XXXX Support explicitly removing circuits
+// XXXX-A1 Support timing out circuits
 // XXXX Make this not parameterized any more?
 pub struct CircMgr<TR>
 where
@@ -209,7 +207,7 @@ where
         netdir: DirInfo<'_>,
         usage: CircUsage,
     ) -> Result<Arc<ClientCirc>> {
-        // XXXX LOG.
+        // XXXX-A1 LOG.
         // XXXX This function is huge and ugly.
         let mut rng = StdRng::from_rng(rand::thread_rng()).unwrap();
 
@@ -237,7 +235,7 @@ where
                 let event = Arc::new(event_listener::Event::new());
                 let id = CircEntId::new();
                 let entry = CircEntry {
-                    usage: usage.clone(), // TODO: Maybe expand the usage based on actual provided ports?
+                    usage: usage.clone(), // XXXX-A1: Maybe expand the usage based on actual provided ports?
                     circ: Circ::Pending(Arc::clone(&event)),
                 };
                 circs.insert(id, entry);
@@ -267,7 +265,7 @@ where
                 let mut circs = self.circuits.lock().await;
                 if let Ok(ref circ) = result {
                     let p = circs.get_mut(&id);
-                    // XXXX instead of unwrapping, should make a new entry.
+                    // XXXX-A1 instead of unwrapping, should make a new entry.
                     let p = p.unwrap();
                     p.circ = Circ::Open(Arc::clone(circ));
                 } else {

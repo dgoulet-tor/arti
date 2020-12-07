@@ -33,7 +33,7 @@ where
     } else {
         // Otherwise, there are measured values; we should look at those only.
         //
-        // XXXX (What if the mesaured values are all 0 but there are nonzero
+        // XXXX-A1 (What if the mesaured values are all 0 but there are nonzero
         // unmeasured values?  In that case, we still believe the measured
         // values here.  Not sure that's right.)
         BandwidthFn::MeasuredOnly

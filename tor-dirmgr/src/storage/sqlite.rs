@@ -271,7 +271,7 @@ impl SqliteStore {
     }
 
     /// Return the latest `valid-after` time for any non-pending consensus.
-    // TODO: Take a pending argument?
+    // TODO: XXXX-A1 Take a pending argument?
     pub fn latest_consensus_time(&self) -> Result<Option<DateTime<Utc>>> {
         if let Some(va) = self
             .conn
@@ -295,8 +295,8 @@ impl SqliteStore {
             .optional()?;
 
         if let Some((_va, _vu, filename)) = rv {
-            // XXXX check va and vu.
-            // XXXX Some error cases should also be 'None'
+            // XXXX-A1 check va and vu.
+            // XXXX-A1 Some error cases should also be 'None'
             self.read_blob(filename).map(Option::Some)
         } else {
             Ok(None)
