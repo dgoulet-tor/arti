@@ -268,7 +268,7 @@ impl DirMgr {
         };
 
         unval.load(&self.config, store).await?;
-        info!("Fetching a certificates.");
+        info!("Fetching certificate(s).");
         unval
             .fetch_certs(&self.config, store, dirinfo, Arc::clone(&circmgr))
             .await?;
