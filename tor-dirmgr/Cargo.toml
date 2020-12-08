@@ -33,7 +33,7 @@ hex = "0.4.2"
 log = "0.4.11"
 memmap = { version="0.7.0", optional=true }
 rand = "0.7.3"
-rusqlite = { version="0.24.1", features=["chrono"] }
+rusqlite = { version = "0.24.2", features = ["chrono"] }
 thiserror = "1.0.22"
 
 [dev-dependencies]
