@@ -272,6 +272,17 @@ impl SqliteStore {
 
     /// Return the latest `valid-after` time for any non-pending consensus.
     // TODO: XXXX-A1 Take a pending argument?
+    //
+    // WAIT HANG ON: XXXX-A1.  This whole function is troubling and is
+    // used in troubling ways.  It assumes that any non-pending
+    // consensus we find will be valid when checked against our
+    // current authorities.  But what if we choose a different set of
+    // authorities?
+    //
+    // As implemented, this means that when switching from mainline
+    // Tor to/from chutney or a testnet, we might not actually fetch
+    // the real consensus that we want because we still have one from
+    // the old network that hasn't expired.
     pub fn latest_consensus_time(&self) -> Result<Option<DateTime<Utc>>> {
         if let Some(va) = self
             .conn
