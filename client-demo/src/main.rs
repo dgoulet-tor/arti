@@ -33,7 +33,7 @@ struct Args {
 
 async fn handle_socks_conn(
     dir: Arc<tor_netdir::NetDir>,
-    circmgr: Arc<tor_circmgr::CircMgr<NativeTlsTransport>>,
+    circmgr: Arc<tor_circmgr::CircMgr>,
     stream: tor_rtcompat::net::TcpStream,
 ) -> Result<()> {
     let mut handshake = tor_socksproto::SocksHandshake::new();
@@ -127,7 +127,7 @@ async fn handle_socks_conn(
 
 async fn run_socks_proxy(
     dir: Arc<tor_dirmgr::DirMgr>,
-    circmgr: Arc<tor_circmgr::CircMgr<NativeTlsTransport>>,
+    circmgr: Arc<tor_circmgr::CircMgr>,
     args: Args,
 ) -> Result<()> {
     use tor_rtcompat::net::TcpListener;

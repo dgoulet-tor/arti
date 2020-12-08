@@ -37,14 +37,13 @@ pub use response::{DirResponse, SourceInfo};
 ///
 /// Circuits are built or found using `circ_mgr`, using paths
 /// constructed using `dirinfo`.
-pub async fn get_resource<CR, TR>(
+pub async fn get_resource<CR>(
     req: CR,
     dirinfo: DirInfo<'_>,
-    circ_mgr: Arc<CircMgr<TR>>,
+    circ_mgr: Arc<CircMgr>,
 ) -> Result<DirResponse>
 where
     CR: request::ClientRequest,
-    TR: tor_chanmgr::transport::Transport,
 {
     use tor_rtcompat::timer::timeout;
 
@@ -296,9 +295,8 @@ fn get_decompressor(encoding: Option<&str>) -> Result<Box<dyn Decompressor + Sen
 }
 
 /// Retire a directory circuit because of an error we've encountered on it.
-async fn retire_circ<TR, E>(circ_mgr: Arc<CircMgr<TR>>, source_info: &SourceInfo, error: &E)
+async fn retire_circ<E>(circ_mgr: Arc<CircMgr>, source_info: &SourceInfo, error: &E)
 where
-    TR: tor_chanmgr::transport::Transport,
     E: std::fmt::Display,
 {
     let id = source_info.unique_circ_id();

@@ -129,29 +129,20 @@ impl DirMgr {
 
     /// Run a complete bootstrapping process, using information from our
     /// cache when it is up-to-date enough.
-    pub async fn bootstrap_directory<TR>(&self, circmgr: Arc<CircMgr<TR>>) -> Result<()>
-    where
-        TR: tor_chanmgr::transport::Transport,
-    {
+    pub async fn bootstrap_directory(&self, circmgr: Arc<CircMgr>) -> Result<()> {
         self.fetch_directory(circmgr, true).await
     }
 
     /// Get a new directory, starting with a fresh consensus download.
     ///
-    async fn fetch_new_directory<TR>(&self, circmgr: Arc<CircMgr<TR>>) -> Result<()>
-    where
-        TR: tor_chanmgr::transport::Transport,
-    {
+    async fn fetch_new_directory(&self, circmgr: Arc<CircMgr>) -> Result<()> {
         self.fetch_directory(circmgr, false).await
     }
 
     /// Try to fetch and add a new set of microdescriptors to the
     /// current NetDir.  On success, return the number of
     /// microdescriptors that are still missing.
-    async fn fetch_additional_microdescs<TR>(&self, circmgr: Arc<CircMgr<TR>>) -> Result<usize>
-    where
-        TR: tor_chanmgr::transport::Transport,
-    {
+    async fn fetch_additional_microdescs(&self, circmgr: Arc<CircMgr>) -> Result<usize> {
         let new_microdescs = {
             // We introduce a scope here so that we'll drop our reference
             // to the old netdir when we're done downloading.
@@ -204,13 +195,7 @@ impl DirMgr {
 
     /// Launch an updater task that periodically re-fetches the
     /// directory to keep it up-to-date.
-    pub fn launch_updater<TR>(
-        self: Arc<Self>,
-        circmgr: Arc<CircMgr<TR>>,
-    ) -> Arc<DirectoryUpdater<TR>>
-    where
-        TR: tor_chanmgr::transport::Transport + Send + Sync + 'static,
-    {
+    pub fn launch_updater(self: Arc<Self>, circmgr: Arc<CircMgr>) -> Arc<DirectoryUpdater> {
         // TODO: XXXX: Need some way to keep two of these from running at
         // once.
         let updater = Arc::new(updater::DirectoryUpdater::new(self, circmgr));
@@ -233,14 +218,11 @@ impl DirMgr {
     // TODO: We'll likely need to refactor this before too long.
     // TODO: This needs to exit with a failure if the consensus expires
     // partway through the process.
-    pub async fn fetch_directory<TR>(
+    pub async fn fetch_directory(
         &self,
-        circmgr: Arc<CircMgr<TR>>,
+        circmgr: Arc<CircMgr>,
         use_cached_consensus: bool,
-    ) -> Result<()>
-    where
-        TR: tor_chanmgr::transport::Transport,
-    {
+    ) -> Result<()> {
         let store = &self.store;
 
         let current_netdir = self.netdir().await;
@@ -422,16 +404,13 @@ impl NoInformation {
     /// from a randomly chosen directory cache server on the network.
     ///
     /// On failure, retry.
-    async fn fetch_consensus<TR>(
+    async fn fetch_consensus(
         &self,
         config: &NetDirConfig,
         store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
-        circmgr: Arc<CircMgr<TR>>,
-    ) -> Result<UnvalidatedDir>
-    where
-        TR: tor_chanmgr::transport::Transport,
-    {
+        circmgr: Arc<CircMgr>,
+    ) -> Result<UnvalidatedDir> {
         // XXXX make this configurable.
         // XXXX-A1 add a "keep trying forever" option for when we have no consensus.
         let n_retries = 3_u32;
@@ -456,16 +435,13 @@ impl NoInformation {
 
     /// Try to fetch a currently timely consensus directory document
     /// from a randomly chosen directory cache server on the network.
-    async fn fetch_consensus_once<TR>(
+    async fn fetch_consensus_once(
         &self,
         config: &NetDirConfig,
         store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
-        circmgr: Arc<CircMgr<TR>>,
-    ) -> Result<UnvalidatedDir>
-    where
-        TR: tor_chanmgr::transport::Transport,
-    {
+        circmgr: Arc<CircMgr>,
+    ) -> Result<UnvalidatedDir> {
         let mut resource = tor_dirclient::request::ConsensusRequest::new();
 
         {
@@ -552,16 +528,13 @@ impl UnvalidatedDir {
     /// Try to fetch authority certificates from the network.
     ///
     /// Retry if we couldn't get enough certs to validate the consensus.
-    async fn fetch_certs<TR>(
+    async fn fetch_certs(
         &mut self,
         config: &NetDirConfig,
         store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
-        circmgr: Arc<CircMgr<TR>>,
-    ) -> Result<()>
-    where
-        TR: tor_chanmgr::transport::Transport,
-    {
+        circmgr: Arc<CircMgr>,
+    ) -> Result<()> {
         // XXXX make this configurable
         // XXXX-A1 add a "keep trying forever" option for when we have no consensus.
         let n_retries = 3_u32;
@@ -589,16 +562,13 @@ impl UnvalidatedDir {
     }
 
     /// Try to fetch authority certificates from the network.
-    async fn fetch_certs_once<TR>(
+    async fn fetch_certs_once(
         &mut self,
         config: &NetDirConfig,
         store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
-        circmgr: Arc<CircMgr<TR>>,
-    ) -> Result<()>
-    where
-        TR: tor_chanmgr::transport::Transport,
-    {
+        circmgr: Arc<CircMgr>,
+    ) -> Result<()> {
         let missing = self.missing_certs(config);
         if missing.is_empty() {
             return Ok(());
@@ -681,15 +651,12 @@ impl PartialDir {
     /// Try to fetch microdescriptors from the network.
     ///
     /// Retry if we didn't get enough to build circuits.
-    async fn fetch_mds<TR>(
+    async fn fetch_mds(
         &mut self,
         store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
-        circmgr: Arc<CircMgr<TR>>,
-    ) -> Result<()>
-    where
-        TR: tor_chanmgr::transport::Transport,
-    {
+        circmgr: Arc<CircMgr>,
+    ) -> Result<()> {
         // XXXX Make this configurable
         // XXXX-A1 add a "keep trying forever" option for when we have no consensus.
         let n_retries = 3_u32;
@@ -716,15 +683,12 @@ impl PartialDir {
         }
     }
     /// Try to fetch microdescriptors from the network.
-    async fn fetch_mds_once<TR>(
+    async fn fetch_mds_once(
         &mut self,
         store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
-        circmgr: Arc<CircMgr<TR>>,
-    ) -> Result<()>
-    where
-        TR: tor_chanmgr::transport::Transport,
-    {
+        circmgr: Arc<CircMgr>,
+    ) -> Result<()> {
         let mark_listed = SystemTime::now(); // XXXX-A1 use validafter
         let missing: Vec<MDDigest> = self.dir.missing_microdescs().map(Clone::clone).collect();
         let mds = download_mds(missing, mark_listed, store, info, circmgr).await?;
@@ -796,16 +760,13 @@ async fn load_mds(
 
 /// Helper to fetch microdescriptors from the network and store them either
 /// into a PartialNetDir or a NetDir.
-async fn download_mds<TR>(
+async fn download_mds(
     mut missing: Vec<MDDigest>,
     mark_listed: SystemTime,
     store: &Mutex<SqliteStore>,
     info: DirInfo<'_>,
-    circmgr: Arc<CircMgr<TR>>,
-) -> Result<Vec<Microdesc>>
-where
-    TR: tor_chanmgr::transport::Transport,
-{
+    circmgr: Arc<CircMgr>,
+) -> Result<Vec<Microdesc>> {
     missing.sort_unstable();
     if missing.is_empty() {
         return Ok(Vec::new());

@@ -41,23 +41,15 @@ impl<'a> TorPath<'a> {
     }
 
     /// Internal: get or create a channel for the first hop of a path.
-    async fn get_channel<TR>(&self, chanmgr: &ChanMgr<TR>) -> Result<Arc<Channel>>
-    where
-        TR: tor_chanmgr::transport::Transport,
-    {
+    async fn get_channel(&self, chanmgr: &ChanMgr) -> Result<Arc<Channel>> {
         let first_hop = self.first_hop()?;
         let channel = chanmgr.get_or_launch(first_hop).await?;
         Ok(channel)
     }
 
     /// Try to build a circuit corresponding to this path.
-    pub async fn build_circuit<TR, R>(
-        &self,
-        rng: &mut R,
-        chanmgr: &ChanMgr<TR>,
-    ) -> Result<Arc<ClientCirc>>
+    pub async fn build_circuit<R>(&self, rng: &mut R, chanmgr: &ChanMgr) -> Result<Arc<ClientCirc>>
     where
-        TR: tor_chanmgr::transport::Transport,
         R: Rng + CryptoRng,
     {
         use TorPath::*;

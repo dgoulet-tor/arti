@@ -11,18 +11,22 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
+mod connect;
 mod err;
 #[cfg(test)]
-mod testing;
+pub(crate) mod testing;
 pub mod transport;
+
+use crate::connect::{Connector, TargetInfo};
+use crate::transport::Transport;
 
 use tor_linkspec::ChanTarget;
 use tor_llcrypto::pk::ed25519::Ed25519Identity;
 
 #[cfg(test)]
-use testing::{FakeChannel as Channel, FakeChannelBuilder as ChannelBuilder};
+use testing::FakeChannel as Channel;
 #[cfg(not(test))]
-use tor_proto::channel::{Channel, ChannelBuilder};
+use tor_proto::channel::Channel;
 
 use anyhow::Result;
 use futures::lock::Mutex;
@@ -37,7 +41,7 @@ pub use err::Error;
 ///
 /// Use the [ChanMgr::get_or_launch] function to craete a new channel, or
 /// get one if it exists.
-pub struct ChanMgr<TR> {
+pub struct ChanMgr {
     /// Map from Ed25519 identity to channel state.
     ///
     /// Note that eventually we might want to have this be only
@@ -51,7 +55,7 @@ pub struct ChanMgr<TR> {
     channels: Mutex<HashMap<Ed25519Identity, ChannelState>>,
 
     /// Object used to create TLS connections to relays.
-    transport: TR,
+    connector: Box<dyn Connector + Sync + Send + 'static>,
 }
 
 /// Possible states for a managed channel
@@ -64,16 +68,17 @@ enum ChannelState {
     Building(Arc<event_listener::Event>),
 }
 
-impl<TR> ChanMgr<TR>
-where
-    TR: transport::Transport,
-{
+impl ChanMgr {
     /// Construct a new channel manager.  It will use `transport` to construct
     /// TLS streams, and `spawn` to launch reactor tasks.
-    pub fn new(transport: TR) -> Self {
+    pub fn new<TR>(transport: TR) -> Self
+    where
+        TR: Transport + Send + Sync + 'static,
+    {
+        let connector = Box::new(transport);
         ChanMgr {
             channels: Mutex::new(HashMap::new()),
-            transport,
+            connector,
         }
     }
 
@@ -98,10 +103,7 @@ where
     /// If there is already a channel launch attempt in progress, this
     /// function will wait until that launch is complete, and succeed
     /// or fail depending on its outcome.
-    pub async fn get_or_launch<T: ChanTarget + Sync + ?Sized>(
-        &self,
-        target: &T,
-    ) -> Result<Arc<Channel>> {
+    pub async fn get_or_launch<T: ChanTarget + ?Sized>(&self, target: &T) -> Result<Arc<Channel>> {
         let ed_identity = target.ed_identity();
         use ChannelState::*;
 
@@ -158,10 +160,7 @@ where
     }
 
     /// Helper: construct a new channel for a target.
-    async fn build_channel<T: ChanTarget + Sync + ?Sized>(
-        &self,
-        target: &T,
-    ) -> Result<Arc<Channel>> {
+    async fn build_channel<T: ChanTarget + ?Sized>(&self, target: &T) -> Result<Arc<Channel>> {
         // XXXX make this a parameter.
         let timeout = Duration::new(5, 0);
 
@@ -176,27 +175,9 @@ where
 
     /// Helper: construct a new channel for a target, trying only once,
     /// and not timing out.
-    async fn build_channel_once<T: ChanTarget + Sync + ?Sized>(
-        &self,
-        target: &T,
-    ) -> Result<Arc<Channel>> {
-        use crate::transport::CertifiedConn;
-        let (addr, tls) = self.transport.connect(target).await?;
-
-        // XXXX-A1 wrong error
-        let peer_cert = tls
-            .peer_cert()?
-            .ok_or_else(|| Error::UnusableTarget("No peer certificate!?".into()))?;
-        let mut builder = ChannelBuilder::new();
-        builder.set_declared_addr(addr);
-        let chan = builder.launch(tls).connect().await?;
-        let chan = chan.check(target, &peer_cert)?;
-        let (chan, reactor) = chan.finish().await?;
-
-        tor_rtcompat::task::spawn(async {
-            let _ = reactor.run().await;
-        });
-        Ok(chan)
+    async fn build_channel_once<T: ChanTarget + ?Sized>(&self, target: &T) -> Result<Arc<Channel>> {
+        let target = TargetInfo::from_chan_target(target);
+        self.connector.build_channel(&target).await
     }
 
     /// Helper: Get the Channel with the given Ed25519 identity, if there

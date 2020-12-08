@@ -40,14 +40,10 @@ use crate::path::{dirpath::DirPathBuilder, exitpath::ExitPathBuilder, TorPath};
 /// circuits.  Exit circuits are ones that were created to connect to
 /// a set of ports; directory circuits were made to talk to directory caches.
 // XXXX-A1 Support timing out circuits
-// XXXX Make this not parameterized any more?
-pub struct CircMgr<TR>
-where
-    TR: tor_chanmgr::transport::Transport,
-{
+pub struct CircMgr {
     /// Reference to a channel manager that this circuit manager can use to make
     /// channels.
-    chanmgr: Arc<ChanMgr<TR>>,
+    chanmgr: Arc<ChanMgr>,
 
     /// Map from unique circuit identifier to an entry describing its state.
     ///
@@ -164,12 +160,9 @@ impl CircEntry {
     }
 }
 
-impl<TR> CircMgr<TR>
-where
-    TR: tor_chanmgr::transport::Transport,
-{
+impl CircMgr {
     /// Construct a new circuit manager.
-    pub fn new(chanmgr: Arc<ChanMgr<TR>>) -> Self {
+    pub fn new(chanmgr: Arc<ChanMgr>) -> Self {
         let circuits = Mutex::new(HashMap::new());
 
         CircMgr { chanmgr, circuits }

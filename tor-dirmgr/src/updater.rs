@@ -15,27 +15,21 @@ use rand::Rng;
 
 /// A SirectoryUpdater runs in a background task to periodically re-fetch
 /// new directory objects as the old ones become outdated.
-pub struct DirectoryUpdater<TR>
-where
-    TR: tor_chanmgr::transport::Transport,
-{
+pub struct DirectoryUpdater {
     /// A directory manager to use in picking directory caches, and which can
     /// download new directory objects.
     dir_mgr: Weak<DirMgr>,
     /// A circuit manager to use in connecting to the network.
-    circ_mgr: Weak<CircMgr<TR>>,
+    circ_mgr: Weak<CircMgr>,
     /// A flag to tell the DirectoryUpdater to exit.
     stopping: AtomicBool,
 }
 
-impl<TR> DirectoryUpdater<TR>
-where
-    TR: tor_chanmgr::transport::Transport,
-{
+impl DirectoryUpdater {
     /// Make a new DirectoryUpdater.  It takes a reference to a directory
     /// manager and circuit manager, but stores weak references to them.  It doesn't
     /// start going till you call 'run' on it.
-    pub(crate) fn new(dir_mgr: Arc<DirMgr>, circ_mgr: Arc<CircMgr<TR>>) -> Self {
+    pub(crate) fn new(dir_mgr: Arc<DirMgr>, circ_mgr: Arc<CircMgr>) -> Self {
         DirectoryUpdater {
             dir_mgr: Arc::downgrade(&dir_mgr),
             circ_mgr: Arc::downgrade(&circ_mgr),
