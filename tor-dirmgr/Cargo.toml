@@ -21,7 +21,7 @@ tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-llcrypto = { path="../tor-llcrypto", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*" }
 
-anyhow = "1.0.34"
+anyhow = "1.0.35"
 async-rwlock = "1.3.0"
 async-trait = "0.1.42"
 base64 = "0.13.0"
