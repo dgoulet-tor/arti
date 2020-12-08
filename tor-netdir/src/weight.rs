@@ -21,22 +21,26 @@ where
     I: Clone + Iterator<Item = &'a RouterWeight>,
 {
     let has_measured = weights.clone().any(|w| w.is_measured());
-    let has_nonzero = weights.any(|w| w.is_nonzero());
+    let has_nonzero = weights.clone().any(|w| w.is_nonzero());
+    let has_nonzero_measured = weights.any(|w| w.is_measured() && w.is_nonzero());
+
     if !has_nonzero {
         // If every value is zero, we should just pretend everything has
-        // bandwidht == 1.
+        // bandwidth == 1.
         BandwidthFn::Uniform
     } else if !has_measured {
         // If there are no measured values, then we can look at unmeasured
         // weights.
         BandwidthFn::IncludeUnmeasured
-    } else {
-        // Otherwise, there are measured values; we should look at those only.
-        //
-        // XXXX-A1 (What if the mesaured values are all 0 but there are nonzero
-        // unmeasured values?  In that case, we still believe the measured
-        // values here.  Not sure that's right.)
+    } else if has_nonzero_measured {
+        // Otherwise, there are measured values; we should look at those only, if
+        // any of them is nonzero.
         BandwidthFn::MeasuredOnly
+    } else {
+        // This is a bit of an ugly case: We have measured values, but they're
+        // all zero.  If this happens, the bandwidth authorities exist but they
+        // very confused: we should fall back to uniform wrighting.
+        BandwidthFn::Uniform
     }
 }
 
@@ -429,7 +433,7 @@ mod test {
         let measured_all_zero = [RouterWeight::Unmeasured(10), RouterWeight::Measured(0)];
         assert_eq!(
             pick_bandwidth_fn(measured_all_zero.iter()),
-            BandwidthFn::MeasuredOnly
+            BandwidthFn::Uniform
         );
     }
 
