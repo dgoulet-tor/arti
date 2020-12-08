@@ -86,7 +86,7 @@ impl TargetInfo {
         TargetInfo {
             addrs: target.addrs().to_vec(),
             ed_identity: *target.ed_identity(),
-            rsa_identity: target.rsa_identity().clone(),
+            rsa_identity: *target.rsa_identity(),
         }
     }
 }

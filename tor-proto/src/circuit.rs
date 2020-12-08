@@ -393,7 +393,7 @@ impl ClientCirc {
         use crate::crypto::cell::Tor1RelayCrypto;
         use crate::crypto::handshake::ntor::{NtorClient, NtorPublicKey};
         let key = NtorPublicKey {
-            id: target.rsa_identity().clone(),
+            id: *target.rsa_identity(),
             pk: *target.ntor_onion_key(),
         };
         let linkspecs = target.linkspecs();
@@ -840,7 +840,7 @@ impl PendingClientCirc {
             handshake_type: 0x0002, // ntor
         };
         let key = NtorPublicKey {
-            id: target.rsa_identity().clone(),
+            id: *target.rsa_identity(),
             pk: *target.ntor_onion_key(),
         };
         // FlowCtrl=1 means that this hop supports authenticated SENDMEs

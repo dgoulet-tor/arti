@@ -1453,7 +1453,7 @@ impl SignatureGroup {
                 continue;
             }
             if sig.find_cert(certs).is_some() {
-                ok.insert(id_fingerprint.clone());
+                ok.insert(*id_fingerprint);
                 continue;
             }
 
@@ -1487,7 +1487,7 @@ impl SignatureGroup {
 
             match sig.check_signature(&self.sha256, certs) {
                 SigCheckResult::Valid => {
-                    ok.insert(id_fingerprint.clone());
+                    ok.insert(*id_fingerprint);
                 }
                 _ => continue,
             }
