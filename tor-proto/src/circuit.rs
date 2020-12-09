@@ -13,9 +13,9 @@
 //! call its [crate::channel::Channel::new_circ] method.  This yields
 //! a [PendingClientCirc] object that won't become live until you call
 //! one of the methods that extends it to its first hop.  After you've
-//! done that, you can call [Circuit::extend_ntor] on the circuit to
+//! done that, you can call [ClientCirc::extend_ntor] on the circuit to
 //! build it into a multi-hop circuit.  Finally, you can use
-//! [Circuit::begin_stream] to get a Stream object that can be used
+//! [ClientCirc::begin_stream] to get a Stream object that can be used
 //! for anonymized data.
 //!
 //! # Implementation

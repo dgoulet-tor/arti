@@ -21,7 +21,7 @@
 //!
 //! To parse a document into a Section, the programmer defines a type
 //! of keyword that the document will use, using the
-//! [macros::decl_keyword] macro.  The programmer then defines a
+//! `decl_keyword!` macro.  The programmer then defines a
 //! [parser::SectionRules] object, containing a [rules::TokenFmt]
 //! describing the rules for each allowed keyword in the
 //! section. Finally, the programmer uses a [tokenize::NetDocReader]

@@ -2,7 +2,7 @@
 //!
 //! This list is derived from the list that ships with Tor, and
 //! kludged up with a quick and dirty script.  Never use it directly;
-//! instead use [super::fallbacks()].
+//! instead use [`super::FallbackSet`].
 
 use tor_llcrypto::pk::ed25519::Ed25519Identity;
 use tor_llcrypto::pk::rsa::RSAIdentity;

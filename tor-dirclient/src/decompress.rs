@@ -76,7 +76,8 @@ pub(crate) mod identity {
     }
 }
 
-/// Implementation for the [`Decompressor`] trait on [`miniz_oxide::InflateState`].
+/// Implementation for the [`Decompressor`] trait on
+/// [`::miniz_oxide::inflate::stream::InflateState`].
 ///
 /// This implements zlib compression as used in Tor.
 mod miniz_oxide {

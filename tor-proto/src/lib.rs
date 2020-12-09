@@ -24,8 +24,9 @@
 //! something.
 //!
 //! In order to create channels and circuits, you'll need to know
-//! about some Tor relays, and expose their information via the traits
-//! in [tor_linkspec::traits].  Currently, the [tor-netdir] crate is
+//! about some Tor relays, and expose their information via
+//! [tor_linkspec::ChanTarget] and [tor_linkspec::CircTarget].
+//! Currently, the [tor-netdir] crate is
 //! the easiest way to do so.
 //!
 //! For an example of this crate in action, see the [client-demo]
