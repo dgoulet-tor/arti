@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tor_chanmgr::transport::nativetls::NativeTlsTransport;
 use tor_socksproto::SocksCmd;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 #[derive(FromArgs)]
 /// Make a connection to the Tor network, open a SOCKS port, and proxy
@@ -43,7 +43,10 @@ async fn handle_socks_conn(
     let mut n_read = 0;
     let request = loop {
         // Read some more stuff.
-        n_read += r.read(&mut inbuf[n_read..]).await?;
+        n_read += r
+            .read(&mut inbuf[n_read..])
+            .await
+            .context("Error while reading SOCKS handshake")?;
 
         // try to advance the handshake.
         let action = match handshake.handshake(&inbuf[..n_read]) {
@@ -58,7 +61,9 @@ async fn handle_socks_conn(
             n_read -= action.drain;
         }
         if !action.reply.is_empty() {
-            w.write(&action.reply[..]).await?;
+            w.write(&action.reply[..])
+                .await
+                .context("Error while writing reply to SOCKS handshake")?;
         }
         if action.finished {
             break handshake.into_request();
@@ -84,6 +89,7 @@ async fn handle_socks_conn(
         .get_or_launch_exit(dir.as_ref().into(), &exit_ports)
         .await?;
     info!("Got a circuit for {}:{}", addr, port);
+    // XXXX-A1 After this point we should drop dir, so it can decref.
 
     let stream = circ.begin_stream(&addr, port).await?;
     info!("Got a stream for {}:{}", addr, port);
