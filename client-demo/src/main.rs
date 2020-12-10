@@ -89,7 +89,7 @@ async fn handle_socks_conn(
         .get_or_launch_exit(dir.as_ref().into(), &exit_ports)
         .await?;
     info!("Got a circuit for {}:{}", addr, port);
-    // XXXX-A1 After this point we should drop dir, so it can decref.
+    drop(dir); // This decreases the refcount on the netdir.
 
     let stream = circ.begin_stream(&addr, port).await?;
     info!("Got a stream for {}:{}", addr, port);
