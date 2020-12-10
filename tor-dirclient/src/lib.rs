@@ -24,7 +24,7 @@ use crate::decompress::Decompressor;
 
 use tor_circmgr::{CircMgr, DirInfo};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures::FutureExt;
 use log::info;
 use std::sync::Arc;
@@ -59,9 +59,20 @@ where
         // XXXX should be an option, and is too long.
         let begin_timeout = Duration::from_secs(5);
         let r = timeout(begin_timeout, async {
-            let mut stream = circuit.begin_dir_stream().await?;
-            stream.write_bytes(encoded.as_bytes()).await?;
-            let hdr = read_headers(&mut stream).await?;
+            // Send the HTTP request
+            let mut stream = circuit
+                .begin_dir_stream()
+                .await
+                .with_context(|| format!("Failed to open a directory stream to {:?}", source))?;
+            stream
+                .write_bytes(encoded.as_bytes())
+                .await
+                .with_context(|| format!("Failed to send HTTP request to {:?}", source))?;
+
+            // Handle the response
+            let hdr = read_headers(&mut stream)
+                .await
+                .with_context(|| format!("Failed to handle the HTTP response from {:?}", source))?;
             Result::<_, anyhow::Error>::Ok((hdr, stream))
         })
         .await;
