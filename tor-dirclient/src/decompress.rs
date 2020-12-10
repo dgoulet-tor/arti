@@ -1,7 +1,7 @@
 //! Decompression support for Tor directory connections.
 //!
 //! There are different compression algorithms that can be used on the
-//! Tor network; right now only zlib and identity decompression are
+//! Tor network; right now only zlib, lzma and identity decompression are
 //! supported here.
 //!
 //! This provides a single streaming API for decompression; we may
@@ -114,11 +114,11 @@ mod miniz_oxide {
 /// Implementation for the [`Decompressor`] trait on [`xz2::Stream`].
 ///
 /// This implements lzma compression as used in Tor.
-mod xz2 {
+mod lzma {
     use super::{Decompressor, Status, StatusKind};
 
     use anyhow::{anyhow, Result};
-    use xz2::stream::{Action, Error, Status as Xz2Status, Stream};
+    use xz2::stream::{Action, Status as Xz2Status, Stream};
 
     impl Decompressor for Stream {
         fn process(&mut self, inp: &[u8], out: &mut [u8], finished: bool) -> Result<Status> {
@@ -127,22 +127,24 @@ mod xz2 {
             } else {
                 Action::Run
             };
-            let res = xz2::stream::Stream::process(self, inp, out, action);
+
+            let previously_consumed = self.total_in();
+            let previously_written = self.total_out();
+
+            let res = self.process(inp, out, action);
 
             let statuskind = match res {
                 Ok(Xz2Status::StreamEnd) => StatusKind::Done,
                 Ok(Xz2Status::Ok) => StatusKind::Written,
                 Ok(Xz2Status::GetCheck) => StatusKind::Written,
                 Ok(Xz2Status::MemNeeded) => StatusKind::OutOfSpace,
-                Err(Error::MemLimit) => StatusKind::OutOfSpace,
-                Err(Error::Mem) => StatusKind::OutOfSpace,
-                other => return Err(anyhow!("xz2 compression error: {:?}", other)),
+                other => return Err(anyhow!("lzma compression error: {:?}", other)),
             };
 
             Ok(Status {
                 status: statuskind,
-                consumed: xz2::stream::Stream::total_in(self) as usize,
-                written: xz2::stream::Stream::total_out(self) as usize,
+                consumed: (self.total_in() - previously_consumed) as usize,
+                written: (self.total_out() - previously_written) as usize,
             })
         }
     }
