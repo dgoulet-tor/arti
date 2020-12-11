@@ -87,7 +87,8 @@ async fn handle_socks_conn(
     let exit_ports = [port];
     let circ = circmgr
         .get_or_launch_exit(dir.as_ref().into(), &exit_ports)
-        .await?;
+        .await
+        .context("Unable to launch circuit for request")?;
     info!("Got a circuit for {}:{}", addr, port);
     drop(dir); // This decreases the refcount on the netdir.
 
@@ -96,7 +97,9 @@ async fn handle_socks_conn(
     // TODO: XXXX-A1 Should send a SOCKS reply if something fails.
 
     let reply = request.reply(tor_socksproto::SocksStatus::SUCCEEDED, None);
-    w.write(&reply[..]).await?;
+    w.write(&reply[..])
+        .await
+        .context("Couldn't write SOCKS reply")?;
 
     let (mut rstream, wstream) = stream.split();
 
@@ -158,7 +161,7 @@ async fn run_socks_proxy(
     let mut incoming = futures::stream::select_all(listeners.iter().map(TcpListener::incoming));
 
     while let Some(stream) = incoming.next().await {
-        let stream = stream?;
+        let stream = stream.context("Failed to receive incoming stream on SOCKS port")?;
         let d = dir.netdir().await.unwrap();
         let ci = Arc::clone(&circmgr);
         tor_rtcompat::task::spawn(async move {
@@ -184,7 +187,9 @@ fn main() -> Result<()> {
 
     let mut dircfg = tor_dirmgr::NetDirConfigBuilder::new();
     if let Some(chutney_dir) = args.chutney_dir.as_ref() {
-        dircfg.configure_from_chutney(chutney_dir)?;
+        dircfg
+            .configure_from_chutney(chutney_dir)
+            .context("Can't extract Chutney network configuration")?;
     } else {
         dircfg.add_default_authorities();
     }
@@ -195,11 +200,18 @@ fn main() -> Result<()> {
         let circmgr = Arc::new(tor_circmgr::CircMgr::new(Arc::clone(&chanmgr)));
         let dirmgr = Arc::new(tor_dirmgr::DirMgr::from_config(dircfg.finalize())?);
 
-        if dirmgr.load_directory().await? {
+        if dirmgr
+            .load_directory()
+            .await
+            .context("Error loading cached directory")?
+        {
             info!("Loaded a good directory from disk.")
         } else {
             info!("Didn't find a usable directory on disk. Trying to booststrap.");
-            dirmgr.bootstrap_directory(Arc::clone(&circmgr)).await?;
+            dirmgr
+                .bootstrap_directory(Arc::clone(&circmgr))
+                .await
+                .context("Unable to bootstrap directory")?;
             info!("Bootstrapped successfully.");
         }
         // TODO CONFORMANCE: we should stop now if there are required
