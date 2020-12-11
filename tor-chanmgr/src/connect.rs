@@ -15,7 +15,7 @@ use crate::testing::{FakeChannel as Channel, FakeChannelBuilder as ChannelBuilde
 #[cfg(not(test))]
 use tor_proto::channel::{Channel, ChannelBuilder};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -33,7 +33,10 @@ pub(crate) trait Connector {
 impl<TR: Transport + Send + Sync> Connector for TR {
     async fn build_channel(&self, target: &TargetInfo) -> Result<Arc<Channel>> {
         use crate::transport::CertifiedConn;
-        let (addr, tls) = self.connect(target).await?;
+        let (addr, tls) = self
+            .connect(target)
+            .await
+            .context("Can't negotiate TLS with channel target")?;
 
         let peer_cert = tls
             .peer_cert()?

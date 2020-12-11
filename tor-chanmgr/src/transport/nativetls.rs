@@ -8,6 +8,7 @@ use crate::{Error, Result};
 use tor_linkspec::ChanTarget;
 use tor_rtcompat::net::TcpStream;
 
+use anyhow::Context;
 use async_trait::async_trait;
 use futures::io::{AsyncRead, AsyncWrite};
 
@@ -50,7 +51,9 @@ impl Transport for NativeTlsTransport {
             .ok_or_else(|| Error::UnusableTarget("No addresses for chosen relay".into()))?;
 
         info!("Connecting to {}", addr);
-        let stream = TcpStream::connect(addr).await?;
+        let stream = TcpStream::connect(addr)
+            .await
+            .context("Can't make a TCP stream to target relay.")?;
 
         info!("Negotiating TLS with {}", addr);
         // TODO: add a random hostname here if it will be used for SNI?
