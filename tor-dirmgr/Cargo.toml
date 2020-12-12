@@ -19,6 +19,7 @@ tor-dirclient = { path="../tor-dirclient", version= "*" }
 tor-netdir = { path="../tor-netdir", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-llcrypto = { path="../tor-llcrypto", version= "*" }
+tor-retry = { path="../tor-retry", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*" }
 
 anyhow = "1.0.35"

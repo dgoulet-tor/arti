@@ -29,6 +29,7 @@ use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
 use tor_netdoc::doc::microdesc::{MDDigest, Microdesc, MicrodescReader};
 use tor_netdoc::doc::netstatus::{MDConsensus, UnvalidatedMDConsensus};
 use tor_netdoc::AllowAnnotations;
+use tor_retry::RetryError;
 
 use anyhow::{anyhow, Result};
 use async_rwlock::RwLock;
@@ -416,21 +417,20 @@ impl NoInformation {
         let n_retries = 3_u32;
         let mut retry_delay = RetryDelay::default();
 
-        let mut last_err: Option<anyhow::Error> = None;
+        let mut errors = RetryError::while_doing("download a consensus");
         for _ in 0..n_retries {
             let cm = Arc::clone(&circmgr);
             match self.fetch_consensus_once(config, store, info, cm).await {
                 Ok(v) => return Ok(v),
                 Err(e) => {
-                    last_err = Some(e);
+                    errors.push(e);
                     let delay = retry_delay.next_delay(&mut rand::thread_rng());
                     tor_rtcompat::task::sleep(delay).await;
                 }
             }
         }
 
-        // TODO: XXXX-A1: don't forget all the other errors.
-        Err(last_err.unwrap())
+        Err(errors.into())
     }
 
     /// Try to fetch a currently timely consensus directory document
@@ -540,11 +540,11 @@ impl UnvalidatedDir {
         let n_retries = 3_u32;
         let mut retry_delay = RetryDelay::default();
 
-        let mut last_err: Option<anyhow::Error> = None;
+        let mut errors = RetryError::while_doing("downloading authority certificates");
         for _ in 0..n_retries {
             let cm = Arc::clone(&circmgr);
             if let Err(e) = self.fetch_certs_once(config, store, info, cm).await {
-                last_err = Some(e);
+                errors.push(e);
             }
 
             if self.missing_certs(config).is_empty() {
@@ -555,10 +555,7 @@ impl UnvalidatedDir {
             tor_rtcompat::task::sleep(delay).await;
         }
 
-        match last_err {
-            Some(e) => Err(e),
-            None => Err(anyhow!("Couldn't get certs after retries.")),
-        }
+        Err(errors.into())
     }
 
     /// Try to fetch authority certificates from the network.
@@ -662,11 +659,11 @@ impl PartialDir {
         let n_retries = 3_u32;
         let mut retry_delay = RetryDelay::default();
 
-        let mut last_err: Option<anyhow::Error> = None;
+        let mut errors = RetryError::while_doing("download microdescriptors");
         for _ in 0..n_retries {
             let cm = Arc::clone(&circmgr);
             if let Err(e) = self.fetch_mds_once(store, info, cm).await {
-                last_err = Some(e);
+                errors.push(e);
             }
 
             if self.dir.have_enough_paths() {
@@ -677,10 +674,7 @@ impl PartialDir {
             tor_rtcompat::task::sleep(delay).await;
         }
 
-        match last_err {
-            Some(e) => Err(e),
-            None => Err(anyhow!("Couldn't get microdescs after retries.")),
-        }
+        Err(errors.into())
     }
     /// Try to fetch microdescriptors from the network.
     async fn fetch_mds_once(

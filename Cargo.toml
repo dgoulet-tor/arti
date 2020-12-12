@@ -14,6 +14,7 @@ members = [
     "tor-linkspec",
     "tor-cell",
     "tor-proto",
+    "tor-retry",
     "tor-netdoc",
     "tor-netdir",
     "tor-chanmgr",
