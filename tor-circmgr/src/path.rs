@@ -40,6 +40,8 @@ impl<'a> TorPath<'a> {
         }
     }
 
+    /// Return the final relay in this path, if this is a path for use
+    /// with exit circuits.
     fn exit_relay(&self) -> Option<&Relay<'a>> {
         match self {
             TorPath::Path(relays) if !relays.is_empty() => Some(&relays[relays.len() - 1]),
@@ -47,7 +49,9 @@ impl<'a> TorPath<'a> {
         }
     }
 
-    pub(crate) fn exit_usage(&self) -> Option<super::ExitPolicy> {
+    /// Return the exit policy of the final relay in this path, if this
+    /// is a path for use with exit circuits.
+    pub(crate) fn exit_policy(&self) -> Option<super::ExitPolicy> {
         if let Some(exit_relay) = self.exit_relay() {
             // TODO: Doing these clones is wasteful; maybe we should
             // have Arcs for all exit policies.  That could also

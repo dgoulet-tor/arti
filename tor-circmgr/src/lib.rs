@@ -88,7 +88,9 @@ impl<'a> Into<DirInfo<'a>> for &'a NetDir {
 // circuit already has one.  That's a waste of memory.
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
 enum CircEntId {
+    /// An identifier for an open circuit.
     Open(UniqId),
+    /// An identifier for a pending circuit.
     Pending(usize),
 }
 
@@ -111,21 +113,31 @@ impl CircEntId {
 
 /// Describes the state of an entry in a circuit builder's map.
 enum CircEntry {
+    /// An entry for a completed circuit
     Open(OpenCircEntry),
+    /// An entry for a pending circuit
     Pending(PendingCircEntry),
 }
 
+/// An entry for a completed circuit that we're managing.
 struct OpenCircEntry {
+    /// The usage for which this circuit is suitable.
     usage: CircUsage,
+    /// The circuit itself
     circ: Arc<ClientCirc>,
 }
 
+/// An entry for a pending circuit that we haven't finished yet.
 struct PendingCircEntry {
+    /// The reason we're building the circuit.
     usage: TargetCircUsage,
+    /// An event that will get notified when the circuit succeeds or fails.
     event: Arc<event_listener::Event>,
 }
 
 impl CircEntry {
+    /// Return true if this CircEntry can be used for the provided
+    /// target_usage.
     fn supports_target_usage(&self, target_usage: &TargetCircUsage) -> bool {
         match self {
             CircEntry::Open(ent) => ent.usage.contains(target_usage),
@@ -133,6 +145,7 @@ impl CircEntry {
         }
     }
 
+    /// Return true if this CircEntry is for a circuit that is closing.
     fn is_closing(&self) -> bool {
         match self {
             CircEntry::Open(ent) => ent.circ.is_closing(),
@@ -141,11 +154,13 @@ impl CircEntry {
     }
 }
 
+/// An exit policy as supported by the last hop of a circuit.
 #[derive(Clone, Debug)]
 struct ExitPolicy {
     v4: PortPolicy, // XXXX refcount!
     v6: PortPolicy, // XXXX refcount!
 }
+/// A port that we want to connect to as a client.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct TargetPort {
     ipv6: bool,
@@ -153,6 +168,7 @@ struct TargetPort {
 }
 
 impl ExitPolicy {
+    /// Return true if a given port is contained in an ExitPolicy.
     fn allows_port(&self, p: TargetPort) -> bool {
         let policy = if p.ipv6 { &self.v6 } else { &self.v4 };
         policy.allows_port(p.port)
@@ -199,7 +215,7 @@ impl TargetCircUsage {
             TargetCircUsage::Exit(p) => {
                 let path = ExitPathBuilder::new(p.clone()).pick_path(rng, netdir)?;
                 let policy = path
-                    .exit_usage()
+                    .exit_policy()
                     .expect("ExitPathBuilder gave us a one-hop circuit?");
                 Ok((path, CircUsage::Exit(policy)))
             }
@@ -363,6 +379,7 @@ impl CircMgr {
 
             {
                 let circs = self.circuits.lock().await;
+                // THIS IS BROKEN NOW. XXXX-A1 -- the ID changed.
                 let ent = circs.get(&id).ok_or(Error::PendingFailed)?;
                 if let CircEntry::Open(ref c) = ent {
                     Ok(Arc::clone(&c.circ))
