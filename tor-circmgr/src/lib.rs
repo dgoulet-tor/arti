@@ -182,25 +182,6 @@ enum CircUsage {
     Exit(ExitPolicy),
 }
 
-impl From<TargetCircUsage> for CircUsage {
-    fn from(t: TargetCircUsage) -> CircUsage {
-        match t {
-            TargetCircUsage::Dir => CircUsage::Dir,
-            TargetCircUsage::Exit(ports) => {
-                // This is ugly and wrong but only temporary. XXXX-A1 remove
-                let p1 = ports[0].port;
-                let v4polstr = format!("accept {}", p1);
-                let v4pol = v4polstr.parse().unwrap();
-                let pol = ExitPolicy {
-                    v4: v4pol,
-                    v6: PortPolicy::new_reject_all(),
-                };
-                CircUsage::Exit(pol)
-            }
-        }
-    }
-}
-
 impl TargetCircUsage {
     /// Construct path for a given circuit purpose; return it and the
     /// usage that it _actually_ supports.
