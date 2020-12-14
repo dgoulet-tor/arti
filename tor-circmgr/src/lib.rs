@@ -319,7 +319,10 @@ impl CircMgr {
                 if !c.supports_target_usage(&target_usage) {
                     continue;
                 }
-                suitable.push((id, c));
+                suitable.push(*id);
+            }
+            for id in remove {
+                circs.remove(&id);
             }
             let result = if suitable.len() < par {
                 // There aren't enough circuits of this type. Launch one.
@@ -339,17 +342,14 @@ impl CircMgr {
                 // There are enough circuits or pending circuits of this type.
                 // We'll pick one.
                 // unwrap ok: there is at least one member in suitable.
-                let (id, entry) = suitable.choose(&mut rng).unwrap();
+                let id = suitable.choose(&mut rng).unwrap();
+                // unwrap okay: we didn't remove this one from the map.
+                let entry = circs.get(id).unwrap();
                 match entry {
                     CircEntry::Open(c) => return Ok(Arc::clone(&c.circ)), // Found a circuit!
-                    CircEntry::Pending(c) => (false, Arc::clone(&c.event), **id), // wait for this one.
+                    CircEntry::Pending(c) => (false, Arc::clone(&c.event), *id), // wait for this one.
                 }
             };
-
-            // XXXXX-A1 need to do this even when we find an open circuit.
-            for id in remove {
-                circs.remove(&id);
-            }
 
             result
         };
