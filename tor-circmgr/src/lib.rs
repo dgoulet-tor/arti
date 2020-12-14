@@ -49,15 +49,11 @@ pub struct CircMgr {
     /// Map from unique circuit identifier to an entry describing its state.
     ///
     /// Each entry is either an open circuit, or a pending circuit.
-    ///
-    // This is an awful structure. The unique-identifier part is ad
-    // hoc and probably a bad choice, whereas some of the usage logic
-    // requires walking the whole map to find a suitable circuit.
     circuits: Mutex<HashMap<CircEntId, CircEntry>>,
 }
 
-/// Counter for allocating unique-ish identifiers for circuits
-static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+/// Counter for allocating unique-ish identifiers for pending circuits
+static NEXT_PENDING_ID: AtomicUsize = AtomicUsize::new(0);
 
 /// Represents what we know about the Tor network.
 ///
@@ -87,26 +83,61 @@ impl<'a> Into<DirInfo<'a>> for &'a NetDir {
 
 /// A unique identifier for a circuit in a circuit manager.
 ///
-/// TODO: We should probably refactor not to need this.
+// TODO: I'd like to avoid dupliating the value of UniqId here, since the
+// circuit already has one.  That's a waste of memory.
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
-struct CircEntId {
-    /// Actual identifier.
-    id: usize,
+enum CircEntId {
+    Open(UniqId),
+    Pending(usize),
 }
+
+impl From<UniqId> for CircEntId {
+    fn from(id: UniqId) -> Self {
+        CircEntId::Open(id)
+    }
+}
+
 impl CircEntId {
-    /// Make a new, hopefully unused, CircEntId
-    fn new() -> Self {
-        let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        CircEntId { id }
+    /// Make a new, hopefully unused, CircEntId for a pending circuit.
+    ///
+    /// Assuming that we time out pending IDs fast enough, these can't
+    /// collide.
+    fn new_pending() -> Self {
+        let id = NEXT_PENDING_ID.fetch_add(1, Ordering::Relaxed);
+        CircEntId::Pending(id)
     }
 }
 
 /// Describes the state of an entry in a circuit builder's map.
-struct CircEntry {
-    /// What this circuit was created for (and presumably, what it can be used for).
-    usage: CircUsage, // XXXX-A1 use targetcircusage for pending
-    /// The circuit, or an event to notify on its creation.
-    circ: Circ,
+enum CircEntry {
+    Open(OpenCircEntry),
+    Pending(PendingCircEntry),
+}
+
+struct OpenCircEntry {
+    usage: CircUsage,
+    circ: Arc<ClientCirc>,
+}
+
+struct PendingCircEntry {
+    usage: TargetCircUsage,
+    event: Arc<event_listener::Event>,
+}
+
+impl CircEntry {
+    fn supports_target_usage(&self, target_usage: &TargetCircUsage) -> bool {
+        match self {
+            CircEntry::Open(ent) => ent.usage.contains(target_usage),
+            CircEntry::Pending(ent) => ent.usage.contains(target_usage),
+        }
+    }
+
+    fn is_closing(&self) -> bool {
+        match self {
+            CircEntry::Open(ent) => ent.circ.is_closing(),
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -170,14 +201,6 @@ impl From<TargetCircUsage> for CircUsage {
     }
 }
 
-/// The state of a circuit: either built or waiting to be built.
-enum Circ {
-    /// A circuit that has been constructed and which is probably usable.
-    Open(Arc<ClientCirc>),
-    /// A circuit that we've started building, which could succeed or fail.
-    Pending(Arc<event_listener::Event>),
-}
-
 impl TargetCircUsage {
     /// Construct path for a given circuit purpose; return it and the
     /// usage that it _actually_ supports.
@@ -200,6 +223,18 @@ impl TargetCircUsage {
             }
         }
     }
+
+    /// Return true if this usage "contains" other -- in other words,
+    /// if any circuit built for this purpose is also usable for the
+    /// purpose of other.
+    fn contains(&self, target: &TargetCircUsage) -> bool {
+        use TargetCircUsage::*;
+        match (self, target) {
+            (Dir, Dir) => true,
+            (Exit(p1), Exit(p2)) => p2.iter().all(|p| p1.contains(p)),
+            (_, _) => false,
+        }
+    }
 }
 
 impl CircUsage {
@@ -212,16 +247,6 @@ impl CircUsage {
             (Dir, TargetCircUsage::Dir) => true,
             (Exit(p1), TargetCircUsage::Exit(p2)) => p2.iter().all(|port| p1.allows_port(*port)),
             (_, _) => false,
-        }
-    }
-}
-
-impl CircEntry {
-    /// Return true if this entry contains the circuit identified with c
-    fn matches_id(&self, c: &UniqId) -> bool {
-        match &self.circ {
-            Circ::Open(x) => &x.unique_id() == c,
-            Circ::Pending(_) => false,
         }
     }
 }
@@ -287,41 +312,45 @@ impl CircMgr {
             let mut remove = Vec::new();
             assert!(par >= 1);
             for (id, c) in circs.iter() {
-                if !c.usage.contains(&target_usage) {
+                if c.is_closing() {
+                    remove.push(*id);
                     continue;
                 }
-                if let Circ::Open(ref c) = &c.circ {
-                    if c.is_closing() {
-                        remove.push(*id);
-                        continue;
-                    }
+                if !c.supports_target_usage(&target_usage) {
+                    continue;
                 }
                 suitable.push((id, c));
             }
             let result = if suitable.len() < par {
                 // There aren't enough circuits of this type. Launch one.
                 let event = Arc::new(event_listener::Event::new());
-                let id = CircEntId::new();
-                let entry = CircEntry {
-                    usage: target_usage.clone().into(), // XXXX-A1 no, remove this.
-                    circ: Circ::Pending(Arc::clone(&event)),
-                };
-                circs.insert(id, entry);
+                let entry = CircEntry::Pending(PendingCircEntry {
+                    usage: target_usage.clone(),
+                    event: Arc::clone(&event),
+                });
+                let id = CircEntId::new_pending();
+                if let Some(_) = circs.insert(id, entry) {
+                    // This should be impossible, since we would have to
+                    // wrap around usize before the pending circuit expired.
+                    panic!("ID collision among pending circuits.");
+                }
                 (true, event, id)
             } else {
                 // There are enough circuits or pending circuits of this type.
                 // We'll pick one.
                 // unwrap ok: there is at least one member in suitable.
                 let (id, entry) = suitable.choose(&mut rng).unwrap();
-                match &entry.circ {
-                    Circ::Open(c) => return Ok(Arc::clone(c)), // Found a circuit!
-                    Circ::Pending(event) => (false, Arc::clone(&event), **id), // wait for this one.
+                match entry {
+                    CircEntry::Open(c) => return Ok(Arc::clone(&c.circ)), // Found a circuit!
+                    CircEntry::Pending(c) => (false, Arc::clone(&c.event), **id), // wait for this one.
                 }
             };
 
+            // XXXXX-A1 need to do this even when we find an open circuit.
             for id in remove {
                 circs.remove(&id);
             }
+
             result
         };
 
@@ -334,11 +363,11 @@ impl CircMgr {
                 let _old = circs.remove(&id).unwrap();
                 match result {
                     Ok((circ, usage)) => {
-                        let ent = CircEntry {
+                        let ent = CircEntry::Open(OpenCircEntry {
                             usage,
-                            circ: Circ::Open(Arc::clone(&circ)),
-                        };
-                        circs.insert(id, ent);
+                            circ: Arc::clone(&circ),
+                        });
+                        circs.insert(circ.unique_id().into(), ent);
                         Ok(circ)
                     }
                     Err(e) => Err(e),
@@ -353,8 +382,8 @@ impl CircMgr {
             {
                 let circs = self.circuits.lock().await;
                 let ent = circs.get(&id).ok_or(Error::PendingFailed)?;
-                if let Circ::Open(ref c) = ent.circ {
-                    Ok(Arc::clone(c))
+                if let CircEntry::Open(ref c) = ent {
+                    Ok(Arc::clone(&c.circ))
                 } else {
                     Err(Error::PendingFailed.into()) // should be impossible XXXX
                 }
@@ -415,18 +444,7 @@ impl CircMgr {
     /// keeping track of, don't give it out for any future requests.
     pub async fn retire_circ(&self, circ_id: &UniqId) {
         let mut circs = self.circuits.lock().await;
-        // XXXX This implementation is awful.  Looking over the whole pile
-        // XXXX of circuits!?
-        let id = {
-            if let Some((id, _)) = circs.iter_mut().find(|(_, c)| c.matches_id(circ_id)) {
-                *id
-            } else {
-                return;
-            }
-        };
 
-        // We just remove this circuit from the map. Doing so will ensure
-        // that it will go away when there are no other references to it.
-        circs.remove(&id);
+        circs.remove(&(*circ_id).into());
     }
 }
