@@ -40,6 +40,27 @@ impl<'a> TorPath<'a> {
         }
     }
 
+    fn exit_relay(&self) -> Option<&Relay<'a>> {
+        match self {
+            TorPath::Path(relays) if !relays.is_empty() => Some(&relays[relays.len() - 1]),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn exit_usage(&self) -> Option<super::ExitPolicy> {
+        if let Some(exit_relay) = self.exit_relay() {
+            // TODO: Doing these clones is wasteful; maybe we should
+            // have Arcs for all exit policies.  That could also
+            // save some memory.
+            Some(super::ExitPolicy {
+                v4: exit_relay.ipv4_policy().clone(),
+                v6: exit_relay.ipv6_policy().clone(),
+            })
+        } else {
+            None
+        }
+    }
+
     /// Internal: get or create a channel for the first hop of a path.
     async fn get_channel(&self, chanmgr: &ChanMgr) -> Result<Arc<Channel>> {
         let first_hop = self.first_hop()?;

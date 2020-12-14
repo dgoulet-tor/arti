@@ -29,6 +29,7 @@ use ll::pk::rsa::RSAIdentity;
 use tor_llcrypto as ll;
 use tor_netdoc::doc::microdesc::{MDDigest, Microdesc};
 use tor_netdoc::doc::netstatus::{self, MDConsensus};
+use tor_netdoc::types::policy::PortPolicy;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -392,6 +393,16 @@ impl<'a> Relay<'a> {
                 .rs
                 .protovers()
                 .supports_known_subver(ProtoKind::DirCache, 2)
+    }
+
+    /// Return the IPv4 exit policy for this relay.
+    pub fn ipv4_policy(&self) -> &'a PortPolicy {
+        self.md.ipv4_policy()
+    }
+
+    /// Return the IPv6 exit policy for this relay.
+    pub fn ipv6_policy(&self) -> &'a PortPolicy {
+        self.md.ipv6_policy()
     }
 }
 

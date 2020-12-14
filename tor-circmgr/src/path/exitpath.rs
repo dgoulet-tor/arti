@@ -1,7 +1,7 @@
 //! Code for building paths to an exit relay.
 
 use super::*;
-use crate::{DirInfo, Error};
+use crate::{DirInfo, Error, TargetPort};
 use tor_netdir::WeightRole;
 
 /// A PathBuilder that builds a path to an exit node supporting a given
@@ -10,20 +10,20 @@ use tor_netdir::WeightRole;
 /// TODO: XXXX-A1 IPv6 support
 pub struct ExitPathBuilder {
     /// List of ports that the exit needs to support
-    wantports: Vec<u16>,
+    wantports: Vec<TargetPort>,
 }
 
 impl ExitPathBuilder {
     /// Create a new builder that will try to get an exit node
     /// containing all the ports in `ports`.
-    pub fn new<P: Into<Vec<u16>>>(ports: P) -> Self {
-        let wantports = ports.into();
+    pub(crate) fn new(wantports: Vec<TargetPort>) -> Self {
         ExitPathBuilder { wantports }
     }
 
     /// Return true if `r` supports every port in `self.wantports`
     fn ports_supported_by(&self, r: &Relay<'_>) -> bool {
-        self.wantports.iter().all(|p| r.supports_exit_port(*p))
+        // XXXX-A1 IpV6
+        self.wantports.iter().all(|p| r.supports_exit_port(p.port))
     }
 
     /// Try to create and return a path corresponding to the requirements of

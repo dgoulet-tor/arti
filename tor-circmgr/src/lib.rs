@@ -14,6 +14,7 @@
 
 use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackSet, NetDir};
+use tor_netdoc::types::policy::PortPolicy;
 use tor_proto::circuit::{ClientCirc, UniqId};
 
 use anyhow::Result;
@@ -103,21 +104,70 @@ impl CircEntId {
 /// Describes the state of an entry in a circuit builder's map.
 struct CircEntry {
     /// What this circuit was created for (and presumably, what it can be used for).
-    usage: CircUsage,
+    usage: CircUsage, // XXXX-A1 use targetcircusage for pending
     /// The circuit, or an event to notify on its creation.
     circ: Circ,
 }
 
-/// The purpose for which a circuit was created.
+#[derive(Clone, Debug)]
+struct ExitPolicy {
+    v4: PortPolicy, // XXXX refcount!
+    v6: PortPolicy, // XXXX refcount!
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct TargetPort {
+    ipv6: bool,
+    port: u16,
+}
+
+impl ExitPolicy {
+    fn allows_port(&self, p: TargetPort) -> bool {
+        let policy = if p.ipv6 { &self.v6 } else { &self.v4 };
+        policy.allows_port(p.port)
+    }
+}
+
+/// The purpose for which a circuit is being created.
 ///
 /// This type should stay internal to the circmgr crate for now: we'll probably
 /// want to refactor it a lot.
-#[derive(Hash, Clone, Debug, PartialEq, Eq)]
-enum CircUsage {
+#[derive(Clone, Debug)]
+enum TargetCircUsage {
     /// Use for BEGINDIR-based non-anonymous directory connections
     Dir,
-    /// Use to exit to any listed port
-    Exit(Vec<u16>),
+    /// Use to exit to one or more ports.
+    Exit(Vec<TargetPort>),
+}
+
+/// The purposes for which a circuit is usable.
+///
+/// This type should stay internal to the circmgr crate for now: we'll probably
+/// want to refactor it a lot.
+#[derive(Clone, Debug)]
+enum CircUsage {
+    /// Useable for BEGINDIR-based non-anonymous directory connections
+    Dir,
+    /// Usable to exit to to a set of ports.
+    Exit(ExitPolicy),
+}
+
+impl From<TargetCircUsage> for CircUsage {
+    fn from(t: TargetCircUsage) -> CircUsage {
+        match t {
+            TargetCircUsage::Dir => CircUsage::Dir,
+            TargetCircUsage::Exit(ports) => {
+                // This is ugly and wrong but only temporary. XXXX-A1 remove
+                let p1 = ports[0].port;
+                let v4polstr = format!("accept {}", p1);
+                let v4pol = v4polstr.parse().unwrap();
+                let pol = ExitPolicy {
+                    v4: v4pol,
+                    v6: PortPolicy::new_reject_all(),
+                };
+                CircUsage::Exit(pol)
+            }
+        }
+    }
 }
 
 /// The state of a circuit: either built or waiting to be built.
@@ -128,23 +178,39 @@ enum Circ {
     Pending(Arc<event_listener::Event>),
 }
 
-impl CircUsage {
-    /// Construct path for a given circuit purpose.
-    fn build_path<'a, R: Rng>(&self, rng: &mut R, netdir: DirInfo<'a>) -> Result<TorPath<'a>> {
+impl TargetCircUsage {
+    /// Construct path for a given circuit purpose; return it and the
+    /// usage that it _actually_ supports.
+    fn build_path<'a, R: Rng>(
+        &self,
+        rng: &mut R,
+        netdir: DirInfo<'a>,
+    ) -> Result<(TorPath<'a>, CircUsage)> {
         match self {
-            CircUsage::Dir => DirPathBuilder::new().pick_path(rng, netdir),
-            CircUsage::Exit(p) => ExitPathBuilder::new(p.clone()).pick_path(rng, netdir),
+            TargetCircUsage::Dir => {
+                let path = DirPathBuilder::new().pick_path(rng, netdir)?;
+                Ok((path, CircUsage::Dir))
+            }
+            TargetCircUsage::Exit(p) => {
+                let path = ExitPathBuilder::new(p.clone()).pick_path(rng, netdir)?;
+                let policy = path
+                    .exit_usage()
+                    .expect("ExitPathBuilder gave us a one-hop circuit?");
+                Ok((path, CircUsage::Exit(policy)))
+            }
         }
     }
+}
 
+impl CircUsage {
     /// Return true if this usage "contains" other -- in other words,
     /// if any circuit built for this purpose is also usable for the
     /// purpose of other.
-    fn contains(&self, other: &CircUsage) -> bool {
+    fn contains(&self, target: &TargetCircUsage) -> bool {
         use CircUsage::*;
-        match (self, other) {
-            (Dir, Dir) => true,
-            (Exit(p1), Exit(p2)) => p1.iter().all(|port| p2.contains(port)),
+        match (self, target) {
+            (Dir, TargetCircUsage::Dir) => true,
+            (Exit(p1), TargetCircUsage::Exit(p2)) => p2.iter().all(|port| p1.allows_port(*port)),
             (_, _) => false,
         }
     }
@@ -171,7 +237,8 @@ impl CircMgr {
     /// Return a circuit suitable for sending one-hop BEGINDIR streams,
     /// launching it if necessary.
     pub async fn get_or_launch_dir(&self, netdir: DirInfo<'_>) -> Result<Arc<ClientCirc>> {
-        self.get_or_launch_by_usage(netdir, CircUsage::Dir).await
+        self.get_or_launch_by_usage(netdir, TargetCircUsage::Dir)
+            .await
     }
 
     /// Return a circuit suitable for exiting to all of the provided
@@ -181,16 +248,24 @@ impl CircMgr {
         netdir: DirInfo<'_>,
         ports: &[u16],
     ) -> Result<Arc<ClientCirc>> {
-        self.get_or_launch_by_usage(netdir, CircUsage::Exit(ports.into()))
+        // XXXX support ipv6
+        let ports = ports
+            .iter()
+            .map(|port| TargetPort {
+                ipv6: false,
+                port: *port,
+            })
+            .collect();
+        self.get_or_launch_by_usage(netdir, TargetCircUsage::Exit(ports))
             .await
     }
 
     /// How many circuits for this purpose should exist in parallel?
-    fn parallelism(&self, usage: &CircUsage) -> usize {
+    fn parallelism(&self, usage: &TargetCircUsage) -> usize {
         // TODO parameterize?
         match usage {
-            CircUsage::Dir => 3,
-            CircUsage::Exit(_) => 1,
+            TargetCircUsage::Dir => 3,
+            TargetCircUsage::Exit(_) => 1,
         }
     }
 
@@ -198,7 +273,7 @@ impl CircMgr {
     async fn get_or_launch_by_usage(
         &self,
         netdir: DirInfo<'_>,
-        usage: CircUsage,
+        target_usage: TargetCircUsage,
     ) -> Result<Arc<ClientCirc>> {
         // XXXX-A1 LOG.
         // XXXX This function is huge and ugly.
@@ -208,11 +283,11 @@ impl CircMgr {
         let (should_launch, event, id) = {
             let mut circs = self.circuits.lock().await;
             let mut suitable = Vec::new();
-            let par = self.parallelism(&usage);
+            let par = self.parallelism(&target_usage);
             let mut remove = Vec::new();
             assert!(par >= 1);
             for (id, c) in circs.iter() {
-                if !c.usage.contains(&usage) {
+                if !c.usage.contains(&target_usage) {
                     continue;
                 }
                 if let Circ::Open(ref c) = &c.circ {
@@ -228,7 +303,7 @@ impl CircMgr {
                 let event = Arc::new(event_listener::Event::new());
                 let id = CircEntId::new();
                 let entry = CircEntry {
-                    usage: usage.clone(), // XXXX-A1: Maybe expand the usage based on actual provided ports?
+                    usage: target_usage.clone().into(), // XXXX-A1 no, remove this.
                     circ: Circ::Pending(Arc::clone(&event)),
                 };
                 circs.insert(id, entry);
@@ -251,22 +326,26 @@ impl CircMgr {
         };
 
         if should_launch {
-            let result = self.build_by_usage(&mut rng, netdir, &usage).await;
+            let result = self.build_by_usage(&mut rng, netdir, &target_usage).await;
 
             // Adjust the map and notify the others.
-            {
+            let circ = {
                 let mut circs = self.circuits.lock().await;
-                if let Ok(ref circ) = result {
-                    let p = circs.get_mut(&id);
-                    // XXXX-A1 instead of unwrapping, should make a new entry.
-                    let p = p.unwrap();
-                    p.circ = Circ::Open(Arc::clone(circ));
-                } else {
-                    circs.remove(&id);
+                let _old = circs.remove(&id).unwrap();
+                match result {
+                    Ok((circ, usage)) => {
+                        let ent = CircEntry {
+                            usage,
+                            circ: Circ::Open(Arc::clone(&circ)),
+                        };
+                        circs.insert(id, ent);
+                        Ok(circ)
+                    }
+                    Err(e) => Err(e),
                 }
-            }
+            };
             event.notify(usize::MAX);
-            result
+            circ
         } else {
             // Wait on the event.
             event.listen().await;
@@ -288,8 +367,8 @@ impl CircMgr {
         &self,
         rng: &mut StdRng,
         netdir: DirInfo<'_>,
-        usage: &CircUsage,
-    ) -> Result<Arc<ClientCirc>> {
+        target_usage: &TargetCircUsage,
+    ) -> Result<(Arc<ClientCirc>, CircUsage)> {
         // TODO: This should probably be an option too.
         let n_tries: usize = 3;
         // TODO: This is way too long, AND it should be an option.
@@ -297,13 +376,15 @@ impl CircMgr {
         let mut last_err = None;
 
         for _ in 0..n_tries {
-            let result =
-                tor_rtcompat::timer::timeout(timeout, self.build_once_by_usage(rng, netdir, usage))
-                    .await;
+            let result = tor_rtcompat::timer::timeout(
+                timeout,
+                self.build_once_by_usage(rng, netdir, target_usage),
+            )
+            .await;
 
             match result {
-                Ok(Ok(circ)) => {
-                    return Ok(circ);
+                Ok(Ok((circ, usage))) => {
+                    return Ok((circ, usage));
                 }
                 Ok(Err(e)) => {
                     last_err = Some(e);
@@ -313,7 +394,7 @@ impl CircMgr {
                 }
             }
         }
-        // TODO: maybe don't forget all the other errors?
+        // TODO: maybe don't forget all the other errors? XXXX-A1
         Err(last_err.unwrap())
     }
 
@@ -323,11 +404,11 @@ impl CircMgr {
         &self,
         rng: &mut StdRng,
         netdir: DirInfo<'_>,
-        usage: &CircUsage,
-    ) -> Result<Arc<ClientCirc>> {
-        let path = usage.build_path(rng, netdir)?;
+        target_usage: &TargetCircUsage,
+    ) -> Result<(Arc<ClientCirc>, CircUsage)> {
+        let (path, usage) = target_usage.build_path(rng, netdir)?;
         let circ = path.build_circuit(rng, &self.chanmgr).await?;
-        Ok(circ)
+        Ok((circ, usage))
     }
 
     /// If `circ_id` is the unique identifier for a circuit that we're
