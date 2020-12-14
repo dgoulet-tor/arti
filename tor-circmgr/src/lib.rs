@@ -43,14 +43,24 @@ use crate::path::{dirpath::DirPathBuilder, exitpath::ExitPathBuilder, TorPath};
 /// a set of ports; directory circuits were made to talk to directory caches.
 // XXXX-A1 Support timing out circuits
 pub struct CircMgr {
-    /// Reference to a channel manager that this circuit manager can use to make
-    /// channels.
+    /// Reference to a channel manager that this circuit manager can
+    /// use to make channels.
     chanmgr: Arc<ChanMgr>,
 
+    /// The circuits and pending circuit creation attempts managed
+    /// by this CircMgr.
+    circuits: Mutex<CircSet>,
+}
+
+/// A group of pending and open circuits managed by a circuit manager.
+///
+/// This is a separate type so we can more easily handle functions that
+/// want to hold the lock on it.
+struct CircSet {
     /// Map from unique circuit identifier to an entry describing its state.
     ///
     /// Each entry is either an open circuit, or a pending circuit.
-    circuits: Mutex<HashMap<CircEntId, CircEntry>>,
+    circuits: HashMap<CircEntId, CircEntry>,
 }
 
 /// Counter for allocating unique-ish identifiers for pending circuits
@@ -252,7 +262,9 @@ impl CircUsage {
 impl CircMgr {
     /// Construct a new circuit manager.
     pub fn new(chanmgr: Arc<ChanMgr>) -> Self {
-        let circuits = Mutex::new(HashMap::new());
+        let circuits = Mutex::new(CircSet {
+            circuits: HashMap::new(),
+        });
 
         CircMgr { chanmgr, circuits }
     }
@@ -305,23 +317,11 @@ impl CircMgr {
         // Check the state of our circuit list.
         let (should_launch, event, id) = {
             let mut circs = self.circuits.lock().await;
-            let mut suitable = Vec::new();
             let par = self.parallelism(&target_usage);
-            let mut remove = Vec::new();
             assert!(par >= 1);
-            for (id, c) in circs.iter() {
-                if c.is_closing() {
-                    remove.push(*id);
-                    continue;
-                }
-                if !c.supports_target_usage(&target_usage) {
-                    continue;
-                }
-                suitable.push(*id);
-            }
-            for id in remove {
-                circs.remove(&id);
-            }
+            circs.prune_closed();
+            let suitable = circs.find_suitable_circs(&target_usage, false);
+
             let result = if suitable.len() < par {
                 // There aren't enough circuits of this type. Launch one.
                 let event = Arc::new(event_listener::Event::new());
@@ -330,7 +330,7 @@ impl CircMgr {
                     event: Arc::clone(&event),
                 });
                 let id = CircEntId::new_pending();
-                if let Some(_) = circs.insert(id, entry) {
+                if let Some(_) = circs.circuits.insert(id, entry) {
                     // This should be impossible, since we would have to
                     // wrap around usize before the pending circuit expired.
                     panic!("ID collision among pending circuits.");
@@ -340,12 +340,10 @@ impl CircMgr {
                 // There are enough circuits or pending circuits of this type.
                 // We'll pick one.
                 // unwrap ok: there is at least one member in suitable.
-                let id = suitable.choose(&mut rng).unwrap();
-                // unwrap okay: we didn't remove this one from the map.
-                let entry = circs.get(id).unwrap();
+                let (id, entry) = suitable.choose(&mut rng).unwrap();
                 match entry {
                     CircEntry::Open(c) => return Ok(Arc::clone(&c.circ)), // Found a circuit!
-                    CircEntry::Pending(c) => (false, Arc::clone(&c.event), *id), // wait for this one.
+                    CircEntry::Pending(c) => (false, Arc::clone(&c.event), **id), // wait for this one.
                 }
             };
 
@@ -358,14 +356,14 @@ impl CircMgr {
             // Adjust the map and notify the others.
             let circ = {
                 let mut circs = self.circuits.lock().await;
-                let _old = circs.remove(&id).unwrap();
+                let _old = circs.circuits.remove(&id).unwrap();
                 match result {
                     Ok((circ, usage)) => {
                         let ent = CircEntry::Open(OpenCircEntry {
                             usage,
                             circ: Arc::clone(&circ),
                         });
-                        circs.insert(circ.unique_id().into(), ent);
+                        circs.circuits.insert(circ.unique_id().into(), ent);
                         Ok(circ)
                     }
                     Err(e) => Err(e),
@@ -375,12 +373,23 @@ impl CircMgr {
             circ
         } else {
             // Wait on the event.
+            //
+            // XXXX This is actually not the right way to do this.
+            // We should arrange to get notified when any circuit
+            // finishes that supports (or might support) our usage.
+            // As implemented now, we only are waiting for one specific
+            // pending circuit, when another might finish first.
             event.listen().await;
 
             {
                 let circs = self.circuits.lock().await;
-                // THIS IS BROKEN NOW. XXXX-A1 -- the ID changed.
-                let ent = circs.get(&id).ok_or(Error::PendingFailed)?;
+                let suitable = circs.find_suitable_circs(&target_usage, true);
+                if suitable.len() == 0 {
+                    // XXXX-A1 might want to retry
+                    return Err(Error::PendingFailed.into());
+                }
+
+                let (_, ent) = suitable.choose(&mut rng).unwrap();
                 if let CircEntry::Open(ref c) = ent {
                     Ok(Arc::clone(&c.circ))
                 } else {
@@ -446,5 +455,51 @@ impl CircMgr {
         let mut circs = self.circuits.lock().await;
 
         circs.remove(&(*circ_id).into());
+    }
+}
+
+impl CircSet {
+    /// Remove every closed circuit from this set.
+    fn prune_closed(&mut self) {
+        let mut remove = Vec::new();
+        for (id, c) in self.circuits.iter() {
+            if c.is_closing() {
+                remove.push(*id)
+            }
+        }
+        for id in remove {
+            self.circuits.remove(&id);
+        }
+    }
+
+    /// Find all the circuits in this set that implement `target_usage`.
+    ///
+    /// Return only the open ones, if `open_only` is true.
+    //
+    // XXXX This is a linear search, and that's not pretty.
+    fn find_suitable_circs(
+        &self,
+        target_usage: &TargetCircUsage,
+        open_only: bool,
+    ) -> Vec<(&CircEntId, &CircEntry)> {
+        let mut result = Vec::new();
+        for (id, c) in self.circuits.iter() {
+            if open_only && !matches!(c, CircEntry::Open(_)) {
+                continue;
+            }
+            if c.is_closing() {
+                continue;
+            }
+            if !c.supports_target_usage(target_usage) {
+                continue;
+            }
+            result.push((id, c));
+        }
+        result
+    }
+
+    /// Remove the circuit with the provided unique identifier from this set.
+    fn remove(&mut self, circ_id: &UniqId) {
+        self.circuits.remove(&(*circ_id).into());
     }
 }
