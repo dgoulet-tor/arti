@@ -16,6 +16,7 @@ use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackSet, NetDir};
 use tor_netdoc::types::policy::PortPolicy;
 use tor_proto::circuit::{ClientCirc, UniqId};
+use tor_retry::RetryError;
 
 use anyhow::Result;
 use futures::lock::Mutex;
@@ -383,7 +384,8 @@ impl CircMgr {
         let n_tries: usize = 3;
         // TODO: This is way too long, AND it should be an option.
         let timeout = Duration::new(10, 0);
-        let mut last_err = None;
+
+        let mut error = RetryError::new();
 
         for _ in 0..n_tries {
             let result = tor_rtcompat::timer::timeout(
@@ -397,15 +399,15 @@ impl CircMgr {
                     return Ok((circ, usage));
                 }
                 Ok(Err(e)) => {
-                    last_err = Some(e);
+                    error.push(e);
                 }
                 Err(_) => {
-                    last_err = Some(Error::CircTimeout.into());
+                    error.push(Error::CircTimeout);
                 }
             }
         }
-        // TODO: maybe don't forget all the other errors? XXXX-A1
-        Err(last_err.unwrap())
+
+        Err(error.into())
     }
 
     /// Actually construct a circuit for a given usage.  Does not time out
