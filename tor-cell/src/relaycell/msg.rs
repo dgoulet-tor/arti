@@ -159,6 +159,36 @@ impl From<u32> for BeginFlags {
     }
 }
 
+/// A preference for IPv4 vs IPv6 addresses; usable as a nicer frontend for
+/// BeginFlags.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum IPVersionPreference {
+    /// Only IPv4 is allowed.
+    Ipv4Only,
+    /// IPv4 and IPv6 are both allowed, and IPv4 is preferred.
+    Ipv4Preferred,
+    /// IPv4 and IPv6 are both allowed, and IPv6 is preferred.
+    Ipv6Preferred,
+    /// Only IPv6 is allowed.
+    Ipv6Only,
+}
+impl From<IPVersionPreference> for BeginFlags {
+    fn from(v: IPVersionPreference) -> Self {
+        use IPVersionPreference::*;
+        match v {
+            Ipv4Only => 0.into(),
+            Ipv4Preferred => BeginFlags::IPV6_OKAY,
+            Ipv6Preferred => BeginFlags::IPV6_OKAY | BeginFlags::IPV6_PREFERRED,
+            Ipv6Only => BeginFlags::IPV4_NOT_OKAY,
+        }
+    }
+}
+impl Default for IPVersionPreference {
+    fn default() -> Self {
+        IPVersionPreference::Ipv4Preferred
+    }
+}
+
 /// A Begin message creates a new data stream.
 ///
 /// Upon receiving a Begin message, relays should try to open a new stream

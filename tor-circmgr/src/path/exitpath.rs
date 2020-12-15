@@ -6,8 +6,6 @@ use tor_netdir::WeightRole;
 
 /// A PathBuilder that builds a path to an exit node supporting a given
 /// set of ports.
-///
-/// TODO: XXXX-A1 IPv6 support
 pub struct ExitPathBuilder {
     /// List of ports that the exit needs to support
     wantports: Vec<TargetPort>,
@@ -22,7 +20,6 @@ impl ExitPathBuilder {
 
     /// Return true if `r` supports every port in `self.wantports`
     fn ports_supported_by(&self, r: &Relay<'_>) -> bool {
-        // XXXX-A1 IpV6
         self.wantports.iter().all(|p| r.supports_exit_port(p.port))
     }
 

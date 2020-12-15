@@ -47,7 +47,6 @@ const MAX_CIRC_DIRTINESS: Duration = Duration::from_secs(60 * 15);
 /// believes in two kinds of circuits: Exit circuits, and directory
 /// circuits.  Exit circuits are ones that were created to connect to
 /// a set of ports; directory circuits were made to talk to directory caches.
-// XXXX-A1 Support timing out circuits
 pub struct CircMgr {
     /// Reference to a channel manager that this circuit manager can
     /// use to make channels.
@@ -193,13 +192,31 @@ struct ExitPolicy {
     /// Permitted IPv6 ports.
     v6: PortPolicy, // XXXX refcount!
 }
+
 /// A port that we want to connect to as a client.
+///
+/// Ordinarliy, this is a TCP port, plus a flag to indicate whether we
+/// must support IPv4 or IPv6.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct TargetPort {
+pub struct TargetPort {
     /// True if this is a request to connect to an IPv6 address
     ipv6: bool,
     /// The port that the client wants to connect to
     port: u16,
+}
+
+impl TargetPort {
+    /// Create a request to make sure that a circuit supports a given
+    /// ipv4 exit port.
+    pub fn ipv4(port: u16) -> TargetPort {
+        TargetPort { ipv6: false, port }
+    }
+
+    /// Create a request to make sure that a circuit supports a given
+    /// ipv6 exit port.
+    pub fn ipv6(port: u16) -> TargetPort {
+        TargetPort { ipv6: true, port }
+    }
 }
 
 impl ExitPolicy {
@@ -306,16 +323,9 @@ impl CircMgr {
     pub async fn get_or_launch_exit(
         &self,
         netdir: DirInfo<'_>,
-        ports: &[u16],
+        ports: &[TargetPort],
     ) -> Result<Arc<ClientCirc>> {
-        // XXXX support ipv6
-        let ports = ports
-            .iter()
-            .map(|port| TargetPort {
-                ipv6: false,
-                port: *port,
-            })
-            .collect();
+        let ports = ports.iter().map(Clone::clone).collect();
         self.get_or_launch_by_usage(netdir, TargetCircUsage::Exit(ports))
             .await
     }

@@ -63,6 +63,8 @@ use tor_cell::relaycell::{RelayCell, RelayCmd, StreamId};
 
 use tor_linkspec::LinkSpec;
 
+pub use tor_cell::relaycell::msg::IPVersionPreference;
+
 use futures::channel::{mpsc, oneshot};
 use futures::lock::Mutex;
 use futures::sink::SinkExt;
@@ -502,9 +504,14 @@ impl ClientCirc {
     ///
     /// The use of a string for the address is intentional: you should let
     /// the remote Tor relay do the hostname lookup for you.
-    pub async fn begin_stream(self: Arc<Self>, target: &str, port: u16) -> Result<DataStream> {
-        // TODO: this should take flags to specify IP version preference
-        let beginmsg = tor_cell::relaycell::msg::Begin::new(target, port, 0)?;
+    pub async fn begin_stream(
+        self: Arc<Self>,
+        target: &str,
+        port: u16,
+        flags: Option<IPVersionPreference>,
+    ) -> Result<DataStream> {
+        let flags = flags.unwrap_or_default();
+        let beginmsg = tor_cell::relaycell::msg::Begin::new(target, port, flags)?;
         self.begin_data_stream(beginmsg.into()).await
     }
 

@@ -6,12 +6,15 @@ use argh::FromArgs;
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::stream::StreamExt;
 use log::{error, info, warn, LevelFilter};
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use tor_chanmgr::transport::nativetls::NativeTlsTransport;
+use tor_circmgr::TargetPort;
 use tor_dirmgr::DirMgr;
-use tor_socksproto::SocksCmd;
+use tor_proto::circuit::IPVersionPreference;
+use tor_socksproto::{SocksCmd, SocksRequest};
 
 use anyhow::{Context, Result};
 
@@ -30,6 +33,18 @@ struct Args {
     /// run a socks proxy on port N.
     #[argh(option, default = "9150")]
     socksport: u16,
+}
+
+fn ip_preference(req: &SocksRequest, addr: &str) -> IPVersionPreference {
+    if addr.parse::<Ipv4Addr>().is_ok() {
+        IPVersionPreference::Ipv4Only
+    } else if addr.parse::<Ipv6Addr>().is_ok() {
+        IPVersionPreference::Ipv6Only
+    } else if req.version() == 4 {
+        IPVersionPreference::Ipv4Only
+    } else {
+        IPVersionPreference::Ipv4Preferred
+    }
 }
 
 async fn handle_socks_conn(
@@ -85,7 +100,12 @@ async fn handle_socks_conn(
         return Ok(());
     }
 
-    let exit_ports = [port];
+    let begin_flags = ip_preference(&request, &addr);
+    let exit_ports = [if begin_flags == IPVersionPreference::Ipv6Only {
+        TargetPort::ipv6(port)
+    } else {
+        TargetPort::ipv4(port)
+    }];
     let circ = circmgr
         .get_or_launch_exit(dir.as_ref().into(), &exit_ports)
         .await
@@ -93,7 +113,7 @@ async fn handle_socks_conn(
     info!("Got a circuit for {}:{}", addr, port);
     drop(dir); // This decreases the refcount on the netdir.
 
-    let stream = circ.begin_stream(&addr, port).await?;
+    let stream = circ.begin_stream(&addr, port, Some(begin_flags)).await?;
     info!("Got a stream for {}:{}", addr, port);
     // TODO: XXXX-A1 Should send a SOCKS reply if something fails.
 
