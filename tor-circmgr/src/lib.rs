@@ -167,13 +167,17 @@ impl CircEntry {
 /// An exit policy as supported by the last hop of a circuit.
 #[derive(Clone, Debug)]
 struct ExitPolicy {
+    /// Permitted IPv4 ports.
     v4: PortPolicy, // XXXX refcount!
+    /// Permitted IPv6 ports.
     v6: PortPolicy, // XXXX refcount!
 }
 /// A port that we want to connect to as a client.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct TargetPort {
+    /// True if this is a request to connect to an IPv6 address
     ipv6: bool,
+    /// The port that the client wants to connect to
     port: u16,
 }
 
@@ -330,7 +334,7 @@ impl CircMgr {
                     event: Arc::clone(&event),
                 });
                 let id = CircEntId::new_pending();
-                if let Some(_) = circs.circuits.insert(id, entry) {
+                if circs.circuits.insert(id, entry).is_some() {
                     // This should be impossible, since we would have to
                     // wrap around usize before the pending circuit expired.
                     panic!("ID collision among pending circuits.");
@@ -384,7 +388,7 @@ impl CircMgr {
             {
                 let circs = self.circuits.lock().await;
                 let suitable = circs.find_suitable_circs(&target_usage, true);
-                if suitable.len() == 0 {
+                if suitable.is_empty() {
                     // XXXX-A1 might want to retry
                     return Err(Error::PendingFailed.into());
                 }
@@ -454,7 +458,7 @@ impl CircMgr {
     pub async fn retire_circ(&self, circ_id: &UniqId) {
         let mut circs = self.circuits.lock().await;
 
-        circs.remove(&(*circ_id).into());
+        circs.remove(circ_id);
     }
 }
 
