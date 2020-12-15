@@ -13,6 +13,8 @@ use tor_bytes::{Readable, Reader, Writeable, Writer};
 use tor_linkspec::LinkSpec;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
+use bitflags::bitflags;
+
 /// A single parsed relay message, sent or received along a circuit
 #[derive(Debug, Clone)]
 pub enum RelayMsg {
@@ -137,6 +139,26 @@ impl RelayMsg {
     }
 }
 
+bitflags! {
+    /// A set of recognized flags that can be attached to a begin cell.
+    ///
+    /// For historical reasons, these flags are constructed so that 0
+    /// is a reasonable default for all of them.
+    pub struct BeginFlags : u32 {
+        /// The client would accept a connection to an IPv6 address.
+        const IPV6_OKAY = (1<<0);
+        /// The client would not accept a connection to an IPv4 address.
+        const IPV4_NOT_OKAY = (1<<1);
+        /// The client would rather have a connection to an IPv6 address.
+        const IPV6_PREFERRED = (1<<2);
+    }
+}
+impl From<u32> for BeginFlags {
+    fn from(v: u32) -> Self {
+        BeginFlags::from_bits_truncate(v)
+    }
+}
+
 /// A Begin message creates a new data stream.
 ///
 /// Upon receiving a Begin message, relays should try to open a new stream
@@ -154,11 +176,15 @@ pub struct Begin {
     /// Target port
     port: u16,
     /// Flags that describe how to resolve the address
-    flags: u32,
+    flags: BeginFlags,
 }
+
 impl Begin {
     /// Construct a new Begin cell
-    pub fn new(addr: &str, port: u16, flags: u32) -> crate::Result<Self> {
+    pub fn new<F>(addr: &str, port: u16, flags: F) -> crate::Result<Self>
+    where
+        F: Into<BeginFlags>,
+    {
         if !addr.is_ascii() {
             return Err(crate::Error::BadStreamAddress);
         }
@@ -167,7 +193,7 @@ impl Begin {
         Ok(Begin {
             addr: addr.into_bytes(),
             port,
-            flags,
+            flags: flags.into(),
         })
     }
 }
@@ -208,7 +234,7 @@ impl Body for Begin {
         Ok(Begin {
             addr: addr.into(),
             port,
-            flags,
+            flags: flags.into(),
         })
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
@@ -222,8 +248,8 @@ impl Body for Begin {
         w.write_u8(b':');
         w.write_all(self.port.to_string().as_bytes());
         w.write_u8(0);
-        if self.flags != 0 {
-            w.write_u32(self.flags);
+        if self.flags.bits() != 0 {
+            w.write_u32(self.flags.bits());
         }
     }
 }
