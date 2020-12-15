@@ -447,7 +447,7 @@ impl CircMgr {
         // TODO: This is way too long, AND it should be an option.
         let timeout = Duration::new(10, 0);
 
-        let mut error = RetryError::new();
+        let mut error = RetryError::while_doing("build a circuit");
 
         for _ in 0..n_tries {
             let result = tor_rtcompat::timer::timeout(

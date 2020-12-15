@@ -828,3 +828,36 @@ pub(super) const FALLBACKS: &[FallbackDir] = &[
         ipv6_orport: Some("[2001:6b0:7:125::243]:9001"),
     },
 ];
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::fallback::FallbackDir as Converted;
+    use hex_literal::hex;
+    use tor_linkspec::ChanTarget;
+
+    #[test]
+    fn convert() {
+        let d = FallbackDir {
+            rsa_identity: "FFA72BD683BC2FCF988356E6BEC1E490F313FB07",
+            ed_identity: "1XEqrNow2olJOwX09N2/ixwregJsPECgqGAOvNMfL5U",
+            ipv4_orport: "193.11.164.243:9001",
+            ipv6_orport: Some("[2001:6b0:7:125::243]:9001"),
+        };
+        let fd: Converted = (&d).into();
+        assert_eq!(
+            fd.rsa_identity(),
+            &RSAIdentity::from_bytes(&hex!("FFA72BD683BC2FCF988356E6BEC1E490F313FB07")).unwrap()
+        );
+        assert_eq!(
+            fd.ed_identity(),
+            &Ed25519Identity::from_bytes(&hex!(
+                "d5712aacda30da89493b05f4f4ddbf8b1c2b7a026c3c40a0a8600ebcd31f2f95"
+            ))
+            .unwrap()
+        );
+        assert_eq!(fd.addrs().len(), 2);
+        assert_eq!(fd.addrs()[0], "193.11.164.243:9001".parse().unwrap());
+        assert_eq!(fd.addrs()[1], "[2001:6b0:7:125::243]:9001".parse().unwrap());
+    }
+}

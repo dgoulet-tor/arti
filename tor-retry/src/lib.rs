@@ -19,7 +19,7 @@ use std::fmt::{Display, Error as FmtError, Formatter};
 #[derive(Debug, Default)]
 pub struct RetryError {
     /// The operation we were trying to do.
-    doing: Option<&'static str>,
+    doing: &'static str,
     /// The errors that we encountered when doing the operation.
     // TODO: It might be nice to have this crate not depend on anyhow.
     // When I first tried to do that, though, I ran into a big pile of
@@ -31,17 +31,6 @@ pub struct RetryError {
 impl std::error::Error for RetryError {}
 
 impl RetryError {
-    /// Create a new RetryError, with no failed attempts.
-    ///
-    /// This RetryError should not be used as-is, since when no
-    /// [`Error`]s have been pushed into it, it doesn't represent an
-    /// actual failure.
-    pub fn new() -> Self {
-        RetryError {
-            doing: None,
-            errors: Vec::new(),
-        }
-    }
     /// Crate a new RetryError, with no failed attempts,
     ///
     /// The provided `doing` argument is a short string that describes
@@ -49,11 +38,12 @@ impl RetryError {
     /// will be used to format the final error message; it should be a
     /// phrase that can go after "while trying to".
     ///
-    /// As with [`RetryError::new()`], the result of this method
-    /// shouln't be used before any errors are pushed into it.
+    /// This RetryError should not be used as-is, since when no
+    /// [`Error`]s have been pushed into it, it doesn't represent an
+    /// actual failure.
     pub fn while_doing(doing: &'static str) -> Self {
         RetryError {
-            doing: Some(doing),
+            doing,
             errors: Vec::new(),
         }
     }
@@ -78,20 +68,18 @@ impl RetryError {
 impl Display for RetryError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
         match self.errors.len() {
-            0 => writeln!(
+            0 => write!(
                 f,
-                "Programming error: Somebody made a RetryError without any errors!"
+                "Programming error: somebody made a RetryError without any errors!"
             ),
             1 => self.errors[0].fmt(f),
             n => {
-                match self.doing {
-                    Some(doing) => writeln!(
-                        f,
-                        "Tried to {} {} times, but all attempts failed.",
-                        doing, n
-                    ),
-                    None => writeln!(f, "Tried {} times, but all attempts failed.", n),
-                }?;
+                writeln!(
+                    f,
+                    "Tried to {} {} times, but all attempts failed.",
+                    self.doing, n
+                )?;
+
                 for (idx, e) in self.sources().enumerate() {
                     write!(f, "Attempt {}:\n{}\n", idx + 1, e)?;
                 }
@@ -106,7 +94,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn bad_bools() {
+    fn bad_parse1() {
         let mut err = RetryError::while_doing("convert some things");
         if let Err(e) = "maybe".parse::<bool>() {
             err.push(e);
@@ -130,5 +118,25 @@ Attempt 3:
 invalid IP address syntax
 "
         );
+    }
+
+    #[test]
+    fn no_problems() {
+        let empty = RetryError::while_doing("immanentize the eschaton");
+        let disp = format!("{}", empty);
+        assert_eq!(
+            disp,
+            "Programming error: somebody made a RetryError without any errors!"
+        );
+    }
+
+    #[test]
+    fn one_problem() {
+        let mut err = RetryError::while_doing("connect to torproject.org");
+        if let Err(e) = "teh_g1b50n".parse::<std::net::IpAddr>() {
+            err.push(e);
+        }
+        let disp = format!("{}", err);
+        assert_eq!(disp, "invalid IP address syntax");
     }
 }
