@@ -25,7 +25,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod err;
 pub mod path;
@@ -33,6 +33,12 @@ pub mod path;
 pub use err::Error;
 
 use crate::path::{dirpath::DirPathBuilder, exitpath::ExitPathBuilder, TorPath};
+
+/// How long do we let a circuit be dirty before we won't hand it out any
+/// more?
+///
+/// TODO: this should be an option.
+const MAX_CIRC_DIRTINESS: Duration = Duration::from_secs(60 * 15);
 
 /// A Circuit Manager (CircMgr) manages a set of circuits, returning them
 /// when they're suitable, and launching them if they don't already exist.
@@ -133,6 +139,11 @@ enum CircEntry {
 struct OpenCircEntry {
     /// The usage for which this circuit is suitable.
     usage: CircUsage,
+    /// When did we first yield this circuit as usable for a stream?
+    ///
+    /// (For now, this is always Some(_).  Later, we'll support building
+    /// circuits in advance, and handing them out as needed.)
+    first_used: Option<Instant>,
     /// The circuit itself
     circ: Arc<ClientCirc>,
 }
@@ -161,6 +172,16 @@ impl CircEntry {
             CircEntry::Open(ent) => ent.circ.is_closing(),
             _ => false,
         }
+    }
+
+    /// Return true if this CircEntry is too old to give to clients.
+    fn is_too_old(&self, now: Instant) -> bool {
+        if let CircEntry::Open(ent) = self {
+            if let Some(first_used) = ent.first_used {
+                return first_used + MAX_CIRC_DIRTINESS < now;
+            }
+        }
+        false
     }
 }
 
@@ -323,7 +344,7 @@ impl CircMgr {
             let mut circs = self.circuits.lock().await;
             let par = self.parallelism(&target_usage);
             assert!(par >= 1);
-            circs.prune_closed();
+            circs.prune();
             let suitable = circs.find_suitable_circs(&target_usage, false);
 
             let result = if suitable.len() < par {
@@ -365,6 +386,7 @@ impl CircMgr {
                     Ok((circ, usage)) => {
                         let ent = CircEntry::Open(OpenCircEntry {
                             usage,
+                            first_used: Some(Instant::now()),
                             circ: Arc::clone(&circ),
                         });
                         circs.circuits.insert(circ.unique_id().into(), ent);
@@ -463,11 +485,15 @@ impl CircMgr {
 }
 
 impl CircSet {
-    /// Remove every closed circuit from this set.
-    fn prune_closed(&mut self) {
+    /// Remove every closed or too-dirty circuit from this set.
+    ///
+    /// This doesn't cause the circuits to close immediately if
+    /// anybody still has a reference to them.
+    fn prune(&mut self) {
+        let now = Instant::now();
         let mut remove = Vec::new();
         for (id, c) in self.circuits.iter() {
-            if c.is_closing() {
+            if c.is_closing() || c.is_too_old(now) {
                 remove.push(*id)
             }
         }
@@ -487,11 +513,12 @@ impl CircSet {
         open_only: bool,
     ) -> Vec<(&CircEntId, &CircEntry)> {
         let mut result = Vec::new();
+        let now = Instant::now();
         for (id, c) in self.circuits.iter() {
             if open_only && !matches!(c, CircEntry::Open(_)) {
                 continue;
             }
-            if c.is_closing() {
+            if c.is_closing() || c.is_too_old(now) {
                 continue;
             }
             if !c.supports_target_usage(target_usage) {
