@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use tor_chanmgr::transport::nativetls::NativeTlsTransport;
+use tor_dirmgr::DirMgr;
 use tor_socksproto::SocksCmd;
 
 use anyhow::{Context, Result};
@@ -162,7 +163,7 @@ async fn run_socks_proxy(
 
     while let Some(stream) = incoming.next().await {
         let stream = stream.context("Failed to receive incoming stream on SOCKS port")?;
-        let d = dir.netdir().await.unwrap();
+        let d = dir.netdir().await;
         let ci = Arc::clone(&circmgr);
         tor_rtcompat::task::spawn(async move {
             let res = handle_socks_conn(d, ci, stream).await;
@@ -193,31 +194,13 @@ fn main() -> Result<()> {
     } else {
         dircfg.add_default_authorities();
     }
+    let dircfg = dircfg.finalize();
 
     tor_rtcompat::task::block_on(async {
         let transport = NativeTlsTransport::new();
         let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(transport));
         let circmgr = Arc::new(tor_circmgr::CircMgr::new(Arc::clone(&chanmgr)));
-        let dirmgr = Arc::new(tor_dirmgr::DirMgr::from_config(dircfg.finalize())?);
-
-        if dirmgr
-            .load_directory()
-            .await
-            .context("Error loading cached directory")?
-        {
-            info!("Loaded a good directory from disk.")
-        } else {
-            info!("Didn't find a usable directory on disk. Trying to booststrap.");
-            dirmgr
-                .bootstrap_directory(Arc::clone(&circmgr))
-                .await
-                .context("Unable to bootstrap directory")?;
-            info!("Bootstrapped successfully.");
-        }
-        // TODO CONFORMANCE: we should stop now if there are required
-        // protovers we don't support.
-
-        Arc::clone(&dirmgr).launch_updater(Arc::clone(&circmgr));
+        let dirmgr = DirMgr::bootstrap_from_config(dircfg, Arc::clone(&circmgr)).await?;
 
         run_socks_proxy(dirmgr, circmgr, args).await
     })

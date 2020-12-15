@@ -13,7 +13,7 @@ use chrono::{DateTime, Utc};
 use log::{debug, info, warn};
 use rand::Rng;
 
-/// A SirectoryUpdater runs in a background task to periodically re-fetch
+/// A DirectoryUpdater runs in a background task to periodically re-fetch
 /// new directory objects as the old ones become outdated.
 pub struct DirectoryUpdater {
     /// A directory manager to use in picking directory caches, and which can
@@ -133,17 +133,16 @@ impl DirectoryUpdater {
     /// directory we already have.
     async fn pick_download_time(&self) -> Option<SystemTime> {
         if let Some(dm) = self.dir_mgr.upgrade() {
-            if let Some(netdir) = dm.netdir().await {
-                let lt = netdir.lifetime();
-                let (lowbound, uncertainty) = client_download_range(&lt);
-                let zero = Duration::new(0, 0);
-                let t = lowbound + rand::thread_rng().gen_range(zero, uncertainty);
-                info!("Current directory is fresh until {}, valid until {}. I've picked {} as the earliest to download a new one.",
+            let netdir = dm.netdir().await;
+            let lt = netdir.lifetime();
+            let (lowbound, uncertainty) = client_download_range(&lt);
+            let zero = Duration::new(0, 0);
+            let t = lowbound + rand::thread_rng().gen_range(zero, uncertainty);
+            info!("Current directory is fresh until {}, valid until {}. I've picked {} as the earliest to download a new one.",
                       DateTime::<Utc>::from(lt.fresh_until()),
                       DateTime::<Utc>::from(lt.valid_until()),
                       DateTime::<Utc>::from(t));
-                return Some(t);
-            }
+            return Some(t);
         }
 
         None

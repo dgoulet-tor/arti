@@ -31,7 +31,7 @@ use tor_netdoc::doc::netstatus::{MDConsensus, UnvalidatedMDConsensus};
 use tor_netdoc::AllowAnnotations;
 use tor_retry::RetryError;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use async_rwlock::RwLock;
 use futures::lock::Mutex;
 use futures::stream::StreamExt;
@@ -60,14 +60,39 @@ pub struct DirMgr {
     ///
     /// We use the RwLock so that we can give this out to a bunch of other
     /// users, and replace it once a new directory is bootstrapped.
-    // XXXX-A1 I'd like this not to be an Option, or not to visibly be an
-    // option once the NetDir is handed off to a user.
     netdir: RwLock<Option<Arc<NetDir>>>,
 }
 
 impl DirMgr {
+    /// Return a new directory manager from a given configuration,
+    /// bootstrapping from the network as necessary.
+    pub async fn bootstrap_from_config(
+        config: NetDirConfig,
+        circmgr: Arc<CircMgr>,
+    ) -> Result<Arc<Self>> {
+        let dirmgr = Arc::new(DirMgr::from_config(config)?);
+
+        if dirmgr
+            .load_directory()
+            .await
+            .context("Error loading cached directory")?
+        {
+            info!("Loaded a good directory from disk.")
+        } else {
+            info!("Didn't find a usable directory on disk. Trying to booststrap.");
+            dirmgr
+                .bootstrap_directory(Arc::clone(&circmgr))
+                .await
+                .context("Unable to bootstrap directory")?;
+            info!("Bootstrapped successfully.");
+        }
+
+        Arc::clone(&dirmgr).launch_updater(circmgr);
+        Ok(dirmgr)
+    }
+
     /// Construct a DirMgr from a NetDirConfig.
-    pub fn from_config(config: NetDirConfig) -> Result<Self> {
+    fn from_config(config: NetDirConfig) -> Result<Self> {
         let store = Mutex::new(config.open_sqlite_store()?);
         let netdir = RwLock::new(None);
         Ok(DirMgr {
@@ -81,7 +106,7 @@ impl DirMgr {
     /// cache, if it is newer than the one we have.
     ///
     /// Return false if there is no such consensus.
-    pub async fn load_directory(&self) -> Result<bool> {
+    async fn load_directory(&self) -> Result<bool> {
         let store = &self.store;
 
         let noinfo = NoInformation::new();
@@ -109,7 +134,7 @@ impl DirMgr {
             NextState::NewState(p) => p,
         };
 
-        partial.load(store, self.netdir().await).await?;
+        partial.load(store, self.opt_netdir().await).await?;
         let nd = match partial.advance() {
             NextState::NewState(nd) => nd,
             NextState::SameState(_) => {
@@ -130,7 +155,7 @@ impl DirMgr {
 
     /// Run a complete bootstrapping process, using information from our
     /// cache when it is up-to-date enough.
-    pub async fn bootstrap_directory(&self, circmgr: Arc<CircMgr>) -> Result<()> {
+    async fn bootstrap_directory(&self, circmgr: Arc<CircMgr>) -> Result<()> {
         self.fetch_directory(circmgr, true).await
     }
 
@@ -147,7 +172,7 @@ impl DirMgr {
         let new_microdescs = {
             // We introduce a scope here so that we'll drop our reference
             // to the old netdir when we're done downloading.
-            let netdir = match self.netdir().await {
+            let netdir = match self.opt_netdir().await {
                 Some(nd) => nd,
                 None => return Ok(0),
             };
@@ -196,7 +221,7 @@ impl DirMgr {
 
     /// Launch an updater task that periodically re-fetches the
     /// directory to keep it up-to-date.
-    pub fn launch_updater(self: Arc<Self>, circmgr: Arc<CircMgr>) -> Arc<DirectoryUpdater> {
+    fn launch_updater(self: Arc<Self>, circmgr: Arc<CircMgr>) -> Arc<DirectoryUpdater> {
         // TODO: XXXX: Need some way to keep two of these from running at
         // once.
         let updater = Arc::new(updater::DirectoryUpdater::new(self, circmgr));
@@ -226,7 +251,7 @@ impl DirMgr {
     ) -> Result<()> {
         let store = &self.store;
 
-        let current_netdir = self.netdir().await;
+        let current_netdir = self.opt_netdir().await;
         let dirinfo = match current_netdir {
             Some(ref nd) => nd.as_ref().into(),
             None => self.config.fallbacks().into(),
@@ -260,7 +285,7 @@ impl DirMgr {
             NextState::NewState(p) => p,
         };
 
-        partial.load(store, self.netdir().await).await?;
+        partial.load(store, self.opt_netdir().await).await?;
         partial
             .fetch_mds(store, dirinfo, Arc::clone(&circmgr))
             .await?;
@@ -290,13 +315,21 @@ impl DirMgr {
         }
     }
 
-    /// Return an Arc handle to our latest sufficiently up-to-date directory.
+    /// Return an Arc handle to our latest directory, if we have one.
     ///
-    // TODO: Add variants of this that make sure that it's up-to-date?
-    //
-    // TODO: XXXX-A1: I'd like this not to ever return None
-    pub async fn netdir(&self) -> Option<Arc<NetDir>> {
+    /// This is a private method, since by the time anybody else has a
+    /// handle to a DirMgr, the NetDir should definitely be
+    /// bootstrapped.
+    async fn opt_netdir(&self) -> Option<Arc<NetDir>> {
         self.netdir.read().await.as_ref().map(Arc::clone)
+    }
+
+    /// Return an Arc handle to our latest directory, if we have one.
+    // TODO: Add variants of this that make sure that it's up-to-date?
+    pub async fn netdir(&self) -> Arc<NetDir> {
+        self.opt_netdir()
+            .await
+            .expect("DirMgr was not bootstrapped!")
     }
 }
 
