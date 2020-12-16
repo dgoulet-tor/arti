@@ -26,7 +26,6 @@ impl ExitPathBuilder {
     /// Try to create and return a path corresponding to the requirements of
     /// this builder.
     pub fn pick_path<'a, R: Rng>(&self, rng: &mut R, netdir: DirInfo<'a>) -> Result<TorPath<'a>> {
-        // TODO: implement families
         // TODO: implement guards
         let netdir = match netdir {
             DirInfo::Fallbacks(_) => return Err(Error::NeedConsensus.into()),
@@ -37,12 +36,17 @@ impl ExitPathBuilder {
             .ok_or_else(|| Error::NoRelays("No exit relay found".into()))?;
 
         let middle = netdir
-            .pick_relay(rng, WeightRole::Middle, |r| !r.same_relay(&exit))
+            .pick_relay(rng, WeightRole::Middle, |r| {
+                !r.same_relay(&exit) && !r.in_same_family(&exit)
+            })
             .ok_or_else(|| Error::NoRelays("No middle relay found".into()))?;
 
         let entry = netdir
             .pick_relay(rng, WeightRole::Guard, |r| {
-                !(r.same_relay(&exit) || r.same_relay(&middle))
+                !r.same_relay(&exit)
+                    && !r.same_relay(&middle)
+                    && !r.in_same_family(&middle)
+                    && !r.in_same_family(&exit)
             })
             .ok_or_else(|| Error::NoRelays("No entry relay found".into()))?;
 

@@ -27,6 +27,11 @@ impl RelayFamily {
     pub fn new() -> Self {
         RelayFamily(Vec::new())
     }
+
+    /// Does this family include the given relay?
+    pub fn contains(&self, rsa_id: &RSAIdentity) -> bool {
+        self.0.contains(rsa_id)
+    }
 }
 
 impl Default for RelayFamily {
@@ -75,6 +80,27 @@ mod test {
             .unwrap(),
         );
         assert_eq!(f.0, v);
+        Ok(())
+    }
+
+    #[test]
+    fn test_contains() -> Result<()> {
+        let family =
+            "ffffffffffffffffffffffffffffffffffffffff eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+                .parse::<RelayFamily>()?;
+        let in_family = RSAIdentity::from_bytes(
+            &hex::decode("ffffffffffffffffffffffffffffffffffffffff").unwrap()[..],
+        )
+        .unwrap();
+        let not_in_family = RSAIdentity::from_bytes(
+            &hex::decode("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap()[..],
+        )
+        .unwrap();
+        assert!(family.contains(&in_family), "Relay not found in family");
+        assert!(
+            !family.contains(&not_in_family),
+            "Extra relay found in family"
+        );
         Ok(())
     }
 }

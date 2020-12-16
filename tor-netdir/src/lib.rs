@@ -394,6 +394,14 @@ impl<'a> Relay<'a> {
                 .protovers()
                 .supports_known_subver(ProtoKind::DirCache, 2)
     }
+    /// Return true if both relays are in the same family.
+    pub fn in_same_family<'b>(&self, other: &Relay<'b>) -> bool {
+        // XXX: features missing from original implementation:
+        // - option EnforceDistinctSubnets
+        // - option NodeFamilySets
+        // see: src/feature/nodelist/nodelist.c:nodes_in_same_family()
+        self.md.family().contains(other.rsa_id()) && other.md.family().contains(self.rsa_id())
+    }
 
     /// Return the IPv4 exit policy for this relay.
     pub fn ipv4_policy(&self) -> &'a PortPolicy {
