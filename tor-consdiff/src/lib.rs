@@ -1,5 +1,4 @@
-#![allow(unused, dead_code)]
-
+use std::fmt::{Display, Formatter};
 use std::num::ParseIntError;
 use std::str::FromStr;
 
@@ -13,7 +12,7 @@ pub enum Error {
 
 type Result<T> = std::result::Result<T, Error>;
 
-pub fn apply_diff<'a>(input: &'a str, diff: &'a str) -> Result<DiffResult<'a>> {
+pub fn apply_diff_trivial<'a>(input: &'a str, diff: &'a str) -> Result<DiffResult<'a>> {
     let mut diffable = DiffResult::from_str(input);
 
     for command in DiffCommandIter::new(diff.lines()) {
@@ -21,6 +20,29 @@ pub fn apply_diff<'a>(input: &'a str, diff: &'a str) -> Result<DiffResult<'a>> {
     }
 
     Ok(diffable)
+}
+
+pub fn apply_diff<'a>(input: &'a str, diff: &'a str) -> Result<DiffResult<'a>> {
+    let mut input = DiffResult::from_str(input);
+    let mut output = DiffResult::new();
+
+    let mut prev_command = None;
+    for command in DiffCommandIter::new(diff.lines()) {
+        let command = command?;
+        if let Some(ref prev) = prev_command {
+            if !command.precedes(prev) {
+                return Err(Error::BadDiff);
+            }
+        }
+        command.apply_transformation(&mut input, &mut output)?;
+
+        prev_command = Some(command);
+    }
+
+    output.push_reversed(&input.lines[..]);
+
+    output.lines.reverse();
+    Ok(output)
 }
 
 impl From<ParseIntError> for Error {
@@ -92,6 +114,63 @@ impl<'a> DiffCommand<'a> {
             } // TODO SPEC: In theory there is an 'InsertHere' command
               // that we should be implementing, but Tor doesn't use it.
         };
+        Ok(())
+    }
+
+    fn following_lines(&self) -> Option<usize> {
+        use DiffCommand::*;
+        match self {
+            Delete { high, .. } => Some(high + 1),
+            DeleteToEnd { .. } => None,
+            Replace { high, .. } => Some(high + 1),
+            Insert { pos, .. } => Some(pos + 1),
+        }
+    }
+
+    fn first_removed_line(&self) -> usize {
+        use DiffCommand::*;
+        match self {
+            Delete { low, .. } => *low,
+            DeleteToEnd { low } => *low,
+            Replace { low, .. } => *low,
+            Insert { pos, .. } => *pos + 1, // XXXX note.
+        }
+    }
+
+    fn precedes(&self, other: &DiffCommand<'a>) -> bool {
+        let their_beginning = other.first_removed_line();
+        match self.following_lines() {
+            Some(my_end) => my_end <= their_beginning,
+            None => false,
+        }
+    }
+
+    fn apply_transformation(
+        &self,
+        input: &mut DiffResult<'a>,
+        output: &mut DiffResult<'a>,
+    ) -> Result<()> {
+        if let Some(succ) = self.following_lines() {
+            if let Some(subslice) = input.lines.get(succ - 1..) {
+                // Lines from `succ` onwards are unaffected.  Copy them.
+                output.push_reversed(subslice);
+            } else {
+                // Oops, dubious line number.
+                return Err(Error::BadDiff);
+            }
+        }
+
+        if let Some(lines) = self.lines() {
+            // These are the lines we're inserting.
+            output.push_reversed(lines);
+        }
+
+        let remove = self.first_removed_line();
+        if remove - 1 > input.lines.len() {
+            return Err(Error::BadDiff);
+        }
+        input.lines.truncate(remove - 1);
+
         Ok(())
     }
 
@@ -200,22 +279,21 @@ where
 }
 
 impl<'a> DiffResult<'a> {
-    pub fn from_str(s: &'a str) -> Self {
+    fn from_str(s: &'a str) -> Self {
         // I'd like to use str::split_inclusive here, but that isn't stable yet
         // as of rust 1.48.
 
-        let mut lines: Vec<_> = s.lines().collect();
+        let lines: Vec<_> = s.lines().collect();
 
         DiffResult { lines }
     }
 
-    pub fn to_string(&self) -> String {
-        let mut s = String::new();
-        for elt in self.lines.iter() {
-            s.push_str(elt);
-            s.push('\n');
-        }
-        s
+    fn new() -> Self {
+        DiffResult { lines: Vec::new() }
+    }
+
+    fn push_reversed(&mut self, lines: &[&'a str]) {
+        self.lines.extend(lines.iter().rev())
     }
 
     fn remove_lines(&mut self, first: usize, last: usize) -> Result<()> {
@@ -228,7 +306,7 @@ impl<'a> DiffResult<'a> {
             if last != self.lines.len() {
                 self.lines[..].copy_within((last).., first - 1);
             }
-            self.lines.resize(self.lines.len() - n_to_remove, "");
+            self.lines.truncate(self.lines.len() - n_to_remove);
             Ok(())
         }
     }
@@ -241,9 +319,18 @@ impl<'a> DiffResult<'a> {
             self.lines.resize(self.lines.len() + lines.len(), "");
             self.lines
                 .copy_within(pos - 1..orig_len, pos - 1 + lines.len());
-            &self.lines[(pos - 1)..(pos + lines.len() - 1)].copy_from_slice(lines);
+            self.lines[(pos - 1)..(pos + lines.len() - 1)].copy_from_slice(lines);
             Ok(())
         }
+    }
+}
+
+impl<'a> Display for DiffResult<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        for elt in self.lines.iter() {
+            writeln!(f, "{}", elt)?
+        }
+        Ok(())
     }
 }
 
