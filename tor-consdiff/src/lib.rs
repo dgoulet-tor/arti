@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::num::ParseIntError;
 use std::str::FromStr;
@@ -13,21 +14,37 @@ pub enum Error {
 type Result<T> = std::result::Result<T, Error>;
 
 pub fn apply_diff_trivial<'a>(input: &'a str, diff: &'a str) -> Result<DiffResult<'a>> {
-    let mut diffable = DiffResult::from_str(input);
+    let mut diff_lines = diff.lines();
+    let (d1, d2) = parse_diff_header(&mut diff_lines)?;
 
-    for command in DiffCommandIter::new(diff.lines()) {
+    let mut diffable = DiffResult::from_str(input, d1, d2);
+
+    for command in DiffCommandIter::new(diff_lines) {
         command?.apply_to(&mut diffable)?;
     }
 
     Ok(diffable)
 }
 
-pub fn apply_diff<'a>(input: &'a str, diff: &'a str) -> Result<DiffResult<'a>> {
-    let mut input = DiffResult::from_str(input);
-    let mut output = DiffResult::new();
+pub fn apply_diff<'a>(
+    input: &'a str,
+    diff: &'a str,
+    check_digest_in: Option<[u8; 32]>,
+) -> Result<DiffResult<'a>> {
+    let mut input = DiffResult::from_str(input, [0; 32], [0; 32]);
 
-    let mut prev_command = None;
-    for command in DiffCommandIter::new(diff.lines()) {
+    let mut diff_lines = diff.lines();
+    let (d1, d2) = parse_diff_header(&mut diff_lines)?;
+    if let Some(d_want) = check_digest_in {
+        if d1 != d_want {
+            return Err(Error::BadDiff);
+        }
+    }
+
+    let mut output = DiffResult::new(d1, d2);
+
+    let mut prev_command = None; // XXX move this check to DiffCommandIter?
+    for command in DiffCommandIter::new(diff_lines) {
         let command = command?;
         if let Some(ref prev) = prev_command {
             if !command.precedes(prev) {
@@ -45,9 +62,42 @@ pub fn apply_diff<'a>(input: &'a str, diff: &'a str) -> Result<DiffResult<'a>> {
     Ok(output)
 }
 
+fn parse_diff_header<'a, I>(iter: &mut I) -> Result<([u8; 32], [u8; 32])>
+where
+    I: Iterator<Item = &'a str>,
+{
+    let line1 = iter.next();
+    if line1 != Some("network-status-diff-version 1") {
+        return Err(Error::BadDiff);
+    }
+    let line2 = iter.next();
+    if line2.is_none() {
+        return Err(Error::BadDiff);
+    }
+    let line2 = line2.unwrap();
+    if !line2.starts_with("hash") {
+        return Err(Error::BadDiff);
+    }
+    let elts: Vec<_> = line2.split_ascii_whitespace().collect();
+    if elts.len() != 3 {
+        return Err(Error::BadDiff);
+    }
+    let d1 = hex::decode(elts[1])?;
+    let d2 = hex::decode(elts[2])?;
+    if d1.len() != 32 || d2.len() != 32 {
+        return Err(Error::BadDiff);
+    }
+    Ok((d1.try_into().unwrap(), d2.try_into().unwrap()))
+}
+
 impl From<ParseIntError> for Error {
     fn from(_e: ParseIntError) -> Error {
         Error::InvalidInt
+    }
+}
+impl From<hex::FromHexError> for Error {
+    fn from(_e: hex::FromHexError) -> Error {
+        Error::BadDiff
     }
 }
 
@@ -73,6 +123,8 @@ enum DiffCommand<'a> {
 
 #[derive(Clone, Debug)]
 pub struct DiffResult<'a> {
+    d_pre: [u8; 32],
+    d_post: [u8; 32],
     lines: Vec<&'a str>,
 }
 
@@ -279,17 +331,25 @@ where
 }
 
 impl<'a> DiffResult<'a> {
-    fn from_str(s: &'a str) -> Self {
+    fn from_str(s: &'a str, d_pre: [u8; 32], d_post: [u8; 32]) -> Self {
         // I'd like to use str::split_inclusive here, but that isn't stable yet
         // as of rust 1.48.
 
         let lines: Vec<_> = s.lines().collect();
 
-        DiffResult { lines }
+        DiffResult {
+            d_pre,
+            d_post,
+            lines,
+        }
     }
 
-    fn new() -> Self {
-        DiffResult { lines: Vec::new() }
+    fn new(d_pre: [u8; 32], d_post: [u8; 32]) -> Self {
+        DiffResult {
+            d_pre,
+            d_post,
+            lines: Vec::new(),
+        }
     }
 
     fn push_reversed(&mut self, lines: &[&'a str]) {
@@ -340,7 +400,7 @@ mod test {
 
     #[test]
     fn remove() -> Result<()> {
-        let example = DiffResult::from_str("1\n2\n3\n4\n5\n6\n7\n8\n9\n");
+        let example = DiffResult::from_str("1\n2\n3\n4\n5\n6\n7\n8\n9\n", [0; 32], [0; 32]);
 
         let mut d = example.clone();
         d.remove_lines(5, 7)?;
@@ -368,7 +428,7 @@ mod test {
 
     #[test]
     fn apply_command() {
-        let example = DiffResult::from_str("a\nb\nc\nd\ne\nf\n");
+        let example = DiffResult::from_str("a\nb\nc\nd\ne\nf\n", [0; 32], [0; 32]);
 
         let mut d = example.clone();
         assert_eq!(d.to_string(), "a\nb\nc\nd\ne\nf\n".to_string());

@@ -8,4 +8,4 @@ publish = false
 
 [dependencies]
 
-
+hex = "0.4.2"
