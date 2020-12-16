@@ -16,6 +16,7 @@ members = [
     "tor-proto",
     "tor-retry",
     "tor-netdoc",
+    "tor-consdiff",
     "tor-netdir",
     "tor-chanmgr",
     "tor-circmgr",

@@ -1,0 +1,70 @@
+network-status-version 3 microdesc
+vote-status consensus
+consensus-method 30
+valid-after 2020-12-16 19:17:20
+fresh-until 2020-12-16 19:17:40
+valid-until 2020-12-16 19:18:00
+voting-delay 4 4
+client-versions 
+server-versions 
+known-flags Authority Exit Fast Guard HSDir NoEdConsensus Running Stable StaleDesc V2Dir Valid
+recommended-client-protocols Cons=2 Desc=2 DirCache=2 HSDir=2 HSIntro=4 HSRend=2 Link=4-5 Microdesc=2 Relay=2
+recommended-relay-protocols Cons=2 Desc=2 DirCache=2 HSDir=2 HSIntro=4 HSRend=2 Link=4-5 LinkAuth=3 Microdesc=2 Relay=2
+required-client-protocols Cons=2 Desc=2 Link=4 Microdesc=2 Relay=2
+required-relay-protocols Cons=2 Desc=2 DirCache=2 HSDir=2 HSIntro=4 HSRend=2 Link=4-5 LinkAuth=3 Microdesc=2 Relay=2
+dir-source test002a 3E53F6F21D09BB0AD70324EB3FEF6C73D8743534 127.0.0.1 127.0.0.1 7002 5002
+contact auth2@test.test
+vote-digest 3F516E98EC1E917D2D85F8CDC2367DC4FC9063BF
+dir-source test001a B4CEBF317867DF2772F5901C492152376C18710C 127.0.0.1 127.0.0.1 7001 5001
+contact auth1@test.test
+vote-digest 40E60C52E1AAC2964BCDE8DB51895823C046909E
+dir-source test000a BAF7E250984702BF0E03F25B4E3EC19DBA20FCD2 127.0.0.1 127.0.0.1 7000 5000
+contact auth0@test.test
+vote-digest 331731F33CBA81DE7431F7B4DB45B1354240E9A4
+r test002a QtS+P906r9KsGtMpKkOowlK+Cls 2020-12-16 19:17:06 127.0.0.1 5002 7002
+m QxfB3i6thZ6vgvovto5mD24nP3E/Q6q6NQ112hq4luQ
+s Authority Exit Fast Guard HSDir Running Stable V2Dir Valid
+v Tor 0.4.6.0-alpha-dev
+pr Cons=1-2 Desc=1-2 DirCache=1-2 FlowCtrl=1 HSDir=1-2 HSIntro=3-5 HSRend=1-2 Link=1-5 LinkAuth=1,3 Microdesc=1-2 Padding=2 Relay=1-3
+w Bandwidth=4 Unmeasured=1
+r test000a htyPQJ4CC2qhNCRR8OdmyLfP9b8 2020-12-16 19:17:06 127.0.0.1 5000 7000
+m sY9Ycuv2qV373vcfsKZFH5mGdPagdD3Z3Qw+BUgoH0o
+s Authority Exit Fast Guard HSDir Running Stable V2Dir Valid
+v Tor 0.4.6.0-alpha-dev
+pr Cons=1-2 Desc=1-2 DirCache=1-2 FlowCtrl=1 HSDir=1-2 HSIntro=3-5 HSRend=1-2 Link=1-5 LinkAuth=1,3 Microdesc=1-2 Padding=2 Relay=1-3
+w Bandwidth=4 Unmeasured=1
+r test001a 8eUXcNFYY2EExHX9Ece8vM044Uk 2020-12-16 19:17:08 127.0.0.1 5001 7001
+m ekUObdf3yueSU6qv0IqibU/FDriVmEMUYk2BSo9i3wU
+s Authority Exit Fast Guard HSDir Running Stable V2Dir Valid
+v Tor 0.4.6.0-alpha-dev
+pr Cons=1-2 Desc=1-2 DirCache=1-2 FlowCtrl=1 HSDir=1-2 HSIntro=3-5 HSRend=1-2 Link=1-5 LinkAuth=1,3 Microdesc=1-2 Padding=2 Relay=1-3
+w Bandwidth=3 Unmeasured=1
+directory-footer
+bandwidth-weights Wbd=3333 Wbe=0 Wbg=0 Wbm=10000 Wdb=10000 Web=10000 Wed=3333 Wee=10000 Weg=3333 Wem=10000 Wgb=10000 Wgd=3333 Wgg=10000 Wgm=10000 Wmb=10000 Wmd=3333 Wme=0 Wmg=0 Wmm=10000
+directory-signature sha256 3E53F6F21D09BB0AD70324EB3FEF6C73D8743534 3BA78CCEE02433A6AE66BC977B36B32AB7764DF9
+-----BEGIN SIGNATURE-----
+BsHsRfhEidhvHf8QNjAziSOslSAiLuL495bVNP59McW1+lB04G5RRyPFuKq6NqHf
+Dax1451jWYC1ZHT+FnjTohuYJzlCh68O5YhdP21Ecbj8CoZ/edh3o+kJ2mrSbWzc
+b1+CZhkixMRUWKSSRwEl6qO7HmeqMAWJLtBcDJPyo9nY6667HipWZLBE4wnM25dz
+GcYtVZ3uoTAwpqjkgOYKcBHgzv5ut8O2huHAMmLZQoU0ROwCt1zMrgxhM2ojulPj
+wZkcJDodYfKHx144VXhqd2HwA6yyqQ40Kd+Jfsp2cpsy1aykxiGjibldFjOo5RXK
+cqWB9djTOAnrkVAo4V3myg==
+-----END SIGNATURE-----
+directory-signature sha256 B4CEBF317867DF2772F5901C492152376C18710C 186F277FB9477ED228326AECDAFE2B043FD76A93
+-----BEGIN SIGNATURE-----
+Dyt2mWX+u5UzQm7naQ3OtVG88hx2n4pqM4d61iAb/p5HPuIfC0MDe94TMaCxXR+S
+Kh7ZEiHih7rdWWFrIv+p/jLezXwsEGjh7vd7Xlmt5KaYTCXyfgDvp9XrlHN7jHRP
+KnAVH6W0syIXqsMTvUvD5VJByyGtKDdq+D2FT0q13Y2dDJLhCuzgIMD7kKJkkTeG
+vOUtweWBsoLtrX3fBgA1X5BTdTOGnK3Jpeotshtg5z5I/ieNMsF5/MmYPn/qZQ21
+ecRogFK5vJXGDtpkLdEwIGAKPsjzHvRc4UicCg3TthAKJZrraAIGtGs3B8h9jOhH
+/HwOLF2GPSu76aNhYhpmiQ==
+-----END SIGNATURE-----
+directory-signature sha256 BAF7E250984702BF0E03F25B4E3EC19DBA20FCD2 60B0593B105AA34956590243B80B69C1BA5259F9
+-----BEGIN SIGNATURE-----
+s1Ba8ofWFG/buoqIRv1ZWSw9vfEnEu+jGujRJyIZGGaOmkFd4VeJIN2bizqaKbtt
+ZqTYZzITOk/BNLW5FKOhOQMm9X2KRk8xvYNbKhwc79nEBEqwpZRDG9vrR9KWXDU5
+bPv9vNZP4TLLpuOXxl/I4g4xrrLRcGtgyGIinml20DBTKCdczk412M2NKZy5p5pg
+lwGytkMDAqVcnSmoA49lj4HQDS8AT/jANJ/YRGBMCRpcoSjccoWCyEauckUk1q8t
+1tugjXi7KiO9i5kyZP8XWONyeLTUYGZcjX+1RJxnuzahQ31RlJC2SJY0PjWLQzAJ
+TPvxWo9jaYy2+k1Nmq0uOg==
+-----END SIGNATURE-----
