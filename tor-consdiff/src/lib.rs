@@ -13,6 +13,7 @@ pub enum Error {
 
 type Result<T> = std::result::Result<T, Error>;
 
+#[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
 pub fn apply_diff_trivial<'a>(input: &'a str, diff: &'a str) -> Result<DiffResult<'a>> {
     let mut diff_lines = diff.lines();
     let (d1, d2) = parse_diff_header(&mut diff_lines)?;
@@ -146,6 +147,7 @@ impl FromStr for RangeEnd {
 }
 
 impl<'a> DiffCommand<'a> {
+    #[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
     fn apply_to(&self, target: &mut DiffResult<'a>) -> Result<()> {
         use DiffCommand::*;
         match self {
@@ -356,6 +358,7 @@ impl<'a> DiffResult<'a> {
         self.lines.extend(lines.iter().rev())
     }
 
+    #[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
     fn remove_lines(&mut self, first: usize, last: usize) -> Result<()> {
         if first > self.lines.len() || last > self.lines.len() || first == 0 || last == 0 {
             Err(Error::NoSuchLine)
@@ -371,6 +374,7 @@ impl<'a> DiffResult<'a> {
         }
     }
 
+    #[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
     fn insert_at(&mut self, pos: usize, lines: &[&'a str]) -> Result<()> {
         if pos > self.lines.len() + 1 || pos == 0 {
             Err(Error::NoSuchLine)

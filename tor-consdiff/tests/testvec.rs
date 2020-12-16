@@ -1,3 +1,4 @@
+#[cfg(feature = "slow-diff-apply")]
 #[test]
 fn apply_simple() {
     let pre = include_str!("../testdata/consensus1.txt");
