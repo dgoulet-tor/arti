@@ -617,9 +617,9 @@ impl ClientCircImpl {
     async fn handle_sendme(&mut self, hopnum: HopNum, msg: Sendme) -> Result<()> {
         // No need to call "shutdown" on errors in this function;
         // it's called from the reactor task and errors will propagate there.
-        let hop = self.hop_mut(hopnum).ok_or(Error::CircProto(
-            format!("Couldn't find {} hop", hopnum).into(),
-        ))?;
+        let hop = self
+            .hop_mut(hopnum)
+            .ok_or_else(|| Error::CircProto(format!("Couldn't find {} hop", hopnum)))?;
 
         let auth: Option<[u8; 20]> = match msg.into_tag() {
             Some(v) if v.len() == 20 => {
