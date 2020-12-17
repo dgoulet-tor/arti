@@ -22,6 +22,12 @@ pub use err::Error;
 /// Result type used by this crate
 type Result<T> = std::result::Result<T, Error>;
 
+/// Return true if `s` looks more like a consensus diff than some other kind
+/// of document.
+pub fn looks_like_diff(s: &str) -> bool {
+    s.starts_with("network-status-diff-version")
+}
+
 /// Apply a given diff to an input text, and return the result from applying
 /// that diff.
 ///
