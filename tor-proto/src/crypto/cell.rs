@@ -347,45 +347,40 @@ pub(crate) mod tor1 {
         }
         /// Check a cell to see whether its recognized field is set.
         fn recognized<D: Digest + Clone>(
-            &mut self,
+            &self,
             d: &mut D,
             rcvd: &mut GenericArray<u8, D::OutputSize>,
         ) -> bool {
-            // maybe too optimized? XXXX
-            // XXXX self is only mut for an optimization.
             use crate::util::ct;
-            use arrayref::{array_mut_ref, array_ref};
+            use arrayref::array_ref;
+
+            // Validate 'Recognized' field
             let recognized = u16::from_be_bytes(*array_ref![self.0, 1, 2]);
             if recognized != 0 {
                 return false;
             }
 
-            let dval = *array_ref![self.0, 5, 4];
-            {
-                self.0[5] = 0;
-                self.0[6] = 0;
-                self.0[7] = 0;
-                self.0[8] = 0;
-            }
+            // Now also validate the 'Digest' field:
 
-            let r = {
-                let mut dtmp = d.clone();
-                dtmp.update(&self.0[..]);
-                dtmp.finalize()
-            };
+            let mut dtmp = d.clone();
+            // Add bytes up to the 'Digest' field
+            dtmp.update(&self.0[..5]);
+            // Add zeroes where the 'Digest' field is
+            dtmp.update([0u8; 4]);
+            // Add the rest of the bytes
+            dtmp.update(&self.0[9..]);
+            // Clone the digest before finalize destroys it because we will use
+            // it in the future
+            let dtmp_clone = dtmp.clone();
+            let result = dtmp.finalize();
 
-            if ct::bytes_eq(&dval[..], &r[0..4]) {
-                // This is for us. We need to process the data again,
-                // apparently, since digesting is destructive
-                // according to the digest api.
-                d.update(&self.0[..]);
-                *rcvd = r;
+            if ct::bytes_eq(&self.0[5..9], &result[0..4]) {
+                // Copy useful things out of this cell (we keep running digest)
+                *d = dtmp_clone;
+                *rcvd = result;
                 return true;
             }
 
-            // This is not for us.  We need to set the digest back to
-            // what it was.
-            *array_mut_ref![self.0, 5, 4] = dval;
             false
         }
     }
