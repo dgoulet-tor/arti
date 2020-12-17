@@ -171,7 +171,11 @@ impl FromStr for RangeEnd {
         if s == "$" {
             Ok(RangeEnd::DollarSign)
         } else {
-            Ok(RangeEnd::Num(s.parse()?))
+            let v: NonZeroUsize = s.parse()?;
+            if v.get() == std::usize::MAX {
+                return Err(Error::BadDiff("range end cannot at usize::MAX"));
+            }
+            Ok(RangeEnd::Num(v))
         }
     }
 }
@@ -338,6 +342,10 @@ impl<'a> DiffCommand<'a> {
         } else {
             (range.parse::<usize>()?, None)
         };
+
+        if low == std::usize::MAX {
+            return Err(Error::BadDiff("range cannot begin at usize::MAX"));
+        }
 
         use DiffCommand::*;
 
@@ -666,6 +674,8 @@ mod test {
         parse_err("4,$c\na\n.");
         parse_err("foo");
         parse_err("5,10p");
+        parse_err("18446744073709551615a");
+        parse_err("1,18446744073709551615d");
 
         Ok(())
     }
