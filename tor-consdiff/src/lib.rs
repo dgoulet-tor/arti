@@ -1,15 +1,9 @@
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
-use std::num::ParseIntError;
 use std::str::FromStr;
 
-#[derive(Debug)]
-pub enum Error {
-    BadDiff,
-    NoSuchLine,
-    InvalidInt,
-    CantParse,
-}
+mod err;
+pub use err::Error;
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -89,17 +83,6 @@ where
         return Err(Error::BadDiff);
     }
     Ok((d1.try_into().unwrap(), d2.try_into().unwrap()))
-}
-
-impl From<ParseIntError> for Error {
-    fn from(_e: ParseIntError) -> Error {
-        Error::InvalidInt
-    }
-}
-impl From<hex::FromHexError> for Error {
-    fn from(_e: hex::FromHexError) -> Error {
-        Error::BadDiff
-    }
 }
 
 #[derive(Clone, Debug)]
