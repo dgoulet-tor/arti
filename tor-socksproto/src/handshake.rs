@@ -43,6 +43,8 @@ enum State {
     ///
     /// (Note that we still need to send a reply.)
     Done,
+    /// Ending (failed) state: the handshake has failed and cannot continue.
+    Failed,
 }
 
 /// An action to take in response to a SOCKS handshake message.
@@ -79,15 +81,24 @@ impl SocksHandshake {
         if input.is_empty() {
             return Err(Error::Truncated);
         }
-        match (self.state, input[0]) {
+        let rv = match (self.state, input[0]) {
             (State::Initial, 4) => self.s4(input),
             (State::Initial, 5) => self.s5_initial(input),
             (State::Initial, v) => Err(Error::BadProtocol(v)),
             (State::Socks5Username, 1) => self.s5_uname(input),
             (State::Socks5Wait, 5) => self.s5(input),
             (State::Done, _) => Err(Error::AlreadyFinished),
+            (State::Failed, _) => Err(Error::AlreadyFinished),
             (_, _) => Err(Error::Syntax),
+        };
+        match rv {
+            Err(Error::Truncated) => (),
+            Err(_) => {
+                self.state = State::Failed;
+            }
+            Ok(_) => (),
         }
+        rv
     }
 
     /// Complete a socks4 or socks4a handshake.
