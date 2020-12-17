@@ -1,0 +1,26 @@
+
+[package]
+name = "tor-consdiff-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.3"
+
+[dependencies.tor-consdiff]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "compare_diffs"
+path = "fuzz_targets/compare_diffs.rs"
+test = false
+doc = false
