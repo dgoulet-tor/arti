@@ -29,6 +29,7 @@ miniz_oxide = "0.4.3"
 #rand = "0.7.3"
 log = "0.4.11"
 thiserror = "1.0.22"
+xz2 = "0.1.6"
 
 [dev-dependencies]
 futures-await-test = "0.3.0"
