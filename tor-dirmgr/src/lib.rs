@@ -35,7 +35,7 @@ use anyhow::{anyhow, Context, Result};
 use async_rwlock::RwLock;
 use futures::lock::Mutex;
 use futures::stream::StreamExt;
-use log::{debug, info};
+use log::{debug, info, warn};
 
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -476,19 +476,48 @@ impl NoInformation {
         circmgr: Arc<CircMgr>,
     ) -> Result<UnvalidatedDir> {
         let mut resource = tor_dirclient::request::ConsensusRequest::new();
-
-        {
-            let r = store.lock().await;
-            if let Some(valid_after) = r.latest_consensus_time()? {
-                resource.set_last_consensus_date(valid_after.into());
-            }
-        }
-        let response = tor_dirclient::get_resource(resource, info, circmgr).await?;
-        let text = response.output();
         // XXXX-A1 In some of the below error cases we should retire the circuit
         // to the cache that gave us this stuff.
 
+        let meta = {
+            let r = store.lock().await;
+            match r.latest_consensus_meta() {
+                Ok(Some(meta)) => {
+                    resource.set_last_consensus_date(meta.lifetime().valid_after());
+                    resource.push_old_consensus_digest(*meta.sha3_256_of_signed());
+                    Some(meta)
+                }
+                Ok(None) => None,
+                Err(e) => {
+                    warn!("Error loading directory metadata: {}", e);
+                    None
+                }
+            }
+        };
+        let response = tor_dirclient::get_resource(resource, info, circmgr).await?;
+        let text = response.output();
+
+        let expanded_diff = if meta.is_some() && tor_consdiff::looks_like_diff(&text) {
+            let meta = meta.unwrap();
+            // This is a diff, not the consensus.
+            let r = store.lock().await;
+            let cons = r.consensus_by_meta(&meta)?;
+            let new_consensus =
+                tor_consdiff::apply_diff(cons.as_str()?, &text, Some(*meta.sha3_256_of_signed()))?
+                    .to_string();
+            // XXXX-A1 have to check digest of new value.
+            info!("Applying a consensus diff");
+            Some(new_consensus)
+        } else {
+            None
+        };
+        let text = match expanded_diff {
+            Some(ref s) => s,
+            None => text,
+        };
+
         let (signedval, remainder, parsed) = MDConsensus::parse(&text)?;
+        debug!("Successfully parsed the consensus");
         let unvalidated = parsed.check_valid_now()?;
         let meta = ConsensusMeta::from_unvalidated(signedval, remainder, &unvalidated);
 

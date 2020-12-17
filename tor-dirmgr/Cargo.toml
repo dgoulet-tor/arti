@@ -15,6 +15,7 @@ mmap = [ "memmap" ]
 tor-chanmgr = { path="../tor-chanmgr", version= "*" }
 tor-checkable = { path="../tor-checkable", version= "*" }
 tor-circmgr = { path="../tor-circmgr", version= "*" }
+tor-consdiff = { path="../tor-consdiff", version= "*" }
 tor-dirclient = { path="../tor-dirclient", version= "*" }
 tor-netdir = { path="../tor-netdir", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }

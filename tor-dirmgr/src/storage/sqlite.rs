@@ -9,6 +9,7 @@ use crate::{Error, Result};
 
 use tor_netdoc::doc::authcert::AuthCertKeyIds;
 use tor_netdoc::doc::microdesc::MDDigest;
+use tor_netdoc::doc::netstatus::Lifetime;
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -240,7 +241,7 @@ impl SqliteStore {
         let sha3_of_whole = cmeta.sha3_256_of_whole();
         let valid_after: DateTime<Utc> = lifetime.valid_after().into();
         let fresh_until: DateTime<Utc> = lifetime.fresh_until().into();
-        let valid_until: DateTime<Utc> = lifetime.valid_after().into();
+        let valid_until: DateTime<Utc> = lifetime.valid_until().into();
 
         // After a few days have passed, a consensus is no good for
         // anything at all, not even diffs.
@@ -270,7 +271,8 @@ impl SqliteStore {
         Ok(())
     }
 
-    /// Return the latest `valid-after` time for any non-pending consensus.
+    /// Return the information about the latest non non-pending consensus,
+    /// including its valid-after time and digest.
     // TODO: XXXX-A1 Take a pending argument?
     //
     // WAIT HANG ON: XXXX-A1.  This whole function is troubling and is
@@ -283,16 +285,35 @@ impl SqliteStore {
     // Tor to/from chutney or a testnet, we might not actually fetch
     // the real consensus that we want because we still have one from
     // the old network that hasn't expired.
-    pub fn latest_consensus_time(&self) -> Result<Option<DateTime<Utc>>> {
-        if let Some(va) = self
-            .conn
-            .query_row(FIND_LATEST_CONSENSUS_TIME, NO_PARAMS, |row| row.get(0))
-            .optional()?
-        {
-            Ok(Some(va))
+    pub fn latest_consensus_meta(&self) -> Result<Option<ConsensusMeta>> {
+        let mut stmt = self.conn.prepare(FIND_LATEST_CONSENSUS_META)?;
+        let mut rows = stmt.query(NO_PARAMS)?;
+        if let Some(row) = rows.next()? {
+            // XXXX-A1 turn all these errors into cache corruption errors?
+            let va: DateTime<Utc> = row.get(0)?;
+            let fu: DateTime<Utc> = row.get(1)?;
+            let vu: DateTime<Utc> = row.get(2)?;
+            let d_signed: String = row.get(3)?;
+            let d_all: String = row.get(4)?;
+            let lifetime = Lifetime::new(va.into(), fu.into(), vu.into())?;
+            let meta = ConsensusMeta::new(
+                lifetime,
+                digest_from_hex(&d_signed)?,
+                digest_from_dstr(&d_all)?,
+            );
+            Ok(Some(meta))
         } else {
             Ok(None)
         }
+    }
+
+    /// Return the valid-after time for the latest non non-pending consensus,
+    #[cfg(test)]
+    // We should revise the tests to use latest_consensus_meta instead.
+    fn latest_consensus_time(&self) -> Result<Option<DateTime<Utc>>> {
+        Ok(self
+            .latest_consensus_meta()?
+            .map(|m| m.lifetime().valid_after().into()))
     }
 
     /// Load the latest consensus from disk.  If `pending` is true, we
@@ -312,6 +333,17 @@ impl SqliteStore {
         } else {
             Ok(None)
         }
+    }
+
+    /// Try to read the consensus corresponding to the provided metadata object.
+    pub fn consensus_by_meta(&self, cmeta: &ConsensusMeta) -> Result<InputString> {
+        let d = hex::encode(cmeta.sha3_256_of_whole());
+        let digest = format!("sha3-256-{}", d);
+
+        let fname: String =
+            self.conn
+                .query_row(FIND_CONSENSUS_BY_DIGEST, params![digest], |row| row.get(0))?;
+        self.read_blob(&fname)
     }
 
     /// Mark the consensus generated from `cmeta` as no longer pending.
@@ -472,6 +504,22 @@ impl Drop for Unlinker {
     }
 }
 
+fn digest_from_hex(s: &str) -> Result<[u8; 32]> {
+    hex::decode(s)?
+        .try_into()
+        .map_err(|_| Error::CacheCorruption("Invalid digest in database").into())
+}
+
+fn digest_from_dstr(s: &str) -> Result<[u8; 32]> {
+    if s.starts_with("sha3-256-") {
+        hex::decode(&s[9..])?
+            .try_into()
+            .map_err(|_| Error::CacheCorruption("Invalid digest in database").into())
+    } else {
+        Err(Error::CacheCorruption("Invalid digest in database").into())
+    }
+}
+
 /// Version number used for this version of the arti cache schema.
 const SCHEMA_VERSION: u32 = 0;
 
@@ -546,11 +594,19 @@ const FIND_CONSENSUS: &str = "
 
 /// Query: Find the valid-after time for the latest-expiring
 /// non-pending microdesc consensus.
-const FIND_LATEST_CONSENSUS_TIME: &str = "
-  SELECT valid_after
+const FIND_LATEST_CONSENSUS_META: &str = "
+  SELECT valid_after, fresh_until, valid_until, sha3_of_signed_part, digest
   FROM Consensuses
   WHERE pending = 0 AND flavor = 'microdesc'
   ORDER BY valid_until DESC
+  LIMIT 1;
+";
+
+/// Look up a consensus by its digest string.
+const FIND_CONSENSUS_BY_DIGEST: &str = "
+  SELECT filename
+  FROM ExtDocs
+  WHERE digest = ?
   LIMIT 1;
 ";
 
