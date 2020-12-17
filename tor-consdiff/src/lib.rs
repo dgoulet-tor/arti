@@ -166,7 +166,7 @@ pub struct DiffResult<'a> {
 
 /// A possible value for the end of a range.  It can be either a line number,
 /// or a dollar sign indicating "end of file".
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 enum RangeEnd {
     /// A line number in the file.
     Num(NonZeroUsize),
@@ -255,7 +255,7 @@ impl<'a> DiffCommand<'a> {
         }
 
         let remove = self.first_removed_line();
-        if remove - 1 > input.lines.len() {
+        if remove == 0 || remove - 1 > input.lines.len() {
             return Err(Error::CantApply(
                 "starting line number didn't correspond to document",
             ));
@@ -354,6 +354,13 @@ impl<'a> DiffCommand<'a> {
         };
 
         use DiffCommand::*;
+
+        match (low, high) {
+            (lo, Some(RangeEnd::Num(hi))) if lo > hi.into() => {
+                return Err(Error::BadDiff("mis-ordered lines in range"))
+            }
+            (_, _) => (),
+        }
 
         let mut cmd = match (command, low, high) {
             ("d", low, None) => Delete { low, high: low },
@@ -466,8 +473,6 @@ impl<'a> DiffResult<'a> {
     fn remove_lines(&mut self, first: usize, last: usize) -> Result<()> {
         if first > self.lines.len() || last > self.lines.len() || first == 0 || last == 0 {
             Err(Error::CantApply("line out of range"))
-        } else if first > last {
-            Err(Error::BadDiff("mis-ordered lines in range"))
         } else {
             let n_to_remove = last - first + 1;
             if last != self.lines.len() {
@@ -478,7 +483,8 @@ impl<'a> DiffResult<'a> {
         }
     }
 
-    /// Insert the provided `lines` so that they appear after position `pos`.
+    /// Insert the provided `lines` so that they appear at 1-indexed
+    /// position `pos`.
     ///
     /// This has to move elements around within the vector, and so it
     /// is potentially O(n) in its length.
@@ -539,7 +545,33 @@ mod test {
     }
 
     #[test]
-    fn apply_command() {
+    fn insert() -> Result<()> {
+        let example = DiffResult::from_str("1\n2\n3\n4\n5\n", [0; 32], [0; 32]);
+        let mut d = example.clone();
+        d.insert_at(3, &["hello", "world"])?;
+        assert_eq!(d.to_string(), "1\n2\nhello\nworld\n3\n4\n5\n");
+
+        let mut d = example.clone();
+        d.insert_at(6, &["hello", "world"])?;
+        assert_eq!(d.to_string(), "1\n2\n3\n4\n5\nhello\nworld\n");
+
+        let mut d = example.clone();
+        assert!(d.insert_at(0, &["hello", "world"]).is_err());
+        assert!(d.insert_at(7, &["hello", "world"]).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn push_reversed() {
+        let mut d = DiffResult::new([0; 32], [0; 32]);
+        d.push_reversed(&["7", "8", "9"]);
+        assert_eq!(d.to_string(), "9\n8\n7\n");
+        d.push_reversed(&["world", "hello", ""]);
+        assert_eq!(d.to_string(), "9\n8\n7\n\nhello\nworld\n");
+    }
+
+    #[test]
+    fn apply_command_simple() {
         let example = DiffResult::from_str("a\nb\nc\nd\ne\nf\n", [0; 32], [0; 32]);
 
         let mut d = example.clone();
@@ -589,6 +621,12 @@ mod test {
             Ok(cmd.unwrap())
         }
 
+        fn parse_err(s: &str) {
+            let mut iter = s.lines();
+            let cmd = DiffCommand::from_line_iterator(&mut iter);
+            assert!(matches!(cmd, Err(Error::BadDiff(_))));
+        }
+
         let p = parse("3,8d\n")?;
         assert!(matches!(p, Delete { low: 3, high: 8 }));
         let p = parse("3d\n")?;
@@ -599,11 +637,158 @@ mod test {
         let p = parse("30,40c\nHello\nWorld\n.\n")?;
         assert!(matches!(p, Replace{ low: 30, high: 40, .. }));
         assert_eq!(p.lines(), Some(&["Hello", "World"][..]));
+        let p = parse("30c\nHello\nWorld\n.\n")?;
+        assert!(matches!(p, Replace{ low: 30, high: 30, .. }));
+        assert_eq!(p.lines(), Some(&["Hello", "World"][..]));
 
         let p = parse("999a\nHello\nWorld\n.\n")?;
         assert!(matches!(p, Insert{ pos: 999, .. }));
         assert_eq!(p.lines(), Some(&["Hello", "World"][..]));
+        let p = parse("0a\nHello\nWorld\n.\n")?;
+        assert!(matches!(p, Insert{ pos: 0, .. }));
+        assert_eq!(p.lines(), Some(&["Hello", "World"][..]));
+
+        parse_err("hello world");
+        parse_err("\n\n");
+        parse_err("$,5d");
+        parse_err("5,6,8d");
+        parse_err("8,5d");
+        parse_err("6");
+        parse_err("d");
+        parse_err("-10d");
+        parse_err("4,$c\na\n.");
+        parse_err("foo");
+        parse_err("5,10p");
 
         Ok(())
+    }
+
+    #[test]
+    fn apply_transformation() -> Result<()> {
+        let example = DiffResult::from_str("1\n2\n3\n4\n5\n6\n7\n8\n9\n", [0; 32], [0; 32]);
+        let empty = DiffResult::new([1; 32], [1; 32]);
+
+        let mut inp = example.clone();
+        let mut out = empty.clone();
+        DiffCommand::DeleteToEnd { low: 5 }.apply_transformation(&mut inp, &mut out)?;
+        assert_eq!(inp.to_string(), "1\n2\n3\n4\n");
+        assert_eq!(out.to_string(), "");
+
+        let mut inp = example.clone();
+        let mut out = empty.clone();
+        DiffCommand::Delete { low: 3, high: 5 }.apply_transformation(&mut inp, &mut out)?;
+        assert_eq!(inp.to_string(), "1\n2\n");
+        assert_eq!(out.to_string(), "9\n8\n7\n6\n");
+
+        let mut inp = example.clone();
+        let mut out = empty.clone();
+        DiffCommand::Replace {
+            low: 5,
+            high: 6,
+            lines: vec!["oh hey", "there"],
+        }
+        .apply_transformation(&mut inp, &mut out)?;
+        assert_eq!(inp.to_string(), "1\n2\n3\n4\n");
+        assert_eq!(out.to_string(), "9\n8\n7\nthere\noh hey\n");
+
+        let mut inp = example.clone();
+        let mut out = empty.clone();
+        DiffCommand::Insert {
+            pos: 3,
+            lines: vec!["oh hey", "there"],
+        }
+        .apply_transformation(&mut inp, &mut out)?;
+        assert_eq!(inp.to_string(), "1\n2\n3\n");
+        assert_eq!(out.to_string(), "9\n8\n7\n6\n5\n4\nthere\noh hey\n");
+        DiffCommand::Insert {
+            pos: 0,
+            lines: vec!["boom!"],
+        }
+        .apply_transformation(&mut inp, &mut out)?;
+        assert_eq!(inp.to_string(), "");
+        assert_eq!(
+            out.to_string(),
+            "9\n8\n7\n6\n5\n4\nthere\noh hey\n3\n2\n1\nboom!\n"
+        );
+
+        let mut inp = example.clone();
+        let mut out = empty.clone();
+        let r = DiffCommand::Delete {
+            low: 100,
+            high: 200,
+        }
+        .apply_transformation(&mut inp, &mut out);
+        assert!(r.is_err());
+        let r = DiffCommand::Delete { low: 5, high: 200 }.apply_transformation(&mut inp, &mut out);
+        assert!(r.is_err());
+        let r = DiffCommand::Delete { low: 0, high: 1 }.apply_transformation(&mut inp, &mut out);
+        assert!(r.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn header() -> Result<()> {
+        fn header_from(s: &str) -> Result<([u8; 32], [u8; 32])> {
+            let mut iter = s.lines();
+            parse_diff_header(&mut iter)
+        }
+
+        let (a,b) = header_from(
+            "network-status-diff-version 1
+hash B03DA3ACA1D3C1D083E3FF97873002416EBD81A058B406D5C5946EAB53A79663 F6789F35B6B3BA58BB23D29E53A8ED6CBB995543DBE075DD5671481C4BA677FB"
+        )?;
+
+        assert_eq!(
+            &a[..],
+            hex::decode("B03DA3ACA1D3C1D083E3FF97873002416EBD81A058B406D5C5946EAB53A79663")?
+        );
+        assert_eq!(
+            &b[..],
+            hex::decode("F6789F35B6B3BA58BB23D29E53A8ED6CBB995543DBE075DD5671481C4BA677FB")?
+        );
+
+        assert!(header_from("network-status-diff-version 2\n").is_err());
+        assert!(header_from("").is_err());
+        assert!(header_from("5,$d\n1,2d\n").is_err());
+        assert!(header_from("network-status-diff-1\n").is_err());
+        assert!(header_from(
+            "network-status-diff-version 1
+hash x y
+5,5d"
+        )
+        .is_err());
+        assert!(header_from(
+            "network-status-diff-version 1
+hash x y
+5,5d"
+        )
+        .is_err());
+        assert!(header_from(
+            "network-status-diff-version 1
+hash AA BB
+5,5d"
+        )
+        .is_err());
+        assert!(header_from(
+            "network-status-diff-version 1
+oh hello there
+5,5d"
+        )
+        .is_err());
+        assert!(header_from("network-status-diff-version 1
+hash B03DA3ACA1D3C1D083E3FF97873002416EBD81A058B406D5C5946EAB53A79663 F6789F35B6B3BA58BB23D29E53A8ED6CBB995543DBE075DD5671481C4BA677FB extra").is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn apply_simple() {
+        let pre = include_str!("../testdata/consensus1.txt");
+        let diff = include_str!("../testdata/diff1.txt");
+        let post = include_str!("../testdata/consensus2.txt");
+
+        let result = apply_diff_trivial(pre, diff).unwrap();
+        assert_eq!(result.to_string(), post);
     }
 }
