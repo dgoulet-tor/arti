@@ -27,7 +27,7 @@ type Result<T> = std::result::Result<T, Error>;
 ///
 /// This is a slow version, for testing and correctness checking.  It uses
 /// an O(n) operation to apply diffs, and therefore runs in O(n^2) time.
-#[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
+#[cfg(any(test, fuzzing, feature = "slow-diff-apply"))]
 pub fn apply_diff_trivial<'a>(input: &'a str, diff: &'a str) -> Result<DiffResult<'a>> {
     let mut diff_lines = diff.lines();
     let (d1, d2) = parse_diff_header(&mut diff_lines)?;
@@ -181,7 +181,7 @@ impl<'a> DiffCommand<'a> {
     ///
     /// Because DiffResult internally uses a vector of line, this
     /// implementation is potentially O(n) in the size of the input.
-    #[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
+    #[cfg(any(test, fuzzing, feature = "slow-diff-apply"))]
     fn apply_to(&self, target: &mut DiffResult<'a>) -> Result<()> {
         use DiffCommand::*;
         match self {
@@ -246,7 +246,7 @@ impl<'a> DiffCommand<'a> {
         }
 
         let remove = self.first_removed_line();
-        if remove == 0 || remove - 1 > input.lines.len() {
+        if remove == 0 || (!self.is_insert() && remove > input.lines.len()) {
             return Err(Error::CantApply(
                 "starting line number didn't correspond to document",
             ));
@@ -304,6 +304,11 @@ impl<'a> DiffCommand<'a> {
             Replace { low, .. } => *low,
             Insert { pos, .. } => *pos + 1,
         }
+    }
+
+    /// Return true if this is an Insert command.
+    fn is_insert(&self) -> bool {
+        matches!(self, DiffCommand::Insert {..})
     }
 
     /// Extract a single command from a line iterator that yields lines
@@ -425,8 +430,8 @@ where
             Ok(Some(c)) => match (self.last_cmd_first_removed, c.following_lines()) {
                 (Some(_), None) => Some(Err(Error::BadDiff("misordered commands"))),
                 (Some(a), Some(b)) if a < b => Some(Err(Error::BadDiff("misordered commands"))),
-                (_, b) => {
-                    self.last_cmd_first_removed = b;
+                (_, _) => {
+                    self.last_cmd_first_removed = Some(c.first_removed_line());
                     Some(Ok(c))
                 }
             },
@@ -471,7 +476,7 @@ impl<'a> DiffResult<'a> {
     ///
     /// This has to move elements around within the vector, and so it
     /// is potentially O(n) in its length.
-    #[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
+    #[cfg(any(test, fuzzing, feature = "slow-diff-apply"))]
     fn remove_lines(&mut self, first: usize, last: usize) -> Result<()> {
         if first > self.lines.len() || last > self.lines.len() || first == 0 || last == 0 {
             Err(Error::CantApply("line out of range"))
@@ -490,7 +495,7 @@ impl<'a> DiffResult<'a> {
     ///
     /// This has to move elements around within the vector, and so it
     /// is potentially O(n) in its length.
-    #[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
+    #[cfg(any(test, fuzzing, feature = "slow-diff-apply"))]
     fn insert_at(&mut self, pos: usize, lines: &[&'a str]) -> Result<()> {
         if pos > self.lines.len() + 1 || pos == 0 {
             Err(Error::CantApply("position out of range"))
@@ -678,6 +683,12 @@ mod test {
 
         let mut inp = example.clone();
         let mut out = empty.clone();
+        DiffCommand::DeleteToEnd { low: 9 }.apply_transformation(&mut inp, &mut out)?;
+        assert_eq!(inp.to_string(), "1\n2\n3\n4\n5\n6\n7\n8\n");
+        assert_eq!(out.to_string(), "");
+
+        let mut inp = example.clone();
+        let mut out = empty.clone();
         DiffCommand::Delete { low: 3, high: 5 }.apply_transformation(&mut inp, &mut out)?;
         assert_eq!(inp.to_string(), "1\n2\n");
         assert_eq!(out.to_string(), "9\n8\n7\n6\n");
@@ -725,7 +736,8 @@ mod test {
         assert!(r.is_err());
         let r = DiffCommand::Delete { low: 0, high: 1 }.apply_transformation(&mut inp, &mut out);
         assert!(r.is_err());
-
+        let r = DiffCommand::DeleteToEnd { low: 10 }.apply_transformation(&mut inp, &mut out);
+        assert!(r.is_err());
         Ok(())
     }
 
