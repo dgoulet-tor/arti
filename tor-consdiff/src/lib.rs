@@ -63,17 +63,8 @@ pub fn apply_diff<'a>(
 
     let mut output = DiffResult::new(d1, d2);
 
-    let mut prev_command = None; // XXX move this check to DiffCommandIter?
     for command in DiffCommandIter::new(diff_lines) {
-        let command = command?;
-        if let Some(ref prev) = prev_command {
-            if !command.precedes(prev) {
-                return Err(Error::BadDiff("diff commands not listed in reverse order"));
-            }
-        }
-        command.apply_transformation(&mut input, &mut output)?;
-
-        prev_command = Some(command);
+        command?.apply_transformation(&mut input, &mut output)?;
     }
 
     output.push_reversed(&input.lines[..]);
@@ -315,16 +306,6 @@ impl<'a> DiffCommand<'a> {
         }
     }
 
-    /// Return true if this command affects an earlier part of the input
-    /// than `other` does.
-    fn precedes(&self, other: &DiffCommand<'a>) -> bool {
-        let their_beginning = other.first_removed_line();
-        match self.following_lines() {
-            Some(my_end) => my_end <= their_beginning,
-            None => false,
-        }
-    }
-
     /// Extract a single command from a line iterator that yields lines
     /// of the diffs.  Return None if we're at the end of the iterator.
     fn from_line_iterator<I>(iter: &mut I) -> Result<Option<Self>>
@@ -404,12 +385,19 @@ impl<'a> DiffCommand<'a> {
 
 /// Iterator that wraps a line iterator and returns a sequence
 /// Result<DiffCommand>.
+///
+/// This iterator forces the commands to affect the file in reverse order,
+/// so that we can use the O(n) algorithm for applying these diffs.
 struct DiffCommandIter<'a, I>
 where
     I: Iterator<Item = &'a str>,
 {
     /// The underlying iterator.
     iter: I,
+
+    /// The 'first removed line' of the last-parsed command; used to ensure
+    /// that commands appear in reverse order.
+    last_cmd_first_removed: Option<usize>,
 }
 
 impl<'a, I> DiffCommandIter<'a, I>
@@ -418,7 +406,10 @@ where
 {
     /// Construct a new DiffCommandIter wrapping `iter`.
     fn new(iter: I) -> Self {
-        DiffCommandIter { iter }
+        DiffCommandIter {
+            iter,
+            last_cmd_first_removed: None,
+        }
     }
 }
 
@@ -428,7 +419,18 @@ where
 {
     type Item = Result<DiffCommand<'a>>;
     fn next(&mut self) -> Option<Result<DiffCommand<'a>>> {
-        DiffCommand::from_line_iterator(&mut self.iter).transpose()
+        match DiffCommand::from_line_iterator(&mut self.iter) {
+            Err(e) => Some(Err(e)),
+            Ok(None) => None,
+            Ok(Some(c)) => match (self.last_cmd_first_removed, c.following_lines()) {
+                (Some(_), None) => Some(Err(Error::BadDiff("misordered commands"))),
+                (Some(a), Some(b)) if a < b => Some(Err(Error::BadDiff("misordered commands"))),
+                (_, b) => {
+                    self.last_cmd_first_removed = b;
+                    Some(Ok(c))
+                }
+            },
+        }
     }
 }
 
@@ -751,7 +753,7 @@ hash B03DA3ACA1D3C1D083E3FF97873002416EBD81A058B406D5C5946EAB53A79663 F6789F35B6
         assert!(header_from("network-status-diff-version 2\n").is_err());
         assert!(header_from("").is_err());
         assert!(header_from("5,$d\n1,2d\n").is_err());
-        assert!(header_from("network-status-diff-1\n").is_err());
+        assert!(header_from("network-status-diff-version 1\n").is_err());
         assert!(header_from(
             "network-status-diff-version 1
 hash x y
@@ -790,5 +792,23 @@ hash B03DA3ACA1D3C1D083E3FF97873002416EBD81A058B406D5C5946EAB53A79663 F6789F35B6
 
         let result = apply_diff_trivial(pre, diff).unwrap();
         assert_eq!(result.to_string(), post);
+    }
+
+    #[test]
+    fn sort_order() -> Result<()> {
+        fn cmds(s: &str) -> Result<Vec<DiffCommand<'_>>> {
+            let mut out = Vec::new();
+            for cmd in DiffCommandIter::new(s.lines()) {
+                out.push(cmd?)
+            }
+            Ok(out)
+        }
+
+        let _ = cmds("6,9d\n5,5d\n")?;
+        assert!(cmds("5,5d\n6,9d\n").is_err());
+        assert!(cmds("5,5d\n6,6d\n").is_err());
+        assert!(cmds("5,5d\n5,6d\n").is_err());
+
+        Ok(())
     }
 }
