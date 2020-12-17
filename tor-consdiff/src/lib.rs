@@ -32,7 +32,7 @@ pub fn apply_diff<'a>(
     let (d1, d2) = parse_diff_header(&mut diff_lines)?;
     if let Some(d_want) = check_digest_in {
         if d1 != d_want {
-            return Err(Error::BadDiff);
+            return Err(Error::CantApply("listed digest does not match document"));
         }
     }
 
@@ -43,7 +43,7 @@ pub fn apply_diff<'a>(
         let command = command?;
         if let Some(ref prev) = prev_command {
             if !command.precedes(prev) {
-                return Err(Error::BadDiff);
+                return Err(Error::BadDiff("diff commands not listed in reverse order"));
             }
         }
         command.apply_transformation(&mut input, &mut output)?;
@@ -63,24 +63,24 @@ where
 {
     let line1 = iter.next();
     if line1 != Some("network-status-diff-version 1") {
-        return Err(Error::BadDiff);
+        return Err(Error::BadDiff("unrecognized or missing header"));
     }
     let line2 = iter.next();
     if line2.is_none() {
-        return Err(Error::BadDiff);
+        return Err(Error::BadDiff("header truncated"));
     }
     let line2 = line2.unwrap();
     if !line2.starts_with("hash") {
-        return Err(Error::BadDiff);
+        return Err(Error::BadDiff("missing 'hash' line"));
     }
     let elts: Vec<_> = line2.split_ascii_whitespace().collect();
     if elts.len() != 3 {
-        return Err(Error::BadDiff);
+        return Err(Error::BadDiff("invalid 'hash' line"));
     }
     let d1 = hex::decode(elts[1])?;
     let d2 = hex::decode(elts[2])?;
     if d1.len() != 32 || d2.len() != 32 {
-        return Err(Error::BadDiff);
+        return Err(Error::BadDiff("wrong digest lengths on 'hash' line"));
     }
     Ok((d1.try_into().unwrap(), d2.try_into().unwrap()))
 }
@@ -193,7 +193,9 @@ impl<'a> DiffCommand<'a> {
                 output.push_reversed(subslice);
             } else {
                 // Oops, dubious line number.
-                return Err(Error::BadDiff);
+                return Err(Error::CantApply(
+                    "ending line number didn't correspond to document",
+                ));
             }
         }
 
@@ -204,7 +206,9 @@ impl<'a> DiffCommand<'a> {
 
         let remove = self.first_removed_line();
         if remove - 1 > input.lines.len() {
-            return Err(Error::BadDiff);
+            return Err(Error::CantApply(
+                "starting line number didn't correspond to document",
+            ));
         }
         input.lines.truncate(remove - 1);
 
@@ -239,7 +243,7 @@ impl<'a> DiffCommand<'a> {
         };
 
         if command.len() < 2 || !command.is_ascii() {
-            return Err(Error::CantParse);
+            return Err(Error::BadDiff("command too short"));
         }
 
         let (range, command) = command.split_at(command.len() - 1);
@@ -272,13 +276,13 @@ impl<'a> DiffCommand<'a> {
                 pos: low,
                 lines: Vec::new(),
             },
-            (_, _, _) => return Err(Error::CantParse),
+            (_, _, _) => return Err(Error::BadDiff("can't parse command line")),
         };
 
         if let Some(ref mut linebuf) = cmd.linebuf_mut() {
             loop {
                 match iter.next() {
-                    None => return Err(Error::CantParse),
+                    None => return Err(Error::BadDiff("unterminated block to insert")),
                     Some(".") => break,
                     Some(line) => linebuf.push(line),
                 }
@@ -344,9 +348,9 @@ impl<'a> DiffResult<'a> {
     #[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
     fn remove_lines(&mut self, first: usize, last: usize) -> Result<()> {
         if first > self.lines.len() || last > self.lines.len() || first == 0 || last == 0 {
-            Err(Error::NoSuchLine)
+            Err(Error::CantApply("line out of range"))
         } else if first > last {
-            Err(Error::BadDiff)
+            Err(Error::BadDiff("mis-ordered lines in range"))
         } else {
             let n_to_remove = last - first + 1;
             if last != self.lines.len() {
@@ -360,7 +364,7 @@ impl<'a> DiffResult<'a> {
     #[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
     fn insert_at(&mut self, pos: usize, lines: &[&'a str]) -> Result<()> {
         if pos > self.lines.len() + 1 || pos == 0 {
-            Err(Error::NoSuchLine)
+            Err(Error::CantApply("position out of range"))
         } else {
             let orig_len = self.lines.len();
             self.lines.resize(self.lines.len() + lines.len(), "");

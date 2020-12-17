@@ -4,23 +4,20 @@ use std::num::ParseIntError;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
-    #[error("Invalid diff.")]
-    BadDiff,
-    #[error("Diff refers to an impossible line number.")]
-    NoSuchLine,
-    #[error("Misformed integer in diff.")]
-    InvalidInt,
-    #[error("Can't parse the diff.")]
-    CantParse,
+    // TODO: it would be neat to have line numbers here.
+    #[error("Invalid diff: {0}")]
+    BadDiff(&'static str),
+    #[error("Diff didn't apply to input: {0}")]
+    CantApply(&'static str),
 }
 
 impl From<ParseIntError> for Error {
     fn from(_e: ParseIntError) -> Error {
-        Error::InvalidInt
+        Error::BadDiff("can't parse line number")
     }
 }
 impl From<hex::FromHexError> for Error {
     fn from(_e: hex::FromHexError) -> Error {
-        Error::BadDiff
+        Error::BadDiff("invalid hexadecimal in 'hash' line")
     }
 }
