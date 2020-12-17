@@ -256,5 +256,8 @@ impl ClientRequest for MicrodescRequest {
 /// (Right now, this is only Accept-Encoding.)
 fn add_common_headers(req: http::request::Builder) -> http::request::Builder {
     // TODO: gzip, zstd, brotli
-    req.header(http::header::ACCEPT_ENCODING, "deflate, identity, x-tor-lzma")
+    req.header(
+        http::header::ACCEPT_ENCODING,
+        "deflate, identity, x-tor-lzma",
+    )
 }
