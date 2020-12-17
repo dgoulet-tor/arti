@@ -1,12 +1,32 @@
+//! Files that encode the difference between two consensus documents.
+//!
+//! Tor uses a restricted vesion of the "ed-style" diff format to
+//! record the difference between a pair of consensus documents, so that
+//! clients can download only the changes since the last document they
+//! have.
+//!
+//! This module provides a function to apply one of these diffs to a
+//! consensus.
+
+#![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
+
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
+use std::num::NonZeroUsize;
 use std::str::FromStr;
 
 mod err;
 pub use err::Error;
 
+/// Result type used by this crate
 type Result<T> = std::result::Result<T, Error>;
 
+/// Apply a given diff to an input text, and return the result from applying
+/// that diff.
+///
+/// This is a slow version, for testing and correctness checking.  It uses
+/// an O(n) operation to apply diffs, and therefore runs in O(n^2) time.
 #[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
 pub fn apply_diff_trivial<'a>(input: &'a str, diff: &'a str) -> Result<DiffResult<'a>> {
     let mut diff_lines = diff.lines();
@@ -21,6 +41,11 @@ pub fn apply_diff_trivial<'a>(input: &'a str, diff: &'a str) -> Result<DiffResul
     Ok(diffable)
 }
 
+/// Apply a given diff to an input text, and return the result from applying
+/// that diff.
+///
+/// If `check_digest_in` is provided, require the diff to say that it
+/// applies to a document with the provided digest.
 pub fn apply_diff<'a>(
     input: &'a str,
     diff: &'a str,
@@ -57,6 +82,8 @@ pub fn apply_diff<'a>(
     Ok(output)
 }
 
+/// Given a line iterator, check to make sure the first two lines are
+/// a valid diff header as specified in dir-spec.txt.
 fn parse_diff_header<'a, I>(iter: &mut I) -> Result<([u8; 32], [u8; 32])>
 where
     I: Iterator<Item = &'a str>,
@@ -85,36 +112,65 @@ where
     Ok((d1.try_into().unwrap(), d2.try_into().unwrap()))
 }
 
+/// A command that can appear in a diff.  Each command tells us to
+/// remove zero or more lines, and insert zero or more lines in their
+/// place.
+///
+/// Commands refer to lines by 1-indexed line number.
 #[derive(Clone, Debug)]
 enum DiffCommand<'a> {
+    /// Remove the lines from low through high, inclusive.
     Delete {
+        /// The first line to remove
         low: usize,
+        /// The last line to remove
         high: usize,
     },
+    /// Remove the lines from low through the end of the file, inclusive.
     DeleteToEnd {
+        /// The first line to remove
         low: usize,
     },
+    /// Replace the lines from low through high, inclusive, with the
+    /// lines in 'lines'.
     Replace {
+        /// The first line to replace
         low: usize,
+        /// The last line to replace
         high: usize,
+        /// The text to insert instead
         lines: Vec<&'a str>,
-    }, // XXXX maybe slice
+    },
+    /// Insert the provided 'lines' after the line with index 'pos'.
     Insert {
+        /// The position after which to insert the text
         pos: usize,
+        /// The text to insert
         lines: Vec<&'a str>,
-    }, // XXXX maybe slice.
+    },
 }
 
+/// The result of applying one or more diff commands to an input string.
+///
+/// It refers to lines from the diff and the input by reference, to
+/// avoid copying.
 #[derive(Clone, Debug)]
 pub struct DiffResult<'a> {
+    /// An expected digest of the input, before the digest is computed.
     d_pre: [u8; 32],
+    /// An expected digest of the output, after it has been assembled.
     d_post: [u8; 32],
+    /// The lines in the output.
     lines: Vec<&'a str>,
 }
 
+/// A possible value for the end of a range.  It can be either a line number,
+/// or a dollar sign indicating "end of file".
 #[derive(Clone, Debug)]
 enum RangeEnd {
-    Num(usize),
+    /// A line number in the file.
+    Num(NonZeroUsize),
+    /// A dollar sign, indicating "end of file" in a delete command.
     DollarSign,
 }
 
@@ -130,6 +186,10 @@ impl FromStr for RangeEnd {
 }
 
 impl<'a> DiffCommand<'a> {
+    /// Transform 'target' according to the this command.
+    ///
+    /// Because DiffResult internally uses a vector of line, this
+    /// implementation is potentially O(n) in the size of the input.
     #[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
     fn apply_to(&self, target: &mut DiffResult<'a>) -> Result<()> {
         use DiffCommand::*;
@@ -154,34 +214,24 @@ impl<'a> DiffCommand<'a> {
         Ok(())
     }
 
-    fn following_lines(&self) -> Option<usize> {
-        use DiffCommand::*;
-        match self {
-            Delete { high, .. } => Some(high + 1),
-            DeleteToEnd { .. } => None,
-            Replace { high, .. } => Some(high + 1),
-            Insert { pos, .. } => Some(pos + 1),
-        }
-    }
-
-    fn first_removed_line(&self) -> usize {
-        use DiffCommand::*;
-        match self {
-            Delete { low, .. } => *low,
-            DeleteToEnd { low } => *low,
-            Replace { low, .. } => *low,
-            Insert { pos, .. } => *pos + 1, // XXXX note.
-        }
-    }
-
-    fn precedes(&self, other: &DiffCommand<'a>) -> bool {
-        let their_beginning = other.first_removed_line();
-        match self.following_lines() {
-            Some(my_end) => my_end <= their_beginning,
-            None => false,
-        }
-    }
-
+    /// Apply this command to 'input', moving lines into 'output'.
+    ///
+    /// This is a more efficient algorithm, but it requires that the
+    /// diff commands are sorted in reverse order by line
+    /// number. (Fortunately, the Tor ed diff format guarantees this.)
+    ///
+    /// Before calling this method, input and output must contain the
+    /// results of having applied the previous command in the diff.
+    /// (When no commands have been applied, input starts out as the
+    /// original text, and output starts out empty.)
+    ///
+    /// This method applies the command by copying unaffected lines
+    /// from the _end_ of input into output, adding any lines inserted
+    /// by this command, and finally deleting any affected lines from
+    /// input.
+    ///
+    /// We builds the `output` value in reverse order, and then put it
+    /// back to normal before giving it to the user.
     fn apply_transformation(
         &self,
         input: &mut DiffResult<'a>,
@@ -215,6 +265,7 @@ impl<'a> DiffCommand<'a> {
         Ok(())
     }
 
+    /// Return the lines that we should add to the output
     fn lines(&self) -> Option<&[&'a str]> {
         use DiffCommand::*;
         match self {
@@ -224,6 +275,8 @@ impl<'a> DiffCommand<'a> {
         }
     }
 
+    /// Return a mutable reference to the vector of lines we should
+    /// add to the output.
     fn linebuf_mut(&mut self) -> Option<&mut Vec<&'a str>> {
         use DiffCommand::*;
         match self {
@@ -233,6 +286,47 @@ impl<'a> DiffCommand<'a> {
         }
     }
 
+    /// Return the (1-indexed) line number of the first line in the
+    /// input that comes _after_ this command, and is not affected by it.
+    ///
+    /// We use this line number to know which lines we should copy.
+    fn following_lines(&self) -> Option<usize> {
+        use DiffCommand::*;
+        match self {
+            Delete { high, .. } => Some(high + 1),
+            DeleteToEnd { .. } => None,
+            Replace { high, .. } => Some(high + 1),
+            Insert { pos, .. } => Some(pos + 1),
+        }
+    }
+
+    /// Return the (1-indexed) line number of the first line that we
+    /// should clear from the input when processing this command.
+    ///
+    /// This can be the same as following_lines(), if we shouldn't
+    /// actually remove any lines.
+    fn first_removed_line(&self) -> usize {
+        use DiffCommand::*;
+        match self {
+            Delete { low, .. } => *low,
+            DeleteToEnd { low } => *low,
+            Replace { low, .. } => *low,
+            Insert { pos, .. } => *pos + 1,
+        }
+    }
+
+    /// Return true if this command affects an earlier part of the input
+    /// than `other` does.
+    fn precedes(&self, other: &DiffCommand<'a>) -> bool {
+        let their_beginning = other.first_removed_line();
+        match self.following_lines() {
+            Some(my_end) => my_end <= their_beginning,
+            None => false,
+        }
+    }
+
+    /// Extract a single command from a line iterator that yields lines
+    /// of the diffs.  Return None if we're at the end of the iterator.
     fn from_line_iterator<I>(iter: &mut I) -> Result<Option<Self>>
     where
         I: Iterator<Item = &'a str>,
@@ -241,6 +335,9 @@ impl<'a> DiffCommand<'a> {
             Some(s) => s,
             None => return Ok(None),
         };
+
+        // `command` can be of these forms: `Rc`, `Rd`, `N,$d`, and `Na`,
+        // where R is a range of form `N,N`, and where N is a line number.
 
         if command.len() < 2 || !command.is_ascii() {
             return Err(Error::BadDiff("command too short"));
@@ -260,7 +357,10 @@ impl<'a> DiffCommand<'a> {
 
         let mut cmd = match (command, low, high) {
             ("d", low, None) => Delete { low, high: low },
-            ("d", low, Some(RangeEnd::Num(high))) => Delete { low, high },
+            ("d", low, Some(RangeEnd::Num(high))) => Delete {
+                low,
+                high: high.into(),
+            },
             ("d", low, Some(RangeEnd::DollarSign)) => DeleteToEnd { low },
             ("c", low, None) => Replace {
                 low,
@@ -269,7 +369,7 @@ impl<'a> DiffCommand<'a> {
             },
             ("c", low, Some(RangeEnd::Num(high))) => Replace {
                 low,
-                high,
+                high: high.into(),
                 lines: Vec::new(),
             },
             ("a", low, None) => Insert {
@@ -280,6 +380,8 @@ impl<'a> DiffCommand<'a> {
         };
 
         if let Some(ref mut linebuf) = cmd.linebuf_mut() {
+            // The 'c' and 'a' commands take a series of lines followed by a
+            // line containing a period.
             loop {
                 match iter.next() {
                     None => return Err(Error::BadDiff("unterminated block to insert")),
@@ -293,10 +395,13 @@ impl<'a> DiffCommand<'a> {
     }
 }
 
+/// Iterator that wraps a line iterator and returns a sequence
+/// Result<DiffCommand>.
 struct DiffCommandIter<'a, I>
 where
     I: Iterator<Item = &'a str>,
 {
+    /// The underlying iterator.
     iter: I,
 }
 
@@ -304,6 +409,7 @@ impl<'a, I> DiffCommandIter<'a, I>
 where
     I: Iterator<Item = &'a str>,
 {
+    /// Construct a new DiffCommandIter wrapping `iter`.
     fn new(iter: I) -> Self {
         DiffCommandIter { iter }
     }
@@ -320,6 +426,9 @@ where
 }
 
 impl<'a> DiffResult<'a> {
+    /// Construct a new DiffResult containing the provided string
+    /// split into lines, and a pair of expected pre- and post-
+    /// transformation digests.
     fn from_str(s: &'a str, d_pre: [u8; 32], d_post: [u8; 32]) -> Self {
         // I'd like to use str::split_inclusive here, but that isn't stable yet
         // as of rust 1.48.
@@ -333,6 +442,8 @@ impl<'a> DiffResult<'a> {
         }
     }
 
+    /// Return a new empty DiffResult with a pair of expected pre- and
+    /// post-transformation digests
     fn new(d_pre: [u8; 32], d_post: [u8; 32]) -> Self {
         DiffResult {
             d_pre,
@@ -341,10 +452,16 @@ impl<'a> DiffResult<'a> {
         }
     }
 
+    /// Put every member of `lines` at the end of this DiffResult, in
+    /// reverse order.
     fn push_reversed(&mut self, lines: &[&'a str]) {
         self.lines.extend(lines.iter().rev())
     }
 
+    /// Remove the 1-indexed lines from `first` through `last` inclusive.
+    ///
+    /// This has to move elements around within the vector, and so it
+    /// is potentially O(n) in its length.
     #[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
     fn remove_lines(&mut self, first: usize, last: usize) -> Result<()> {
         if first > self.lines.len() || last > self.lines.len() || first == 0 || last == 0 {
@@ -361,6 +478,10 @@ impl<'a> DiffResult<'a> {
         }
     }
 
+    /// Insert the provided `lines` so that they appear after position `pos`.
+    ///
+    /// This has to move elements around within the vector, and so it
+    /// is potentially O(n) in its length.
     #[cfg(any(test, fuzz, feature = "slow-diff-apply"))]
     fn insert_at(&mut self, pos: usize, lines: &[&'a str]) -> Result<()> {
         if pos > self.lines.len() + 1 || pos == 0 {

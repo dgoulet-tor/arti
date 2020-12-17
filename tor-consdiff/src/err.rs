@@ -1,12 +1,20 @@
+//! Declare an error type for the tor-consdiff crate.
+
 use thiserror::Error;
 
 use std::num::ParseIntError;
 
+/// An error type from the tor-consdiff crate.
 #[derive(Clone, Debug, Error)]
 pub enum Error {
+    /// We got a consensus diff that we couldn't parse, or which we found
+    /// to be somehow invalid.
     // TODO: it would be neat to have line numbers here.
     #[error("Invalid diff: {0}")]
     BadDiff(&'static str),
+
+    /// We got a consensus diff that looked valid, but we couldn't apply it
+    /// to the given input.
     #[error("Diff didn't apply to input: {0}")]
     CantApply(&'static str),
 }
