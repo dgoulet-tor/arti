@@ -240,6 +240,8 @@ with Tor-specific extensions.
 `tor-checkable`: Defines traits and types used to represent things that you
 can't use until verifying their signatures and checking their timeliness.
 
+`tor-consdiff`: Implements the client side of Tor's consensus-diff algorithm.
+
 `tor-netdoc`: Parsing for Tor's network documents.  Underdocumented and too
 big.
 
