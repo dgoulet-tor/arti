@@ -85,6 +85,10 @@ impl Microdesc {
     pub fn ipv6_policy(&self) -> &PortPolicy {
         &self.ipv6_policy
     }
+    /// Return the relay family for this microdesc
+    pub fn family(&self) -> &RelayFamily {
+        &self.family
+    }
     /// Return the ed25519 identity for this microdesc, if its
     /// Ed25519 identity is well-formed.
     pub fn ed25519_id(&self) -> &ed25519::Ed25519Identity {
