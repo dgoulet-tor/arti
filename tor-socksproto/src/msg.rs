@@ -29,7 +29,7 @@ pub struct SocksRequest {
 }
 
 /// An address sent or received as part of a SOCKS handshake
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SocksAddr {
     /// A regular DNS hostname
     Hostname(String),
@@ -204,5 +204,54 @@ mod test {
 
         let a = SocksAddr::Hostname("www.torproject.org".into());
         assert_eq!(a.to_string(), "www.torproject.org");
+    }
+
+    #[test]
+    fn ok_request() {
+        let localhost_v4 = SocksAddr::Ip(IpAddr::V4("127.0.0.1".parse().unwrap()));
+        let r = SocksRequest::new(
+            4,
+            SocksCmd::CONNECT,
+            localhost_v4.clone(),
+            1024,
+            SocksAuth::NoAuth,
+        )
+        .unwrap();
+        assert_eq!(r.version(), 4);
+        assert_eq!(r.command(), SocksCmd::CONNECT);
+        assert_eq!(r.addr(), &localhost_v4);
+        assert_eq!(r.auth(), &SocksAuth::NoAuth);
+    }
+
+    #[test]
+    fn bad_request() {
+        let localhost_v4 = SocksAddr::Ip(IpAddr::V4("127.0.0.1".parse().unwrap()));
+
+        let e = SocksRequest::new(
+            9,
+            SocksCmd::CONNECT,
+            localhost_v4.clone(),
+            1024,
+            SocksAuth::NoAuth,
+        );
+        assert!(matches!(e, Err(Error::NoSupport)));
+
+        let e = SocksRequest::new(
+            4,
+            SocksCmd::BIND,
+            localhost_v4.clone(),
+            1024,
+            SocksAuth::NoAuth,
+        );
+        assert!(matches!(e, Err(Error::NoSupport)));
+
+        let e = SocksRequest::new(
+            4,
+            SocksCmd::CONNECT,
+            localhost_v4.clone(),
+            0,
+            SocksAuth::NoAuth,
+        );
+        assert!(matches!(e, Err(Error::Syntax)));
     }
 }

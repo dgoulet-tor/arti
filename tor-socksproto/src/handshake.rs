@@ -508,4 +508,41 @@ mod test {
             hex!("05 00 00 01 00000000 0000")
         );
     }
+
+    #[test]
+    fn empty_handshake() {
+        let r = SocksHandshake::new().handshake(&[]);
+        assert!(matches!(r, Err(Error::Truncated)));
+    }
+
+    #[test]
+    fn bad_version() {
+        let mut h = SocksHandshake::new();
+        let r = h.handshake(&hex!("06 01 00"));
+        assert!(matches!(r, Err(Error::BadProtocol(6))));
+
+        let mut h = SocksHandshake::new();
+        let _a = h.handshake(&hex!("05 01 00")).unwrap();
+        let r = h.handshake(&hex!("06 01 00"));
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn fused_result() {
+        let good_socks4a = &hex!("04 01 0050 CB007107 00")[..];
+
+        // Can't try again after failure.
+        let mut h = SocksHandshake::new();
+        let r = h.handshake(&hex!("06 01 00"));
+        assert!(r.is_err());
+        let r = h.handshake(good_socks4a);
+        assert!(matches!(r, Err(Error::AlreadyFinished)));
+
+        // Can't try again after success
+        let mut h = SocksHandshake::new();
+        let r = h.handshake(good_socks4a);
+        assert!(r.is_ok());
+        let r = h.handshake(good_socks4a);
+        assert!(matches!(r, Err(Error::AlreadyFinished)));
+    }
 }
