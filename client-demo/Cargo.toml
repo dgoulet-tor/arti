@@ -18,7 +18,7 @@ tor-socksproto = { path="../tor-socksproto", version= "*" }
 tor-dirclient = { path="../tor-dirclient", version = "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
 
-anyhow = "1.0.35"
+anyhow = "1.0.36"
 async-native-tls = "0.3.3"
 futures = "0.3.8"
 log = "0.4.11"
