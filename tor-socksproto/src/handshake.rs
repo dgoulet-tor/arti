@@ -7,6 +7,7 @@ use tor_bytes::Error as BytesError;
 use tor_bytes::Result as BytesResult;
 use tor_bytes::{Readable, Reader, Writeable, Writer};
 
+use std::convert::TryInto;
 use std::net::IpAddr;
 
 /// An ongoing SOCKS handshake.
@@ -114,11 +115,14 @@ impl SocksHandshake {
         let auth = SocksAuth::Socks4(username);
 
         let addr = if ip != 0 && (ip >> 8) == 0 {
-            // Socks4a; a hotname is given.
+            // Socks4a; a hostname is given.
             let hostname = r.take_until(0)?;
             let hostname = std::str::from_utf8(hostname)
                 .map_err(|_| Error::Syntax)?
                 .to_string();
+            let hostname = hostname
+                .try_into()
+                .map_err(|_| BytesError::BadMessage("hostname too long"))?;
             SocksAddr::Hostname(hostname)
         } else {
             let ip4: std::net::Ipv4Addr = ip.into();
@@ -301,6 +305,9 @@ impl Readable for SocksAddr {
                 let hostname = std::str::from_utf8(hostname)
                     .map_err(|_| BytesError::BadMessage("bad utf8 on hostname"))?
                     .to_string();
+                let hostname = hostname
+                    .try_into()
+                    .map_err(|_| BytesError::BadMessage("hostname too long"))?;
                 Ok(SocksAddr::Hostname(hostname))
             }
             4 => {
@@ -324,7 +331,8 @@ impl Writeable for SocksAddr {
                 w.write(ip);
             }
             SocksAddr::Hostname(h) => {
-                assert!(h.len() < 256); // XXXX-A1 make sure we catch this earlier!
+                let h = h.as_ref();
+                assert!(h.len() < 256);
                 let hlen = h.len() as u8;
                 w.write_u8(3);
                 w.write_u8(hlen);
@@ -451,7 +459,9 @@ mod test {
         assert_eq!(
             req.reply(
                 SocksStatus::HOST_UNREACHABLE,
-                Some(&SocksAddr::Hostname("foo.example.com".into()))
+                Some(&SocksAddr::Hostname(
+                    "foo.example.com".to_string().try_into().unwrap()
+                ))
             ),
             hex!("05 04 00 03 0f 666f6f2e6578616d706c652e636f6d 1f90")
         );

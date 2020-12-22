@@ -3,6 +3,7 @@
 use crate::{Error, Result};
 
 use caret::caret_int;
+use std::convert::TryFrom;
 use std::fmt;
 use std::net::IpAddr;
 
@@ -31,13 +32,17 @@ pub struct SocksRequest {
 /// An address sent or received as part of a SOCKS handshake
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SocksAddr {
-    /// A regular DNS hostname
-    Hostname(String),
+    /// A regular DNS hostname.
+    Hostname(SocksHostname),
     /// An IP address.  (Tor doesn't like to receive these during SOCKS
     /// handshakes, since they usually indicate that the hostname lookup
     /// happened somewhere else.)
     Ip(IpAddr),
 }
+
+/// A hostname for use with SOCKS.  It is limited in length.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SocksHostname(String);
 
 /// Provided authentication from a SOCKS handshake
 #[derive(Clone, Debug, PartialEq)]
@@ -120,6 +125,29 @@ impl SocksStatus {
     }
 }
 
+impl TryFrom<String> for SocksHostname {
+    type Error = Error;
+    fn try_from(s: String) -> Result<SocksHostname> {
+        if s.len() > 255 {
+            Err(Error::Syntax)
+        } else {
+            Ok(SocksHostname(s))
+        }
+    }
+}
+
+impl AsRef<str> for SocksHostname {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl From<SocksHostname> for String {
+    fn from(s: SocksHostname) -> String {
+        s.0
+    }
+}
+
 impl SocksRequest {
     /// Create a SocksRequest with a given set of fields.
     ///
@@ -185,7 +213,7 @@ impl fmt::Display for SocksAddr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SocksAddr::Ip(a) => write!(f, "{}", a),
-            SocksAddr::Hostname(h) => write!(f, "{}", h),
+            SocksAddr::Hostname(h) => write!(f, "{}", h.0),
         }
     }
 }
@@ -193,6 +221,7 @@ impl fmt::Display for SocksAddr {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::convert::TryInto;
 
     #[test]
     fn display_sa() {
@@ -202,7 +231,7 @@ mod test {
         let a = SocksAddr::Ip(IpAddr::V6("f00::9999".parse().unwrap()));
         assert_eq!(a.to_string(), "f00::9999");
 
-        let a = SocksAddr::Hostname("www.torproject.org".into());
+        let a = SocksAddr::Hostname("www.torproject.org".to_string().clone().try_into().unwrap());
         assert_eq!(a.to_string(), "www.torproject.org");
     }
 
