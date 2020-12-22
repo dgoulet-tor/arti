@@ -19,6 +19,7 @@ use tor_cell::relaycell::msg::{Data, RelayMsg, Resolved, Sendme};
 use futures::channel::mpsc;
 use futures::lock::Mutex;
 use futures::stream::StreamExt;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 /// A TorStream is a client's cell-oriented view of a stream over the
@@ -31,10 +32,10 @@ pub struct TorStream {
     /// A Stream over which we receive relay messages.  Only relay messages
     /// that can be associated with a stream ID will be received.
     receiver: Mutex<mpsc::Receiver<RelayMsg>>,
-    /// Have we been informed that this stream is closed?  If so this is
-    /// the message or the error that told us.
-    #[allow(dead_code)] //XXXXXX-A1
-    received_end: Option<Result<RelayMsg>>,
+    /// Have we been informed that this stream is closed, or received a fatal
+    /// error?
+    #[allow(dead_code)]
+    stream_ended: AtomicBool,
 }
 
 impl TorStream {
@@ -43,7 +44,7 @@ impl TorStream {
         TorStream {
             target: Mutex::new(target),
             receiver: Mutex::new(receiver),
-            received_end: None,
+            stream_ended: AtomicBool::new(false),
         }
     }
 
@@ -201,11 +202,9 @@ impl DataReader {
             }
         }
 
-        /* XXXX-A1 RESTORE THIS
-                if self.s.received_end.is_some() {
-                    return Err(Error::StreamClosed("Stream is closed."));
-                }
-        */
+        if self.s.stream_ended.load(Ordering::SeqCst) {
+            return Err(Error::StreamClosed("Stream is closed."));
+        }
 
         if let Some(pending) = self.pending.take() {
             let (n, new_pending) = split_and_write(buf, pending);
@@ -228,9 +227,7 @@ impl DataReader {
                 Ok(n)
             }
             Err(_) | Ok(RelayMsg::End(_)) => {
-                /* XXXXX-A1 RESTORE THIS
-                self.s.received_end = Some(cell);
-                 */
+                self.s.stream_ended.store(true, Ordering::SeqCst);
                 Err(Error::StreamClosed("received an end cell"))
             }
             Ok(m) => {
