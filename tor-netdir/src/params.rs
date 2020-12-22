@@ -56,6 +56,27 @@ impl NetParameters {
         }
     }
 
+    /// Returns the value for the parameter `key` as a u16.
+    ///
+    /// Panics if any allowable value for `key` can't be represented as a u16.
+    pub fn get_u16(&self, key: Param) -> u16 {
+        let range = key.range();
+        assert!(range.min >= 0);
+        assert!(range.max <= 65535);
+        self.get(key) as u16
+    }
+
+    /// Returns the value for the parameter `key` as a u16.
+    ///
+    /// Panics if any allowable value for `key` can't be represented a
+    pub fn get_bool(&self, key: Param) -> bool {
+        let range = key.range();
+        assert!(range.min >= 0);
+        assert!(range.max <= 1);
+
+        self.get(key) != 0
+    }
+
     /// Change the value for the parameter `key` to be `value`.
     ///
     /// If `value` is not in range, clamp it to the minimum or maximum
@@ -255,5 +276,27 @@ mod test {
         assert_eq!(p.get(Param::CircWindow), 1000);
         assert_eq!(p.get(Param::MinPathsForCircsPct), 45);
         assert_eq!(p.get(Param::CircuitPriorityHalflifeMsec), 30_000);
+    }
+
+    #[test]
+    fn get_casting_ok() {
+        let mut p = NetParameters::new();
+        assert_eq!(p.get_bool(Param::ExtendByEd25519Id), false);
+        assert_eq!(p.get_u16(Param::ExtendByEd25519Id), 0);
+
+        p.set_clamped(Param::MinPathsForCircsPct, 99);
+        assert_eq!(p.get_u16(Param::MinPathsForCircsPct), 95);
+    }
+
+    #[test]
+    #[should_panic]
+    fn get_bool_panics() {
+        NetParameters::new().get_bool(Param::MinPathsForCircsPct);
+    }
+
+    #[test]
+    #[should_panic]
+    fn get_u16_panics() {
+        NetParameters::new().get_u16(Param::BwWeightScale);
     }
 }

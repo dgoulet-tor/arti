@@ -99,15 +99,22 @@ impl<'a> Into<DirInfo<'a>> for &'a NetDir {
 impl<'a> DirInfo<'a> {
     /// Return a set of circuit parameters for this DirInfo.
     fn circ_params(&self) -> CircParameters {
-        use tor_netdir::params::Param;
+        use tor_netdir::params::NetParameters;
+        /// Extract a CircParameters from the NetParameters from a
+        /// consensus.  We use a common function for both cases here
+        /// to be sure that we look at the defaults from NetParameters
+        /// code.
+        fn from_netparams(inp: &NetParameters) -> CircParameters {
+            use tor_netdir::params::Param;
+            let mut p = CircParameters::default();
+            p.set_initial_send_window(inp.get_u16(Param::CircWindow));
+            p.set_extend_by_ed25519_id(inp.get_bool(Param::ExtendByEd25519Id));
+            p
+        }
+
         match self {
-            DirInfo::Fallbacks(_) => CircParameters::default(),
-            DirInfo::Directory(d) => {
-                let mut p = CircParameters::default();
-                p.set_initial_send_window(d.params().get(Param::CircWindow) as u16);
-                p.set_extend_by_ed25519_id(d.params().get(Param::ExtendByEd25519Id) != 0);
-                p
-            }
+            DirInfo::Fallbacks(_) => from_netparams(&NetParameters::new()),
+            DirInfo::Directory(d) => from_netparams(d.params()),
         }
     }
 }
