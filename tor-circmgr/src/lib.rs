@@ -217,6 +217,15 @@ impl TargetPort {
     pub fn ipv6(port: u16) -> TargetPort {
         TargetPort { ipv6: true, port }
     }
+
+    /// Return true if this port is supported by the provided Relay.
+    pub fn is_supported_by(&self, r: &tor_netdir::Relay<'_>) -> bool {
+        if self.ipv6 {
+            r.supports_exit_port_ipv6(self.port)
+        } else {
+            r.supports_exit_port_ipv4(self.port)
+        }
+    }
 }
 
 impl ExitPolicy {

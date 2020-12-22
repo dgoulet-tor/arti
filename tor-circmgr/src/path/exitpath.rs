@@ -20,7 +20,7 @@ impl ExitPathBuilder {
 
     /// Return true if `r` supports every port in `self.wantports`
     fn ports_supported_by(&self, r: &Relay<'_>) -> bool {
-        self.wantports.iter().all(|p| r.supports_exit_port(p.port))
+        self.wantports.iter().all(|p| p.is_supported_by(r))
     }
 
     /// Try to create and return a path corresponding to the requirements of

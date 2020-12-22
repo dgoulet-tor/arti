@@ -380,9 +380,12 @@ impl<'a> Relay<'a> {
         self.id() == other.id() && self.rsa_id() == other.rsa_id()
     }
     /// Return true if this relay allows exiting to `port` on IPv4.
-    // XXXX-A1 ipv4/ipv6
-    pub fn supports_exit_port(&self, port: u16) -> bool {
+    pub fn supports_exit_port_ipv4(&self, port: u16) -> bool {
         !self.rs.is_flagged_bad_exit() && self.md.ipv4_policy().allows_port(port)
+    }
+    /// Return true if this relay allows exiting to `port` on IPv6.
+    pub fn supports_exit_port_ipv6(&self, port: u16) -> bool {
+        !self.rs.is_flagged_bad_exit() && self.md.ipv6_policy().allows_port(port)
     }
     /// Return true if this relay is suitable for use as a directory
     /// cache.
