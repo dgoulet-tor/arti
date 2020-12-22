@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
+caret = { path = "../caret", version= "*" }
 tor-checkable = { path="../tor-checkable", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }

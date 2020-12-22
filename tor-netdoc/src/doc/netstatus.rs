@@ -138,6 +138,10 @@ impl<T> NetParams<T> {
     pub fn get<A: AsRef<str>>(&self, v: A) -> Option<&T> {
         self.params.get(v.as_ref())
     }
+    /// Return an iterator over all key value pares in an arbitrary order.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &T)> {
+        self.params.iter()
+    }
 }
 impl<T> NetParams<T>
 where
@@ -244,7 +248,7 @@ struct CommonHeader {
     /// Declared parameters for tunable settings about how to the
     /// network should operator. Some of these adjust timeouts and
     /// whatnot; some features things on and off.
-    params: NetParams<u32>,
+    params: NetParams<i32>,
     /// How long should voters wait for votes and consensuses to
     /// propagate?
     voting_delay: Option<(u32, u32)>,
@@ -506,7 +510,7 @@ impl MDConsensus {
     }
 
     /// Return the map of network parameters that this consensus advertises.
-    pub fn params(&self) -> &NetParams<u32> {
+    pub fn params(&self) -> &NetParams<i32> {
         &self.header.hdr.params
     }
 }

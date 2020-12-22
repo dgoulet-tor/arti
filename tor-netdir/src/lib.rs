@@ -22,6 +22,7 @@
 
 mod err;
 pub mod fallback;
+pub mod params;
 mod pick;
 mod weight;
 
@@ -38,6 +39,8 @@ pub use err::Error;
 pub use weight::WeightRole;
 /// A Result using the Error type from the tor-netdir crate
 pub type Result<T> = std::result::Result<T, Error>;
+
+use params::{NetParameters, Param};
 
 /// Internal type: either a microdescriptor, or the digest for a
 /// microdescriptor that we want.
@@ -102,6 +105,9 @@ pub struct NetDir {
     /// and maps each one to a 'microdescriptor' that has more information
     /// about it
     consensus: Arc<MDConsensus>,
+    /// A map from keys to integer values, distributed in the consensus,
+    /// and clamped to certain defaults.
+    params: NetParameters,
     /// Map from SHA256 digest of microdescriptors to the
     /// microdescriptors themselves.
     mds: HashSet<MDEntry>,
@@ -153,11 +159,15 @@ impl PartialNetDir {
     /// Create a new PartialNetDir with a given consensus, and no
     /// microdecriptors loaded.
     pub fn new(consensus: MDConsensus) -> Self {
+        let mut params = NetParameters::default();
+        params.update_from_consensus(consensus.params());
+
         // Compute the weights we'll want to use for these routers.
-        let weights = weight::WeightSet::from_consensus(&consensus);
+        let weights = weight::WeightSet::from_consensus(&consensus, &params);
 
         let mut netdir = NetDir {
             consensus: Arc::new(consensus),
+            params,
             mds: HashSet::new(),
             weights,
         };
@@ -238,6 +248,14 @@ impl NetDir {
     pub fn relays(&self) -> impl Iterator<Item = Relay<'_>> {
         self.all_relays().filter_map(UncheckedRelay::into_relay)
     }
+    /// Return the parameters from the consensus, clamped to the
+    /// correct ranges, with defaults filled in.
+    ///
+    /// NOTE: that unsupported parameters aren't returned here; only those
+    /// values configured in the `params` module are available.
+    pub fn params(&self) -> &NetParameters {
+        &self.params
+    }
     /// Return the fraction of total bandwidth weight for a given role
     /// that we have available information for in this NetDir.
     fn frac_for_role(&self, role: WeightRole) -> f64 {
@@ -260,11 +278,7 @@ impl NetDir {
         // If we can build a randomly chosen path with at least this
         // probability, we know enough information to participate
         // on the network.
-        let min_pct = self
-            .consensus
-            .params()
-            .get_clamped("min_paths_for_circs_pct", 25, 95)
-            .unwrap_or(60);
+        let min_pct = self.params().get(Param::MinPathsForCircsPct);
         let min_frac_paths = (min_pct as f64) / 100.0;
 
         // What fraction of paths can we build?

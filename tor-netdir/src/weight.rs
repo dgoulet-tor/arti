@@ -12,6 +12,7 @@
 //!   relay provides particularly scarce functionality, we might choose not to
 //!   use it for other roles, or to use it less commonly for them.
 
+use crate::params::{NetParameters, Param};
 use tor_netdoc::doc::netstatus::{MDConsensus, MDConsensusRouterStatus, NetParams, RouterWeight};
 
 /// Helper: Calculate the function we should use to find initial relay
@@ -232,12 +233,9 @@ impl WeightSet {
     }
 
     /// Compute the correct WeightSet for a provided MDConsensus.
-    pub(crate) fn from_consensus(consensus: &MDConsensus) -> Self {
+    pub(crate) fn from_consensus(consensus: &MDConsensus, params: &NetParameters) -> Self {
         let bandwidth_fn = pick_bandwidth_fn(consensus.routers().iter().map(|rs| rs.weight()));
-        let weight_scale = consensus
-            .params()
-            .get_clamped("bwweightscale", 1, std::u32::MAX)
-            .unwrap_or(10000);
+        let weight_scale = params.get(Param::BwWeightScale);
         let total_bw = consensus
             .routers()
             .iter()
@@ -254,7 +252,7 @@ impl WeightSet {
     fn from_parts(
         bandwidth_fn: BandwidthFn,
         total_bw: u64,
-        weight_scale: u32,
+        weight_scale: i32,
         p: &NetParams<i32>,
     ) -> Self {
         /// Find a single RelayWeight, given the names that its bandwidth
@@ -271,6 +269,9 @@ impl WeightSet {
                 as_dir: w_param(p, d),
             }
         }
+
+        assert!(weight_scale >= 0);
+        let weight_scale = weight_scale as u32;
 
         // For non-V2Dir nodes, we have names for most of their weights.
         //
