@@ -56,11 +56,10 @@ use tor_protover::Protocols;
 
 use bitflags::bitflags;
 use digest::Digest;
+use once_cell::sync::Lazy;
 use tor_checkable::{timed::TimerangeBound, ExternallySigned};
 use tor_llcrypto as ll;
 use tor_llcrypto::pk::rsa::RSAIdentity;
-
-use lazy_static::lazy_static;
 
 /// The lifetime of a networkstatus document.
 ///
@@ -575,99 +574,98 @@ decl_keyword! {
     }
 }
 
-lazy_static! {
-    /// Shared parts of rules for all kinds of netstatus headers
-    static ref NS_HEADER_RULES_COMMON_: SectionRules<NetstatusKW> = {
-        use NetstatusKW::*;
-        let mut rules = SectionRules::new();
-        rules.add(NETWORK_STATUS_VERSION.rule().required().args(1..=2));
-        rules.add(VOTE_STATUS.rule().required().args(1..));
-        rules.add(VALID_AFTER.rule().required());
-        rules.add(FRESH_UNTIL.rule().required());
-        rules.add(VALID_UNTIL.rule().required());
-        rules.add(VOTING_DELAY.rule().args(2..));
-        rules.add(CLIENT_VERSIONS.rule());
-        rules.add(SERVER_VERSIONS.rule());
-        rules.add(KNOWN_FLAGS.rule().required());
-        rules.add(RECOMMENDED_CLIENT_PROTOCOLS.rule().args(1..));
-        rules.add(RECOMMENDED_RELAY_PROTOCOLS.rule().args(1..));
-        rules.add(REQUIRED_CLIENT_PROTOCOLS.rule().args(1..));
-        rules.add(REQUIRED_RELAY_PROTOCOLS.rule().args(1..));
-        rules.add(PARAMS.rule());
-        rules
-    };
-    /// Rules for parsing the header of a consensus.
-    static ref NS_HEADER_RULES_CONSENSUS: SectionRules<NetstatusKW> = {
-        use NetstatusKW::*;
-        let mut rules = NS_HEADER_RULES_COMMON_.clone();
-        rules.add(CONSENSUS_METHOD.rule().args(1..=1));
-        rules.add(SHARED_RAND_PREVIOUS_VALUE.rule().args(2..));
-        rules.add(SHARED_RAND_CURRENT_VALUE.rule().args(2..));
-        rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
-        rules
-    };
-    /*
-    /// Rules for parsing the header of a vote.
-    static ref NS_HEADER_RULES_VOTE: SectionRules<NetstatusKW> = {
-        use NetstatusKW::*;
-        let mut rules = NS_HEADER_RULES_COMMON_.clone();
-        rules.add(CONSENSUS_METHODS.rule().args(1..));
-        rules.add(FLAG_THRESHOLDS.rule());
-        rules.add(BANDWIDTH_FILE_HEADERS.rule());
-        rules.add(BANDWIDTH_FILE_DIGEST.rule().args(1..));
-        rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
-        rules
-    };
-    /// Rules for parsing a single voter's information in a vote.
-    static ref NS_VOTERINFO_RULES_VOTE: SectionRules<NetstatusKW> = {
-        use NetstatusKW::*;
-        let mut rules = SectionRules::new();
-        rules.add(DIR_SOURCE.rule().required().args(6..));
-        rules.add(CONTACT.rule().required());
-        rules.add(LEGACY_DIR_KEY.rule().args(1..));
-        rules.add(SHARED_RAND_PARTICIPATE.rule().no_args());
-        rules.add(SHARED_RAND_COMMIT.rule().may_repeat().args(4..));
-        rules.add(SHARED_RAND_PREVIOUS_VALUE.rule().args(2..));
-        rules.add(SHARED_RAND_CURRENT_VALUE.rule().args(2..));
-        // then comes an entire cert: When we implement vote parsing,
-        // we should use the authcert code for handling that.
-        rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
-        rules
-    };
-     */
-    /// Rules for parsing a single voter's information in a consensus
-    static ref NS_VOTERINFO_RULES_CONSENSUS: SectionRules<NetstatusKW> = {
-        use NetstatusKW::*;
-        let mut rules = SectionRules::new();
-        rules.add(DIR_SOURCE.rule().required().args(6..));
-        rules.add(CONTACT.rule().required());
-        rules.add(VOTE_DIGEST.rule().required());
-        rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
-        rules
-    };
-    /// Shared rules for parsing a single routerstatus
-    static ref NS_ROUTERSTATUS_RULES_COMMON_: SectionRules<NetstatusKW> = {
-        use NetstatusKW::*;
-        let mut rules = SectionRules::new();
-        rules.add(RS_A.rule().may_repeat().args(1..));
-        rules.add(RS_S.rule().required());
-        rules.add(RS_V.rule());
-        rules.add(RS_PR.rule().required());
-        rules.add(RS_W.rule());
-        rules.add(RS_P.rule().args(2..));
-        rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
-        rules
-    };
+/// Shared parts of rules for all kinds of netstatus headers
+static NS_HEADER_RULES_COMMON_: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
+    use NetstatusKW::*;
+    let mut rules = SectionRules::new();
+    rules.add(NETWORK_STATUS_VERSION.rule().required().args(1..=2));
+    rules.add(VOTE_STATUS.rule().required().args(1..));
+    rules.add(VALID_AFTER.rule().required());
+    rules.add(FRESH_UNTIL.rule().required());
+    rules.add(VALID_UNTIL.rule().required());
+    rules.add(VOTING_DELAY.rule().args(2..));
+    rules.add(CLIENT_VERSIONS.rule());
+    rules.add(SERVER_VERSIONS.rule());
+    rules.add(KNOWN_FLAGS.rule().required());
+    rules.add(RECOMMENDED_CLIENT_PROTOCOLS.rule().args(1..));
+    rules.add(RECOMMENDED_RELAY_PROTOCOLS.rule().args(1..));
+    rules.add(REQUIRED_CLIENT_PROTOCOLS.rule().args(1..));
+    rules.add(REQUIRED_RELAY_PROTOCOLS.rule().args(1..));
+    rules.add(PARAMS.rule());
+    rules
+});
+/// Rules for parsing the header of a consensus.
+static NS_HEADER_RULES_CONSENSUS: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
+    use NetstatusKW::*;
+    let mut rules = NS_HEADER_RULES_COMMON_.clone();
+    rules.add(CONSENSUS_METHOD.rule().args(1..=1));
+    rules.add(SHARED_RAND_PREVIOUS_VALUE.rule().args(2..));
+    rules.add(SHARED_RAND_CURRENT_VALUE.rule().args(2..));
+    rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
+    rules
+});
+/*
+/// Rules for parsing the header of a vote.
+static NS_HEADER_RULES_VOTE: SectionRules<NetstatusKW> = {
+    use NetstatusKW::*;
+    let mut rules = NS_HEADER_RULES_COMMON_.clone();
+    rules.add(CONSENSUS_METHODS.rule().args(1..));
+    rules.add(FLAG_THRESHOLDS.rule());
+    rules.add(BANDWIDTH_FILE_HEADERS.rule());
+    rules.add(BANDWIDTH_FILE_DIGEST.rule().args(1..));
+    rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
+    rules
+};
+/// Rules for parsing a single voter's information in a vote.
+static NS_VOTERINFO_RULES_VOTE: SectionRules<NetstatusKW> = {
+    use NetstatusKW::*;
+    let mut rules = SectionRules::new();
+    rules.add(DIR_SOURCE.rule().required().args(6..));
+    rules.add(CONTACT.rule().required());
+    rules.add(LEGACY_DIR_KEY.rule().args(1..));
+    rules.add(SHARED_RAND_PARTICIPATE.rule().no_args());
+    rules.add(SHARED_RAND_COMMIT.rule().may_repeat().args(4..));
+    rules.add(SHARED_RAND_PREVIOUS_VALUE.rule().args(2..));
+    rules.add(SHARED_RAND_CURRENT_VALUE.rule().args(2..));
+    // then comes an entire cert: When we implement vote parsing,
+    // we should use the authcert code for handling that.
+    rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
+    rules
+};
+ */
+/// Rules for parsing a single voter's information in a consensus
+static NS_VOTERINFO_RULES_CONSENSUS: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
+    use NetstatusKW::*;
+    let mut rules = SectionRules::new();
+    rules.add(DIR_SOURCE.rule().required().args(6..));
+    rules.add(CONTACT.rule().required());
+    rules.add(VOTE_DIGEST.rule().required());
+    rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
+    rules
+});
+/// Shared rules for parsing a single routerstatus
+static NS_ROUTERSTATUS_RULES_COMMON_: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
+    use NetstatusKW::*;
+    let mut rules = SectionRules::new();
+    rules.add(RS_A.rule().may_repeat().args(1..));
+    rules.add(RS_S.rule().required());
+    rules.add(RS_V.rule());
+    rules.add(RS_PR.rule().required());
+    rules.add(RS_W.rule());
+    rules.add(RS_P.rule().args(2..));
+    rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
+    rules
+});
 /*
     /// Rules for parsing a single routerstatus in an NS consensus
-    static ref NS_ROUTERSTATUS_RULES_NSCON: SectionRules<NetstatusKW> = {
+    static NS_ROUTERSTATUS_RULES_NSCON: SectionRules<NetstatusKW> = {
         use NetstatusKW::*;
         let mut rules = NS_ROUTERSTATUS_RULES_COMMON_.clone();
         rules.add(RS_R.rule().required().args(8..));
         rules
     };
     /// Rules for parsing a single routerstatus in a vote
-    static ref NS_ROUTERSTATUS_RULES_VOTE: SectionRules<NetstatusKW> = {
+    static NS_ROUTERSTATUS_RULES_VOTE: SectionRules<NetstatusKW> = {
         use NetstatusKW::*;
         let mut rules = NS_ROUTERSTATUS_RULES_COMMON_.clone();
         rules.add(RS_R.rule().required().args(8..));
@@ -676,25 +674,24 @@ lazy_static! {
         rules
     };
 */
-    /// Rules for parsing a single routerstatus in a microdesc consensus
-    static ref NS_ROUTERSTATUS_RULES_MDCON: SectionRules<NetstatusKW> = {
-        use NetstatusKW::*;
-        let mut rules = NS_ROUTERSTATUS_RULES_COMMON_.clone();
-        rules.add(RS_R.rule().required().args(6..));
-        rules.add(RS_M.rule().required().args(1..));
-        rules
-    };
-    /// Rules for parsing consensus fields from a footer.
-    static ref NS_FOOTER_RULES: SectionRules<NetstatusKW> = {
-        use NetstatusKW::*;
-        let mut rules = SectionRules::new();
-        rules.add(DIRECTORY_FOOTER.rule().required().no_args());
-        // consensus only
-        rules.add(BANDWIDTH_WEIGHTS.rule());
-        rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
-        rules
-    };
-}
+/// Rules for parsing a single routerstatus in a microdesc consensus
+static NS_ROUTERSTATUS_RULES_MDCON: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
+    use NetstatusKW::*;
+    let mut rules = NS_ROUTERSTATUS_RULES_COMMON_.clone();
+    rules.add(RS_R.rule().required().args(6..));
+    rules.add(RS_M.rule().required().args(1..));
+    rules
+});
+/// Rules for parsing consensus fields from a footer.
+static NS_FOOTER_RULES: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
+    use NetstatusKW::*;
+    let mut rules = SectionRules::new();
+    rules.add(DIRECTORY_FOOTER.rule().required().no_args());
+    // consensus only
+    rules.add(BANDWIDTH_WEIGHTS.rule());
+    rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
+    rules
+});
 
 impl ProtoStatus {
     /// Construct a ProtoStatus from two chosen keywords in a section.

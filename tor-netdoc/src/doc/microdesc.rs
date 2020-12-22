@@ -25,7 +25,7 @@ use tor_llcrypto::d;
 use tor_llcrypto::pk::{curve25519, ed25519, rsa};
 
 use digest::Digest;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use std::time;
 
@@ -145,28 +145,29 @@ decl_keyword! {
     }
 }
 
-lazy_static! {
-    static ref MICRODESC_ANNOTATIONS: SectionRules<MicrodescKW> = {
-        use MicrodescKW::*;
-        let mut rules = SectionRules::new();
-        rules.add(ANN_LAST_LISTED.rule().args(1..));
-        rules.add(ANN_UNRECOGNIZED.rule().may_repeat().obj_optional());
-        rules
-    };
-    static ref MICRODESC_RULES: SectionRules<MicrodescKW> = {
-        use MicrodescKW::*;
+/// Rules about annotations that can appear before a Microdescriptor
+static MICRODESC_ANNOTATIONS: Lazy<SectionRules<MicrodescKW>> = Lazy::new(|| {
+    use MicrodescKW::*;
+    let mut rules = SectionRules::new();
+    rules.add(ANN_LAST_LISTED.rule().args(1..));
+    rules.add(ANN_UNRECOGNIZED.rule().may_repeat().obj_optional());
+    rules
+});
+/// Rules about entries that must appear in an Microdesc, and how they must
+/// be formed.
+static MICRODESC_RULES: Lazy<SectionRules<MicrodescKW>> = Lazy::new(|| {
+    use MicrodescKW::*;
 
-        let mut rules = SectionRules::new();
-        rules.add(ONION_KEY.rule().required().no_args().obj_required());
-        rules.add(NTOR_ONION_KEY.rule().required().args(1..));
-        rules.add(FAMILY.rule().args(1..));
-        rules.add(P.rule().args(2..));
-        rules.add(P6.rule().args(2..));
-        rules.add(ID.rule().may_repeat().args(2..));
-        rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
-        rules
-    };
-}
+    let mut rules = SectionRules::new();
+    rules.add(ONION_KEY.rule().required().no_args().obj_required());
+    rules.add(NTOR_ONION_KEY.rule().required().args(1..));
+    rules.add(FAMILY.rule().args(1..));
+    rules.add(P.rule().args(2..));
+    rules.add(P6.rule().args(2..));
+    rules.add(ID.rule().may_repeat().args(2..));
+    rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
+    rules
+});
 
 impl Default for MicrodescAnnotation {
     fn default() -> Self {

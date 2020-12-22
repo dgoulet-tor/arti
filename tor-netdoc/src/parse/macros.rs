@@ -57,12 +57,11 @@ macro_rules! decl_keyword {
             fn from_idx(i : usize) -> Option<Self> {
                 // Note looking up the value in a vec.  This may or may
                 // not be faster than a case statement would be.
-                lazy_static::lazy_static! {
-                    static ref VALS: Vec<$name> =
-                        vec![ $($name::$i , )*
+                static VALS: once_cell::sync::Lazy<Vec<$name>> =
+                    once_cell::sync::Lazy::new(
+                        || vec![ $($name::$i , )*
                               $name::UNRECOGNIZED,
-                              $name::ANN_UNRECOGNIZED ];
-                };
+                                 $name::ANN_UNRECOGNIZED ]);
                 VALS.get(i).copied()
             }
             fn to_str(self) -> &'static str {

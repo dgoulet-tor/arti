@@ -17,7 +17,7 @@ use tor_checkable::{signed, timed};
 use tor_llcrypto::pk::rsa;
 use tor_llcrypto::{d, pk, pk::rsa::RSAIdentity};
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use std::{net, time};
 
@@ -37,29 +37,29 @@ decl_keyword! {
     }
 }
 
-lazy_static! {
-    static ref AUTHCERT_RULES: SectionRules<AuthCertKW> = {
-        use AuthCertKW::*;
+/// Rules about entries that must appear in an AuthCert, and how they must
+/// be formed.
+static AUTHCERT_RULES: Lazy<SectionRules<AuthCertKW>> = Lazy::new(|| {
+    use AuthCertKW::*;
 
-        let mut rules = SectionRules::new();
-        rules.add(DIR_KEY_CERTIFICATE_VERSION.rule().required().args(1..));
-        rules.add(DIR_ADDRESS.rule().args(1..));
-        rules.add(FINGERPRINT.rule().required().args(1..));
-        rules.add(DIR_IDENTITY_KEY.rule().required().no_args().obj_required());
-        rules.add(DIR_SIGNING_KEY.rule().required().no_args().obj_required());
-        rules.add(DIR_KEY_PUBLISHED.rule().required());
-        rules.add(DIR_KEY_EXPIRES.rule().required());
-        rules.add(DIR_KEY_CROSSCERT.rule().required().no_args().obj_required());
-        rules.add(
-            DIR_KEY_CERTIFICATION
-                .rule()
-                .required()
-                .no_args()
-                .obj_required(),
-        );
-        rules
-    };
-}
+    let mut rules = SectionRules::new();
+    rules.add(DIR_KEY_CERTIFICATE_VERSION.rule().required().args(1..));
+    rules.add(DIR_ADDRESS.rule().args(1..));
+    rules.add(FINGERPRINT.rule().required().args(1..));
+    rules.add(DIR_IDENTITY_KEY.rule().required().no_args().obj_required());
+    rules.add(DIR_SIGNING_KEY.rule().required().no_args().obj_required());
+    rules.add(DIR_KEY_PUBLISHED.rule().required());
+    rules.add(DIR_KEY_EXPIRES.rule().required());
+    rules.add(DIR_KEY_CROSSCERT.rule().required().no_args().obj_required());
+    rules.add(
+        DIR_KEY_CERTIFICATION
+            .rule()
+            .required()
+            .no_args()
+            .obj_required(),
+    );
+    rules
+});
 
 /// A single authority certificate.
 ///

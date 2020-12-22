@@ -11,7 +11,7 @@
 use tor_llcrypto::pk::ed25519::Ed25519Identity;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::net::SocketAddr;
 
 mod pregen;
@@ -56,11 +56,9 @@ impl tor_linkspec::ChanTarget for FallbackDir {
     }
 }
 
-lazy_static! {
-    /// A list of all the built-in fallbacks that we know.
-    static ref FALLBACK_DIRS: Vec<FallbackDir> =
-        pregen::FALLBACKS.iter().map(FallbackDir::from).collect();
-}
+/// A list of all the built-in fallbacks that we know.
+static FALLBACK_DIRS: Lazy<Vec<FallbackDir>> =
+    Lazy::new(|| pregen::FALLBACKS.iter().map(FallbackDir::from).collect());
 
 /// A set of fallback directories.
 ///

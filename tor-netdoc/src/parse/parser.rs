@@ -297,21 +297,19 @@ mod test {
     use crate::parse::macros::test::Fruit;
     use crate::parse::tokenize::{Item, NetDocReader};
     use crate::{Error, Result};
-    use lazy_static::lazy_static;
+    use once_cell::sync::Lazy;
 
-    lazy_static! {
-        /// Rules for parsing a set of router annotations.
-        static ref FRUIT_SALAD : SectionRules<Fruit> = {
-            use Fruit::*;
-            let mut rules = SectionRules::new();
-            rules.add(ANN_TASTY.rule().required().args(1..=1));
-            rules.add(ORANGE.rule().args(1..));
-            rules.add(STONEFRUIT.rule().may_repeat());
-            rules.add(GUAVA.rule().obj_optional());
-            rules.add(LEMON.rule().no_args().obj_required());
-            rules
-        };
-    }
+    /// Rules for parsing a set of router annotations.
+    static FRUIT_SALAD: Lazy<SectionRules<Fruit>> = Lazy::new(|| {
+        use Fruit::*;
+        let mut rules = SectionRules::new();
+        rules.add(ANN_TASTY.rule().required().args(1..=1));
+        rules.add(ORANGE.rule().args(1..));
+        rules.add(STONEFRUIT.rule().may_repeat());
+        rules.add(GUAVA.rule().obj_optional());
+        rules.add(LEMON.rule().no_args().obj_required());
+        rules
+    });
 
     #[test]
     fn parse_section() -> Result<()> {

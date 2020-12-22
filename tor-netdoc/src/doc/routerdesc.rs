@@ -36,7 +36,7 @@ use crate::types::policy::*;
 use crate::types::version::TorVersion;
 use crate::{AllowAnnotations, Error, Result};
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::{net, time};
 use tor_checkable::{signed, timed, Timebound};
 use tor_llcrypto as ll;
@@ -197,76 +197,86 @@ decl_keyword! {
     }
 }
 
-lazy_static! {
-    /// Rules for parsing a set of router annotations.
-    static ref ROUTER_ANNOTATIONS : SectionRules<RouterKW> = {
-        use RouterKW::*;
+/// Rules for parsing a set of router annotations.
+static ROUTER_ANNOTATIONS: Lazy<SectionRules<RouterKW>> = Lazy::new(|| {
+    use RouterKW::*;
 
-        let mut rules = SectionRules::new();
-        rules.add(ANN_SOURCE.rule());
-        rules.add(ANN_DOWNLOADED_AT.rule().args(1..));
-        rules.add(ANN_PURPOSE.rule().args(1..));
-        rules.add(ANN_UNRECOGNIZED.rule().may_repeat().obj_optional());
-        rules
-    };
-    /// Rules for tokens that are allowed in the first part of a
-    /// router descriptor.
-    static ref ROUTER_HEADER_RULES : SectionRules<RouterKW> = {
-        use RouterKW::*;
+    let mut rules = SectionRules::new();
+    rules.add(ANN_SOURCE.rule());
+    rules.add(ANN_DOWNLOADED_AT.rule().args(1..));
+    rules.add(ANN_PURPOSE.rule().args(1..));
+    rules.add(ANN_UNRECOGNIZED.rule().may_repeat().obj_optional());
+    rules
+});
+/// Rules for tokens that are allowed in the first part of a
+/// router descriptor.
+static ROUTER_HEADER_RULES: Lazy<SectionRules<RouterKW>> = Lazy::new(|| {
+    use RouterKW::*;
 
-        let mut rules = SectionRules::new();
-        rules.add(ROUTER.rule().required().args(5..));
-        rules.add(IDENTITY_ED25519.rule().required().no_args().obj_required());
-        rules
-    };
-    /// Rules for  tokens that are allowed in the first part of a
-    /// router descriptor.
-    static ref ROUTER_BODY_RULES : SectionRules<RouterKW> = {
-        use RouterKW::*;
+    let mut rules = SectionRules::new();
+    rules.add(ROUTER.rule().required().args(5..));
+    rules.add(IDENTITY_ED25519.rule().required().no_args().obj_required());
+    rules
+});
+/// Rules for  tokens that are allowed in the first part of a
+/// router descriptor.
+static ROUTER_BODY_RULES: Lazy<SectionRules<RouterKW>> = Lazy::new(|| {
+    use RouterKW::*;
 
-        let mut rules = SectionRules::new();
-        rules.add(MASTER_KEY_ED25519.rule().required().args(1..));
-        rules.add(PLATFORM.rule());
-        rules.add(PUBLISHED.rule().required());
-        rules.add(FINGERPRINT.rule());
-        rules.add(UPTIME.rule().args(1..));
-        rules.add(ONION_KEY.rule().no_args().required().obj_required());
-        rules.add(ONION_KEY_CROSSCERT.rule().required().no_args().obj_required());
-        rules.add(NTOR_ONION_KEY.rule().required().args(1..));
-        rules.add(NTOR_ONION_KEY_CROSSCERT.rule().required().args(1..=1).obj_required());
-        rules.add(SIGNING_KEY.rule().no_args().required().obj_required());
-        rules.add(POLICY.rule().may_repeat().args(1..));
-        rules.add(IPV6_POLICY.rule().args(2..));
-        rules.add(FAMILY.rule().args(1..));
-        rules.add(CACHES_EXTRA_INFO.rule().no_args());
-        rules.add(OR_ADDRESS.rule().may_repeat().args(1..));
-        rules.add(TUNNELLED_DIR_SERVER.rule());
-        rules.add(PROTO.rule().required().args(1..));
-        rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
-        // TODO: these aren't parsed yet.  Only authorities use them.
-        {
-            rules.add(BANDWIDTH.rule().required().args(3..));
-            rules.add(BRIDGE_DISTRIBUTION_REQUEST.rule().args(1..));
-            rules.add(HIBERNATING.rule().args(1..));
-            rules.add(CONTACT.rule());
-        }
-        // TODO: this is ignored for now.
-        {
-            rules.add(EXTRA_INFO_DIGEST.rule().args(1..));
-        }
-        rules
-    };
+    let mut rules = SectionRules::new();
+    rules.add(MASTER_KEY_ED25519.rule().required().args(1..));
+    rules.add(PLATFORM.rule());
+    rules.add(PUBLISHED.rule().required());
+    rules.add(FINGERPRINT.rule());
+    rules.add(UPTIME.rule().args(1..));
+    rules.add(ONION_KEY.rule().no_args().required().obj_required());
+    rules.add(
+        ONION_KEY_CROSSCERT
+            .rule()
+            .required()
+            .no_args()
+            .obj_required(),
+    );
+    rules.add(NTOR_ONION_KEY.rule().required().args(1..));
+    rules.add(
+        NTOR_ONION_KEY_CROSSCERT
+            .rule()
+            .required()
+            .args(1..=1)
+            .obj_required(),
+    );
+    rules.add(SIGNING_KEY.rule().no_args().required().obj_required());
+    rules.add(POLICY.rule().may_repeat().args(1..));
+    rules.add(IPV6_POLICY.rule().args(2..));
+    rules.add(FAMILY.rule().args(1..));
+    rules.add(CACHES_EXTRA_INFO.rule().no_args());
+    rules.add(OR_ADDRESS.rule().may_repeat().args(1..));
+    rules.add(TUNNELLED_DIR_SERVER.rule());
+    rules.add(PROTO.rule().required().args(1..));
+    rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
+    // TODO: these aren't parsed yet.  Only authorities use them.
+    {
+        rules.add(BANDWIDTH.rule().required().args(3..));
+        rules.add(BRIDGE_DISTRIBUTION_REQUEST.rule().args(1..));
+        rules.add(HIBERNATING.rule().args(1..));
+        rules.add(CONTACT.rule());
+    }
+    // TODO: this is ignored for now.
+    {
+        rules.add(EXTRA_INFO_DIGEST.rule().args(1..));
+    }
+    rules
+});
 
-    /// Rules for items that appear at the end of a router descriptor.
-    static ref ROUTER_SIG_RULES : SectionRules<RouterKW> = {
-        use RouterKW::*;
+/// Rules for items that appear at the end of a router descriptor.
+static ROUTER_SIG_RULES: Lazy<SectionRules<RouterKW>> = Lazy::new(|| {
+    use RouterKW::*;
 
-        let mut rules = SectionRules::new();
-        rules.add(ROUTER_SIG_ED25519.rule().required().args(1..));
-        rules.add(ROUTER_SIGNATURE.rule().required().no_args().obj_required());
-        rules
-    };
-}
+    let mut rules = SectionRules::new();
+    rules.add(ROUTER_SIG_ED25519.rule().required().args(1..));
+    rules.add(ROUTER_SIGNATURE.rule().required().no_args().obj_required());
+    rules
+});
 
 impl Default for RouterAnnotation {
     fn default() -> Self {
