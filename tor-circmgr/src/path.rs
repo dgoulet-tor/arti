@@ -9,7 +9,7 @@ pub mod exitpath;
 use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackDir, Relay};
 use tor_proto::channel::Channel;
-use tor_proto::circuit::ClientCirc;
+use tor_proto::circuit::{CircParameters, ClientCirc};
 
 use rand::{CryptoRng, Rng};
 use std::sync::Arc;
@@ -73,7 +73,12 @@ impl<'a> TorPath<'a> {
     }
 
     /// Try to build a circuit corresponding to this path.
-    pub async fn build_circuit<R>(&self, rng: &mut R, chanmgr: &ChanMgr) -> Result<Arc<ClientCirc>>
+    pub async fn build_circuit<R>(
+        &self,
+        rng: &mut R,
+        chanmgr: &ChanMgr,
+        params: &CircParameters,
+    ) -> Result<Arc<ClientCirc>>
     where
         R: Rng + CryptoRng,
     {
@@ -87,13 +92,13 @@ impl<'a> TorPath<'a> {
 
         match self {
             OneHop(_) | FallbackOneHop(_) => {
-                let circ = pcirc.create_firsthop_fast(rng).await?;
+                let circ = pcirc.create_firsthop_fast(rng, &params).await?;
                 Ok(circ)
             }
             Path(p) => {
-                let circ = pcirc.create_firsthop_ntor(rng, &p[0]).await?;
+                let circ = pcirc.create_firsthop_ntor(rng, &p[0], &params).await?;
                 for relay in p[1..].iter() {
-                    circ.extend_ntor(rng, relay).await?;
+                    circ.extend_ntor(rng, relay, params).await?;
                 }
                 Ok(circ)
             }

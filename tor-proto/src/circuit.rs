@@ -74,7 +74,7 @@ use std::sync::Arc;
 
 use rand::{thread_rng, CryptoRng, Rng};
 
-use log::{debug, trace};
+use log::{debug, trace, warn};
 
 /// A circuit that we have constructed over the Tor network.
 pub struct ClientCirc {
@@ -98,6 +98,46 @@ pub struct PendingClientCirc {
     recvcreated: oneshot::Receiver<CreateResponse>,
     /// The ClientCirc object that we can expose on success.
     circ: Arc<ClientCirc>,
+}
+
+/// Description of the network's current rules for building circuits.
+#[derive(Clone, Debug)]
+pub struct CircParameters {
+    /// Initial value to use for our outbound circuit-level windows.
+    initial_send_window: u16,
+    /// Whether we should include ed25519 identities when we send
+    /// EXTEND2 cells.
+    extend_by_ed25519_id: bool,
+}
+
+impl Default for CircParameters {
+    fn default() -> CircParameters {
+        CircParameters {
+            initial_send_window: 1000,
+            extend_by_ed25519_id: true,
+        }
+    }
+}
+
+impl CircParameters {
+    /// Override the default initial send window for these parameters.
+    /// Ignores any value over 1000.
+    ///
+    /// You should probably not call this.
+    pub fn set_initial_send_window(&mut self, v: u16) {
+        if v <= 1000 {
+            self.initial_send_window = v;
+        } else {
+            warn!("internal error: bad value {}", v);
+        }
+    }
+    /// Override the default decision about whether to use ed25519
+    /// identities in outgoing EXTEND2 cells.
+    ///
+    /// You should probably not call this.
+    pub fn set_extend_by_ed25519_id(&mut self, v: bool) {
+        self.extend_by_ed25519_id = v;
+    }
 }
 
 /// A result type used to tell a circuit about some a "meta-cell"
@@ -181,12 +221,10 @@ struct CircHop {
 
 impl CircHop {
     /// Construct a new (sender-side) view of a circuit hop.
-    fn new(auth_sendme_optional: bool) -> Self {
+    fn new(auth_sendme_optional: bool, initial_window: u16) -> Self {
         CircHop {
             auth_sendme_optional,
-            // TODO: this value should come from the consensus and not be
-            // hardcoded. XXXX-A1
-            sendwindow: sendme::CircSendWindow::new(1000),
+            sendwindow: sendme::CircSendWindow::new(initial_window),
         }
     }
 }
@@ -250,6 +288,7 @@ impl ClientCirc {
         key: &H::KeyType,
         linkspecs: Vec<LinkSpec>,
         supports_flowctrl_1: bool,
+        params: &CircParameters,
     ) -> Result<()>
     where
         R: Rng + CryptoRng,
@@ -343,6 +382,7 @@ impl ClientCirc {
             supports_flowctrl_1,
             Box::new(layer_fwd),
             Box::new(layer_back),
+            params,
         )
         .await
     }
@@ -353,11 +393,12 @@ impl ClientCirc {
     /// hop to our own structures, and tell the reactor to add it to the
     /// reactor's structures as well, and wait for the reactor to tell us
     /// that it did.
-    async fn add_hop(
-        &self,
+    async fn add_hop<'a>(
+        &'a self,
         supports_flowctrl_1: bool,
         fwd: Box<dyn OutboundClientLayer + 'static + Send>,
         rev: Box<dyn InboundClientLayer + 'static + Send>,
+        params: &'a CircParameters,
     ) -> Result<()> {
         let inbound_hop = crate::circuit::reactor::InboundHop::new();
         let (snd, rcv) = oneshot::channel();
@@ -378,7 +419,7 @@ impl ClientCirc {
 
         {
             let mut c = self.c.lock().await;
-            let hop = CircHop::new(supports_flowctrl_1);
+            let hop = CircHop::new(supports_flowctrl_1, params.initial_send_window);
             c.hops.push(hop);
             c.crypto_out.add_layer(fwd);
         }
@@ -387,7 +428,12 @@ impl ClientCirc {
 
     /// Extend the circuit via the ntor handshake to a new target last
     /// hop.  Same caveats apply from extend_impl.
-    pub async fn extend_ntor<R, Tg>(&self, rng: &mut R, target: &Tg) -> Result<()>
+    pub async fn extend_ntor<R, Tg>(
+        &self,
+        rng: &mut R,
+        target: &Tg,
+        params: &CircParameters,
+    ) -> Result<()>
     where
         R: Rng + CryptoRng,
         Tg: tor_linkspec::CircTarget,
@@ -398,7 +444,10 @@ impl ClientCirc {
             id: *target.rsa_identity(),
             pk: *target.ntor_onion_key(),
         };
-        let linkspecs = target.linkspecs();
+        let mut linkspecs = target.linkspecs();
+        if !params.extend_by_ed25519_id {
+            linkspecs.retain(|ls| !matches!(ls, LinkSpec::Ed25519Id(_)));
+        }
         // FlowCtrl=1 means that this hop supports authenticated SENDMEs
         let supports_flowctrl_1 = target
             .protovers()
@@ -409,6 +458,7 @@ impl ClientCirc {
             &key,
             linkspecs,
             supports_flowctrl_1,
+            params,
         )
         .await
     }
@@ -765,6 +815,7 @@ impl PendingClientCirc {
         wrap: &W,
         key: &H::KeyType,
         supports_flowctrl_1: bool,
+        params: &CircParameters,
     ) -> Result<Arc<ClientCirc>>
     where
         R: Rng + CryptoRng,
@@ -809,6 +860,7 @@ impl PendingClientCirc {
             supports_flowctrl_1,
             Box::new(layer_fwd),
             Box::new(layer_back),
+            params,
         )
         .await?;
         Ok(circ)
@@ -820,15 +872,25 @@ impl PendingClientCirc {
     /// There's no authentication in CRATE_FAST,
     /// so we don't need to know whom we're connecting to: we're just
     /// connecting to whichever relay the channel is for.
-    pub async fn create_firsthop_fast<R>(self, rng: &mut R) -> Result<Arc<ClientCirc>>
+    pub async fn create_firsthop_fast<R>(
+        self,
+        rng: &mut R,
+        params: &CircParameters,
+    ) -> Result<Arc<ClientCirc>>
     where
         R: Rng + CryptoRng,
     {
         use crate::crypto::cell::Tor1RelayCrypto;
         use crate::crypto::handshake::fast::CreateFastClient;
         let wrap = CreateFastWrap;
-        self.create_impl::<R, Tor1RelayCrypto, _, _, CreateFastClient, _>(rng, &wrap, &(), false)
-            .await
+        self.create_impl::<R, Tor1RelayCrypto, _, _, CreateFastClient, _>(
+            rng,
+            &wrap,
+            &(),
+            false,
+            params,
+        )
+        .await
     }
 
     /// Use the ntor handshake to connect to the first hop of this circuit.
@@ -839,6 +901,7 @@ impl PendingClientCirc {
         self,
         rng: &mut R,
         target: &Tg,
+        params: &CircParameters,
     ) -> Result<Arc<ClientCirc>>
     where
         R: Rng + CryptoRng,
@@ -862,6 +925,7 @@ impl PendingClientCirc {
             &wrap,
             &key,
             supports_flowctrl_1,
+            params,
         )
         .await
     }
@@ -1071,10 +1135,13 @@ mod test {
         let client_fut = async move {
             let mut rng = rand::thread_rng();
             let target = example_target();
+            let params = CircParameters::default();
             if fast {
-                pending.create_firsthop_fast(&mut rng).await
+                pending.create_firsthop_fast(&mut rng, &params).await
             } else {
-                pending.create_firsthop_ntor(&mut rng, &target).await
+                pending
+                    .create_firsthop_ntor(&mut rng, &target, &params)
+                    .await
             }
         };
         let reactor_fut = reactor.run().map(|_| ());
@@ -1161,11 +1228,13 @@ mod test {
         } = pending;
 
         for idx in 0_u8..3 {
+            let params = CircParameters::default();
             let (hopf, reacf) = futures::join!(
                 circ.add_hop(
                     true,
                     Box::new(DummyCrypto::new(idx == 2)),
-                    Box::new(DummyCrypto::new(idx == 2))
+                    Box::new(DummyCrypto::new(idx == 2)),
+                    &params,
                 ),
                 reactor.run_once()
             );
@@ -1257,11 +1326,12 @@ mod test {
 
         let (chan, mut ch) = fake_channel();
         let (circ, mut reactor, mut sink) = newcirc(chan).await;
+        let params = CircParameters::default();
 
         let extend_fut = async move {
             let target = example_target();
             let mut rng = thread_rng();
-            circ.extend_ntor(&mut rng, &target).await.unwrap();
+            circ.extend_ntor(&mut rng, &target, &params).await.unwrap();
             circ // gotta keep the circ alive, or the reactor would exit.
         };
         let reply_fut = async move {

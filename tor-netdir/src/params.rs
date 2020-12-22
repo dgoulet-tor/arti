@@ -95,8 +95,6 @@ caret_enum! {
         /// relays.
         BwWeightScale ("bwweightscale"),
         /// Default starting value for circuit SENDME windows.
-        ///
-        /// XXXX-A1 not yet implemented
         CircWindow ("circwindow"),
         /// Halflife for weighting circuits and deciding which should send
         /// the next cell.
@@ -105,8 +103,6 @@ caret_enum! {
         CircuitPriorityHalflifeMsec ("CircuitPriorityHalflifeMsec"),
         /// Whether clients should include Ed25519 identities for
         /// relays when generating EXTEND2 cells.
-        ///
-        /// XXXX-A1 Not yet implemented; should warn if set to 0.
         ExtendByEd25519Id ("ExtendByEd25519ID"),
         /// A percentage threshold that determines whether clients
         /// believe they have enough directory information to build

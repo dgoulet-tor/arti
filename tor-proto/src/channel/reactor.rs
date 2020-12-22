@@ -363,6 +363,8 @@ pub(crate) mod test {
     use futures::stream::StreamExt;
     use futures_await_test::async_test;
 
+    use crate::circuit::CircParameters;
+
     type CodecResult = std::result::Result<ChanCell, tor_cell::Error>;
 
     pub(crate) fn new_reactor() -> (
@@ -468,6 +470,8 @@ pub(crate) mod test {
 
         let (pending, _circr) = chan.new_circ(&mut rng).await.unwrap();
 
+        let circparams = CircParameters::default();
+
         reactor.run_once().await.unwrap();
 
         let id = pending.peek_circid().await;
@@ -481,8 +485,10 @@ pub(crate) mod test {
         let created_cell = ChanCell::new(id, msg::CreatedFast::new(*b"x").into());
         input.send(Ok(created_cell)).await.unwrap();
 
-        let (circ, reac) =
-            futures::join!(pending.create_firsthop_fast(&mut rng), reactor.run_once());
+        let (circ, reac) = futures::join!(
+            pending.create_firsthop_fast(&mut rng, &circparams),
+            reactor.run_once()
+        );
         // Make sure statuses are as expected.
         assert!(matches!(circ.err().unwrap(), Error::BadHandshake));
         assert!(reac.is_ok());

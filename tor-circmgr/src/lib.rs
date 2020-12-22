@@ -15,7 +15,7 @@
 use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackSet, NetDir};
 use tor_netdoc::types::policy::PortPolicy;
-use tor_proto::circuit::{ClientCirc, UniqId};
+use tor_proto::circuit::{CircParameters, ClientCirc, UniqId};
 use tor_retry::RetryError;
 
 use anyhow::Result;
@@ -94,6 +94,21 @@ impl<'a> Into<DirInfo<'a>> for &'a FallbackSet {
 impl<'a> Into<DirInfo<'a>> for &'a NetDir {
     fn into(self) -> DirInfo<'a> {
         DirInfo::Directory(self)
+    }
+}
+impl<'a> DirInfo<'a> {
+    /// Return a set of circuit parameters for this DirInfo.
+    fn circ_params(&self) -> CircParameters {
+        use tor_netdir::params::Param;
+        match self {
+            DirInfo::Fallbacks(_) => CircParameters::default(),
+            DirInfo::Directory(d) => {
+                let mut p = CircParameters::default();
+                p.set_initial_send_window(d.params().get(Param::CircWindow) as u16);
+                p.set_extend_by_ed25519_id(d.params().get(Param::ExtendByEd25519Id) != 0);
+                p
+            }
+        }
     }
 }
 
@@ -489,8 +504,9 @@ impl CircMgr {
         netdir: DirInfo<'_>,
         target_usage: &TargetCircUsage,
     ) -> Result<(Arc<ClientCirc>, CircUsage)> {
+        let params = netdir.circ_params();
         let (path, usage) = target_usage.build_path(rng, netdir)?;
-        let circ = path.build_circuit(rng, &self.chanmgr).await?;
+        let circ = path.build_circuit(rng, &self.chanmgr, &params).await?;
         Ok((circ, usage))
     }
 
