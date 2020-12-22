@@ -143,33 +143,6 @@ impl<T> NetParams<T> {
         self.params.iter()
     }
 }
-impl<T> NetParams<T>
-where
-    T: Copy + Clone,
-{
-    /// Return a given network parameter by value, if it is present.
-    pub fn get_val<A: AsRef<str>>(&self, v: A) -> Option<T> {
-        self.get(v).map(T::clone)
-    }
-}
-impl<T> NetParams<T>
-where
-    T: Copy + Clone + PartialOrd,
-{
-    /// Return a given network parameter by value, if it is
-    /// present. Clamp it so that it lies within the range `low..=high`.
-    pub fn get_clamped<A: AsRef<str>>(&self, v: A, low: T, high: T) -> Option<T> {
-        self.get_val(v).map(|x| {
-            if x < low {
-                low
-            } else if x > high {
-                high
-            } else {
-                x
-            }
-        })
-    }
-}
 /// A list of subprotocol versions that implementors should/must provide.
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
