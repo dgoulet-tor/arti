@@ -872,16 +872,20 @@ async fn download_mds(
                     for annot in
                         MicrodescReader::new(&text, AllowAnnotations::AnnotationsNotAllowed)
                     {
-                        if let Ok(anno) = annot {
-                            let txt = anno.within(&text).unwrap().to_string(); //XXXX ugly copy
-                            let md = anno.into_microdesc();
-                            if want.contains(md.digest()) {
-                                my_new_mds.push((txt, md))
-                            } else {
-                                warn!("Received md we did not ask for: {:?}", md.digest())
+                        match annot {
+                            Ok(anno) => {
+                                let txt = anno.within(&text).unwrap().to_string(); //XXXX ugly copy
+                                let md = anno.into_microdesc();
+                                if want.contains(md.digest()) {
+                                    my_new_mds.push((txt, md))
+                                } else {
+                                    warn!("Received md we did not ask for: {:?}", md.digest())
+                                }
+                            }
+                            Err(err) => {
+                                warn!("Problem with annotated md: {:?}", err)
                             }
                         }
-                        // XXXX-A1 log error
                     }
                 }
 
