@@ -857,9 +857,12 @@ async fn download_mds(
 
                 let res = tor_dirclient::get_resource(resource, info, cm).await;
 
-                let mut my_new_mds = Vec::new();
+                // Handle fetch errors here
+                if let Err(err) = &res {
+                    info!("Problem fetching mds: {:?}", err);
+                }
 
-                // XXXX-A1 log error.
+                let mut my_new_mds = Vec::new();
                 if let Ok(response) = res {
                     let text = response.output();
                     // XXXX-A1 In some of the below error cases we should
@@ -869,14 +872,20 @@ async fn download_mds(
                     for annot in
                         MicrodescReader::new(&text, AllowAnnotations::AnnotationsNotAllowed)
                     {
-                        if let Ok(anno) = annot {
-                            let txt = anno.within(&text).unwrap().to_string(); //XXXX ugly copy
-                            let md = anno.into_microdesc();
-                            if want.contains(md.digest()) {
-                                my_new_mds.push((txt, md))
-                            } // XXXX-A1 warn if we didn't want this.
+                        match annot {
+                            Ok(anno) => {
+                                let txt = anno.within(&text).unwrap().to_string(); //XXXX ugly copy
+                                let md = anno.into_microdesc();
+                                if want.contains(md.digest()) {
+                                    my_new_mds.push((txt, md))
+                                } else {
+                                    warn!("Received md we did not ask for: {:?}", md.digest())
+                                }
+                            }
+                            Err(err) => {
+                                warn!("Problem with annotated md: {:?}", err)
+                            }
                         }
-                        // XXXX-A1 log error
                     }
                 }
 
