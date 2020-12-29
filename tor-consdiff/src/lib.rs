@@ -632,7 +632,7 @@ mod test {
     #[test]
     fn parse_command() -> Result<()> {
         use DiffCommand::*;
-        fn parse(s: &str) -> Result<DiffCommand> {
+        fn parse(s: &str) -> Result<DiffCommand<'_>> {
             let mut iter = s.lines();
             let cmd = DiffCommand::from_line_iterator(&mut iter)?;
             let cmd2 = DiffCommand::from_line_iterator(&mut iter)?;
