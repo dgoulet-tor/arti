@@ -13,4 +13,4 @@ slow-diff-apply = []
 [dependencies]
 
 hex = "0.4.2"
-thiserror = "1.0.22"
+thiserror = "1.0.23"

@@ -18,12 +18,12 @@ tor-socksproto = { path="../tor-socksproto", version= "*" }
 tor-dirclient = { path="../tor-dirclient", version = "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
 
-anyhow = "1.0.36"
+anyhow = "1.0.37"
 async-native-tls = "0.3.3"
 futures = "0.3.8"
 log = "0.4.11"
-native-tls = "0.2.6"
+native-tls = "0.2.7"
 rand = "0.7.3"
 simple-logging = "2.0.2"
-thiserror = "1.0.22"
+thiserror = "1.0.23"
 argh = "0.1.4"
