@@ -365,8 +365,11 @@ impl Channel {
     /// with a channel: the channel should close on its own once nothing
     /// is using it any more.
     pub async fn terminate(&self) {
-        let previously_closed = self.closed.compare_and_swap(false, true, Ordering::SeqCst);
-        if !previously_closed {
+        let outcome = self
+            .closed
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+        if outcome == Ok(false) {
+            // The old value was false and the new value is true.
             let mut inner = self.inner.lock().await;
             inner.shutdown_reactor();
             // ignore any failure to flush; we can't do anything about it.

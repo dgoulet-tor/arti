@@ -594,8 +594,11 @@ impl ClientCirc {
     /// with a circuit: the channel should close on its own once nothing
     /// is using it any more.
     pub async fn terminate(&self) {
-        let previously_closed = self.closed.compare_and_swap(false, true, Ordering::SeqCst);
-        if !previously_closed {
+        let outcome = self
+            .closed
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+        if outcome == Ok(false) {
+            // The old value was false and the new value is true.
             self.c.lock().await.shutdown_reactor();
         }
     }

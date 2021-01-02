@@ -282,7 +282,7 @@ impl std::str::FromStr for SubprotocolEntry {
             Some(p) => Protocol::Proto(p),
             None => Protocol::Unrecognized(name.to_string()),
         };
-        if versions == "" {
+        if versions.is_empty() {
             // We need to handle this case specially, since otherwise
             // it would be treated below as a single empty value, which
             // would be rejected.
