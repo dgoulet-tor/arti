@@ -16,12 +16,12 @@ tor-linkspec = { path="../tor-linkspec", version= "*" }
 tor-llcrypto = { path="../tor-llcrypto", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*" }
 
-anyhow = "1.0.37"
+anyhow = "1.0.38"
 async-trait = "0.1.42"
 event-listener = "2.5.1"
-futures = "0.3.8"
+futures = "0.3.9"
 rand = "0.7.3"
-log = "0.4.11"
+log = "0.4.13"
 thiserror = "1.0.23"
 
 [dev-dependencies]
