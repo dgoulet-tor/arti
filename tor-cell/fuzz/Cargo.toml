@@ -11,7 +11,6 @@ cargo-fuzz = true
 
 [dependencies]
 bytes = "0.5.6"
-futures_codec = "0.4.1"
 libfuzzer-sys = "0.3"
 
 [dependencies.tor-cell]
