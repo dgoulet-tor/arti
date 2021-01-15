@@ -20,7 +20,7 @@ tor-llcrypto = { path="../tor-llcrypto", version= "*" }
 anyhow = "1.0.38"
 async-trait = "0.1.42"
 event-listener = "2.5.1"
-futures = "0.3.10"
+futures = "0.3.12"
 log = "0.4.13"
 thiserror = "1.0.23"
 

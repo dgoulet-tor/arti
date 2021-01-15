@@ -20,7 +20,7 @@ tor-linkspec = { path="../tor-linkspec", version= "*" }
 
 anyhow = "1.0.38"
 async-native-tls = "0.3.3"
-futures = "0.3.10"
+futures = "0.3.12"
 log = "0.4.13"
 native-tls = "0.2.7"
 rand = "0.7.3"
