@@ -2,6 +2,7 @@
 //! crate.
 use tor_cell::chancell::{codec, ChanCell};
 
+use asynchronous_codec as futures_codec;
 use bytes::BytesMut;
 
 /// Asynchronous wrapper around ChannelCodec in tor_cell, with implementation
@@ -48,7 +49,7 @@ pub(crate) mod test {
     use pin_project::pin_project;
     use std::pin::Pin;
 
-    use super::ChannelCodec;
+    use super::{futures_codec, ChannelCodec};
     use tor_cell::chancell::{msg, ChanCell, ChanCmd, CircId};
 
     /// Helper type for reading and writing bytes to/from buffers.

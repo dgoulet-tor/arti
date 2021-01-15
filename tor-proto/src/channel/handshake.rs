@@ -1,6 +1,7 @@
 //! Implementations for the channel handshake
 
 use arrayref::array_ref;
+use asynchronous_codec as futures_codec;
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use futures::sink::SinkExt;
 use futures::stream::{self, StreamExt};

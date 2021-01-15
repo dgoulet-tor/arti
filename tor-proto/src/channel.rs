@@ -69,6 +69,7 @@ use tor_linkspec::ChanTarget;
 use tor_llcrypto::pk::ed25519::Ed25519Identity;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
+use asynchronous_codec as futures_codec;
 use futures::channel::{mpsc, oneshot};
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::lock::Mutex;

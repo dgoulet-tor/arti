@@ -14,9 +14,8 @@ tor-cert = { path="../tor-cert" }
 tor-linkspec = { path="../tor-linkspec" }
 
 arrayref = "0.3.6"
-# Can't upgrade this or futures-codec will break.
 bitflags = "1.2.1"
-bytes = "0.5.6"
+bytes = "1.0.1"
 rand = "0.7.3"
 rand_core = "0.5.1"
 thiserror = "1.0.23"
