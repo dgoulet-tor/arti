@@ -142,7 +142,7 @@ mod zstd {
                         written: res.bytes_written,
                     })
                 }
-                Err(err) => return Err(anyhow!("zstd compression error: {:?}", err)),
+                Err(err) => Err(anyhow!("zstd compression error: {:?}", err)),
             }
         }
     }
@@ -225,21 +225,27 @@ mod test {
         let mut decoder = zstd::stream::raw::Decoder::new().unwrap();
         let mut output = [0u8; 78];
         let empty_space = [0u8; 78];
-        let status = decoder.process(&input[0..30], &mut output[..], false).unwrap();
+        let status = decoder
+            .process(&input[0..30], &mut output[..], false)
+            .unwrap();
         assert!(matches!(status.status, StatusKind::Written));
         assert_eq!(status.consumed, 30);
         // There will be no writing till we consume the whole input
         assert_eq!(status.written, 0);
         assert_eq!(output, empty_space);
 
-        let status = decoder.process(&input[30..50], &mut output[..], false).unwrap();
+        let status = decoder
+            .process(&input[30..50], &mut output[..], false)
+            .unwrap();
 
         assert!(matches!(status.status, StatusKind::Written));
         assert_eq!(status.consumed, 20);
         assert_eq!(status.written, 0);
         assert_eq!(output, empty_space);
 
-        let status = decoder.process(&input[50..], &mut output[..], true).unwrap();
+        let status = decoder
+            .process(&input[50..], &mut output[..], true)
+            .unwrap();
 
         assert!(matches!(status.status, StatusKind::Done));
         assert_eq!(status.consumed, 12);
@@ -248,5 +254,4 @@ mod test {
         let out = str::from_utf8(&output[..]).unwrap();
         assert_eq!(out, original_input);
     }
-
 }
