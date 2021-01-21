@@ -186,3 +186,30 @@ mod lzma {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::StatusKind;
+    use crate::decompress::Decompressor;
+    use std::str;
+
+    #[test]
+    fn decompress_zstd() {
+        let original_input =
+            "Tor is amazing, Tor is amazing, Tor is amazing, you work now please, good Tor.";
+        let input = vec![
+            40, 181, 47, 253, 32, 78, 173, 1, 0, 228, 2, 84, 111, 114, 32, 105, 115, 32, 97, 109,
+            97, 122, 105, 110, 103, 44, 32, 121, 111, 117, 32, 119, 111, 114, 107, 32, 110, 111,
+            119, 32, 112, 108, 101, 97, 115, 101, 44, 32, 103, 111, 111, 100, 32, 84, 111, 114, 46,
+            1, 0, 6, 159, 75,
+        ];
+        let mut decoder = zstd::stream::raw::Decoder::new().unwrap();
+        let mut output = [0u8; 78];
+        let status = decoder.process(&input[..], &mut output[..], true).unwrap();
+        assert!(matches!(status.status, StatusKind::Done));
+        assert_eq!(status.consumed, 62);
+        assert_eq!(status.written, 78);
+        let out = str::from_utf8(&output[..]).unwrap();
+        assert_eq!(out, original_input);
+    }
+}
