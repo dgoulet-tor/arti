@@ -7,7 +7,7 @@
 //!
 //! Multi-hop tunnels are not supported.
 //!
-//! Only zlib and lzma compression is supported.
+//! Only zlib, zstd and lzma compression is supported.
 
 // XXXX THIS CODE IS HORRIBLE AND NEEDS REFACTORING.
 
@@ -304,6 +304,7 @@ fn get_decompressor(encoding: Option<&str>) -> Result<Box<dyn Decompressor + Sen
         Some("x-tor-lzma") => Ok(Box::new(
             xz2::stream::Stream::new_lzma_decoder(16 * 1024 * 1024).unwrap(),
         )),
+        Some("x-zstd") => Ok(Box::new(zstd::stream::raw::Decoder::new().unwrap())),
         Some(other) => Err(Error::BadEncoding(other.into()).into()),
     }
 }

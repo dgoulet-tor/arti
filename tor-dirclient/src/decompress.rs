@@ -112,6 +112,42 @@ mod miniz_oxide {
     }
 }
 
+/// Implementation for the [`Decompressor`] trait on [`zstd::stream`].
+///
+/// This implements zstd compression as used in Tor.
+mod zstd {
+    use super::{Decompressor, Status, StatusKind};
+
+    use anyhow::{anyhow, Result};
+    use zstd::stream::raw::{Decoder, Operation};
+
+    impl Decompressor for Decoder<'static> {
+        fn process(&mut self, inp: &[u8], out: &mut [u8], finished: bool) -> Result<Status> {
+            let result = self.run_on_buffers(inp, out);
+            if finished {
+                // It does not do anything, just returns Ok(0) if finished_frame = true
+                //self.finish(output, finished_frame)
+            }
+            match result {
+                Ok(res) => {
+                    let status = if finished {
+                        StatusKind::Done
+                    } else {
+                        StatusKind::Written
+                    };
+
+                    Ok(Status {
+                        status,
+                        consumed: res.bytes_read,
+                        written: res.bytes_written,
+                    })
+                }
+                Err(err) => return Err(anyhow!("zstd compression error: {:?}", err)),
+            }
+        }
+    }
+}
+
 /// Implementation for the [`Decompressor`] trait on [`xz2::Stream`].
 ///
 /// This implements lzma compression as used in Tor.
