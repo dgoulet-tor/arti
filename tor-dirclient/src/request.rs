@@ -259,7 +259,7 @@ fn add_common_headers(req: http::request::Builder) -> http::request::Builder {
     // TODO: gzip, zstd, brotli
     req.header(
         http::header::ACCEPT_ENCODING,
-        "deflate, identity, x-tor-lzma",
+        "deflate, identity, x-tor-lzma, x-zstd",
     )
 }
 
