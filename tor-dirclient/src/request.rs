@@ -282,7 +282,7 @@ mod test {
         let req = crate::util::encode_request(req.into_request()?);
 
         assert_eq!(req,
-                   "GET /tor/micro/d/J3QgYWN0dWFsbHkgU0hBLTI1Ni4uLi4uLi4uLi4uLi4-VGhpcyBpcyBhIHRlc3RpbmcgZGlnZXN0LiBpdCBpc24.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma\r\n\r\n");
+                   "GET /tor/micro/d/J3QgYWN0dWFsbHkgU0hBLTI1Ni4uLi4uLi4uLi4uLi4-VGhpcyBpcyBhIHRlc3RpbmcgZGlnZXN0LiBpdCBpc24.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma, x-zstd\r\n\r\n");
 
         Ok(())
     }
@@ -310,7 +310,7 @@ mod test {
         let req = crate::util::encode_request(req.into_request()?);
 
         assert_eq!(req,
-                   "GET /tor/keys/fp-sk/5468697320697320612074657374696e6720646e-27742061637475616c6c79205348412d3235362e+626c616820626c616820626c6168203120322033-49206c696b652070697a7a612066726f6d204e61.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma\r\n\r\n");
+                   "GET /tor/keys/fp-sk/5468697320697320612074657374696e6720646e-27742061637475616c6c79205348412d3235362e+626c616820626c616820626c6168203120322033-49206c696b652070697a7a612066726f6d204e61.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma, x-zstd\r\n\r\n");
 
         Ok(())
     }
