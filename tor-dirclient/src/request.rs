@@ -224,6 +224,7 @@ impl Default for MicrodescRequest {
 
 impl ClientRequest for MicrodescRequest {
     fn into_request(mut self) -> Result<http::Request<()>> {
+        // TODO: require that self.digests is nonempty.
         self.digests.sort_unstable();
 
         let ids: Vec<String> = self
@@ -260,4 +261,29 @@ fn add_common_headers(req: http::request::Builder) -> http::request::Builder {
         http::header::ACCEPT_ENCODING,
         "deflate, identity, x-tor-lzma",
     )
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    #[test]
+    fn test_md_request() -> Result<()> {
+        let d1 = b"This is a testing digest. it isn";
+        let d2 = b"'t actually SHA-256.............";
+
+        let mut req = MicrodescRequest::new();
+        req.push(*d1);
+        req.push(*d2);
+
+        assert!(req.partial_docs_ok());
+
+        let req = crate::util::encode_request(req.into_request()?);
+
+        assert_eq!(req,
+                   "GET /tor/micro/d/J3QgYWN0dWFsbHkgU0hBLTI1Ni4uLi4uLi4uLi4uLi4-VGhpcyBpcyBhIHRlc3RpbmcgZGlnZXN0LiBpdCBpc24.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma\r\n\r\n");
+
+        Ok(())
+    }
 }

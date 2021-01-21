@@ -10,7 +10,7 @@
 use anyhow::Result;
 
 /// Possible return conditions from a decompression operation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum StatusKind {
     /// Some data was written.
     Written,

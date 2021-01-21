@@ -320,3 +320,39 @@ where
     );
     circ_mgr.retire_circ(&id).await;
 }
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    fn check_decomp(name: Option<&str>, inp: &[u8]) -> Vec<u8> {
+        let mut d = get_decompressor(name).unwrap();
+        let mut buf = vec![0; 2048];
+        let s = d.process(inp, &mut buf[..], true).unwrap();
+        // TODO: what if d requires multiple steps to work?
+        assert_eq!(s.status, decompress::StatusKind::Done);
+        assert_eq!(s.consumed, inp.len());
+        buf.truncate(s.written);
+        buf
+    }
+
+    #[test]
+    fn test_get_decompressor_ident() {
+        assert_eq!(
+            &check_decomp(None, &b"Hello world"[..])[..],
+            &b"Hello world"[..]
+        );
+
+        assert_eq!(
+            &check_decomp(Some("identity"), &b"Hello world"[..])[..],
+            &b"Hello world"[..]
+        );
+    }
+
+    #[test]
+    fn test_get_decompressor_err() {
+        let r = get_decompressor(Some("quantum-entanglement"));
+        assert!(r.is_err()); // TODO: check actual error type.
+    }
+}

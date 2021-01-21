@@ -21,7 +21,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn fromat() {
+    fn format() {
         let req = http::Request::builder()
             .method("GET")
             .uri("/index.html")
