@@ -286,4 +286,32 @@ mod test {
 
         Ok(())
     }
+
+    #[test]
+    fn test_cert_request() -> Result<()> {
+        let d1 = b"This is a testing dn";
+        let d2 = b"'t actually SHA-256.";
+
+        let d3 = b"blah blah blah 1 2 3";
+        let d4 = b"I like pizza from Na";
+
+        let mut req = AuthCertRequest::new();
+        req.push(AuthCertKeyIds {
+            id_fingerprint: (*d1).into(),
+            sk_fingerprint: (*d2).into(),
+        });
+        req.push(AuthCertKeyIds {
+            id_fingerprint: (*d3).into(),
+            sk_fingerprint: (*d4).into(),
+        });
+
+        assert!(req.partial_docs_ok());
+
+        let req = crate::util::encode_request(req.into_request()?);
+
+        assert_eq!(req,
+                   "GET /tor/keys/fp-sk/5468697320697320612074657374696e6720646e-27742061637475616c6c79205348412d3235362e+626c616820626c616820626c6168203120322033-49206c696b652070697a7a612066726f6d204e61.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma\r\n\r\n");
+
+        Ok(())
+    }
 }
