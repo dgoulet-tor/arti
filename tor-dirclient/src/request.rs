@@ -314,4 +314,29 @@ mod test {
 
         Ok(())
     }
+
+    #[test]
+    fn test_consensus_request() -> Result<()> {
+        let d1 = RSAIdentity::from_bytes(
+            &hex::decode("03479E93EBF3FF2C58C1C9DBF2DE9DE9C2801B3E").unwrap(),
+        )
+        .unwrap();
+
+        let d2 = b"blah blah blah 12 blah blah blah";
+        let d3 = SystemTime::now();
+        let mut req = ConsensusRequest::new();
+
+        let when = httpdate::fmt_http_date(d3);
+
+        req.push_authority_id(d1);
+        req.push_old_consensus_digest(*d2);
+        req.set_last_consensus_date(d3);
+
+        let req = crate::util::encode_request(req.into_request()?);
+
+        assert_eq!(req,
+                   format!("GET /tor/status-vote/current/consensus-microdesc/03479e93ebf3ff2c58c1c9dbf2de9de9c2801b3e.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma, x-zstd\r\nif-modified-since: {}\r\nx-or-diff-from-consensus: 626c616820626c616820626c616820313220626c616820626c616820626c6168\r\n\r\n", when));
+
+        Ok(())
+    }
 }
