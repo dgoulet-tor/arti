@@ -71,6 +71,8 @@ impl DirMgr {
         circmgr: Arc<CircMgr>,
     ) -> Result<Arc<Self>> {
         let dirmgr = Arc::new(DirMgr::from_config(config)?);
+        /// largest number of attempts before we give up completely.
+        const MAX_BOOTSTRAP_ATTEMPTS: usize = 128;
 
         // Try to load from the cache.
         if dirmgr
@@ -83,10 +85,18 @@ impl DirMgr {
             // Okay, we didn't get a directory from the cache.  We need to
             // try fetching it.
             info!("Didn't find a usable directory in the cache. Trying to booststrap.");
-            dirmgr
-                .bootstrap_directory(Arc::clone(&circmgr))
-                .await
-                .context("Unable to bootstrap directory")?;
+            let mut retry = RetryDelay::from_msec(1000);
+            for _ in 0..MAX_BOOTSTRAP_ATTEMPTS {
+                match dirmgr.bootstrap_directory(Arc::clone(&circmgr)).await {
+                    Ok(()) => break,
+                    Err(e) => {
+                        warn!("Can't bootstrap: {}. Will wait and try again.", e);
+                    }
+                }
+
+                let delay = retry.next_delay(&mut rand::thread_rng());
+                tor_rtcompat::task::sleep(delay).await;
+            }
             info!("Bootstrapped successfully.");
         }
 
@@ -481,7 +491,6 @@ impl NoInformation {
         circmgr: Arc<CircMgr>,
     ) -> Result<UnvalidatedDir> {
         // XXXX make this configurable.
-        // XXXX-A1 add a "keep trying forever" option for when we have no consensus.
         let n_retries = 3_u32;
         let mut retry_delay = RetryDelay::default();
 
@@ -645,7 +654,6 @@ impl UnvalidatedDir {
         circmgr: Arc<CircMgr>,
     ) -> Result<()> {
         // XXXX make this configurable
-        // XXXX-A1 add a "keep trying forever" option for when we have no consensus.
         let n_retries = 3_u32;
         let mut retry_delay = RetryDelay::default();
 
@@ -777,7 +785,6 @@ impl PartialDir {
         circmgr: Arc<CircMgr>,
     ) -> Result<()> {
         // XXXX Make this configurable
-        // XXXX-A1 add a "keep trying forever" option for when we have no consensus.
         let n_retries = 3_u32;
         let mut retry_delay = RetryDelay::default();
 
