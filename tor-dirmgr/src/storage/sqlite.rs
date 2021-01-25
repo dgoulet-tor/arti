@@ -304,15 +304,21 @@ impl SqliteStore {
             .map(|m| m.lifetime().valid_after().into()))
     }
 
-    /// Load the latest consensus from disk.  If `pending` is true, we
-    /// can fetch a consensus that hasn't got enough microdescs yet.
+    /// Load the latest consensus from disk.  If `pending_ok` is true, we
+    /// will accept a consensus that hasn't got enough microdescs yet.
     /// Otherwise, we only want a consensus where we got full
     /// directory information.
-    pub fn latest_consensus(&self, pending: bool) -> Result<Option<InputString>> {
-        let rv: Option<(DateTime<Utc>, DateTime<Utc>, String)> = self
-            .conn
-            .query_row(FIND_CONSENSUS, params![pending], |row| row.try_into())
-            .optional()?;
+    pub fn latest_consensus(&self, pending_ok: bool) -> Result<Option<InputString>> {
+        let rv: Option<(DateTime<Utc>, DateTime<Utc>, String)>;
+        rv = if pending_ok {
+            self.conn
+                .query_row(FIND_CONSENSUS, NO_PARAMS, |row| row.try_into())
+                .optional()?
+        } else {
+            self.conn
+                .query_row(FIND_CONSENSUS_P, params![false], |row| row.try_into())
+                .optional()?
+        };
 
         if let Some((_va, _vu, filename)) = rv {
             // XXXX-A1 check va and vu.
@@ -587,12 +593,24 @@ const INSTALL_SCHEMA: &str = "
 
 ";
 
-/// Query: find the latest-expiring microdesc with a given pending status.
-const FIND_CONSENSUS: &str = "
+/// Query: find the latest-expiring microdesc consensus with a given
+/// pending status.
+const FIND_CONSENSUS_P: &str = "
   SELECT valid_after, valid_until, filename
   FROM Consensuses
   INNER JOIN ExtDocs ON ExtDocs.digest = Consensuses.digest
   WHERE pending = ? AND flavor = 'microdesc'
+  ORDER BY valid_until DESC
+  LIMIT 1;
+";
+
+/// Query: find the latest-expiring microdesc consensus, regardless of
+/// pending status.
+const FIND_CONSENSUS: &str = "
+  SELECT valid_after, valid_until, filename
+  FROM Consensuses
+  INNER JOIN ExtDocs ON ExtDocs.digest = Consensuses.digest
+  WHERE flavor = 'microdesc'
   ORDER BY valid_until DESC
   LIMIT 1;
 ";
@@ -854,14 +872,16 @@ mod test {
             assert_eq!(store.latest_consensus_time()?, None);
             let consensus = store.latest_consensus(true)?.unwrap();
             assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
+            let consensus = store.latest_consensus(false)?;
+            assert!(consensus.is_none());
         }
 
         store.mark_consensus_usable(&cmeta)?;
 
         {
             assert_eq!(store.latest_consensus_time()?, now.into());
-            let consensus = store.latest_consensus(true)?;
-            assert!(consensus.is_none());
+            let consensus = store.latest_consensus(true)?.unwrap();
+            assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
             let consensus = store.latest_consensus(false)?.unwrap();
             assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
         }

@@ -416,19 +416,19 @@ impl NoInformation {
     }
 
     /// Try to fetch a currently timely consensus directory document
-    /// from the local cache in `store`.  If `pending`, then we'll
+    /// from the local cache in `store`.  If `pending_ok`, then we'll
     /// happily return a pending document; otherwise, we'll only
     /// return a document that has been marked as having been completely
     /// bootstrapped.
     async fn load(
         self,
-        pending: bool,
+        pending_ok: bool,
         config: &NetDirConfig,
         store: &Mutex<SqliteStore>,
     ) -> Result<NextState<Self, UnvalidatedDir>> {
         let consensus_text = {
             let store = store.lock().await;
-            match store.latest_consensus(pending)? {
+            match store.latest_consensus(pending_ok)? {
                 Some(c) => c,
                 None => return Ok(NextState::SameState(self)),
             }
