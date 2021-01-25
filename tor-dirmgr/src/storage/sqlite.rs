@@ -277,7 +277,6 @@ impl SqliteStore {
         let mut stmt = self.conn.prepare(FIND_LATEST_CONSENSUS_META)?;
         let mut rows = stmt.query(NO_PARAMS)?;
         if let Some(row) = rows.next()? {
-            // XXXX-A1 turn all these errors into cache corruption errors?
             let va: DateTime<Utc> = row.get(0)?;
             let fu: DateTime<Utc> = row.get(1)?;
             let vu: DateTime<Utc> = row.get(2)?;
@@ -321,8 +320,6 @@ impl SqliteStore {
         };
 
         if let Some((_va, _vu, filename)) = rv {
-            // XXXX-A1 check va and vu.
-            // XXXX-A1 Some error cases should also be 'None'
             self.read_blob(filename).map(Option::Some)
         } else {
             Ok(None)
