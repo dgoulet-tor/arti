@@ -278,7 +278,6 @@ impl DirMgr {
             NextState::SameState(noinfo)
         };
 
-        // TODO: XXXX-A1: Also check the age of our current one.
         let mut unval = match nextstate {
             NextState::SameState(noinfo) => {
                 // Couldn't load a pending consensus. Have to fetch one.
@@ -455,9 +454,6 @@ impl NoInformation {
             .collect();
         if !unvalidated.authorities_are_correct(&authority_ids[..]) {
             // This is not for us.  Treat it as if we had no cached consensus.
-            // XXXX-A1: We should mark the cached as invalid somehow, or just
-            // remove it.
-
             warn!("Found cached directory not signed by the right authorities. Are you using a mismatched cache?");
             store.lock().await.delete_consensus(&consensus_meta)?;
             return Ok(NextState::SameState(self));
@@ -629,7 +625,6 @@ impl UnvalidatedDir {
         for c in newcerts.values() {
             let cert = AuthCert::parse(c)?.check_signature()?;
             if let Ok(cert) = cert.check_valid_now() {
-                // XXXX-A1: Complain if we find a cert we didn't want. That's a bug.
                 self.certs.push(cert);
             }
         }
@@ -702,16 +697,29 @@ impl UnvalidatedDir {
                 if let Ok(wellsigned) = parsed.check_signature() {
                     if let Ok(timely) = wellsigned.check_valid_now() {
                         newcerts.push((timely, s));
+                        continue;
                     }
                 }
             }
-            // XXXX-A1 warn on error.
+
+            warn!(
+                "Received an unusable certificate from {:?}.",
+                response.source()
+            );
         }
 
         // Throw away any that we didn't ask for.
-        self.certs
-            .retain(|cert| missing.iter().any(|m| m == cert.key_ids()));
-        // XXXX-A1 warn on discard.
+        {
+            let n_orig = self.certs.len();
+            self.certs
+                .retain(|cert| missing.iter().any(|m| m == cert.key_ids()));
+            if self.certs.len() != n_orig {
+                warn!(
+                    "Received cert(s) from {:?} that we didn't request.",
+                    response.source()
+                );
+            }
+        }
 
         {
             let v: Vec<_> = newcerts[..]
@@ -754,7 +762,7 @@ impl UnvalidatedDir {
 impl PartialDir {
     /// Try to load microdescriptors from our local cache.
     async fn load(&mut self, store: &Mutex<SqliteStore>, prev: Option<Arc<NetDir>>) -> Result<()> {
-        let mark_listed = Some(SystemTime::now()); // XXXX-A1 use validafter, conditionally.
+        let mark_listed = Some(self.dir.lifetime().valid_after());
 
         load_mds(&mut self.dir, prev, mark_listed, store).await
     }
@@ -797,7 +805,8 @@ impl PartialDir {
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr>,
     ) -> Result<()> {
-        let mark_listed = SystemTime::now(); // XXXX-A1 use validafter
+        let mark_listed = self.dir.lifetime().valid_after();
+
         let missing: Vec<MDDigest> = self.dir.missing_microdescs().map(Clone::clone).collect();
         let mds = download_mds(missing, mark_listed, store, info, circmgr).await?;
         for md in mds {
@@ -848,14 +857,16 @@ async fn load_mds(
     };
 
     for (digest, text) in microdescs.iter() {
-        let md = Microdesc::parse(text)?; // XXXX-A1 recover from this
-        if md.digest() != digest {
-            // whoa! XXXX Log something about this.
-            continue;
+        if let Ok(md) = Microdesc::parse(text) {
+            if md.digest() == digest && doc.add_microdesc(md) {
+                loaded.push(digest);
+                continue;
+            }
         }
-        if doc.add_microdesc(md) {
-            loaded.push(digest);
-        }
+        warn!(
+            "Found unusable microdescriptor {} in cache?",
+            hex::encode(digest)
+        )
     }
 
     if let Some(when) = mark_listed {

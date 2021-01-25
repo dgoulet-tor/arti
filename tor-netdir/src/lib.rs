@@ -177,6 +177,11 @@ impl PartialNetDir {
         }
         PartialNetDir { netdir }
     }
+
+    /// Return the declared lifetime of this PartialNetDir.
+    pub fn lifetime(&self) -> &netstatus::Lifetime {
+        self.netdir.lifetime()
+    }
     /// Fill in as many missing microdescriptors as possible in this
     /// netdir, using the microdescriptors from the previous netdir.
     pub fn fill_from_previous_netdir<'a>(&mut self, prev: &'a NetDir) -> Vec<&'a MDDigest> {
