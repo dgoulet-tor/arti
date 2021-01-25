@@ -72,14 +72,17 @@ impl DirMgr {
     ) -> Result<Arc<Self>> {
         let dirmgr = Arc::new(DirMgr::from_config(config)?);
 
+        // Try to load from the cache.
         if dirmgr
             .load_directory()
             .await
             .context("Error loading cached directory")?
         {
-            info!("Loaded a good directory from disk.")
+            info!("Loaded a good directory from cache.")
         } else {
-            info!("Didn't find a usable directory on disk. Trying to booststrap.");
+            // Okay, we didn't get a directory from the cache.  We need to
+            // try fetching it.
+            info!("Didn't find a usable directory in the cache. Trying to booststrap.");
             dirmgr
                 .bootstrap_directory(Arc::clone(&circmgr))
                 .await
@@ -87,7 +90,10 @@ impl DirMgr {
             info!("Bootstrapped successfully.");
         }
 
+        // Launch a task to run in the background and keep this dirmgr
+        // up-to-date.
         Arc::clone(&dirmgr).launch_updater(circmgr);
+
         Ok(dirmgr)
     }
 
@@ -111,6 +117,7 @@ impl DirMgr {
 
         let noinfo = NoInformation::new();
 
+        // Load the consensus.
         let mut unval = match noinfo.load(false, &self.config, store).await? {
             NextState::SameState(_) => return Ok(false),
             NextState::NewState(unval) => unval,
@@ -123,6 +130,7 @@ impl DirMgr {
             }
         }
 
+        // Load certificates, see if it's well-signed.
         unval.load(&self.config, store).await?;
         let mut partial = match unval.advance(&self.config)? {
             NextState::SameState(_) => {
@@ -134,6 +142,7 @@ impl DirMgr {
             NextState::NewState(p) => p,
         };
 
+        // Load microdescs, make sure there are enough.
         partial.load(store, self.opt_netdir().await).await?;
         let nd = match partial.advance() {
             NextState::NewState(nd) => nd,
@@ -145,6 +154,7 @@ impl DirMgr {
             }
         };
 
+        // This is now a good directory.  Put it in self.netdir.
         {
             let mut w = self.netdir.write().await;
             *w = Some(Arc::new(nd));
@@ -251,12 +261,16 @@ impl DirMgr {
     ) -> Result<()> {
         let store = &self.store;
 
+        // Start out by using our previous netdir (if any): We'll need it
+        // to decide where we ar downloading things from.
         let current_netdir = self.opt_netdir().await;
         let dirinfo = match current_netdir {
             Some(ref nd) => nd.as_ref().into(),
             None => self.config.fallbacks().into(),
         };
 
+        // Get a cached consensus, or start from scratch, depending on
+        // whether `use_cached_consensus` is true.
         let noinfo = NoInformation::new();
         let nextstate = if use_cached_consensus {
             noinfo.load(true, &self.config, store).await?
@@ -267,6 +281,7 @@ impl DirMgr {
         // TODO: XXXX-A1: Also check the age of our current one.
         let mut unval = match nextstate {
             NextState::SameState(noinfo) => {
+                // Couldn't load a pending consensus. Have to fetch one.
                 info!("Fetching a consensus directory.");
                 noinfo
                     .fetch_consensus(&self.config, store, dirinfo, Arc::clone(&circmgr))
@@ -275,8 +290,11 @@ impl DirMgr {
             NextState::NewState(unval) => unval,
         };
 
+        // At this point we have a pending consensus.  We need to get certs
+        // for it.  See what we can get from disk...
         unval.load(&self.config, store).await?;
-        info!("Fetching certificate(s).");
+        // Then fetch whatever we're missing.
+        info!("Fetching certificate(s)."); // XXXX only log this when we have some to fetch.
         unval
             .fetch_certs(&self.config, store, dirinfo, Arc::clone(&circmgr))
             .await?;
@@ -285,7 +303,9 @@ impl DirMgr {
             NextState::NewState(p) => p,
         };
 
+        // Finally, get microdescs from the cache...
         partial.load(store, self.opt_netdir().await).await?;
+        // .. and fetch whatever we're missing.
         partial
             .fetch_mds(store, dirinfo, Arc::clone(&circmgr))
             .await?;
