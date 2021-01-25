@@ -22,6 +22,10 @@ impl Authority {
     pub fn new(name: String, v3ident: RSAIdentity) -> Self {
         Authority { name, v3ident }
     }
+    /// Return the v3 identity key of this certificate.
+    pub fn v3ident(&self) -> &RSAIdentity {
+        &self.v3ident
+    }
     /// Return true if this authority matches a given certificate.
     pub fn matches_cert(&self, cert: &AuthCert) -> bool {
         &self.v3ident == cert.id_fingerprint()

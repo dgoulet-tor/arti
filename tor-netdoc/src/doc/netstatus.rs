@@ -1392,7 +1392,7 @@ impl UnvalidatedMDConsensus {
     ///
     /// (This is the case if the consensus claims to be signed by more than
     /// half of the authorities in the list.)
-    pub fn authorities_are_correct(&self, authorities: &[RSAIdentity]) -> bool {
+    pub fn authorities_are_correct(&self, authorities: &[&RSAIdentity]) -> bool {
         self.siggroup.could_validate(authorities)
     }
 }
@@ -1452,7 +1452,7 @@ impl SignatureGroup {
     /// Given a list of authority identity key fingerprints, return true if
     /// this signature group is _potentially_ well-signed according to those
     /// authorities.
-    fn could_validate(&self, authorities: &[RSAIdentity]) -> bool {
+    fn could_validate(&self, authorities: &[&RSAIdentity]) -> bool {
         let mut signed_by: HashSet<RSAIdentity> = HashSet::new();
         for sig in self.signatures.iter() {
             let id_fp = &sig.key_ids.id_fingerprint;
@@ -1460,7 +1460,7 @@ impl SignatureGroup {
                 // Already found this in the list.
                 continue;
             }
-            if authorities.contains(id_fp) {
+            if authorities.contains(&id_fp) {
                 signed_by.insert(*id_fp);
             }
         }
@@ -1531,10 +1531,7 @@ mod test {
             let cert = cert?.check_signature()?.dangerously_assume_timely();
             certs.push(cert);
         }
-        let auth_ids: Vec<_> = certs
-            .iter()
-            .map(|c| c.key_ids().id_fingerprint.clone())
-            .collect();
+        let auth_ids: Vec<_> = certs.iter().map(|c| &c.key_ids().id_fingerprint).collect();
 
         assert_eq!(certs.len(), 3);
 
@@ -1549,7 +1546,7 @@ mod test {
             // If we only believe in an authority that isn't listed,
             // that won't work.
             let bad_auth_id = (*b"xxxxxxxxxxxxxxxxxxxx").into();
-            assert!(!consensus.authorities_are_correct(&[bad_auth_id]));
+            assert!(!consensus.authorities_are_correct(&[&bad_auth_id]));
         }
 
         let missing = consensus.key_is_correct(&[]).err().unwrap();

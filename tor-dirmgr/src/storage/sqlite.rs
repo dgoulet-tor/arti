@@ -271,20 +271,8 @@ impl SqliteStore {
         Ok(())
     }
 
-    /// Return the information about the latest non non-pending consensus,
+    /// Return the information about the latest non-pending consensus,
     /// including its valid-after time and digest.
-    // TODO: XXXX-A1 Take a pending argument?
-    //
-    // WAIT HANG ON: XXXX-A1.  This whole function is troubling and is
-    // used in troubling ways.  It assumes that any non-pending
-    // consensus we find will be valid when checked against our
-    // current authorities.  But what if we choose a different set of
-    // authorities?
-    //
-    // As implemented, this means that when switching from mainline
-    // Tor to/from chutney or a testnet, we might not actually fetch
-    // the real consensus that we want because we still have one from
-    // the old network that hasn't expired.
     pub fn latest_consensus_meta(&self) -> Result<Option<ConsensusMeta>> {
         let mut stmt = self.conn.prepare(FIND_LATEST_CONSENSUS_META)?;
         let mut rows = stmt.query(NO_PARAMS)?;
@@ -353,6 +341,20 @@ impl SqliteStore {
 
         let tx = self.conn.transaction()?;
         tx.execute(MARK_CONSENSUS_NON_PENDING, params![digest])?;
+        tx.commit()?;
+
+        Ok(())
+    }
+
+    /// Remove the consensus generated from `cmeta`.
+    pub fn delete_consensus(&mut self, cmeta: &ConsensusMeta) -> Result<()> {
+        let d = hex::encode(cmeta.sha3_256_of_whole());
+        let digest = format!("sha3-256-{}", d);
+
+        // TODO: We should probably remove the blob as well, but for now
+        // this is enough.
+        let tx = self.conn.transaction()?;
+        tx.execute(REMOVE_CONSENSUS, params![digest])?;
         tx.commit()?;
 
         Ok(())
@@ -618,6 +620,12 @@ const FIND_CONSENSUS_BY_DIGEST: &str = "
 const MARK_CONSENSUS_NON_PENDING: &str = "
   UPDATE Consensuses
   SET pending = 0
+  WHERE digest = ?;
+";
+
+/// Query: Remove the consensus with a given digest field.
+const REMOVE_CONSENSUS: &str = "
+  DELETE FROM Consensuses
   WHERE digest = ?;
 ";
 

@@ -433,6 +433,7 @@ impl NoInformation {
                 None => return Ok(NextState::SameState(self)),
             }
         };
+
         let (consensus_meta, unvalidated) = {
             let string = consensus_text.as_str()?;
             let (signedval, remainder, parsed) = MDConsensus::parse(string)?;
@@ -444,6 +445,24 @@ impl NoInformation {
                 return Ok(NextState::SameState(self));
             }
         };
+
+        // Make sure that we could in principle validate this
+        // consensus. If we couldn't, pretend it isn't cached at all.
+        let authority_ids: Vec<_> = config
+            .authorities()
+            .iter()
+            .map(|auth| auth.v3ident())
+            .collect();
+        if !unvalidated.authorities_are_correct(&authority_ids[..]) {
+            // This is not for us.  Treat it as if we had no cached consensus.
+            // XXXX-A1: We should mark the cached as invalid somehow, or just
+            // remove it.
+
+            warn!("Found cached directory not signed by the right authorities. Are you using a mismatched cache?");
+            store.lock().await.delete_consensus(&consensus_meta)?;
+            return Ok(NextState::SameState(self));
+        }
+
         let n_authorities = config.authorities().len() as u16;
         let unvalidated = unvalidated.set_n_authorities(n_authorities);
         Ok(NextState::NewState(UnvalidatedDir {
@@ -541,12 +560,25 @@ impl NoInformation {
         let unvalidated = parsed.check_valid_now()?;
         let meta = ConsensusMeta::from_unvalidated(signedval, remainder, &unvalidated);
 
+        // Make sure that we could in principle validate this, and it doesn't
+        // have a totally different set of authorities than the ones
+        // we asked for.
+        let authority_ids: Vec<_> = config
+            .authorities()
+            .iter()
+            .map(|auth| auth.v3ident())
+            .collect();
+        if !unvalidated.authorities_are_correct(&authority_ids[..]) {
+            return Err(Error::Unwanted("Consensus not signed by correct authorities").into());
+        }
+
         {
             let mut w = store.lock().await;
             w.store_consensus(&meta, true, &text)?;
         }
         let n_authorities = config.authorities().len() as u16;
         let unvalidated = unvalidated.set_n_authorities(n_authorities);
+
         Ok(UnvalidatedDir {
             from_cache: false,
             consensus: unvalidated,
