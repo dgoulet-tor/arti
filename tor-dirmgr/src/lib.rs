@@ -546,12 +546,13 @@ impl NoInformation {
             // This is a diff, not the consensus.
             let r = store.lock().await;
             let cons = r.consensus_by_meta(&meta)?;
-            let new_consensus =
-                tor_consdiff::apply_diff(cons.as_str()?, &text, Some(*meta.sha3_256_of_signed()))?
-                    .to_string();
-            // XXXX-A1 have to check digest of new value.
             info!("Applying a consensus diff");
-            Some(new_consensus)
+            let new_consensus =
+                tor_consdiff::apply_diff(cons.as_str()?, &text, Some(*meta.sha3_256_of_signed()))?;
+
+            new_consensus.check_digest()?;
+
+            Some(new_consensus.to_string())
         } else {
             None
         };

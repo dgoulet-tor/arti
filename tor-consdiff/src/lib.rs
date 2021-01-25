@@ -522,6 +522,24 @@ impl<'a> DiffResult<'a> {
             Ok(())
         }
     }
+
+    /// See whether the output of this diff matches the target digest.
+    ///
+    /// If not, return an error.
+    pub fn check_digest(&self) -> Result<()> {
+        use digest::Digest;
+        use tor_llcrypto::d::Sha3_256;
+        let mut d = Sha3_256::new();
+        for line in self.lines.iter() {
+            d.update(line.as_bytes());
+            d.update(b"\n");
+        }
+        if d.finalize() == self.d_post.into() {
+            Ok(())
+        } else {
+            Err(Error::CantApply("Wrong digest after applying diff"))
+        }
+    }
 }
 
 impl<'a> Display for DiffResult<'a> {
@@ -819,6 +837,7 @@ hash B03DA3ACA1D3C1D083E3FF97873002416EBD81A058B406D5C5946EAB53A79663 F6789F35B6
         let post = include_str!("../testdata/consensus2.txt");
 
         let result = apply_diff_trivial(pre, diff).unwrap();
+        assert!(result.check_digest().is_ok());
         assert_eq!(result.to_string(), post);
     }
 
