@@ -1385,6 +1385,16 @@ impl UnvalidatedMDConsensus {
     pub fn peek_lifetime(&self) -> &Lifetime {
         self.consensus.lifetime()
     }
+
+    /// Return true if a client who believes in exactly the provided
+    /// set of authority IDs might might consider this consensus to be
+    /// well-signed.
+    ///
+    /// (This is the case if the consensus claims to be signed by more than
+    /// half of the authorities in the list.)
+    pub fn authorities_are_correct(&self, authorities: &[RSAIdentity]) -> bool {
+        self.siggroup.could_validate(authorities)
+    }
 }
 
 impl ExternallySigned<MDConsensus> for UnvalidatedMDConsensus {
@@ -1415,6 +1425,9 @@ impl ExternallySigned<MDConsensus> for UnvalidatedMDConsensus {
 }
 
 impl SignatureGroup {
+    // TODO: these functions are pretty similar and could probably stand to be
+    // refactored a lot.
+
     /// Helper: Return a pair of the number of possible authorities'
     /// signatures in this object for which we _could_ find certs, and
     /// a list of the signatures we couldn't find certificates for.
@@ -1434,6 +1447,25 @@ impl SignatureGroup {
             missing.push(sig);
         }
         (ok.len(), missing)
+    }
+
+    /// Given a list of authority identity key fingerprints, return true if
+    /// this signature group is _potentially_ well-signed according to those
+    /// authorities.
+    fn could_validate(&self, authorities: &[RSAIdentity]) -> bool {
+        let mut signed_by: HashSet<RSAIdentity> = HashSet::new();
+        for sig in self.signatures.iter() {
+            let id_fp = &sig.key_ids.id_fingerprint;
+            if signed_by.contains(id_fp) {
+                // Already found this in the list.
+                continue;
+            }
+            if authorities.contains(id_fp) {
+                signed_by.insert(*id_fp);
+            }
+        }
+
+        signed_by.len() > (authorities.len() / 2)
     }
 
     /// Return true if the signature group defines a valid signature.
@@ -1499,11 +1531,26 @@ mod test {
             let cert = cert?.check_signature()?.dangerously_assume_timely();
             certs.push(cert);
         }
+        let auth_ids: Vec<_> = certs
+            .iter()
+            .map(|c| c.key_ids().id_fingerprint.clone())
+            .collect();
 
         assert_eq!(certs.len(), 3);
 
         let (_, _, consensus) = MDConsensus::parse(CONSENSUS)?;
         let consensus = consensus.dangerously_assume_timely().set_n_authorities(3);
+
+        // The set of authorities we know _could_ validate this cert.
+        assert!(consensus.authorities_are_correct(&auth_ids));
+        // A subset would also work.
+        assert!(consensus.authorities_are_correct(&auth_ids[0..1]));
+        {
+            // If we only believe in an authority that isn't listed,
+            // that won't work.
+            let bad_auth_id = (*b"xxxxxxxxxxxxxxxxxxxx").into();
+            assert!(!consensus.authorities_are_correct(&[bad_auth_id]));
+        }
 
         let missing = consensus.key_is_correct(&[]).err().unwrap();
         assert_eq!(3, missing.len());
@@ -1517,6 +1564,7 @@ mod test {
         same_three_times.push(certs[0].clone());
         same_three_times.push(certs[0].clone());
         let missing = consensus.key_is_correct(&same_three_times).err().unwrap();
+
         assert_eq!(2, missing.len());
         assert!(consensus.is_well_signed(&same_three_times).is_err());
 
