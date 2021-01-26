@@ -273,11 +273,12 @@ mod test {
         let d1 = b"This is a testing digest. it isn";
         let d2 = b"'t actually SHA-256.............";
 
-        let mut req = MicrodescRequest::new();
+        let mut req = MicrodescRequest::default();
         req.push(*d1);
+        assert!(!req.partial_docs_ok());
         req.push(*d2);
-
         assert!(req.partial_docs_ok());
+        assert_eq!(req.max_response_len(), 16 << 10);
 
         let req = crate::util::encode_request(req.into_request()?);
 
@@ -295,17 +296,18 @@ mod test {
         let d3 = b"blah blah blah 1 2 3";
         let d4 = b"I like pizza from Na";
 
-        let mut req = AuthCertRequest::new();
+        let mut req = AuthCertRequest::default();
         req.push(AuthCertKeyIds {
             id_fingerprint: (*d1).into(),
             sk_fingerprint: (*d2).into(),
         });
+        assert!(!req.partial_docs_ok());
         req.push(AuthCertKeyIds {
             id_fingerprint: (*d3).into(),
             sk_fingerprint: (*d4).into(),
         });
-
         assert!(req.partial_docs_ok());
+        assert_eq!(req.max_response_len(), 32 << 10);
 
         let req = crate::util::encode_request(req.into_request()?);
 
@@ -324,13 +326,15 @@ mod test {
 
         let d2 = b"blah blah blah 12 blah blah blah";
         let d3 = SystemTime::now();
-        let mut req = ConsensusRequest::new();
+        let mut req = ConsensusRequest::default();
 
         let when = httpdate::fmt_http_date(d3);
 
         req.push_authority_id(d1);
         req.push_old_consensus_digest(*d2);
         req.set_last_consensus_date(d3);
+        assert!(!req.partial_docs_ok());
+        assert_eq!(req.max_response_len(), (16 << 20) - 1);
 
         let req = crate::util::encode_request(req.into_request()?);
 
