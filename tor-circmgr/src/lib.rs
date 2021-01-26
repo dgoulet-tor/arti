@@ -20,6 +20,7 @@ use tor_retry::RetryError;
 
 use anyhow::Result;
 use futures::lock::Mutex;
+use log::debug;
 use rand::seq::SliceRandom;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
@@ -123,7 +124,7 @@ impl<'a> DirInfo<'a> {
 ///
 // TODO: I'd like to avoid dupliating the value of UniqId here, since the
 // circuit already has one.  That's a waste of memory.
-#[derive(Copy, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 enum CircEntId {
     /// An identifier for an open circuit.
     Open(UniqId),
@@ -376,7 +377,7 @@ impl CircMgr {
         netdir: DirInfo<'_>,
         target_usage: TargetCircUsage,
     ) -> Result<Arc<ClientCirc>> {
-        // XXXX-A1 LOG.
+        debug!("Looking for a circuit that can handle {:?}", &target_usage);
         // XXXX This function is huge and ugly.
         let mut rng = StdRng::from_rng(rand::thread_rng()).unwrap();
 
@@ -389,6 +390,7 @@ impl CircMgr {
             let suitable = circs.find_suitable_circs(&target_usage, false);
 
             let result = if suitable.len() < par {
+                debug!("Launching new circuit for {:?}", &target_usage);
                 // There aren't enough circuits of this type. Launch one.
                 let event = Arc::new(event_listener::Event::new());
                 let entry = CircEntry::Pending(PendingCircEntry {
@@ -408,8 +410,19 @@ impl CircMgr {
                 // unwrap ok: there is at least one member in suitable.
                 let (id, entry) = suitable.choose(&mut rng).unwrap();
                 match entry {
-                    CircEntry::Open(c) => return Ok(Arc::clone(&c.circ)), // Found a circuit!
-                    CircEntry::Pending(c) => (false, Arc::clone(&c.event), **id), // wait for this one.
+                    CircEntry::Open(c) => {
+                        // Found a circuit!
+                        debug!(
+                            "Returning existing circuit {:?} for {:?}",
+                            id, &target_usage
+                        );
+                        return Ok(Arc::clone(&c.circ));
+                    }
+                    CircEntry::Pending(c) => {
+                        // wait for this one.
+                        debug!("Waiting for circuit {:?} for {:?}", id, &target_usage);
+                        (false, Arc::clone(&c.event), **id)
+                    }
                 }
             };
 
@@ -452,12 +465,19 @@ impl CircMgr {
                 let circs = self.circuits.lock().await;
                 let suitable = circs.find_suitable_circs(&target_usage, true);
                 if suitable.is_empty() {
-                    // XXXX-A1 might want to retry
+                    // XXXX might want to retry; we should do that when we
+                    // XXXX refactor this code.
+                    debug!("pending circuit for {:?} failed.", &target_usage);
                     return Err(Error::PendingFailed.into());
                 }
 
                 let (_, ent) = suitable.choose(&mut rng).unwrap();
                 if let CircEntry::Open(ref c) = ent {
+                    debug!(
+                        "pending circuit {} for {:?} succeeded.",
+                        c.circ.unique_id(),
+                        &target_usage
+                    );
                     Ok(Arc::clone(&c.circ))
                 } else {
                     Err(Error::PendingFailed.into()) // should be impossible XXXX
