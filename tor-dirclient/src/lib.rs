@@ -326,6 +326,7 @@ where
 mod test {
 
     use super::*;
+    use anyhow::anyhow;
 
     fn check_decomp(name: Option<&str>, inp: &[u8]) -> Vec<u8> {
         let mut d = get_decompressor(name).unwrap();
@@ -353,7 +354,13 @@ mod test {
 
     #[test]
     fn test_get_decompressor_err() {
-        let r = get_decompressor(Some("quantum-entanglement"));
-        assert!(r.is_err()); // TODO: check actual error type.
+        let name = "quantum-entanglement";
+        let r = get_decompressor(Some(name));
+        assert!(r.is_err());
+
+        let e = r.err();
+        let msg = format!("unsupported HTTP encoding \"{}\"", name);
+        let err_msg = format!("{}", anyhow!(e.unwrap()));
+        assert_eq!(msg, err_msg);
     }
 }
