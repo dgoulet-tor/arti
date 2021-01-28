@@ -22,5 +22,6 @@ members = [
     "tor-circmgr",
     "tor-dirclient",
     "tor-dirmgr",
+    "tor-config",
     "client-demo",
     ]
