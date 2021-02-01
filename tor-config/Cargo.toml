@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 config = {version="0.10.1", features=["toml"]}
-serde = {version="1.0", features= ["derive"]}
+serde = { version = "1.0.123", features = ["derive"] }
 toml = "0.5.8"
 once_cell = "1.5.2"
 regex = "1.4.3"
