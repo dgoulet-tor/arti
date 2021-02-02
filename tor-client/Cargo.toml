@@ -1,5 +1,5 @@
 [package]
-name = "client-demo"
+name = "tor-client"
 version = "0.0.0"
 authors = ["Nick Mathewson <nickm@torproject.org>"]
 edition = "2018"

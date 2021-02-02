@@ -26,7 +26,7 @@ secure or anonymous one!)  It knows how to download directory
 information and how to load it from cache, but it doesn't try to
 download more than one directory per run.
 
-To try it out, run the demo program in client-demo.   It will open a
+To try it out, run the demo program in `tor-client`.   It will open a
 SOCKS proxy on port 9150.
 
     % cargo run --release
@@ -156,7 +156,7 @@ You can make documentation with `cargo doc`.  I prefer
 `cargo doc --no-deps --document-private-items`, to include documentation for
 private members but not for dependencies.
 
-You can try running the demo SOCKS proxy code in `client-demo` with
+You can try running the demo SOCKS proxy code in `tor-client` with
 `cargo run`.  Since rust builds code without optimization by default,
 you'll probably want to say `cargo run --release`.
 
@@ -272,7 +272,7 @@ when they already exist.
 to download, cache, and maintain an up-to-date network view. Exposes the
 network view as an instance of `tor-netdir::NetDir`.
 
-`client-demo`: A simple Tor client program that can runs as a SOCKS proxy.
+`tor-client`: A simple Tor client program that can runs as a SOCKS proxy.
 
 ## Intended architecture
 

@@ -29,7 +29,7 @@
 //! Currently, the [tor-netdir] crate is
 //! the easiest way to do so.
 //!
-//! For an example of this crate in action, see the [client-demo]
+//! For an example of this crate in action, see the [tor-client]
 //! program.
 //!
 //! # Limitations
