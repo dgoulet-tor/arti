@@ -35,7 +35,7 @@ struct Args {
 
 /// Default options to use for our configuration.
 const ARTI_DEFAULTS: &str = "
-socks_port = 9050
+socks_port = 9150
 trace = false
 ";
 
