@@ -17,22 +17,43 @@ use tor_proto::circuit::IPVersionPreference;
 use tor_socksproto::{SocksCmd, SocksRequest};
 
 use anyhow::{Context, Result};
+use serde::Deserialize;
 
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug, Clone)]
 /// Make a connection to the Tor network, open a SOCKS port, and proxy
 /// traffic.
 ///
 /// This is a demo; you get no stability guarantee.
 struct Args {
-    /// chutney network that we should use instead of the Tor defaults.
-    #[argh(option)]
+    /// override the default location(s) for the configuration file
+    #[argh(option, short = 'f')]
+    rc: Vec<String>,
+    /// override a configuration option (uses toml syntax)
+    #[argh(option, short = 'c')]
+    cfg: Vec<String>,
+}
+
+/// Default options to use for our configuration.
+const ARTI_DEFAULTS: &str = "
+socks_port = 9050
+trace = false
+";
+
+/// Structure to hold our configuration options, whether from a
+/// configuration file or the command line.
+///
+/// NOTE: These are NOT the final options or their final layout.
+/// Expect NO stability here.
+#[derive(Deserialize, Debug, Clone)]
+struct ArtiConfig {
+    /// A location for a chutney network whose authorities we should
+    /// use instead of the default authorities.
     chutney_dir: Option<PathBuf>,
-    /// enable trace-level logging.
-    #[argh(switch)]
+    /// Port to listen on (at localhost) for incoming SOCKS
+    /// connections.
+    socks_port: Option<u16>,
+    /// Whether to log at trace level.
     trace: bool,
-    /// run a socks proxy on port N.
-    #[argh(option, default = "9150")]
-    socksport: u16,
 }
 
 fn ip_preference(req: &SocksRequest, addr: &str) -> IPVersionPreference {
@@ -158,11 +179,15 @@ async fn handle_socks_conn(
 async fn run_socks_proxy(
     dir: Arc<tor_dirmgr::DirMgr>,
     circmgr: Arc<tor_circmgr::CircMgr>,
-    args: Args,
+    args: &ArtiConfig,
 ) -> Result<()> {
     use tor_rtcompat::net::TcpListener;
 
-    let socksport = args.socksport;
+    if args.socks_port.is_none() {
+        info!("Nothing to do: no socks_port configured.");
+        return Ok(());
+    }
+    let socksport = args.socks_port.unwrap();
     let mut listeners = Vec::new();
 
     for localhost in &["127.0.0.1", "::1"] {
@@ -198,8 +223,18 @@ async fn run_socks_proxy(
 
 fn main() -> Result<()> {
     let args: Args = argh::from_env();
+    let dflt_config = tor_config::default_config_file();
 
-    let filt = if args.trace {
+    let mut cfg = config::Config::new();
+    cfg.merge(config::File::from_str(
+        ARTI_DEFAULTS,
+        config::FileFormat::Toml,
+    ))?;
+    tor_config::load(&mut cfg, dflt_config, &args.rc, &args.cfg)?;
+
+    let config: ArtiConfig = cfg.try_into()?;
+
+    let filt = if config.trace {
         LevelFilter::Trace
     } else {
         LevelFilter::Debug
@@ -207,7 +242,7 @@ fn main() -> Result<()> {
     simple_logging::log_to_stderr(filt);
 
     let mut dircfg = tor_dirmgr::NetDirConfigBuilder::new();
-    if let Some(chutney_dir) = args.chutney_dir.as_ref() {
+    if let Some(chutney_dir) = config.chutney_dir.as_ref() {
         dircfg
             .configure_from_chutney(chutney_dir)
             .context("Can't extract Chutney network configuration")?;
@@ -222,6 +257,6 @@ fn main() -> Result<()> {
         let circmgr = Arc::new(tor_circmgr::CircMgr::new(Arc::clone(&chanmgr)));
         let dirmgr = DirMgr::bootstrap_from_config(dircfg, Arc::clone(&circmgr)).await?;
 
-        run_socks_proxy(dirmgr, circmgr, args).await
+        run_socks_proxy(dirmgr, circmgr, &config).await
     })
 }
