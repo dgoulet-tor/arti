@@ -13,8 +13,7 @@ It's not the future yet! ;)
 
 I'm hoping that with time I can turn this code into a minimal Tor
 client, and then we'll see what the situation is, and whether we should
-keep on working on it.  See the TODO file for other milestones that
-we're considering.
+keep on working on it.
 
 There are absolutely no guarantees about stability.  Future versions of
 Tor might break this; no users should expect source compatibility.
