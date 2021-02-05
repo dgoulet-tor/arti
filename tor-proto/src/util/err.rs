@@ -1,5 +1,6 @@
 //! Define an error type for the tor-proto crate.
 use thiserror::Error;
+use tor_rtcompat::timer::TimeoutError;
 
 /// An error type for the tor-proto crate.
 ///
@@ -71,6 +72,16 @@ pub enum Error {
     /// Channel does not match target
     #[error("channel mismatch: {0}")]
     ChanMismatch(String),
+
+    /// A new stream timed out
+    #[error("stream timed out")]
+    StreamTimeout,
+}
+
+impl From<TimeoutError> for Error {
+    fn from(_: TimeoutError) -> Self {
+        Error::StreamTimeout
+    }
 }
 
 impl From<tor_cell::Error> for Error {
