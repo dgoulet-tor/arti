@@ -134,7 +134,21 @@ async fn handle_socks_conn(
     info!("Got a circuit for {}:{}", addr, port);
     drop(dir); // This decreases the refcount on the netdir.
 
-    let stream = circ.begin_stream(&addr, port, Some(begin_flags)).await?;
+    let stream = circ.begin_stream(&addr, port, Some(begin_flags)).await;
+    let stream = match stream {
+        Ok(s) => s,
+        // In the case of a stream timeout, send the right SOCKS reply.
+        Err(tor_proto::Error::StreamTimeout) => {
+            let reply = request.reply(tor_socksproto::SocksStatus::TTL_EXPIRED, None);
+            w.write(&reply[..])
+                .await
+                .context("Couldn't write SOCKS reply")?;
+            return Err(tor_proto::Error::StreamTimeout.into());
+        }
+        // In any other case, just propagate the error downwards
+        Err(e) => return Err(e.into()),
+    };
+
     info!("Got a stream for {}:{}", addr, port);
     // TODO: XXXX-A1 Should send a SOCKS reply if something fails.
 

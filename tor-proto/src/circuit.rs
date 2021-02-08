@@ -71,6 +71,7 @@ use futures::sink::SinkExt;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use rand::{thread_rng, CryptoRng, Rng};
 
@@ -534,18 +535,29 @@ impl ClientCirc {
     async fn begin_data_stream(self: Arc<Self>, msg: RelayMsg) -> Result<DataStream> {
         let stream = self.begin_stream_impl(msg).await?;
         // TODO: waiting for a response here preculdes optimistic data.
-        let response = stream.recv().await?;
 
-        if response.cmd() == RelayCmd::CONNECTED {
-            Ok(DataStream::new(stream))
-        } else if response.cmd() == RelayCmd::END {
-            Err(Error::StreamClosed("end cell when waiting for connection"))
-        } else {
-            self.protocol_error().await;
-            Err(Error::StreamProto(format!(
-                "Received {} while waiting for connection",
-                response.cmd()
-            )))
+        // Setup a timeout for new streams
+        // XXXX: Make this configurable (is it the same as SocksTimeout)?
+        let stream_timeout = Duration::from_secs(120);
+
+        let response = tor_rtcompat::timer::timeout(stream_timeout, stream.recv()).await?;
+
+        // If we received a legit RELAY cell, handle it
+        match response {
+            Ok(response) => {
+                if response.cmd() == RelayCmd::CONNECTED {
+                    Ok(DataStream::new(stream))
+                } else if response.cmd() == RelayCmd::END {
+                    Err(Error::StreamClosed("end cell when waiting for connection"))
+                } else {
+                    self.protocol_error().await;
+                    Err(Error::StreamProto(format!(
+                        "Received {} while waiting for connection",
+                        response.cmd()
+                    )))
+                }
+            }
+            Err(err) => Err(err),
         }
     }
 
