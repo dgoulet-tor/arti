@@ -540,24 +540,18 @@ impl ClientCirc {
         // XXXX: Make this configurable (is it the same as SocksTimeout)?
         let stream_timeout = Duration::from_secs(120);
 
-        let response = tor_rtcompat::timer::timeout(stream_timeout, stream.recv()).await?;
+        let response = tor_rtcompat::timer::timeout(stream_timeout, stream.recv()).await??;
 
-        // If we received a legit RELAY cell, handle it
-        match response {
-            Ok(response) => {
-                if response.cmd() == RelayCmd::CONNECTED {
-                    Ok(DataStream::new(stream))
-                } else if response.cmd() == RelayCmd::END {
-                    Err(Error::StreamClosed("end cell when waiting for connection"))
-                } else {
-                    self.protocol_error().await;
-                    Err(Error::StreamProto(format!(
-                        "Received {} while waiting for connection",
-                        response.cmd()
-                    )))
-                }
-            }
-            Err(err) => Err(err),
+        if response.cmd() == RelayCmd::CONNECTED {
+            Ok(DataStream::new(stream))
+        } else if response.cmd() == RelayCmd::END {
+            Err(Error::StreamClosed("end cell when waiting for connection"))
+        } else {
+            self.protocol_error().await;
+            Err(Error::StreamProto(format!(
+                "Received {} while waiting for connection",
+                response.cmd()
+            )))
         }
     }
 
