@@ -161,6 +161,8 @@ you'll probably want to say `cargo run --release`.
 
 ## I want to help. What _should_ I do with this?
 
+Please check `CONTRIBUTING.md` for more dev related information.
+
 More tests would be great.
 
 Parsing more document types would be neat.
