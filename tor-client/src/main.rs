@@ -271,3 +271,22 @@ fn main() -> Result<()> {
         run_socks_proxy(dirmgr, circmgr, &config).await
     })
 }
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    #[test]
+    fn load_default_config() -> Result<()> {
+        // TODO: this is duplicate code.
+        let mut cfg = config::Config::new();
+        cfg.merge(config::File::from_str(
+            ARTI_DEFAULTS,
+            config::FileFormat::Toml,
+        ))?;
+
+        let _parsed: ArtiConfig = cfg.try_into()?;
+        Ok(())
+    }
+}
