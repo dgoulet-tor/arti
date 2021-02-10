@@ -112,6 +112,65 @@ impl Debug for Ed25519Identity {
     }
 }
 
+impl serde::Serialize for Ed25519Identity {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&base64::encode_config(self.id, base64::STANDARD_NO_PAD))
+        } else {
+            serializer.serialize_bytes(&self.id[..])
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Ed25519Identity {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            /// Helper for deserialization
+            struct EdIdentityVisitor;
+            impl<'de> serde::de::Visitor<'de> for EdIdentityVisitor {
+                type Value = Ed25519Identity;
+                fn expecting(&self, fmt: &mut std::fmt::Formatter) -> fmt::Result {
+                    fmt.write_str("base64-encoded Ed25519 public key")
+                }
+                fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+                where
+                    E: serde::de::Error,
+                {
+                    let bytes =
+                        base64::decode_config(s, base64::STANDARD_NO_PAD).map_err(E::custom)?;
+                    Ed25519Identity::from_bytes(&bytes)
+                        .ok_or_else(|| E::custom("wrong length for Ed25519 public key"))
+                }
+            }
+
+            deserializer.deserialize_str(EdIdentityVisitor)
+        } else {
+            /// Helper for deserialization
+            struct EdIdentityVisitor;
+            impl<'de> serde::de::Visitor<'de> for EdIdentityVisitor {
+                type Value = Ed25519Identity;
+                fn expecting(&self, fmt: &mut std::fmt::Formatter) -> fmt::Result {
+                    fmt.write_str("ed25519 public key")
+                }
+                fn visit_bytes<E>(self, bytes: &[u8]) -> Result<Self::Value, E>
+                where
+                    E: serde::de::Error,
+                {
+                    Ed25519Identity::from_bytes(&bytes)
+                        .ok_or_else(|| E::custom("wrong length for ed25519 public key"))
+                }
+            }
+            deserializer.deserialize_bytes(EdIdentityVisitor)
+        }
+    }
+}
+
 /// An ed25519 signature, plus the document that it signs and its
 /// public key.
 pub struct ValidatableEd25519Signature {

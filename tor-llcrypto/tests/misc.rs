@@ -75,3 +75,34 @@ fn batch_verify() {
     let sigrefs: Vec<_> = sigs.iter().collect();
     assert!(!validate_batch(&sigrefs[..]));
 }
+
+#[test]
+fn ser_de_rsaid() {
+    use serde_test::{assert_tokens, Configure, Token};
+
+    let rsa_id = ll::pk::rsa::RSAIdentity::from_bytes(b"example key id here!").unwrap();
+
+    assert_tokens(
+        &rsa_id.readable(),
+        &[Token::Str("6578616d706c65206b6579206964206865726521")],
+    );
+    assert_tokens(&rsa_id.compact(), &[Token::Bytes(b"example key id here!")]);
+}
+
+#[test]
+fn ser_de_edid() {
+    use serde_test::{assert_tokens, Configure, Token};
+
+    let rsa_id =
+        ll::pk::ed25519::Ed25519Identity::from_bytes(b"this is another key. not valid..").unwrap();
+
+    assert_tokens(
+        &rsa_id.readable(),
+        &[Token::Str("dGhpcyBpcyBhbm90aGVyIGtleS4gbm90IHZhbGlkLi4")],
+    );
+
+    assert_tokens(
+        &rsa_id.compact(),
+        &[Token::Bytes(b"this is another key. not valid..")],
+    );
+}
