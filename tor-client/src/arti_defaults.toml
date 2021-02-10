@@ -1,0 +1,14 @@
+# (Built-in defaults for the arti configuration format.)
+
+# Default port to use when listening to SOCKS connections.  We always
+# listen on localhost.
+socks_port = 9150
+
+# Whether to log at the "trace" debugging level.  By default, we log at
+# "debug".
+trace = false
+
+# If present, the 'nodes' directory of a chutney installation to use when
+# configuring the network.
+#chutney_dir = "/home/nickm/src/chutney/net/nodes/"
+

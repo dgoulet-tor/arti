@@ -34,10 +34,7 @@ struct Args {
 }
 
 /// Default options to use for our configuration.
-const ARTI_DEFAULTS: &str = "
-socks_port = 9150
-trace = false
-";
+const ARTI_DEFAULTS: &str = include_str!("./arti_defaults.toml");
 
 /// Structure to hold our configuration options, whether from a
 /// configuration file or the command line.
