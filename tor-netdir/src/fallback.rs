@@ -11,15 +11,13 @@
 use tor_llcrypto::pk::ed25519::Ed25519Identity;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
-use once_cell::sync::Lazy;
+use serde::Deserialize;
 use std::net::SocketAddr;
-
-mod pregen;
 
 /// A directory whose location ships with Tor (or arti), and which we
 /// can use for bootstrapping when we don't know anything else about
 /// the network.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct FallbackDir {
     /// RSA identity for the directory relay
     rsa_identity: RSAIdentity,
@@ -53,59 +51,5 @@ impl tor_linkspec::ChanTarget for FallbackDir {
     }
     fn rsa_identity(&self) -> &RSAIdentity {
         &self.rsa_identity
-    }
-}
-
-/// A list of all the built-in fallbacks that we know.
-static FALLBACK_DIRS: Lazy<Vec<FallbackDir>> =
-    Lazy::new(|| pregen::FALLBACKS.iter().map(FallbackDir::from).collect());
-
-/// A set of fallback directories.
-///
-/// This can either be the default set, or a set provided at runtime.
-#[derive(Debug, Clone)]
-pub struct FallbackSet {
-    /// If present a list of all our fallback directories.  If absent,
-    /// we use the default list.
-    fallbacks: Option<Vec<FallbackDir>>,
-}
-
-impl FallbackSet {
-    /// Construct the default set of fallback directories.
-    pub fn new() -> Self {
-        FallbackSet { fallbacks: None }
-    }
-    /// Construct a set of caller-provided fallback directories
-    pub fn from_fallbacks<T>(fallbacks: T) -> Self
-    where
-        T: IntoIterator<Item = FallbackDir>,
-    {
-        let fallbacks = fallbacks.into_iter().collect();
-        FallbackSet {
-            fallbacks: Some(fallbacks),
-        }
-    }
-    /// Choose a fallback directory at random.
-    ///
-    /// TODO: In theory, it would be a good idea to have weights for these.
-    pub fn pick<'a, R>(&'a self, rng: &mut R) -> Option<&'a FallbackDir>
-    where
-        R: rand::RngCore,
-    {
-        use rand::seq::SliceRandom;
-        let slice = self.as_ref();
-        slice.choose(rng)
-    }
-}
-
-impl Default for FallbackSet {
-    fn default() -> Self {
-        FallbackSet::new()
-    }
-}
-
-impl AsRef<[FallbackDir]> for FallbackSet {
-    fn as_ref(&self) -> &[FallbackDir] {
-        self.fallbacks.as_ref().unwrap_or(&FALLBACK_DIRS)
     }
 }

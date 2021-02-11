@@ -43,7 +43,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 pub use authority::Authority;
-pub use config::{NetDirConfig, NetDirConfigBuilder};
+pub use config::{NetDirConfig, NetDirConfigBuilder, NetworkConfig};
 pub use err::Error;
 pub use updater::DirectoryUpdater;
 

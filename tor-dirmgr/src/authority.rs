@@ -3,11 +3,12 @@
 //! From a client's point of view, an authority's role is to to sign the
 //! consensus directory.
 
+use serde::Deserialize;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
 
 /// A single authority that signs a consensus directory.
-#[derive(Debug, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Authority {
     /// A memorable nickname for this authority.
     name: String,
@@ -30,6 +31,7 @@ impl Authority {
     pub fn matches_cert(&self, cert: &AuthCert) -> bool {
         &self.v3ident == cert.id_fingerprint()
     }
+
     /// Return true if this authority matches a given key ID.
     pub fn matches_keyid(&self, id: &AuthCertKeyIds) -> bool {
         self.v3ident == id.id_fingerprint

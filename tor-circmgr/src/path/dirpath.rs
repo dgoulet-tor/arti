@@ -3,6 +3,8 @@ use super::*;
 use crate::{DirInfo, Error};
 use tor_netdir::{Relay, WeightRole};
 
+use rand::seq::SliceRandom;
+
 /// A PathBuilder that can connect to a directory.
 pub struct DirPathBuilder {}
 
@@ -24,7 +26,7 @@ impl DirPathBuilder {
         // TODO: this will need to learn about directory guards.
         match netdir {
             DirInfo::Fallbacks(f) => {
-                let relay = f.pick(rng);
+                let relay = f.choose(rng);
                 if let Some(r) = relay {
                     return Ok(TorPath::FallbackOneHop(r));
                 }

@@ -24,4 +24,7 @@ pub enum Error {
     /// An updater no longer has anything to update.
     #[error("directory updater has shut down")]
     UpdaterShutdown,
+    /// We couldn't configure the network.
+    #[error("bad network configuration")]
+    BadNetworkConfig(&'static str),
 }

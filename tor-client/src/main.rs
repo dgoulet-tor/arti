@@ -7,12 +7,11 @@ use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::stream::StreamExt;
 use log::{error, info, warn, LevelFilter};
 use std::net::{Ipv4Addr, Ipv6Addr};
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use tor_chanmgr::transport::nativetls::NativeTlsTransport;
 use tor_circmgr::TargetPort;
-use tor_dirmgr::DirMgr;
+use tor_dirmgr::{DirMgr, NetworkConfig};
 use tor_proto::circuit::IPVersionPreference;
 use tor_socksproto::{SocksCmd, SocksRequest};
 
@@ -34,7 +33,11 @@ struct Args {
 }
 
 /// Default options to use for our configuration.
-const ARTI_DEFAULTS: &str = include_str!("./arti_defaults.toml");
+const ARTI_DEFAULTS: &str = concat!(
+    include_str!("./arti_defaults.toml"),
+    include_str!("./fallback_caches.toml"),
+    include_str!("./authorities.toml"),
+);
 
 /// Structure to hold our configuration options, whether from a
 /// configuration file or the command line.
@@ -43,14 +46,14 @@ const ARTI_DEFAULTS: &str = include_str!("./arti_defaults.toml");
 /// Expect NO stability here.
 #[derive(Deserialize, Debug, Clone)]
 struct ArtiConfig {
-    /// A location for a chutney network whose authorities we should
-    /// use instead of the default authorities.
-    chutney_dir: Option<PathBuf>,
     /// Port to listen on (at localhost) for incoming SOCKS
     /// connections.
     socks_port: Option<u16>,
     /// Whether to log at trace level.
     trace: bool,
+
+    /// Information about the Tor network we want to connect to.
+    network: NetworkConfig,
 }
 
 fn ip_preference(req: &SocksRequest, addr: &str) -> IPVersionPreference {
@@ -253,14 +256,8 @@ fn main() -> Result<()> {
     simple_logging::log_to_stderr(filt);
 
     let mut dircfg = tor_dirmgr::NetDirConfigBuilder::new();
-    if let Some(chutney_dir) = config.chutney_dir.as_ref() {
-        dircfg
-            .configure_from_chutney(chutney_dir)
-            .context("Can't extract Chutney network configuration")?;
-    } else {
-        dircfg.add_default_authorities();
-    }
-    let dircfg = dircfg.finalize();
+    dircfg.set_network_config(config.network.clone());
+    let dircfg = dircfg.finalize()?;
 
     tor_rtcompat::task::block_on(async {
         let transport = NativeTlsTransport::new();

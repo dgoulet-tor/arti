@@ -13,7 +13,7 @@
 #![deny(clippy::missing_docs_in_private_items)]
 
 use tor_chanmgr::ChanMgr;
-use tor_netdir::{fallback::FallbackSet, NetDir};
+use tor_netdir::{fallback::FallbackDir, NetDir};
 use tor_netdoc::types::policy::PortPolicy;
 use tor_proto::circuit::{CircParameters, ClientCirc, UniqId};
 use tor_retry::RetryError;
@@ -82,12 +82,12 @@ static NEXT_PENDING_ID: AtomicUsize = AtomicUsize::new(0);
 #[derive(Debug, Copy, Clone)]
 pub enum DirInfo<'a> {
     /// A list of fallbacks, for use when we don't know a network directory.
-    Fallbacks(&'a FallbackSet),
+    Fallbacks(&'a [FallbackDir]),
     /// A complete network directory
     Directory(&'a NetDir),
 }
 
-impl<'a> Into<DirInfo<'a>> for &'a FallbackSet {
+impl<'a> Into<DirInfo<'a>> for &'a [FallbackDir] {
     fn into(self) -> DirInfo<'a> {
         DirInfo::Fallbacks(self)
     }

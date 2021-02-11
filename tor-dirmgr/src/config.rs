@@ -8,15 +8,28 @@ use crate::storage::legacy::LegacyStore;
 use crate::storage::sqlite::SqliteStore;
 use crate::Authority;
 use crate::{Error, Result};
-use tor_netdir::fallback::{FallbackDir, FallbackSet};
+use tor_netdir::fallback::FallbackDir;
 
-use tor_llcrypto::pk::ed25519::Ed25519Identity;
-use tor_llcrypto::pk::rsa::RSAIdentity;
-
-use log::warn;
-use std::fs;
-use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+
+use serde::Deserialize;
+
+/// Configuration information about the Tor network; used as part of
+/// Arti's configuration.
+// TODO: move this?
+#[derive(Deserialize, Debug, Clone)]
+pub struct NetworkConfig {
+    /// List of locations to look in when downloading directory information,
+    /// if we don't actually have a directory yet.
+    ///
+    /// (If we do have a chached directory, we use directory caches
+    /// listed there instead.)
+    fallback_cache: Vec<FallbackDir>,
+
+    /// List of directory authorities which we expect to sign
+    /// consensus documents.
+    authority: Vec<Authority>,
+}
 
 /// Builder for a NetDirConfig.
 ///
@@ -42,7 +55,7 @@ pub struct NetDirConfigBuilder {
 
     /// The fallback directories to use when downloading directory
     /// information
-    fallbacks: Option<FallbackSet>,
+    fallbacks: Vec<FallbackDir>,
 }
 
 /// Configuration type for network directory operations.
@@ -71,7 +84,7 @@ pub struct NetDirConfig {
 
     /// A set of directories to use for fetching directory info when we
     /// don't have any directories yet.
-    fallbacks: FallbackSet,
+    fallbacks: Vec<FallbackDir>,
 }
 
 impl NetDirConfigBuilder {
@@ -84,136 +97,14 @@ impl NetDirConfigBuilder {
             authorities: Vec::new(),
             legacy_cache_path: None,
             cache_path: None,
-            fallbacks: None,
+            fallbacks: Vec::new(),
         }
     }
 
-    /// Add a single directory authority to this configuration.
-    ///
-    /// The authority's name is `name`; its identity is given as a
-    /// hex-encoded RSA identity fingrprint in `ident`.
-    pub fn add_authority(&mut self, name: &str, ident: &str) -> Result<()> {
-        let ident: Vec<u8> =
-            hex::decode(ident).map_err(|_| Error::BadArgument("bad hex identity"))?;
-        let v3ident =
-            RSAIdentity::from_bytes(&ident).ok_or(Error::BadArgument("wrong identity length"))?;
-        self.authorities
-            .push(Authority::new(name.to_string(), v3ident));
-
-        Ok(())
-    }
-
-    /// Configure the set of fallback directories to be `fallbacks`, instead
-    /// of the defaults.
-    pub fn set_fallback_list(&mut self, fallbacks: FallbackSet) {
-        self.fallbacks = Some(fallbacks);
-    }
-
-    /// Add the default Tor network directory authorities to this
-    /// configuration.
-    ///
-    /// This list is added by default if you try to load() without having
-    /// configured any authorities.
-    ///
-    /// (List generated August 2020.)
-    pub fn add_default_authorities(&mut self) {
-        self.add_authority("moria1", "D586D18309DED4CD6D57C18FDB97EFA96D330566")
-            .unwrap();
-        self.add_authority("tor26", "14C131DFC5C6F93646BE72FA1401C02A8DF2E8B4")
-            .unwrap();
-        self.add_authority("dizum", "E8A9C45EDE6D711294FADF8E7951F4DE6CA56B58")
-            .unwrap();
-        self.add_authority("gabelmoo", "ED03BB616EB2F60BEC80151114BB25CEF515B226")
-            .unwrap();
-        self.add_authority("dannenberg", "0232AF901C31A04EE9848595AF9BB7620D4C5B2E")
-            .unwrap();
-        self.add_authority("maatuska", "49015F787433103580E3B66A1707A00E60F2D15B")
-            .unwrap();
-        self.add_authority("Faravahar", "EFCBE720AB3A82B99F9E953CD5BF50F7EEFC7B97")
-            .unwrap();
-        self.add_authority("longclaw", "23D15D965BC35114467363C165C4F724B64B4F66")
-            .unwrap();
-        self.add_authority("bastet", "27102BC123E7AF1D4741AE047E160C91ADC76B21")
-            .unwrap();
-    }
-
-    /// Read the authorities from a torrc file in a Chutney directory.
-    ///
-    /// # Limitations
-    ///
-    /// This function can handle the format for DirAuthority lines
-    /// that chutney generates now, but that's it.  It isn't careful
-    /// about line continuations.
-    pub fn configure_from_chutney<P>(&mut self, path: P) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        use std::io::{self, BufRead};
-        let pb = path.as_ref().join("000a/torrc"); // Any node directory will do.
-        let f = fs::File::open(pb)?;
-
-        let mut fbinfo: Vec<(SocketAddr, RSAIdentity)> = Vec::new();
-        // Find the authorities.  These will also be the fallbacks.
-        for line in io::BufReader::new(f).lines() {
-            let line = line?;
-            let line = line.trim();
-            if !line.starts_with("DirAuthority") {
-                continue;
-            }
-            let elts: Vec<_> = line.split_ascii_whitespace().collect();
-            let name = elts[1];
-            let orport = elts[2];
-            let v3ident = elts[4];
-            if !v3ident.starts_with("v3ident=") || !orport.starts_with("orport=") {
-                warn!("Chutney torrc not in expected format.");
-            }
-            self.add_authority(name, &v3ident[8..])?;
-
-            // XXXX These unwraps should turn into errors.
-            let dir_addr: SocketAddr = elts[5].parse().unwrap();
-            let port: u16 = orport[7..].parse().unwrap();
-            let sockaddr = SocketAddr::new(dir_addr.ip(), port);
-            let rsaident = hex::decode(elts[6]).unwrap();
-            let rsaident = RSAIdentity::from_bytes(&rsaident[..]).unwrap();
-
-            fbinfo.push((sockaddr, rsaident));
-        }
-
-        // Now find the ed identities so we can configure the fallbacks.
-        let mut fallbacks = Vec::new();
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            if !entry.metadata()?.is_dir() {
-                continue;
-            }
-            let path = entry.path();
-            let rsapath = path.join("fingerprint");
-            let edpath = path.join("fingerprint-ed25519");
-
-            if !rsapath.exists() || !edpath.exists() {
-                continue;
-            }
-
-            // XXXX this is ugly
-            // XXXX These unwraps can be crashy.
-            let rsa = std::fs::read_to_string(rsapath)?;
-            let ed = std::fs::read_to_string(edpath)?;
-            let rsa = rsa.split_ascii_whitespace().nth(1).unwrap();
-            let ed = ed.split_ascii_whitespace().nth(1).unwrap();
-            let rsa = hex::decode(rsa).unwrap();
-            let ed = base64::decode(ed).unwrap();
-            let rsa = RSAIdentity::from_bytes(&rsa).unwrap();
-            let ed = Ed25519Identity::from_bytes(&ed).unwrap();
-
-            if let Some((sa, _)) = fbinfo.iter().find(|(_, rsaid)| rsaid == &rsa) {
-                fallbacks.push(FallbackDir::new(rsa, ed, vec![*sa]));
-            }
-        }
-
-        let fallbacks = FallbackSet::from_fallbacks(fallbacks);
-        self.set_fallback_list(fallbacks);
-
-        Ok(())
+    /// Set the network information (authorities and fallbacks) from `config`.
+    pub fn set_network_config(&mut self, config: NetworkConfig) {
+        self.authorities = config.authority;
+        self.fallbacks = config.fallback_cache;
     }
 
     /// Use `path` as the directory to search for legacy directory files.
@@ -231,7 +122,7 @@ impl NetDirConfigBuilder {
 
     /// Consume this builder and return a NetDirConfig that can be used
     /// to load directories
-    pub fn finalize(mut self) -> NetDirConfig {
+    pub fn finalize(mut self) -> Result<NetDirConfig> {
         if self.legacy_cache_path.is_none() {
             // XXXX use dirs crate?
             let mut pb: PathBuf = std::env::var_os("HOME").unwrap().into();
@@ -247,17 +138,18 @@ impl NetDirConfigBuilder {
         }
 
         if self.authorities.is_empty() {
-            self.add_default_authorities();
+            return Err(Error::BadNetworkConfig("No authorities configured").into());
+        }
+        if self.fallbacks.is_empty() {
+            return Err(Error::BadNetworkConfig("No fallback caches configured").into());
         }
 
-        let fallbacks = self.fallbacks.unwrap_or_else(FallbackSet::default);
-
-        NetDirConfig {
+        Ok(NetDirConfig {
             authorities: self.authorities,
             legacy_cache_path: self.legacy_cache_path,
             cache_path: self.cache_path.unwrap(),
-            fallbacks,
-        }
+            fallbacks: self.fallbacks,
+        })
     }
 }
 
@@ -289,13 +181,7 @@ impl NetDirConfig {
     }
 
     /// Return the configured set of fallback directories
-    pub fn fallbacks(&self) -> &FallbackSet {
-        &self.fallbacks
-    }
-}
-
-impl From<NetDirConfigBuilder> for NetDirConfig {
-    fn from(builder: NetDirConfigBuilder) -> NetDirConfig {
-        builder.finalize()
+    pub fn fallbacks(&self) -> &[FallbackDir] {
+        &self.fallbacks[..]
     }
 }
