@@ -1,3 +1,10 @@
+# List of Tor directory authorities and digests of their keys.
+#
+# Since Arti is currently client-only, there's no need to keep
+# anything else about authorities (like addresses), since clients only
+# connect to fallback directories.
+#
+# (List generated August 2020.)
 
 [[network.authority]]
 name = "moria1"

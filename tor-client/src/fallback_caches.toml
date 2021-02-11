@@ -1,3 +1,10 @@
+# List of directories on the Tor network where we think we can
+# download directory info.  We only use this list when we haven't yet
+# downloaded our first directory.
+#
+# This list is derived from Tor's list in Nov 2020, but any nodes that
+# were down at the time were removed.
+
 [[network.fallback_cache]]
 rsa_identity = "0338F9F55111FE8E3570E7DE117EF3AF999CC1D7"
 ed_identity = "GsyBNDtZ8A3X++jOPpNWDJaDXFetH0qbXaqzxp3vWbI"
