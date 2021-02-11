@@ -51,6 +51,64 @@ impl fmt::Debug for RSAIdentity {
     }
 }
 
+impl serde::Serialize for RSAIdentity {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&hex::encode(&self.id[..]))
+        } else {
+            serializer.serialize_bytes(&self.id[..])
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for RSAIdentity {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            /// Deserialization helper
+            struct RSAIdentityVisitor;
+            impl<'de> serde::de::Visitor<'de> for RSAIdentityVisitor {
+                type Value = RSAIdentity;
+                fn expecting(&self, fmt: &mut std::fmt::Formatter) -> fmt::Result {
+                    fmt.write_str("hex-encoded RSA identity")
+                }
+                fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+                where
+                    E: serde::de::Error,
+                {
+                    let bytes = hex::decode(s).map_err(E::custom)?;
+                    RSAIdentity::from_bytes(&bytes)
+                        .ok_or_else(|| E::custom("wrong length for RSA identity"))
+                }
+            }
+
+            deserializer.deserialize_str(RSAIdentityVisitor)
+        } else {
+            /// Deserialization helper
+            struct RSAIdentityVisitor;
+            impl<'de> serde::de::Visitor<'de> for RSAIdentityVisitor {
+                type Value = RSAIdentity;
+                fn expecting(&self, fmt: &mut std::fmt::Formatter) -> fmt::Result {
+                    fmt.write_str("RSA identity")
+                }
+                fn visit_bytes<E>(self, bytes: &[u8]) -> Result<Self::Value, E>
+                where
+                    E: serde::de::Error,
+                {
+                    RSAIdentity::from_bytes(&bytes)
+                        .ok_or_else(|| E::custom("wrong length for RSA identity"))
+                }
+            }
+            deserializer.deserialize_bytes(RSAIdentityVisitor)
+        }
+    }
+}
+
 impl RSAIdentity {
     /// Expose and RSAIdentity as a slice of bytes.
     pub fn as_bytes(&self) -> &[u8] {
