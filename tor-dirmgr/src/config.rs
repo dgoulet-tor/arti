@@ -131,12 +131,8 @@ impl NetDirConfigBuilder {
         };
 
         if self.cache_path.is_none() {
-            // XXXX use dirs crate?
-            let mut pb: PathBuf = std::env::var_os("HOME").unwrap().into();
-            pb.push(".arti/cache");
-            self.cache_path = Some(pb);
+            return Err(Error::BadNetworkConfig("No cache path configured").into());
         }
-
         if self.authorities.is_empty() {
             return Err(Error::BadNetworkConfig("No authorities configured").into());
         }
