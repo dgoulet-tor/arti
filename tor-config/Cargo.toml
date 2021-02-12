@@ -18,3 +18,4 @@ log = "0.4.14"
 thiserror = "1.0.23"
 
 [dev-dependencies]
+dirs = "3.0.1"

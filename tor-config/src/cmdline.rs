@@ -179,7 +179,6 @@ mod test {
         cl.push_toml_line("w=[1,2,3]".to_string());
 
         let v = cl.collect().unwrap();
-        dbg!(&v);
         assert_eq!(v["a"], "3".into());
         assert_eq!(v["bcd"], "hello".into());
         assert_eq!(v["ef"], "gh i".into());

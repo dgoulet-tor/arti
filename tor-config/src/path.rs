@@ -111,3 +111,49 @@ pub fn base_dirs() -> Result<&'static BaseDirs, Error> {
 
     BASE_DIRS.as_ref().ok_or(Error::NoBaseDirs)
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn expand_no_op() {
+        let p = CfgPath::new("Hello/world".to_string());
+        assert_eq!(p.to_string(), "Hello/world".to_string());
+        assert_eq!(p.path().unwrap().to_str(), Some("Hello/world"));
+
+        let p = CfgPath::new("/usr/local/foo".to_string());
+        assert_eq!(p.to_string(), "/usr/local/foo".to_string());
+        assert_eq!(p.path().unwrap().to_str(), Some("/usr/local/foo"));
+    }
+
+    #[test]
+    fn expand_home() {
+        let p = CfgPath::new("~/.arti/config".to_string());
+        assert_eq!(p.to_string(), "~/.arti/config".to_string());
+
+        let expected = dirs::home_dir().unwrap().join(".arti/config");
+        assert_eq!(p.path().unwrap().to_str(), expected.to_str());
+
+        let p = CfgPath::new("${USER_HOME}/.arti/config".to_string());
+        assert_eq!(p.to_string(), "${USER_HOME}/.arti/config".to_string());
+        assert_eq!(p.path().unwrap().to_str(), expected.to_str());
+    }
+
+    #[test]
+    fn expand_cache() {
+        let p = CfgPath::new("${APP_CACHE}/example".to_string());
+        assert_eq!(p.to_string(), "${APP_CACHE}/example".to_string());
+
+        let expected = project_dirs().unwrap().cache_dir().join("example");
+        assert_eq!(p.path().unwrap().to_str(), expected.to_str());
+    }
+
+    #[test]
+    fn expand_bogus() {
+        let p = CfgPath::new("${APP_WOMBAT}/example".to_string());
+        assert_eq!(p.to_string(), "${APP_WOMBAT}/example".to_string());
+
+        assert!(p.path().is_err());
+    }
+}
