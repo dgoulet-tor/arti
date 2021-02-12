@@ -18,6 +18,7 @@ use serde::Deserialize;
 /// Arti's configuration.
 // TODO: move this?
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct NetworkConfig {
     /// List of locations to look in when downloading directory information,
     /// if we don't actually have a directory yet.

@@ -17,6 +17,10 @@ use std::net::SocketAddr;
 /// A directory whose location ships with Tor (or arti), and which we
 /// can use for bootstrapping when we don't know anything else about
 /// the network.
+//
+// Note that we do *not* set serde(deny_unknown_fields)] on this structure:
+// we want our authorities format to be future-proof against adding new info
+// about each authority.
 #[derive(Debug, Clone, Deserialize)]
 pub struct FallbackDir {
     /// RSA identity for the directory relay

@@ -8,6 +8,10 @@ use tor_llcrypto::pk::rsa::RSAIdentity;
 use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
 
 /// A single authority that signs a consensus directory.
+//
+// Note that we do *not* set serde(deny_unknown_fields)] on this structure:
+// we want our authorities format to be future-proof against adding new info
+// about each authority.
 #[derive(Deserialize, Debug, Clone)]
 pub struct Authority {
     /// A memorable nickname for this authority.

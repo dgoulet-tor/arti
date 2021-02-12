@@ -46,6 +46,7 @@ const ARTI_DEFAULTS: &str = concat!(
 /// NOTE: These are NOT the final options or their final layout.
 /// Expect NO stability here.
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 struct ArtiConfig {
     /// Port to listen on (at localhost) for incoming SOCKS
     /// connections.
@@ -64,6 +65,7 @@ struct ArtiConfig {
 ///
 /// This section is for read/write storage
 #[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 struct StorageConfig {
     /// Location on disk for cached directory information
     cache_dir: CfgPath,
