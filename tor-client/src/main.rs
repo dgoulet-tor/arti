@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use tor_chanmgr::transport::nativetls::NativeTlsTransport;
 use tor_circmgr::TargetPort;
+use tor_config::CfgPath;
 use tor_dirmgr::{DirMgr, NetworkConfig};
 use tor_proto::circuit::IPVersionPreference;
 use tor_socksproto::{SocksCmd, SocksRequest};
@@ -54,6 +55,21 @@ struct ArtiConfig {
 
     /// Information about the Tor network we want to connect to.
     network: NetworkConfig,
+
+    /// Directories for storing information on disk
+    storage: StorageConfig,
+}
+
+/// Configuration for where information should be stored on disk.
+///
+/// This section is for read/write storage
+#[derive(Deserialize, Debug, Clone)]
+struct StorageConfig {
+    /// Location on disk for cached directory information
+    cache_dir: CfgPath,
+    /// Location on disk for less-sensitive persistent state information.
+    #[allow(unused)]
+    state_dir: CfgPath,
 }
 
 fn ip_preference(req: &SocksRequest, addr: &str) -> IPVersionPreference {
@@ -257,6 +273,7 @@ fn main() -> Result<()> {
 
     let mut dircfg = tor_dirmgr::NetDirConfigBuilder::new();
     dircfg.set_network_config(config.network.clone());
+    dircfg.set_cache_path(&config.storage.cache_dir.path()?);
     let dircfg = dircfg.finalize()?;
 
     tor_rtcompat::task::block_on(async {

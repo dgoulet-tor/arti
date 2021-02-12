@@ -7,7 +7,9 @@
 #![deny(clippy::missing_docs_in_private_items)]
 
 mod cmdline;
+mod path;
 pub use cmdline::CmdLine;
+pub use path::CfgPath;
 
 use std::path::{Path, PathBuf};
 
@@ -66,7 +68,5 @@ where
 
 /// Return a filename for the default user configuration file.
 pub fn default_config_file() -> Option<PathBuf> {
-    let pd = directories::ProjectDirs::from("org", "torproject", "Arti")?;
-
-    Some(pd.config_dir().join("arti.toml"))
+    CfgPath::new("${APP_CONFIG}/arti.toml".into()).path().ok()
 }
