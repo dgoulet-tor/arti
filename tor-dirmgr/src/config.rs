@@ -18,7 +18,7 @@ use serde::Deserialize;
 /// Configuration information about the Tor network; used as part of
 /// Arti's configuration.
 // TODO: move this?
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkConfig {
     /// List of locations to look in when downloading directory information,
@@ -42,14 +42,8 @@ pub struct NetworkConfig {
 ///
 /// To create a directory configuration, create one of these,
 /// configure it, then call its finalize function.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NetDirConfigBuilder {
-    /// A list of authorities to trust.
-    ///
-    /// A consensus document is considered valid if it signed by more
-    /// than half of these authorities.
-    authorities: Vec<Authority>,
-
     /// The directory from which to read legacy directory information.
     ///
     /// This has to be the directory used by a Tor instance
@@ -60,13 +54,8 @@ pub struct NetDirConfigBuilder {
     /// Path to use for current (sqlite) directory information.
     cache_path: Option<PathBuf>,
 
-    /// The fallback directories to use when downloading directory
-    /// information
-    fallbacks: Vec<FallbackDir>,
-
-    /// A map of network parameters that we're overriding from their
-    /// setttings in the consensus.
-    override_net_params: netstatus::NetParams<i32>,
+    /// Configuration information about the network.
+    network: NetworkConfig,
 }
 
 /// Configuration type for network directory operations.
@@ -76,12 +65,6 @@ pub struct NetDirConfigBuilder {
 /// To create an object of this type, use NetDirConfigBuilder.
 #[derive(Debug, Clone)]
 pub struct NetDirConfig {
-    /// A list of authorities to trust.
-    ///
-    /// A consensus document is considered valid if it signed by more
-    /// than half of these authorities.
-    authorities: Vec<Authority>,
-
     /// The directory from which to read legacy directory information.
     ///
     /// This has to be the directory used by a Tor instance
@@ -93,13 +76,8 @@ pub struct NetDirConfig {
     /// directory information.
     cache_path: PathBuf,
 
-    /// A set of directories to use for fetching directory info when we
-    /// don't have any directories yet.
-    fallbacks: Vec<FallbackDir>,
-
-    /// A map of network parameters that we're overriding from their
-    /// setttings in the consensus.
-    override_net_params: netstatus::NetParams<i32>,
+    /// Configuration information about the network.
+    network: NetworkConfig,
 }
 
 impl NetDirConfigBuilder {
@@ -108,20 +86,12 @@ impl NetDirConfigBuilder {
     /// To use this, call at least one method to configure directory
     /// authorities, then call load().
     pub fn new() -> Self {
-        NetDirConfigBuilder {
-            authorities: Vec::new(),
-            legacy_cache_path: None,
-            cache_path: None,
-            fallbacks: Vec::new(),
-            override_net_params: netstatus::NetParams::default(),
-        }
+        NetDirConfigBuilder::default()
     }
 
     /// Set the network information (authorities and fallbacks) from `config`.
     pub fn set_network_config(&mut self, config: NetworkConfig) {
-        self.authorities = config.authority;
-        self.fallbacks = config.fallback_cache;
-        self.override_net_params = config.override_net_params;
+        self.network = config;
     }
 
     /// Use `path` as the directory to search for legacy directory files.
@@ -150,26 +120,18 @@ impl NetDirConfigBuilder {
         if self.cache_path.is_none() {
             return Err(Error::BadNetworkConfig("No cache path configured").into());
         }
-        if self.authorities.is_empty() {
+        if self.network.authority.is_empty() {
             return Err(Error::BadNetworkConfig("No authorities configured").into());
         }
-        if self.fallbacks.is_empty() {
+        if self.network.fallback_cache.is_empty() {
             return Err(Error::BadNetworkConfig("No fallback caches configured").into());
         }
 
         Ok(NetDirConfig {
-            authorities: self.authorities,
             legacy_cache_path: self.legacy_cache_path,
             cache_path: self.cache_path.unwrap(),
-            fallbacks: self.fallbacks,
-            override_net_params: self.override_net_params,
+            network: self.network,
         })
-    }
-}
-
-impl Default for NetDirConfigBuilder {
-    fn default() -> Self {
-        NetDirConfigBuilder::new()
     }
 }
 
@@ -191,16 +153,16 @@ impl NetDirConfig {
 
     /// Return a slice of the configured authorities
     pub fn authorities(&self) -> &[Authority] {
-        &self.authorities[..]
+        &self.network.authority[..]
     }
 
     /// Return the configured set of fallback directories
     pub fn fallbacks(&self) -> &[FallbackDir] {
-        &self.fallbacks[..]
+        &self.network.fallback_cache[..]
     }
 
     /// Return set of configured networkstatus parameter overrides.
     pub fn override_net_params(&self) -> &netstatus::NetParams<i32> {
-        &self.override_net_params
+        &self.network.override_net_params
     }
 }
