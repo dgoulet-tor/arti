@@ -61,6 +61,8 @@ use tor_checkable::{timed::TimerangeBound, ExternallySigned};
 use tor_llcrypto as ll;
 use tor_llcrypto::pk::rsa::RSAIdentity;
 
+use serde::{Deserialize, Deserializer};
+
 /// The lifetime of a networkstatus document.
 ///
 /// In a consensus, this type describes when the consensus may safely
@@ -126,8 +128,7 @@ impl Lifetime {
 /// These are used to describe current settings for the Tor network,
 /// current weighting parameters for path selection, and so on.  They're
 /// encoded with a space-separated K=V format.
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NetParams<T> {
     /// Map from keys to values.
     params: HashMap<String, T>,
@@ -143,6 +144,20 @@ impl<T> NetParams<T> {
         self.params.iter()
     }
 }
+
+impl<'de, T> Deserialize<'de> for NetParams<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let params = HashMap::deserialize(deserializer)?;
+        Ok(NetParams { params })
+    }
+}
+
 /// A list of subprotocol versions that implementors should/must provide.
 #[allow(dead_code)]
 #[derive(Debug, Clone)]

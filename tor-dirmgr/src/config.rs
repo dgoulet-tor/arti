@@ -9,6 +9,7 @@ use crate::storage::sqlite::SqliteStore;
 use crate::Authority;
 use crate::{Error, Result};
 use tor_netdir::fallback::FallbackDir;
+use tor_netdoc::doc::netstatus;
 
 use std::path::{Path, PathBuf};
 
@@ -30,6 +31,11 @@ pub struct NetworkConfig {
     /// List of directory authorities which we expect to sign
     /// consensus documents.
     authority: Vec<Authority>,
+
+    /// A map of network parameters that we're overriding from their
+    /// setttings in the consensus.
+    #[serde(default)]
+    override_net_params: netstatus::NetParams<i32>,
 }
 
 /// Builder for a NetDirConfig.
@@ -57,6 +63,10 @@ pub struct NetDirConfigBuilder {
     /// The fallback directories to use when downloading directory
     /// information
     fallbacks: Vec<FallbackDir>,
+
+    /// A map of network parameters that we're overriding from their
+    /// setttings in the consensus.
+    override_net_params: netstatus::NetParams<i32>,
 }
 
 /// Configuration type for network directory operations.
@@ -86,6 +96,10 @@ pub struct NetDirConfig {
     /// A set of directories to use for fetching directory info when we
     /// don't have any directories yet.
     fallbacks: Vec<FallbackDir>,
+
+    /// A map of network parameters that we're overriding from their
+    /// setttings in the consensus.
+    override_net_params: netstatus::NetParams<i32>,
 }
 
 impl NetDirConfigBuilder {
@@ -99,6 +113,7 @@ impl NetDirConfigBuilder {
             legacy_cache_path: None,
             cache_path: None,
             fallbacks: Vec::new(),
+            override_net_params: netstatus::NetParams::default(),
         }
     }
 
@@ -106,6 +121,7 @@ impl NetDirConfigBuilder {
     pub fn set_network_config(&mut self, config: NetworkConfig) {
         self.authorities = config.authority;
         self.fallbacks = config.fallback_cache;
+        self.override_net_params = config.override_net_params;
     }
 
     /// Use `path` as the directory to search for legacy directory files.
@@ -146,6 +162,7 @@ impl NetDirConfigBuilder {
             legacy_cache_path: self.legacy_cache_path,
             cache_path: self.cache_path.unwrap(),
             fallbacks: self.fallbacks,
+            override_net_params: self.override_net_params,
         })
     }
 }
@@ -180,5 +197,10 @@ impl NetDirConfig {
     /// Return the configured set of fallback directories
     pub fn fallbacks(&self) -> &[FallbackDir] {
         &self.fallbacks[..]
+    }
+
+    /// Return set of configured networkstatus parameter overrides.
+    pub fn override_net_params(&self) -> &netstatus::NetParams<i32> {
+        &self.override_net_params
     }
 }

@@ -18,3 +18,11 @@ trace = false
 [storage]
 cache_dir = "${APP_CACHE}"
 state_dir = "${APP_LOCAL_DATA}"
+
+# Replacement values for consensus parameters.  This is an advanced option
+# and you probably should leave it alone. Not all parameters are supported.
+# These are case-sensitive.
+#
+#[override_net_params]
+#circwindow = 1000
+#min_paths_for_circs_pct = 60

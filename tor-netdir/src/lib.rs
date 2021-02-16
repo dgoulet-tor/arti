@@ -32,6 +32,7 @@ use tor_netdoc::doc::microdesc::{MDDigest, Microdesc};
 use tor_netdoc::doc::netstatus::{self, MDConsensus};
 use tor_netdoc::types::policy::PortPolicy;
 
+use log::warn;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -158,9 +159,23 @@ pub trait MDReceiver {
 impl PartialNetDir {
     /// Create a new PartialNetDir with a given consensus, and no
     /// microdecriptors loaded.
-    pub fn new(consensus: MDConsensus) -> Self {
+    ///
+    /// If `replacement_params` is provided, override network parameters from
+    /// the consensus with those from `replacement_params`.
+    pub fn new(
+        consensus: MDConsensus,
+        replacement_params: Option<&netstatus::NetParams<i32>>,
+    ) -> Self {
         let mut params = NetParameters::default();
-        params.update_from_consensus(consensus.params());
+        params.update(consensus.params());
+        // We have to do this now, or else changes won't be reflected in our
+        // weights.
+        if let Some(replacement) = replacement_params {
+            let unrecognized = params.update(replacement);
+            for u in unrecognized {
+                warn!("Unrecognized option: override_net_params.{}", u);
+            }
+        }
 
         // Compute the weights we'll want to use for these routers.
         let weights = weight::WeightSet::from_consensus(&consensus, &params);

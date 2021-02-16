@@ -17,6 +17,7 @@ tor-protover = { path="../tor-protover", version= "*" }
 base64 = "0.13.0"
 digest = "0.9.0"
 hex = "0.4.2"
+log = "0.4.14"
 once_cell = "1.5.2"
 rand = "0.7.3"
 rusqlite = { version = "0.24.2", features = ["chrono"] }

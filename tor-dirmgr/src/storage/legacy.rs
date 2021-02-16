@@ -151,7 +151,7 @@ impl LegacyStore {
         let certs = self.load_certs(authorities)?;
         let consensus = self.load_consensus(&certs, authorities)?;
         info!("Loaded consensus");
-        let mut partial = PartialNetDir::new(consensus);
+        let mut partial = PartialNetDir::new(consensus, None); // TODO: allow parameter override.
 
         let mds = self.load_mds()?;
         info!("Loaded {} microdescriptors", mds.len());

@@ -760,7 +760,7 @@ impl UnvalidatedDir {
             Ok(NextState::NewState(PartialDir {
                 from_cache: self.from_cache,
                 consensus_meta: self.consensus_meta,
-                dir: PartialNetDir::new(validated),
+                dir: PartialNetDir::new(validated, Some(config.override_net_params())),
             }))
         } else {
             Ok(NextState::SameState(self))

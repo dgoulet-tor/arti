@@ -87,14 +87,18 @@ impl NetParameters {
     }
 
     /// Replace any values in this NetParameters that are overridden in `new`.
-    pub fn update_from_consensus(&mut self, new: &netstatus::NetParams<i32>) {
+    ///
+    /// Return a vector of unrecognized keys.
+    pub fn update<'a>(&mut self, new: &'a netstatus::NetParams<i32>) -> Vec<&'a str> {
+        let mut unrecognized = Vec::new();
         for (name, value) in new.iter() {
             if let Ok(param) = name.parse() {
                 self.set_clamped(param, *value);
             } else {
-                // We ignore unrecognized keys.
+                unrecognized.push(name.as_ref());
             }
         }
+        unrecognized
     }
 }
 
@@ -270,12 +274,15 @@ mod test {
             "bwweightscale=70 min_paths_for_circs_pct=45 im_a_little_teapot=1 circwindow=99999"
                 .parse()
                 .unwrap();
-        p.update_from_consensus(&np);
+        let unrec = p.update(&np);
 
         assert_eq!(p.get(Param::BwWeightScale), 70);
         assert_eq!(p.get(Param::CircWindow), 1000);
         assert_eq!(p.get(Param::MinPathsForCircsPct), 45);
         assert_eq!(p.get(Param::CircuitPriorityHalflifeMsec), 30_000);
+
+        assert_eq!(unrec.len(), 1);
+        assert_eq!(unrec[0], "im_a_little_teapot");
     }
 
     #[test]
