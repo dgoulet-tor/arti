@@ -54,7 +54,7 @@ impl DirectoryUpdater {
             // Do this until we have all the microdescriptors, or it's time
             // to download the next thing.
             if let Some(download_time) = download_time {
-                let mut retry = RetryDelay::from_msec(1000); // XXXX make this configurable.
+                let mut retry = RetryDelay::from_msec(1000); // XXXX make this configurable?
                 while SystemTime::now() < download_time {
                     let again = self.fetch_more_microdescs().await?;
                     if !again {
@@ -86,7 +86,7 @@ impl DirectoryUpdater {
     /// Keep trying to get a new consensus until we have one, along with any
     /// other directory objects we need to use that consensus.
     async fn fetch_new_directory(&self) -> Result<()> {
-        let mut retry = RetryDelay::from_msec(1000);
+        let mut retry = RetryDelay::from_msec(1000); // XXXX make this configurable?
         loop {
             if self.stopping.load(Ordering::SeqCst) {
                 return Err(Error::UpdaterShutdown.into());

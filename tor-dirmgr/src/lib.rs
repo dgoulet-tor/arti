@@ -212,6 +212,7 @@ impl DirMgr {
             let mds = download_mds(
                 missing,
                 mark_listed,
+                &self.config,
                 &self.store,
                 netdir.as_ref().into(),
                 circmgr,
@@ -316,7 +317,7 @@ impl DirMgr {
         partial.load(store, self.opt_netdir().await).await?;
         // .. and fetch whatever we're missing.
         partial
-            .fetch_mds(store, dirinfo, Arc::clone(&circmgr))
+            .fetch_mds(&self.config, store, dirinfo, Arc::clone(&circmgr))
             .await?;
 
         let nd = match partial.advance() {
@@ -490,12 +491,11 @@ impl NoInformation {
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr>,
     ) -> Result<UnvalidatedDir> {
-        // XXXX make this configurable.
-        let n_retries = 3_u32;
-        let mut retry_delay = RetryDelay::default();
+        let retry = config.timing().retry_consensus();
+        let mut retry_delay = retry.schedule();
 
         let mut errors = RetryError::while_doing("download a consensus");
-        for _ in 0..n_retries {
+        for _ in retry.attempts() {
             let cm = Arc::clone(&circmgr);
             match self.fetch_consensus_once(config, store, info, cm).await {
                 Ok(v) => return Ok(v),
@@ -654,12 +654,11 @@ impl UnvalidatedDir {
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr>,
     ) -> Result<()> {
-        // XXXX make this configurable
-        let n_retries = 3_u32;
-        let mut retry_delay = RetryDelay::default();
+        let retry = config.timing().retry_certs();
+        let mut retry_delay = retry.schedule();
 
         let mut errors = RetryError::while_doing("downloading authority certificates");
-        for _ in 0..n_retries {
+        for _ in retry.attempts() {
             let cm = Arc::clone(&circmgr);
             if let Err(e) = self.fetch_certs_once(config, store, info, cm).await {
                 errors.push(e);
@@ -781,18 +780,18 @@ impl PartialDir {
     /// Retry if we didn't get enough to build circuits.
     async fn fetch_mds(
         &mut self,
+        config: &NetDirConfig,
         store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr>,
     ) -> Result<()> {
-        // XXXX Make this configurable
-        let n_retries = 3_u32;
-        let mut retry_delay = RetryDelay::default();
+        let retry = config.timing().retry_microdescs();
+        let mut retry_delay = retry.schedule();
 
         let mut errors = RetryError::while_doing("download microdescriptors");
-        for _ in 0..n_retries {
+        for _ in retry.attempts() {
             let cm = Arc::clone(&circmgr);
-            if let Err(e) = self.fetch_mds_once(store, info, cm).await {
+            if let Err(e) = self.fetch_mds_once(config, store, info, cm).await {
                 errors.push(e);
             }
 
@@ -809,6 +808,7 @@ impl PartialDir {
     /// Try to fetch microdescriptors from the network.
     async fn fetch_mds_once(
         &mut self,
+        config: &NetDirConfig,
         store: &Mutex<SqliteStore>,
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr>,
@@ -816,7 +816,7 @@ impl PartialDir {
         let mark_listed = self.dir.lifetime().valid_after();
 
         let missing: Vec<MDDigest> = self.dir.missing_microdescs().map(Clone::clone).collect();
-        let mds = download_mds(missing, mark_listed, store, info, circmgr).await?;
+        let mds = download_mds(missing, mark_listed, config, store, info, circmgr).await?;
         for md in mds {
             self.dir.add_microdesc(md);
         }
@@ -890,6 +890,7 @@ async fn load_mds(
 async fn download_mds(
     mut missing: Vec<MDDigest>,
     mark_listed: SystemTime,
+    config: &NetDirConfig,
     store: &Mutex<SqliteStore>,
     info: DirInfo<'_>,
     circmgr: Arc<CircMgr>,
@@ -900,7 +901,7 @@ async fn download_mds(
     }
     let chunksize: usize = std::cmp::min(500, (missing.len() + 2) / 3);
 
-    let n_parallel_requests = 4; // TODO make this configurable.
+    let n_parallel_requests = config.timing().microdesc_parallelism();
 
     // Now we're going to fetch the descriptors up to 500 at a time,
     // in up to n_parallel_requests requests.

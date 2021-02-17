@@ -28,14 +28,25 @@ state_dir = "${APP_LOCAL_DATA}"
 #min_paths_for_circs_pct = 60
 
 # Configuration for timing when and how often we should download directory
-# information
-[download_schedule]
-
-# How to retry our initial bootstrapping when we're trying to start up.
+# information.
 #
 # We use a randomized algorithm for determining when to retry. With
-# this and other retry_* options, "num" is the number of downloads to
+# the various retry_* options, "num" is the number of downloads to
 # attempt, and "initial_delay" is a parameter determining both our
 # _first_ delay before we reattempt, and our _minimum_ delay for
 # subsequent attempts.
+[download_schedule]
+
+# How to retry our initial bootstrapping when we're trying to start up.
 retry_bootstrap = { num = 128, initial_delay = "1 sec" }
+
+# How to retry a single consensus download.
+retry_consensus = { num = 3, initial_delay = "1 sec" }
+
+# How to retry a set of authority certificate downloads.
+retry_certs = { num = 3, initial_delay = "1 sec" }
+
+# How to retry a set of microdescriptor downloads.
+retry_microdescs = { num = 3, initial_delay = "1 sec" }
+# How many microdescriptor fetches to launch at once.
+microdesc_parallelism = 4

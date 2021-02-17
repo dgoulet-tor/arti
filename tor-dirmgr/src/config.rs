@@ -44,9 +44,25 @@ pub struct NetworkConfig {
 #[derive(Deserialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields)]
 pub struct DownloadScheduleConfig {
-    /// Top-level counter for how to retry our initial bootstrap attempt.
-    #[serde(default)]
+    /// Top-level configuration for how to retry our initial bootstrap attempt.
+    #[serde(default)] // XXXX change default.
     retry_bootstrap: RetryConfig,
+
+    /// Configuration for how to retry a consensus download.
+    #[serde(default)]
+    retry_consensus: RetryConfig,
+
+    /// Configuration for how to retry an authority cert download.
+    #[serde(default)]
+    retry_certs: RetryConfig,
+
+    /// Configuration for how to retry a microdescriptor download.
+    #[serde(default)]
+    retry_microdescs: RetryConfig,
+
+    /// Number of microdescriptor downloads to attempt in parallel
+    #[serde(default)]
+    microdesc_parallelism: u8,
 }
 
 /// Builder for a NetDirConfig.
@@ -202,5 +218,25 @@ impl DownloadScheduleConfig {
     /// operation at startup.
     pub fn retry_bootstrap(&self) -> &RetryConfig {
         &self.retry_bootstrap
+    }
+
+    /// Return configuration for retrying a consensus download.
+    pub fn retry_consensus(&self) -> &RetryConfig {
+        &self.retry_consensus
+    }
+
+    /// Return configuration for retrying an authority certificate download
+    pub fn retry_certs(&self) -> &RetryConfig {
+        &self.retry_certs
+    }
+
+    /// Return configuration for retrying an authority certificate download
+    pub fn retry_microdescs(&self) -> &RetryConfig {
+        &self.retry_microdescs
+    }
+
+    /// Number of microdescriptor fetches to attemppt in parallel
+    pub fn microdesc_parallelism(&self) -> usize {
+        self.microdesc_parallelism.max(1).into()
     }
 }
