@@ -7,7 +7,11 @@
 //! [`dir-spec.txt`]: https://spec.torproject.org/dir-spec
 
 use rand::Rng;
+use std::convert::TryInto;
+use std::num::NonZeroU32;
 use std::time::Duration;
+
+use serde::Deserialize;
 
 /// An implementation for retrying downloads based on a decorrelated jitter
 /// schedule.
@@ -30,7 +34,12 @@ pub struct RetryDelay {
 }
 
 /// Lowest possible lower bound, in milliseconds.
+// We're doing this in MS, and Tor does it in seconds, so I'm
+// multiplying the minimum by 1000 here.
 const MIN_LOW_BOUND: u32 = 1000;
+
+/// Largest possible lower bound, in milliseconds.
+const MAX_LOW_BOUND: u32 = std::u32::MAX - 1;
 
 /// Maximum amount to mulitply the previous delay by.
 const MAX_DELAY_MULT: u32 = 3;
@@ -47,10 +56,9 @@ impl RetryDelay {
     /// If the base delay is less than 1000, a base delay of 1000 is
     /// used instead, since that's what the C tor implemenation does.
     pub fn from_msec(base_delay_msec: u32) -> Self {
-        // We're doing this in MS, and Tor does it in seconds, so I'm
-        // multiplying the minimum by 1000 here.
+        // TODO: use Ord::clamp once we depend on rust 1.50
         let low_bound_ms = std::cmp::max(MIN_LOW_BOUND, base_delay_msec);
-        assert!(low_bound_ms != std::u32::MAX);
+        let low_bound_ms = std::cmp::min(MAX_LOW_BOUND, low_bound_ms);
         RetryDelay {
             last_delay_ms: 0,
             low_bound_ms,
@@ -60,10 +68,9 @@ impl RetryDelay {
     /// Construct a new RetryDelay from a given base delay.
     ///
     /// See from_msec for more information.
-    #[allow(unused)]
     pub fn from_duration(d: Duration) -> Self {
         let msec = d.as_millis();
-        let msec = std::cmp::min(msec, std::u32::MAX as u128) as u32;
+        let msec = std::cmp::min(msec, MAX_LOW_BOUND as u128) as u32;
         RetryDelay::from_msec(msec)
     }
 
@@ -101,6 +108,44 @@ impl RetryDelay {
 impl Default for RetryDelay {
     fn default() -> Self {
         RetryDelay::from_msec(0)
+    }
+}
+
+/// Configuration for how many times to retry a download, and with what
+/// frequency.
+#[derive(Debug, Copy, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RetryConfig {
+    /// How many times to retry before giving up?
+    num: NonZeroU32,
+
+    /// The amount of time to delay after the first failure, and a
+    /// lower-bound for future delays.
+    #[serde(with = "humantime_serde")]
+    initial_delay: Duration,
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        RetryConfig {
+            num: 3.try_into().unwrap(),
+            initial_delay: Duration::from_millis(1000),
+        }
+    }
+}
+
+impl RetryConfig {
+    /// Return an iterator to use over all the supported attempts for
+    /// this configuration.
+    pub fn attempts(&self) -> impl Iterator<Item = u32> {
+        0..(self.num.into())
+    }
+
+    /// Return a RetryDelay object for this configuration.
+    ///
+    /// If the initial delay is longer than 32
+    pub fn schedule(&self) -> RetryDelay {
+        RetryDelay::from_duration(self.initial_delay)
     }
 }
 

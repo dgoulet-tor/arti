@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tor_chanmgr::transport::nativetls::NativeTlsTransport;
 use tor_circmgr::TargetPort;
 use tor_config::CfgPath;
-use tor_dirmgr::{DirMgr, NetworkConfig};
+use tor_dirmgr::{DirMgr, DownloadScheduleConfig, NetworkConfig};
 use tor_proto::circuit::IPVersionPreference;
 use tor_socksproto::{SocksCmd, SocksRequest};
 
@@ -59,6 +59,9 @@ struct ArtiConfig {
 
     /// Directories for storing information on disk
     storage: StorageConfig,
+
+    /// Information about when and how often to download directory information
+    download_schedule: DownloadScheduleConfig,
 }
 
 /// Configuration for where information should be stored on disk.

@@ -3,6 +3,7 @@
 //! Directory configuration tells us where to load and store directory
 //! information, where to fetch it from, and how to validate it.
 
+use crate::retry::RetryConfig;
 #[cfg(feature = "legacy-storage")]
 use crate::storage::legacy::LegacyStore;
 use crate::storage::sqlite::SqliteStore;
@@ -38,6 +39,16 @@ pub struct NetworkConfig {
     override_net_params: netstatus::NetParams<i32>,
 }
 
+/// Configuration information for how exactly we download things from the
+/// Tor directory caches.
+#[derive(Deserialize, Debug, Clone, Default)]
+#[serde(deny_unknown_fields)]
+pub struct DownloadScheduleConfig {
+    /// Top-level counter for how to retry our initial bootstrap attempt.
+    #[serde(default)]
+    retry_bootstrap: RetryConfig,
+}
+
 /// Builder for a NetDirConfig.
 ///
 /// To create a directory configuration, create one of these,
@@ -56,6 +67,9 @@ pub struct NetDirConfigBuilder {
 
     /// Configuration information about the network.
     network: NetworkConfig,
+
+    /// Configuration information about when to download stuff.
+    timing: DownloadScheduleConfig,
 }
 
 /// Configuration type for network directory operations.
@@ -78,6 +92,9 @@ pub struct NetDirConfig {
 
     /// Configuration information about the network.
     network: NetworkConfig,
+
+    /// Configuration information about when we download things.
+    timing: DownloadScheduleConfig,
 }
 
 impl NetDirConfigBuilder {
@@ -92,6 +109,12 @@ impl NetDirConfigBuilder {
     /// Set the network information (authorities and fallbacks) from `config`.
     pub fn set_network_config(&mut self, config: NetworkConfig) {
         self.network = config;
+    }
+
+    /// Set the timining information that we use for deciding when to
+    /// attempt and retry downloads.
+    pub fn set_timing_config(&mut self, timing: DownloadScheduleConfig) {
+        self.timing = timing;
     }
 
     /// Use `path` as the directory to search for legacy directory files.
@@ -131,6 +154,7 @@ impl NetDirConfigBuilder {
             legacy_cache_path: self.legacy_cache_path,
             cache_path: self.cache_path.unwrap(),
             network: self.network,
+            timing: self.timing,
         })
     }
 }
@@ -164,5 +188,19 @@ impl NetDirConfig {
     /// Return set of configured networkstatus parameter overrides.
     pub fn override_net_params(&self) -> &netstatus::NetParams<i32> {
         &self.network.override_net_params
+    }
+
+    /// Return the timing configuration we should use to decide when to
+    /// attemppt and retry downloads.
+    pub fn timing(&self) -> &DownloadScheduleConfig {
+        &self.timing
+    }
+}
+
+impl DownloadScheduleConfig {
+    /// Return configuration for retrying our entire bootstrap
+    /// operation at startup.
+    pub fn retry_bootstrap(&self) -> &RetryConfig {
+        &self.retry_bootstrap
     }
 }

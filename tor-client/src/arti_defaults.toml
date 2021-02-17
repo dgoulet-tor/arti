@@ -26,3 +26,16 @@ state_dir = "${APP_LOCAL_DATA}"
 #[override_net_params]
 #circwindow = 1000
 #min_paths_for_circs_pct = 60
+
+# Configuration for timing when and how often we should download directory
+# information
+[download_schedule]
+
+# How to retry our initial bootstrapping when we're trying to start up.
+#
+# We use a randomized algorithm for determining when to retry. With
+# this and other retry_* options, "num" is the number of downloads to
+# attempt, and "initial_delay" is a parameter determining both our
+# _first_ delay before we reattempt, and our _minimum_ delay for
+# subsequent attempts.
+retry_bootstrap = { num = 128, initial_delay = "1 sec" }

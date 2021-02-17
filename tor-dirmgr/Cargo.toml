@@ -38,6 +38,7 @@ rand = "0.7.3"
 rusqlite = { version = "0.24.2", features = ["chrono"] }
 serde = {version="1.0.123", features = ["derive"] }
 thiserror = "1.0.23"
+humantime-serde = "1.0.1"
 
 [dev-dependencies]
 futures-await-test = "0.3.0"

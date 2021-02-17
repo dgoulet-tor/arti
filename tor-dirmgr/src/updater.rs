@@ -54,7 +54,7 @@ impl DirectoryUpdater {
             // Do this until we have all the microdescriptors, or it's time
             // to download the next thing.
             if let Some(download_time) = download_time {
-                let mut retry = RetryDelay::from_msec(1000);
+                let mut retry = RetryDelay::from_msec(1000); // XXXX make this configurable.
                 while SystemTime::now() < download_time {
                     let again = self.fetch_more_microdescs().await?;
                     if !again {

@@ -43,7 +43,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 pub use authority::Authority;
-pub use config::{NetDirConfig, NetDirConfigBuilder, NetworkConfig};
+pub use config::{DownloadScheduleConfig, NetDirConfig, NetDirConfigBuilder, NetworkConfig};
 pub use err::Error;
 pub use updater::DirectoryUpdater;
 
@@ -71,8 +71,6 @@ impl DirMgr {
         circmgr: Arc<CircMgr>,
     ) -> Result<Arc<Self>> {
         let dirmgr = Arc::new(DirMgr::from_config(config)?);
-        /// largest number of attempts before we give up completely.
-        const MAX_BOOTSTRAP_ATTEMPTS: usize = 128;
 
         // Try to load from the cache.
         if dirmgr
@@ -85,8 +83,10 @@ impl DirMgr {
             // Okay, we didn't get a directory from the cache.  We need to
             // try fetching it.
             info!("Didn't find a usable directory in the cache. Trying to booststrap.");
-            let mut retry = RetryDelay::from_msec(1000);
-            for _ in 0..MAX_BOOTSTRAP_ATTEMPTS {
+            let retry_config = dirmgr.config.timing().retry_bootstrap();
+            let mut retry: RetryDelay = retry_config.schedule();
+
+            for _ in retry_config.attempts() {
                 match dirmgr.bootstrap_directory(Arc::clone(&circmgr)).await {
                     Ok(()) => break,
                     Err(e) => {
