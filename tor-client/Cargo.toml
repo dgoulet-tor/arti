@@ -28,5 +28,5 @@ native-tls = "0.2.7"
 rand = "0.7.3"
 serde = { version = "1.0.123", features = ["derive"] }
 simple-logging = "2.0.2"
-thiserror = "1.0.23"
+thiserror = "1.0.24"
 argh = "0.1.4"

@@ -10,6 +10,6 @@ publish = false
 tor-llcrypto = { path="../tor-llcrypto", version = "*" }
 
 signature = "1.3.0"
-thiserror = "1.0.23"
+thiserror = "1.0.24"
 
 
