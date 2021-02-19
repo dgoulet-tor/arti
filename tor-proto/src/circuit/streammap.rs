@@ -188,7 +188,10 @@ mod test {
             let id = map.add_ent(sink, StreamSendWindow::new(500))?;
             let expect_id: StreamId = next_id.into();
             assert_eq!(expect_id, id);
-            next_id += 1;
+            next_id = next_id.wrapping_add(1);
+            if next_id == 0 {
+                next_id = 1;
+            }
             ids.push(id);
         }
 
