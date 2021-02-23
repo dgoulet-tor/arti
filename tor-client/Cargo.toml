@@ -22,7 +22,7 @@ tor-config = { path="../tor-config", version = "*" }
 anyhow = "1.0.38"
 async-native-tls = "0.3.3"
 config = "0.10.1"
-futures = "0.3.12"
+futures = "0.3.13"
 log = "0.4.14"
 native-tls = "0.2.7"
 rand = "0.7.3"
