@@ -1093,15 +1093,12 @@ mod test {
         )
     }
 
-    fn test_create(fast: bool) {
+    async fn test_create(fast: bool) {
         // We want to try progressing from a pending circuit to a circuit
         // via a crate_fast handshake.
 
-        // XXXX Make this use join!() instead.
         use crate::crypto::handshake::{fast::CreateFastServer, ntor::NtorServer, ServerHandshake};
-        use futures::executor::LocalPool;
         use futures::future::FutureExt;
-        use futures::task::LocalSpawnExt;
 
         let (chan, mut ch) = fake_channel();
         let circid = 128.into();
@@ -1109,7 +1106,7 @@ mod test {
         let (_circmsg_send, circmsg_recv) = mpsc::channel(64);
         let unique_id = UniqId::new(23, 17);
 
-        let (pending, reactor) = PendingClientCirc::new(
+        let (pending, mut reactor) = PendingClientCirc::new(
             circid,
             chan,
             created_recv,
@@ -1153,16 +1150,11 @@ mod test {
                     .await
             }
         };
-        let reactor_fut = reactor.run().map(|_| ());
+        let reactor_fut = reactor.run_once().map(|_| ());
 
-        let mut pool = LocalPool::new();
-        let spawner = pool.spawner();
-        spawner.spawn_local(reactor_fut).unwrap();
-        spawner.spawn_local(simulate_relay_fut).unwrap();
-        let client_handle = spawner.spawn_local_with_handle(client_fut).unwrap();
-        pool.run_until_stalled();
+        let (circ, _, _) = futures::join!(client_fut, reactor_fut, simulate_relay_fut);
 
-        let _circuit = client_handle.now_or_never().unwrap().unwrap();
+        let _circ = circ.unwrap();
 
         // pfew!  We've build a circuit!  Let's make sure it has one hop.
         /* TODO: reinstate this.
@@ -1171,13 +1163,13 @@ mod test {
          */
     }
 
-    #[test]
-    fn test_create_fast() {
-        test_create(true)
+    #[async_test]
+    async fn test_create_fast() {
+        test_create(true).await
     }
-    #[test]
-    fn test_create_ntor() {
-        test_create(false)
+    #[async_test]
+    async fn test_create_ntor() {
+        test_create(false).await
     }
 
     // An encryption layer that doesn't do any crypto.
