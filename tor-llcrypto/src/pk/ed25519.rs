@@ -135,7 +135,7 @@ impl<'de> serde::Deserialize<'de> for Ed25519Identity {
             struct EdIdentityVisitor;
             impl<'de> serde::de::Visitor<'de> for EdIdentityVisitor {
                 type Value = Ed25519Identity;
-                fn expecting(&self, fmt: &mut std::fmt::Formatter) -> fmt::Result {
+                fn expecting(&self, fmt: &mut std::fmt::Formatter<'_>) -> fmt::Result {
                     fmt.write_str("base64-encoded Ed25519 public key")
                 }
                 fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
@@ -155,7 +155,7 @@ impl<'de> serde::Deserialize<'de> for Ed25519Identity {
             struct EdIdentityVisitor;
             impl<'de> serde::de::Visitor<'de> for EdIdentityVisitor {
                 type Value = Ed25519Identity;
-                fn expecting(&self, fmt: &mut std::fmt::Formatter) -> fmt::Result {
+                fn expecting(&self, fmt: &mut std::fmt::Formatter<'_>) -> fmt::Result {
                     fmt.write_str("ed25519 public key")
                 }
                 fn visit_bytes<E>(self, bytes: &[u8]) -> Result<Self::Value, E>

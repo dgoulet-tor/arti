@@ -74,7 +74,7 @@ impl<'de> serde::Deserialize<'de> for RSAIdentity {
             struct RSAIdentityVisitor;
             impl<'de> serde::de::Visitor<'de> for RSAIdentityVisitor {
                 type Value = RSAIdentity;
-                fn expecting(&self, fmt: &mut std::fmt::Formatter) -> fmt::Result {
+                fn expecting(&self, fmt: &mut std::fmt::Formatter<'_>) -> fmt::Result {
                     fmt.write_str("hex-encoded RSA identity")
                 }
                 fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
@@ -93,7 +93,7 @@ impl<'de> serde::Deserialize<'de> for RSAIdentity {
             struct RSAIdentityVisitor;
             impl<'de> serde::de::Visitor<'de> for RSAIdentityVisitor {
                 type Value = RSAIdentity;
-                fn expecting(&self, fmt: &mut std::fmt::Formatter) -> fmt::Result {
+                fn expecting(&self, fmt: &mut std::fmt::Formatter<'_>) -> fmt::Result {
                     fmt.write_str("RSA identity")
                 }
                 fn visit_bytes<E>(self, bytes: &[u8]) -> Result<Self::Value, E>
