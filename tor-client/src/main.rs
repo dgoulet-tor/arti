@@ -10,7 +10,7 @@ use tor_dirmgr::{DownloadScheduleConfig, NetDirConfig, NetworkConfig};
 
 use anyhow::Result;
 use argh::FromArgs;
-use log::{warn, LevelFilter};
+use log::{info, warn, LevelFilter};
 use serde::Deserialize;
 
 #[derive(FromArgs, Debug, Clone)]
@@ -103,8 +103,13 @@ fn main() -> Result<()> {
 
     let dircfg = config.get_dir_config()?;
 
+    if config.socks_port.is_none() {
+        info!("Nothing to do: no socks_port configured.");
+        return Ok(());
+    }
+    let socks_port = config.socks_port.unwrap();
+
     tor_rtcompat::task::block_on(async {
-        let socks_port = config.socks_port;
         let client = Arc::new(TorClient::bootstrap(dircfg).await?);
         tor_client::proxy::run_socks_proxy(client, socks_port).await
     })

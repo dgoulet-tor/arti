@@ -1,3 +1,8 @@
+/// A general interface for Tor client usage.
+///
+/// To construct a client, run the `TorClient::bootstrap()` method.
+/// Once the client is bootstrapped, you can make connections over the Tor
+/// network using `TorClient::connect()`.
 use tor_chanmgr::transport::nativetls::NativeTlsTransport;
 use tor_circmgr::TargetPort;
 use tor_dirmgr::NetDirConfig;
@@ -9,12 +14,64 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use log::info;
 
+/// An active client connection to the Tor network.
+///
+/// While it's running, it will fetch directory information, build
+/// circuits, and make connections for you.
+///
+/// Cloning this object makes a new reference to the same underlying
+/// handles.
+#[derive(Clone)]
 pub struct TorClient {
     circmgr: Arc<tor_circmgr::CircMgr>,
     dirmgr: Arc<tor_dirmgr::DirMgr>,
 }
 
+/// Preferences for how to route a stream over the Tor network.
+///
+
+#[derive(Debug, Default, Clone)]
+pub struct ConnectPrefs {
+    /// What kind of IPv6/IPv4 we'd prefer, and how strongly.
+    ip_ver_pref: IPVersionPreference,
+}
+
+impl ConnectPrefs {
+    /// Construct a new ConnnectPrefs.
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// Set the preference for what kind of IPv4/IPv6 connection we'd
+    /// like to make.
+    ///
+    /// (By default, IPv4 is preferred.)
+    pub fn set_ip_preference(&mut self, pref: IPVersionPreference) {
+        self.ip_ver_pref = pref;
+    }
+
+    /// Get the begin_flags fields that we should use for the BEGIN
+    /// cell for this stream.
+    fn begin_flags(&self) -> IPVersionPreference {
+        self.ip_ver_pref
+    }
+
+    /// Return a TargetPort to describe what kind of exit policy our
+    /// target circuit needs to support.
+    fn wrap_target_port(&self, port: u16) -> TargetPort {
+        match self.ip_ver_pref {
+            IPVersionPreference::Ipv6Only => TargetPort::ipv6(port),
+            _ => TargetPort::ipv4(port),
+        }
+    }
+
+    // TODO: Add some way to be IPFlexible, and require exit to suppport both.
+}
+
 impl TorClient {
+    /// Bootstrap a network connection configured by `dircfg`.
+    ///
+    /// Return a client once there is enough directory material to
+    /// connect safely over the Tor network.
     pub async fn bootstrap(dircfg: NetDirConfig) -> Result<TorClient> {
         let transport = NativeTlsTransport::new();
         let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(transport));
@@ -25,19 +82,14 @@ impl TorClient {
         Ok(TorClient { circmgr, dirmgr })
     }
 
-    // XXXX use better options
     pub async fn connect(
         &self,
         addr: &str,
         port: u16,
-        flags: Option<IPVersionPreference>,
+        flags: Option<ConnectPrefs>,
     ) -> Result<DataStream> {
-        let exit_ports = [if flags == Some(IPVersionPreference::Ipv6Only) {
-            TargetPort::ipv6(port)
-        } else {
-            TargetPort::ipv4(port)
-        }];
-
+        let flags = flags.unwrap_or_default();
+        let exit_ports = [flags.wrap_target_port(port)];
         let dir = self.dirmgr.netdir().await;
         let circ = self
             .circmgr
@@ -47,7 +99,9 @@ impl TorClient {
         info!("Got a circuit for {}:{}", addr, port);
         drop(dir); // This decreases the refcount on the netdir.
 
-        let stream = circ.begin_stream(&addr, port, flags).await?;
+        let stream = circ
+            .begin_stream(&addr, port, Some(flags.begin_flags()))
+            .await?;
 
         Ok(stream)
     }

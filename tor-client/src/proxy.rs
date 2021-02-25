@@ -1,27 +1,37 @@
+//! Implement a simple SOCKS proxy that relays connections over Tor.
+
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::stream::StreamExt;
 use log::{error, info, warn};
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
 
-use crate::TorClient;
+use crate::{client::ConnectPrefs, TorClient};
 use tor_proto::circuit::IPVersionPreference;
 use tor_socksproto::{SocksCmd, SocksRequest};
 
 use anyhow::{Context, Result};
 
+/// Find out which kind of address family we can/should use for a
+/// given socks request.
 fn ip_preference(req: &SocksRequest, addr: &str) -> IPVersionPreference {
     if addr.parse::<Ipv4Addr>().is_ok() {
+        // If they asked for an IPv4 address correctly, nothing else will do.
         IPVersionPreference::Ipv4Only
     } else if addr.parse::<Ipv6Addr>().is_ok() {
+        // If they asked for an IPv6 address correctly, nothing else will do.
         IPVersionPreference::Ipv6Only
     } else if req.version() == 4 {
+        // SOCKS4 and SOCKS4a only support IPv4
         IPVersionPreference::Ipv4Only
     } else {
+        // Otherwise, default to saying IPv4 is preferred.
         IPVersionPreference::Ipv4Preferred
     }
 }
 
+/// Given a just-received TCP connection on a SOCKS port, handle the
+/// SOCKS handshake and relay the connection over the Tor network.
 async fn handle_socks_conn(
     client: Arc<TorClient>,
     stream: tor_rtcompat::net::TcpStream,
@@ -69,13 +79,15 @@ async fn handle_socks_conn(
         return Ok(());
     }
 
+    // XXXX move this
     if addr.to_lowercase().ends_with(".onion") {
         info!("That's an onion address; rejecting it.");
         return Ok(());
     }
 
-    let begin_flags = ip_preference(&request, &addr);
-    let stream = client.connect(&addr, port, Some(begin_flags)).await;
+    let mut prefs = ConnectPrefs::new();
+    prefs.set_ip_preference(ip_preference(&request, &addr));
+    let stream = client.connect(&addr, port, Some(prefs)).await;
     let stream = match stream {
         Ok(s) => s,
         // In the case of a stream timeout, send the right SOCKS reply.
@@ -135,18 +147,14 @@ async fn handle_socks_conn(
     Ok(())
 }
 
-pub async fn run_socks_proxy(client: Arc<TorClient>, socks_port: Option<u16>) -> Result<()> {
+/// Launch a SOCKS proxy to listen on a given localhost port, and run until
+/// indefinitely.
+pub async fn run_socks_proxy(client: Arc<TorClient>, socks_port: u16) -> Result<()> {
     use tor_rtcompat::net::TcpListener;
-
-    if socks_port.is_none() {
-        info!("Nothing to do: no socks_port configured.");
-        return Ok(());
-    }
-    let socksport = socks_port.unwrap();
     let mut listeners = Vec::new();
 
     for localhost in &["127.0.0.1", "::1"] {
-        let addr = (*localhost, socksport);
+        let addr = (*localhost, socks_port);
         match TcpListener::bind(addr).await {
             Ok(listener) => {
                 info!("Listening on {:?}.", addr);
@@ -157,7 +165,7 @@ pub async fn run_socks_proxy(client: Arc<TorClient>, socks_port: Option<u16>) ->
     }
     if listeners.is_empty() {
         error!("Couldn't open any listeners.");
-        return Ok(());
+        return Ok(()); // XXXX should return an error.
     }
     let mut incoming = futures::stream::select_all(listeners.iter().map(TcpListener::incoming));
 
