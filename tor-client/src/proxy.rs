@@ -76,21 +76,24 @@ async fn handle_socks_conn(
 
     let begin_flags = ip_preference(&request, &addr);
     let stream = client.connect(&addr, port, Some(begin_flags)).await;
-    /*
-        let stream = match stream {
-            Ok(s) => s,
-            // In the case of a stream timeout, send the right SOCKS reply.
-            Err(tor_proto::Error::StreamTimeout) => {
-                let reply = request.reply(tor_socksproto::SocksStatus::TTL_EXPIRED, None);
-                w.write(&reply[..])
-                    .await
-                    .context("Couldn't write SOCKS reply")?;
-                return Err(tor_proto::Error::StreamTimeout.into());
+    let stream = match stream {
+        Ok(s) => s,
+        // In the case of a stream timeout, send the right SOCKS reply.
+        Err(e) => {
+            // TODO: Using downcast_ref() here is ugly. maybe we shouldn't
+            // be using anyhow at this point?
+            match e.downcast_ref::<tor_proto::Error>() {
+                Some(tor_proto::Error::StreamTimeout) => {
+                    let reply = request.reply(tor_socksproto::SocksStatus::TTL_EXPIRED, None);
+                    w.write(&reply[..])
+                        .await
+                        .context("Couldn't write SOCKS reply")?;
+                    return Err(tor_proto::Error::StreamTimeout.into());
+                }
+                _ => return Err(e),
             }
-            // In any other case, just propagate the error downwards
-            Err(e) => return Err(e.into()),
-        };
-    */
+        }
+    };
     info!("Got a stream for {}:{}", addr, port);
     // TODO: XXXX-A1 Should send a SOCKS reply if something fails.
 

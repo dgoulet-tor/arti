@@ -25,7 +25,6 @@ impl TorClient {
         Ok(TorClient { circmgr, dirmgr })
     }
 
-    // XXXX use different error type.
     // XXXX use better options
     pub async fn connect(
         &self,
