@@ -1,8 +1,8 @@
-/// A general interface for Tor client usage.
-///
-/// To construct a client, run the `TorClient::bootstrap()` method.
-/// Once the client is bootstrapped, you can make connections over the Tor
-/// network using `TorClient::connect()`.
+//! A general interface for Tor client usage.
+//!
+//! To construct a client, run the `TorClient::bootstrap()` method.
+//! Once the client is bootstrapped, you can make connections over the Tor
+//! network using `TorClient::connect()`.
 use tor_chanmgr::transport::nativetls::NativeTlsTransport;
 use tor_circmgr::TargetPort;
 use tor_dirmgr::NetDirConfig;
@@ -23,13 +23,14 @@ use log::info;
 /// handles.
 #[derive(Clone)]
 pub struct TorClient {
+    /// Circuit manager for keeping our circuits up to date and building
+    /// them on-demand.
     circmgr: Arc<tor_circmgr::CircMgr>,
+    /// Directory manager for keeping our directory material up to date.
     dirmgr: Arc<tor_dirmgr::DirMgr>,
 }
 
 /// Preferences for how to route a stream over the Tor network.
-///
-
 #[derive(Debug, Default, Clone)]
 pub struct ConnectPrefs {
     /// What kind of IPv6/IPv4 we'd prefer, and how strongly.
@@ -82,6 +83,11 @@ impl TorClient {
         Ok(TorClient { circmgr, dirmgr })
     }
 
+    /// Launch a connection to the provided address and port over the Tor
+    /// network.
+    ///
+    /// Note that because Tor prefers to do DNS resolution on the remote
+    /// side of the network, this function takes its address as a string.
     pub async fn connect(
         &self,
         addr: &str,
