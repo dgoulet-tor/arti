@@ -11,7 +11,7 @@ use tor_proto::stream::DataStream;
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use log::info;
 
 /// An active client connection to the Tor network.
@@ -94,6 +94,10 @@ impl TorClient {
         port: u16,
         flags: Option<ConnectPrefs>,
     ) -> Result<DataStream> {
+        if addr.to_lowercase().ends_with(".onion") {
+            return Err(anyhow!("Rejecting .onion address as unsupported."));
+        }
+
         let flags = flags.unwrap_or_default();
         let exit_ports = [flags.wrap_target_port(port)];
         let dir = self.dirmgr.netdir().await;

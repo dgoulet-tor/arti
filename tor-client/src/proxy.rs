@@ -79,12 +79,6 @@ async fn handle_socks_conn(
         return Ok(());
     }
 
-    // XXXX move this
-    if addr.to_lowercase().ends_with(".onion") {
-        info!("That's an onion address; rejecting it.");
-        return Ok(());
-    }
-
     let mut prefs = ConnectPrefs::new();
     prefs.set_ip_preference(ip_preference(&request, &addr));
     let stream = client.connect(&addr, port, Some(prefs)).await;
