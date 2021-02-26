@@ -13,7 +13,11 @@ rust-latest:
     - cargo test --verbose --all
     - rustup component add clippy rustfmt
     - cargo clippy -- -D warnings
-    - cargo fmt --all -- --check
+####
+# Temporarily disabled while the CI version of rustfmt doesn't agree
+# with nickm's.
+#
+#    - cargo fmt --all -- --check
 
 rust-nightly:
   stage: build
