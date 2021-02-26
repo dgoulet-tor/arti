@@ -110,24 +110,31 @@ impl StreamMap {
     ///
     /// Returns true if there was really a stream there.
     pub(super) fn end_received(&mut self, id: StreamId) -> Result<()> {
-        // TODO: can we refactor this to use HashMap::Entry?
-        let old = self.m.get(&id);
-        match old {
-            None => Err(Error::CircProto(
-                "Received END cell on nonexistent stream".into(),
-            )),
-            Some(StreamEnt::EndReceived) => Err(Error::CircProto(
+        // Check the hashmap for the right stream. Bail if not found.
+        // Also keep the hashmap handle so that we can do more efficient inserts/removals
+        let mut stream_entry = match self.m.entry(id) {
+            Entry::Vacant(_) => {
+                return Err(Error::CircProto(
+                    "Received END cell on nonexistent stream".into(),
+                ))
+            }
+            Entry::Occupied(o) => o,
+        };
+
+        // Progress the stream's state machine accordingly
+        match stream_entry.get() {
+            StreamEnt::EndReceived => Err(Error::CircProto(
                 "Received two END cells on same stream".into(),
             )),
-            Some(StreamEnt::EndSent(_)) => {
+            StreamEnt::EndSent(_) => {
                 info!("Actually got an end cell on a half-closed stream!");
                 // We got an END, and we already sent an END. Great!
                 // we can forget about this stream.
-                self.m.remove(&id);
+                stream_entry.remove_entry();
                 Ok(())
             }
-            Some(StreamEnt::Open(_, _, _)) => {
-                self.m.insert(id, StreamEnt::EndReceived);
+            StreamEnt::Open(_, _, _) => {
+                stream_entry.insert(StreamEnt::EndReceived);
                 Ok(())
             }
         }
@@ -142,26 +149,34 @@ impl StreamMap {
         mut recvw: sendme::StreamRecvWindow,
     ) -> Result<ShouldSendEnd> {
         use ShouldSendEnd::*;
-        // TODO: can we refactor this to use HashMap::Entry?
-        let old = self.m.get(&id);
-        match old {
-            None => Err(Error::InternalError(
-                "Somehow we terminated a nonexistent connection‽".into(),
-            )),
-            Some(StreamEnt::EndReceived) => {
-                self.m.remove(&id);
+
+        // Check the hashmap for the right stream. Bail if not found.
+        // Also keep the hashmap handle so that we can do more efficient inserts/removals
+        let mut stream_entry = match self.m.entry(id) {
+            Entry::Vacant(_) => {
+                return Err(Error::InternalError(
+                    "Somehow we terminated a nonexistent connection‽".into(),
+                ))
+            }
+            Entry::Occupied(o) => o,
+        };
+
+        // Progress the stream's state machine accordingly
+        match stream_entry.get() {
+            StreamEnt::EndReceived => {
+                stream_entry.remove_entry();
                 Ok(DontSend)
             }
-            Some(StreamEnt::Open(_, sendw, n)) => {
+            StreamEnt::Open(_, sendw, n) => {
                 recvw.decrement_n(*n)?;
                 // TODO: would be nice to avoid new_ref.
                 // XXXX: We should set connected_ok properly.
                 let connected_ok = true;
                 let halfstream = HalfStream::new(sendw.new_ref(), recvw, connected_ok);
-                self.m.insert(id, StreamEnt::EndSent(halfstream));
+                stream_entry.insert(StreamEnt::EndSent(halfstream));
                 Ok(Send)
             }
-            Some(StreamEnt::EndSent(_)) => {
+            StreamEnt::EndSent(_) => {
                 panic!("Hang on! We're sending an END on a stream where we alerady sent an END‽");
             }
         }
