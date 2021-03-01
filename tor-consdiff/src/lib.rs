@@ -318,7 +318,7 @@ impl<'a> DiffCommand<'a> {
 
     /// Return true if this is an Insert command.
     fn is_insert(&self) -> bool {
-        matches!(self, DiffCommand::Insert {..})
+        matches!(self, DiffCommand::Insert { .. })
     }
 
     /// Extract a single command from a line iterator that yields lines
@@ -674,17 +674,31 @@ mod test {
         assert!(matches!(p, DeleteToEnd { low: 100 }));
 
         let p = parse("30,40c\nHello\nWorld\n.\n")?;
-        assert!(matches!(p, Replace{ low: 30, high: 40, .. }));
+        assert!(matches!(
+            p,
+            Replace {
+                low: 30,
+                high: 40,
+                ..
+            }
+        ));
         assert_eq!(p.lines(), Some(&["Hello", "World"][..]));
         let p = parse("30c\nHello\nWorld\n.\n")?;
-        assert!(matches!(p, Replace{ low: 30, high: 30, .. }));
+        assert!(matches!(
+            p,
+            Replace {
+                low: 30,
+                high: 30,
+                ..
+            }
+        ));
         assert_eq!(p.lines(), Some(&["Hello", "World"][..]));
 
         let p = parse("999a\nHello\nWorld\n.\n")?;
-        assert!(matches!(p, Insert{ pos: 999, .. }));
+        assert!(matches!(p, Insert { pos: 999, .. }));
         assert_eq!(p.lines(), Some(&["Hello", "World"][..]));
         let p = parse("0a\nHello\nWorld\n.\n")?;
-        assert!(matches!(p, Insert{ pos: 0, .. }));
+        assert!(matches!(p, Insert { pos: 0, .. }));
         assert_eq!(p.lines(), Some(&["Hello", "World"][..]));
 
         parse_err("hello world");
