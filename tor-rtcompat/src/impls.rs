@@ -4,3 +4,6 @@
 
 #[cfg(all(feature = "async-std"))]
 pub(crate) mod async_std;
+
+#[cfg(all(feature = "tokio"))]
+pub(crate) mod tokio;

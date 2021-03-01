@@ -7,14 +7,14 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-tor-chanmgr = { path="../tor-chanmgr", version= "*" }
+tor-chanmgr = { path="../tor-chanmgr", version= "*", default-features=false }
 tor-netdir = { path="../tor-netdir", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
 tor-retry = { path="../tor-retry", version= "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
 tor-llcrypto = { path="../tor-llcrypto", version= "*" }
-tor-rtcompat = { path="../tor-rtcompat", version= "*" }
+tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
 
 anyhow = "1.0.38"
 async-trait = "0.1.42"

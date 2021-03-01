@@ -1,10 +1,13 @@
 //! Implement a simple SOCKS proxy that relays connections over Tor.
 
+#[allow(unused)]
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::stream::StreamExt;
 use log::{error, info, warn};
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
+#[allow(unused)]
+use tor_rtcompat::traits::*;
 
 use crate::{client::ConnectPrefs, TorClient};
 use tor_proto::circuit::IPVersionPreference;
@@ -38,7 +41,7 @@ async fn handle_socks_conn(
 ) -> Result<()> {
     let mut handshake = tor_socksproto::SocksHandshake::new();
 
-    let (mut r, mut w) = stream.split();
+    let (mut r, mut w) = tor_rtcompat::net::split_io(stream);
     let mut inbuf = [0_u8; 1024];
     let mut n_read = 0;
     let request = loop {
@@ -161,7 +164,13 @@ pub async fn run_socks_proxy(client: Arc<TorClient>, socks_port: u16) -> Result<
         error!("Couldn't open any listeners.");
         return Ok(()); // XXXX should return an error.
     }
-    let mut incoming = futures::stream::select_all(listeners.iter().map(TcpListener::incoming));
+    #[cfg(feature = "async-std")]
+    let streams_iter = listeners.iter();
+    #[cfg(feature = "tokio")]
+    let streams_iter = listeners.into_iter();
+
+    let mut incoming =
+        futures::stream::select_all(streams_iter.map(tor_rtcompat::net::listener_to_stream));
 
     while let Some(stream) = incoming.next().await {
         let stream = stream.context("Failed to receive incoming stream on SOCKS port")?;

@@ -1,6 +1,5 @@
 //! Types for launching TLS connections to relays
 
-#[cfg(feature = "native-tls")]
 pub mod nativetls;
 
 use crate::Result;

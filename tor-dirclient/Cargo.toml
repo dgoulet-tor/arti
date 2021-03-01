@@ -8,12 +8,12 @@ publish = false
 
 [dependencies]
 tor-circmgr = { path="../tor-circmgr", version= "*" }
-tor-chanmgr = { path="../tor-chanmgr", version= "*" }
+tor-chanmgr = { path="../tor-chanmgr", version= "*", default-features=false }
 tor-llcrypto = { path="../tor-llcrypto", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-netdir = { path="../tor-netdir", version= "*" }
-tor-rtcompat = { path="../tor-rtcompat", version= "*" }
+tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
 
 anyhow = "1.0.38"
 #async-trait = "0.1.41"

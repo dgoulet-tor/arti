@@ -12,7 +12,7 @@ legacy-store = []
 mmap = [ "memmap" ]
 
 [dependencies]
-tor-chanmgr = { path="../tor-chanmgr", version= "*" }
+tor-chanmgr = { path="../tor-chanmgr", version= "*", default-features=false }
 tor-checkable = { path="../tor-checkable", version= "*" }
 tor-circmgr = { path="../tor-circmgr", version= "*" }
 tor-consdiff = { path="../tor-consdiff", version= "*" }
@@ -21,7 +21,7 @@ tor-netdir = { path="../tor-netdir", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-llcrypto = { path="../tor-llcrypto", version= "*" }
 tor-retry = { path="../tor-retry", version= "*" }
-tor-rtcompat = { path="../tor-rtcompat", version= "*" }
+tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
 
 anyhow = "1.0.38"
 async-rwlock = "1.3.0"

@@ -6,25 +6,28 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 publish = false
 
+[features]
+default = [ "tokio" ]
+async-std = [ "tor-rtcompat/async-std", "tor-chanmgr/async-std" ]
+tokio = [ "tor-rtcompat/tokio", "tor-chanmgr/tokio" ]
+
 [dependencies]
 tor-circmgr = { path="../tor-circmgr", version= "*" }
-tor-chanmgr = { path="../tor-chanmgr", version= "*" }
+tor-chanmgr = { path="../tor-chanmgr", version= "*", default-features=false }
 tor-dirmgr = { path="../tor-dirmgr", version="*" }
 tor-netdir = { path="../tor-netdir", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
-tor-rtcompat = { path="../tor-rtcompat", version= "*" }
+tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
 tor-socksproto = { path="../tor-socksproto", version= "*" }
 tor-dirclient = { path="../tor-dirclient", version = "*" }
 tor-linkspec = { path="../tor-linkspec", version = "*" }
 tor-config = { path="../tor-config", version = "*" }
 
 anyhow = "1.0.38"
-async-native-tls = "0.3.3"
 config = "0.10.1"
 futures = "0.3.13"
 log = "0.4.14"
-native-tls = "0.2.7"
 rand = "0.7.3"
 serde = { version = "1.0.123", features = ["derive"] }
 simple-logging = "2.0.2"

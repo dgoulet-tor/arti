@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-tor-rtcompat = { path="../tor-rtcompat", version= "*" }
+tor-rtcompat = { path="../tor-rtcompat", default-features=false }
 tor-llcrypto = { path="../tor-llcrypto" }
 tor-bytes = { path="../tor-bytes" }
 tor-cert = { path="../tor-cert" }

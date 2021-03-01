@@ -234,7 +234,8 @@ async fn read_and_decompress(
 
     // XXX should be an option and is too long.
     let read_timeout = Duration::from_secs(10);
-    let mut timer = tor_rtcompat::timer::Timer::after(read_timeout).fuse();
+    let timer = tor_rtcompat::timer::sleep(read_timeout).fuse();
+    futures::pin_mut!(timer);
 
     loop {
         let status = futures::select! {
