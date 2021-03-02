@@ -3,6 +3,9 @@
 // XXXX-A2 This should get refactored significantly.  Probably we should have
 // a boxed-connection-factory type that we can use instead.  Once we have a
 // pluggable designn, we'll really need something like that.
+//
+// Probably, much of this code should move into tor-rtcompat, or a new
+// crate similar to tor-rtcompat, that can handle our TLS drama.
 
 use super::{CertifiedConn, Transport};
 use crate::{Error, Result};
