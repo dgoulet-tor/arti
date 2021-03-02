@@ -15,6 +15,12 @@ rust-latest:
     - cargo clippy -- -D warnings
     - cargo fmt --all -- --check
 
+rust-latest-async-std:
+  stage: build
+  image: rust:latest
+  script:
+    - cd tor-client && cargo check --no-default-features --features=async-std
+
 rust-nightly:
   stage: build
   image: rustlang/rust:nightly
