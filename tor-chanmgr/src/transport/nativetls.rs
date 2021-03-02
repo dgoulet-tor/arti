@@ -54,8 +54,11 @@ impl NativeTlsTransport {
     }
 }
 
+/// The connection type returned by NativeTlsTransport.
 #[cfg(feature = "async-std")]
 type TlsConnection = TlsStream<TcpStream>;
+
+/// The connection type returned by NativeTlsTransport.
 #[cfg(feature = "tokio")]
 type TlsConnection = Compat<TlsStream<TcpStream>>;
 
