@@ -202,7 +202,6 @@ mod test {
     use futures::io::{AsyncRead, AsyncWrite};
     use futures::join;
     use futures::task::Context;
-    use futures_await_test::async_test;
     use std::net::SocketAddr;
     use std::pin::Pin;
     use std::task::Poll;
@@ -279,142 +278,152 @@ mod test {
         }
     }
 
-    #[async_test]
-    async fn connect_one_ok() {
-        let mgr = ChanMgr::new(FakeTransport);
-        let target = Target {
-            addr: ["127.0.0.1:443".parse().unwrap()],
-            ed_id: [3; 32].into(),
-            rsa_id: [2; 20].into(),
-        };
-        let chan1 = mgr.get_or_launch(&target).await.unwrap();
-        let chan2 = mgr.get_or_launch(&target).await.unwrap();
+    #[test]
+    fn connect_one_ok() {
+        tor_rtcompat::task::block_on(async {
+            let mgr = ChanMgr::new(FakeTransport);
+            let target = Target {
+                addr: ["127.0.0.1:443".parse().unwrap()],
+                ed_id: [3; 32].into(),
+                rsa_id: [2; 20].into(),
+            };
+            let chan1 = mgr.get_or_launch(&target).await.unwrap();
+            let chan2 = mgr.get_or_launch(&target).await.unwrap();
 
-        assert!(chan1.same_channel(&chan2));
+            assert!(chan1.same_channel(&chan2));
 
-        {
-            let channels = mgr.channels.lock().await;
-            let entry = channels.get(&[3; 32].into());
-            match entry {
-                Some(ChannelState::Open(c)) => assert!(c.same_channel(&chan1)),
-                _ => panic!(),
+            {
+                let channels = mgr.channels.lock().await;
+                let entry = channels.get(&[3; 32].into());
+                match entry {
+                    Some(ChannelState::Open(c)) => assert!(c.same_channel(&chan1)),
+                    _ => panic!(),
+                }
             }
-        }
 
-        let chan3 = mgr.get_nowait_by_ed_id(&[3; 32].into()).await;
-        assert!(chan3.unwrap().same_channel(&chan1));
+            let chan3 = mgr.get_nowait_by_ed_id(&[3; 32].into()).await;
+            assert!(chan3.unwrap().same_channel(&chan1));
+        })
     }
 
-    #[async_test]
-    async fn connect_one_fail() {
-        let mgr = ChanMgr::new(FakeTransport);
-        // port 1337 is set up to always fail in FakeTransport.
-        let target = Target {
-            addr: ["127.0.0.1:1337".parse().unwrap()],
-            ed_id: [3; 32].into(),
-            rsa_id: [2; 20].into(),
-        };
+    #[test]
+    fn connect_one_fail() {
+        tor_rtcompat::task::block_on(async {
+            let mgr = ChanMgr::new(FakeTransport);
+            // port 1337 is set up to always fail in FakeTransport.
+            let target = Target {
+                addr: ["127.0.0.1:1337".parse().unwrap()],
+                ed_id: [3; 32].into(),
+                rsa_id: [2; 20].into(),
+            };
 
-        let res1 = mgr.get_or_launch(&target).await;
-        assert!(matches!(
-            res1.unwrap_err().downcast(),
-            Ok(Error::UnusableTarget(_))
-        ));
+            let res1 = mgr.get_or_launch(&target).await;
+            assert!(matches!(
+                res1.unwrap_err().downcast(),
+                Ok(Error::UnusableTarget(_))
+            ));
 
-        // port 8686 is set up to always fail in FakeTransport.
-        let target = Target {
-            addr: ["127.0.0.1:8686".parse().unwrap()],
-            ed_id: [4; 32].into(),
-            rsa_id: [2; 20].into(),
-        };
+            // port 8686 is set up to always fail in FakeTransport.
+            let target = Target {
+                addr: ["127.0.0.1:8686".parse().unwrap()],
+                ed_id: [4; 32].into(),
+                rsa_id: [2; 20].into(),
+            };
 
-        let res1 = mgr.get_or_launch(&target).await;
-        assert!(res1.unwrap_err().is::<tor_proto::Error>());
+            let res1 = mgr.get_or_launch(&target).await;
+            assert!(res1.unwrap_err().is::<tor_proto::Error>());
 
-        let chan3 = mgr.get_nowait_by_ed_id(&[4; 32].into()).await;
-        assert!(chan3.is_none());
+            let chan3 = mgr.get_nowait_by_ed_id(&[4; 32].into()).await;
+            assert!(chan3.is_none());
+        })
     }
 
-    #[async_test]
-    async fn test_concurrent() {
-        let mgr = ChanMgr::new(FakeTransport);
-        let target3 = Target {
-            addr: ["127.0.0.1:99".parse().unwrap()],
-            ed_id: [3; 32].into(),
-            rsa_id: [2; 20].into(),
-        };
-        let target44 = Target {
-            addr: ["127.0.0.2:99".parse().unwrap()],
-            ed_id: [44; 32].into(), // note different ed key.
-            rsa_id: [2; 20].into(),
-        };
-        let target_bad = Target {
-            addr: ["127.0.0.1:8686".parse().unwrap()],
-            ed_id: [66; 32].into(),
-            rsa_id: [2; 20].into(),
-        };
+    #[test]
+    fn test_concurrent() {
+        tor_rtcompat::task::block_on(async {
+            let mgr = ChanMgr::new(FakeTransport);
+            let target3 = Target {
+                addr: ["127.0.0.1:99".parse().unwrap()],
+                ed_id: [3; 32].into(),
+                rsa_id: [2; 20].into(),
+            };
+            let target44 = Target {
+                addr: ["127.0.0.2:99".parse().unwrap()],
+                ed_id: [44; 32].into(), // note different ed key.
+                rsa_id: [2; 20].into(),
+            };
+            let target_bad = Target {
+                addr: ["127.0.0.1:8686".parse().unwrap()],
+                ed_id: [66; 32].into(),
+                rsa_id: [2; 20].into(),
+            };
 
-        // TODO XXXX: figure out how to make these actually run
-        // concurrently. Right now it seems that they don't actually
-        // interact.
-        let (ch3a, ch3b, ch44a, ch44b, ch86a, ch86b) = join!(
-            mgr.get_or_launch(&target3),
-            mgr.get_or_launch(&target3),
-            mgr.get_or_launch(&target44),
-            mgr.get_or_launch(&target44),
-            mgr.get_or_launch(&target_bad),
-            mgr.get_or_launch(&target_bad),
-        );
-        let ch3a = ch3a.unwrap();
-        let ch3b = ch3b.unwrap();
-        let ch44a = ch44a.unwrap();
-        let ch44b = ch44b.unwrap();
-        let err_a = ch86a.unwrap_err();
-        let err_b = ch86b.unwrap_err();
+            // TODO XXXX: figure out how to make these actually run
+            // concurrently. Right now it seems that they don't actually
+            // interact.
+            let (ch3a, ch3b, ch44a, ch44b, ch86a, ch86b) = join!(
+                mgr.get_or_launch(&target3),
+                mgr.get_or_launch(&target3),
+                mgr.get_or_launch(&target44),
+                mgr.get_or_launch(&target44),
+                mgr.get_or_launch(&target_bad),
+                mgr.get_or_launch(&target_bad),
+            );
+            let ch3a = ch3a.unwrap();
+            let ch3b = ch3b.unwrap();
+            let ch44a = ch44a.unwrap();
+            let ch44b = ch44b.unwrap();
+            let err_a = ch86a.unwrap_err();
+            let err_b = ch86b.unwrap_err();
 
-        assert!(ch3a.same_channel(&ch3b));
-        assert!(ch44a.same_channel(&ch44b));
-        assert!(!ch3a.same_channel(&ch44b));
+            assert!(ch3a.same_channel(&ch3b));
+            assert!(ch44a.same_channel(&ch44b));
+            assert!(!ch3a.same_channel(&ch44b));
 
-        assert!(err_a.is::<tor_proto::Error>());
-        assert!(err_b.is::<tor_proto::Error>());
+            assert!(err_a.is::<tor_proto::Error>());
+            assert!(err_b.is::<tor_proto::Error>());
+        })
     }
 
-    #[async_test]
-    async fn test_stall() {
-        use futures::FutureExt;
+    #[test]
+    fn test_stall() {
+        tor_rtcompat::task::block_on(async {
+            use futures::FutureExt;
 
-        let mgr = ChanMgr::new(FakeTransport);
-        let target = Target {
-            addr: ["127.0.0.1:99".parse().unwrap()],
-            ed_id: [12; 32].into(),
-            rsa_id: [2; 20].into(),
-        };
+            let mgr = ChanMgr::new(FakeTransport);
+            let target = Target {
+                addr: ["127.0.0.1:99".parse().unwrap()],
+                ed_id: [12; 32].into(),
+                rsa_id: [2; 20].into(),
+            };
 
-        {
-            let mut channels = mgr.channels.lock().await;
-            let e = Arc::new(event_listener::Event::new());
-            let state = ChannelState::Building(Arc::clone(&e));
-            channels.insert([12; 32].into(), state);
-        }
+            {
+                let mut channels = mgr.channels.lock().await;
+                let e = Arc::new(event_listener::Event::new());
+                let state = ChannelState::Building(Arc::clone(&e));
+                channels.insert([12; 32].into(), state);
+            }
 
-        let h = mgr.get_or_launch(&target);
+            let h = mgr.get_or_launch(&target);
 
-        assert!(h.now_or_never().is_none());
+            assert!(h.now_or_never().is_none());
+        })
     }
 
-    #[async_test]
-    async fn connect_two_closing() {
-        let mgr = ChanMgr::new(FakeTransport);
-        let target = Target {
-            addr: ["127.0.0.1:443".parse().unwrap()],
-            ed_id: [3; 32].into(),
-            rsa_id: [2; 20].into(),
-        };
-        let chan1 = mgr.get_or_launch(&target).await.unwrap();
-        chan1.mark_closing();
-        let chan2 = mgr.get_or_launch(&target).await.unwrap();
+    #[test]
+    fn connect_two_closing() {
+        tor_rtcompat::task::block_on(async {
+            let mgr = ChanMgr::new(FakeTransport);
+            let target = Target {
+                addr: ["127.0.0.1:443".parse().unwrap()],
+                ed_id: [3; 32].into(),
+                rsa_id: [2; 20].into(),
+            };
+            let chan1 = mgr.get_or_launch(&target).await.unwrap();
+            chan1.mark_closing();
+            let chan2 = mgr.get_or_launch(&target).await.unwrap();
 
-        assert!(!chan1.same_channel(&chan2));
+            assert!(!chan1.same_channel(&chan2));
+        })
     }
 }
