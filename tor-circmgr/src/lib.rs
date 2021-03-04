@@ -379,7 +379,8 @@ impl CircMgr {
     ) -> Result<Arc<ClientCirc>> {
         debug!("Looking for a circuit that can handle {:?}", &target_usage);
         // XXXX This function is huge and ugly.
-        let mut rng = StdRng::from_rng(rand::thread_rng()).unwrap();
+        let mut rng =
+            StdRng::from_rng(rand::thread_rng()).expect("couldn't construct temporary rng");
 
         // Check the state of our circuit list.
         let (should_launch, event, id) = {
@@ -408,7 +409,9 @@ impl CircMgr {
                 // There are enough circuits or pending circuits of this type.
                 // We'll pick one.
                 // unwrap ok: there is at least one member in suitable.
-                let (id, entry) = suitable.choose(&mut rng).unwrap();
+                let (id, entry) = suitable
+                    .choose(&mut rng)
+                    .expect("tried to choose circuit from empty list");
                 match entry {
                     CircEntry::Open(c) => {
                         // Found a circuit!
@@ -435,7 +438,10 @@ impl CircMgr {
             // Adjust the map and notify the others.
             let circ = {
                 let mut circs = self.circuits.lock().await;
-                let _old = circs.circuits.remove(&id).unwrap();
+                let _old = circs
+                    .circuits
+                    .remove(&id)
+                    .expect("tried to remove circuit that wasn't actually tracked");
                 match result {
                     Ok((circ, usage)) => {
                         let ent = CircEntry::Open(OpenCircEntry {
@@ -471,7 +477,9 @@ impl CircMgr {
                     return Err(Error::PendingFailed.into());
                 }
 
-                let (_, ent) = suitable.choose(&mut rng).unwrap();
+                let (_, ent) = suitable
+                    .choose(&mut rng)
+                    .expect("tried to choose pending circuit from empty list");
                 if let CircEntry::Open(ref c) = ent {
                     debug!(
                         "pending circuit {} for {:?} succeeded.",
