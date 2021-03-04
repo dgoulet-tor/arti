@@ -701,7 +701,9 @@ impl UnvalidatedDir {
         let mut newcerts = Vec::new();
         for cert in AuthCert::parse_multiple(&text) {
             if let Ok(parsed) = cert {
-                let s = parsed.within(&text).unwrap();
+                let s = parsed
+                    .within(&text)
+                    .expect("Certificate was not in input as expected");
                 if let Ok(wellsigned) = parsed.check_signature() {
                     if let Ok(timely) = wellsigned.check_valid_now() {
                         newcerts.push((timely, s));
@@ -946,7 +948,10 @@ async fn download_mds(
                     {
                         match annot {
                             Ok(anno) => {
-                                let txt = anno.within(&text).unwrap().to_string(); //XXXX ugly copy
+                                let txt = anno
+                                    .within(&text)
+                                    .expect("annotation not from within text as expected")
+                                    .to_string(); //XXXX ugly copy
                                 let md = anno.into_microdesc();
                                 if want.contains(md.digest()) {
                                     my_new_mds.push((txt, md))

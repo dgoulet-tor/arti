@@ -150,15 +150,17 @@ impl NetDirConfigBuilder {
     /// to load directories
     pub fn finalize(mut self) -> Result<NetDirConfig> {
         if self.legacy_cache_path.is_none() {
-            // XXXX use dirs crate?
-            let mut pb: PathBuf = std::env::var_os("HOME").unwrap().into();
-            pb.push(".tor");
-            self.legacy_cache_path = Some(pb);
+            if let Some(home) = std::env::var_os("HOME") {
+                let mut pb: PathBuf = home.into();
+                pb.push(".tor");
+                self.legacy_cache_path = Some(pb);
+            }
         };
 
-        if self.cache_path.is_none() {
-            return Err(Error::BadNetworkConfig("No cache path configured").into());
-        }
+        let cache_path = self
+            .cache_path
+            .ok_or(Error::BadNetworkConfig("No cache path configured"))?;
+
         if self.network.authority.is_empty() {
             return Err(Error::BadNetworkConfig("No authorities configured").into());
         }
@@ -168,7 +170,7 @@ impl NetDirConfigBuilder {
 
         Ok(NetDirConfig {
             legacy_cache_path: self.legacy_cache_path,
-            cache_path: self.cache_path.unwrap(),
+            cache_path,
             network: self.network,
             timing: self.timing,
         })
@@ -179,7 +181,11 @@ impl NetDirConfig {
     #[cfg(feature = "legacy-storage")]
     /// Read directory information from the configured storage location.
     pub fn load_legacy(&self) -> Result<tor_netdir::PartialNetDir> {
-        let store = LegacyStore::new(self.legacy_cache_path.as_ref().unwrap().clone());
+        let path = self
+            .legacy_cache_path
+            .as_ref()
+            .ok_or(Error::BadNetworkConfig("No legacy cache path available"))?;
+        let store = LegacyStore::new(path.clone());
         store.load_legacy(&self.authorities[..])
     }
 
