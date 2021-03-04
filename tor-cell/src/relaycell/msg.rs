@@ -442,15 +442,12 @@ impl Body for End {
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
         w.write_u8(self.reason.into());
-        match (self.reason, self.addr) {
-            (EndReason::EXITPOLICY, Some((addr, ttl))) => {
-                match addr {
-                    IpAddr::V4(v4) => w.write(&v4),
-                    IpAddr::V6(v6) => w.write(&v6),
-                }
-                w.write_u32(ttl);
+        if let (EndReason::EXITPOLICY, Some((addr, ttl))) = (self.reason, self.addr) {
+            match addr {
+                IpAddr::V4(v4) => w.write(&v4),
+                IpAddr::V6(v6) => w.write(&v6),
             }
-            _ => (),
+            w.write_u32(ttl);
         }
     }
 }
