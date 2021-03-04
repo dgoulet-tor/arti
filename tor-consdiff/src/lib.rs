@@ -89,11 +89,7 @@ where
     if line1 != Some("network-status-diff-version 1") {
         return Err(Error::BadDiff("unrecognized or missing header"));
     }
-    let line2 = iter.next();
-    if line2.is_none() {
-        return Err(Error::BadDiff("header truncated"));
-    }
-    let line2 = line2.unwrap();
+    let line2 = iter.next().ok_or(Error::BadDiff("header truncated"))?;
     if !line2.starts_with("hash") {
         return Err(Error::BadDiff("missing 'hash' line"));
     }
@@ -103,10 +99,10 @@ where
     }
     let d1 = hex::decode(elts[1])?;
     let d2 = hex::decode(elts[2])?;
-    if d1.len() != 32 || d2.len() != 32 {
-        return Err(Error::BadDiff("wrong digest lengths on 'hash' line"));
+    match (d1.try_into(), d2.try_into()) {
+        (Ok(a), Ok(b)) => (Ok((a, b))),
+        _ => Err(Error::BadDiff("wrong digest lengths on 'hash' line")),
     }
-    Ok((d1.try_into().unwrap(), d2.try_into().unwrap()))
 }
 
 /// A command that can appear in a diff.  Each command tells us to
