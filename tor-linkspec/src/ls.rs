@@ -3,7 +3,6 @@
 //! (These are in a separate crate, since they get used both by
 //! directory code and protocol code.)
 
-use std::cmp::Ordering;
 use std::net::{IpAddr, SocketAddr};
 
 use tor_bytes::{Error, Readable, Reader, Result, Writeable, Writer};
@@ -130,8 +129,8 @@ impl From<ed25519::PublicKey> for LinkSpec {
 }
 
 impl LinkSpec {
-    /// Helper for partial_cmd: return the position in the list of identifiers
-    /// in which a given linkspec should occur
+    /// Helper: return the position in the list of identifiers
+    /// in which a given linkspec should occur.
     fn sort_pos(&self) -> u8 {
         use LinkSpec::*;
         match self {
@@ -142,11 +141,11 @@ impl LinkSpec {
             Unrecognized(n, _) => *n,
         }
     }
-}
 
-impl PartialOrd for LinkSpec {
-    fn partial_cmp(&self, other: &LinkSpec) -> Option<Ordering> {
-        Some(self.sort_pos().cmp(&other.sort_pos()))
+    /// Sort a slice of LinkSpec based on the order in which they should
+    /// appear in an EXTEND cell.
+    pub fn sort_by_type(lst: &mut [Self]) {
+        lst.sort_by_key(LinkSpec::sort_pos)
     }
 }
 

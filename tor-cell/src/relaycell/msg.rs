@@ -703,7 +703,7 @@ pub struct Extend2 {
 impl Extend2 {
     /// Create a new Extend2 cell.
     pub fn new(mut linkspec: Vec<LinkSpec>, handshake_type: u16, handshake: Vec<u8>) -> Self {
-        linkspec.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        LinkSpec::sort_by_type(linkspec.as_mut());
 
         Extend2 {
             linkspec,
