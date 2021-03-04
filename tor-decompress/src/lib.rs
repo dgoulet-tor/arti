@@ -7,7 +7,10 @@
 //! This provides a single streaming API for decompression; we may
 //! want others in the future.
 
-use anyhow::Result;
+#![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
+
+use anyhow::{anyhow, Result};
 
 /// Possible return conditions from a decompression operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +42,17 @@ pub trait Decompressor {
     fn process(&mut self, inp: &[u8], out: &mut [u8], finished: bool) -> Result<Status>;
 }
 
+/// Return a decompressor object corresponding to a given Content-Encoding.
+pub fn from_content_encoding(encoding: Option<&str>) -> Result<Box<dyn Decompressor + Send>> {
+    match encoding {
+        None | Some("identity") => identity::new_boxed(),
+        Some("deflate") => miniz_oxide::new_boxed(),
+        Some("x-tor-lzma") => lzma::new_boxed(),
+        Some("x-zstd") => zstd::new_boxed(),
+        Some(other) => Err(anyhow!("Unrecognized content-encoding {:?}", other)),
+    }
+}
+
 /// Implementation for the identity decompressor.
 ///
 /// This does more copying than Rust best practices would prefer, but
@@ -49,6 +63,11 @@ pub mod identity {
 
     /// An identity decompressor
     pub struct Identity;
+
+    /// Create a new boxed identity decompressor.
+    pub fn new_boxed() -> Result<Box<dyn Decompressor + Send + 'static>> {
+        Ok(Box::new(Identity))
+    }
 
     impl Decompressor for Identity {
         fn process(&mut self, inp: &[u8], out: &mut [u8], finished: bool) -> Result<Status> {
@@ -87,6 +106,11 @@ pub mod miniz_oxide {
     use miniz_oxide::inflate::stream::InflateState;
     use miniz_oxide::{MZError, MZFlush, MZStatus};
 
+    /// Create a new boxed miniz_oxide decompressor.
+    pub fn new_boxed() -> Result<Box<dyn Decompressor + Send + 'static>> {
+        Ok(InflateState::new_boxed(miniz_oxide::DataFormat::Zlib))
+    }
+
     impl Decompressor for InflateState {
         fn process(&mut self, inp: &[u8], out: &mut [u8], finished: bool) -> Result<Status> {
             let flush = if finished {
@@ -120,6 +144,11 @@ pub mod zstd {
 
     use anyhow::{anyhow, Result};
     use zstd::stream::raw::{Decoder, Operation};
+
+    /// Create a new boxed zstd decompressor.
+    pub fn new_boxed() -> Result<Box<dyn Decompressor + Send + 'static>> {
+        Ok(Box::new(::zstd::stream::raw::Decoder::new()?))
+    }
 
     impl Decompressor for Decoder<'static> {
         fn process(&mut self, inp: &[u8], out: &mut [u8], finished: bool) -> Result<Status> {
@@ -157,6 +186,11 @@ pub mod lzma {
     use anyhow::{anyhow, Result};
     use xz2::stream::{Action, Status as Xz2Status, Stream};
 
+    /// Create a new boxed lzma decompressor.
+    pub fn new_boxed() -> Result<Box<dyn Decompressor + Send + 'static>> {
+        Ok(Box::new(Stream::new_lzma_decoder(16 * 1024 * 1024)?))
+    }
+
     impl Decompressor for Stream {
         fn process(&mut self, inp: &[u8], out: &mut [u8], finished: bool) -> Result<Status> {
             let action = if finished {
@@ -189,8 +223,8 @@ pub mod lzma {
 
 #[cfg(test)]
 mod test {
-    use super::Decompressor;
-    use super::StatusKind;
+    use super::{from_content_encoding, Decompressor, StatusKind};
+    use anyhow::anyhow;
     use std::str;
 
     #[test]
@@ -203,6 +237,7 @@ mod test {
             119, 32, 112, 108, 101, 97, 115, 101, 44, 32, 103, 111, 111, 100, 32, 84, 111, 114, 46,
             1, 0, 6, 159, 75,
         ];
+
         let mut decoder = zstd::stream::raw::Decoder::new().unwrap();
         let mut output = [0u8; 78];
         let status = decoder.process(&input[..], &mut output[..], true).unwrap();
@@ -253,5 +288,41 @@ mod test {
 
         let out = str::from_utf8(&output[..]).unwrap();
         assert_eq!(out, original_input);
+    }
+
+    fn check_decomp(name: Option<&str>, inp: &[u8]) -> Vec<u8> {
+        let mut d = from_content_encoding(name).unwrap();
+        let mut buf = vec![0; 2048];
+        let s = d.process(inp, &mut buf[..], true).unwrap();
+        // TODO: what if d requires multiple steps to work?
+        assert_eq!(s.status, StatusKind::Done);
+        assert_eq!(s.consumed, inp.len());
+        buf.truncate(s.written);
+        buf
+    }
+
+    #[test]
+    fn test_from_content_encoding_ident() {
+        assert_eq!(
+            &check_decomp(None, &b"Hello world"[..])[..],
+            &b"Hello world"[..]
+        );
+
+        assert_eq!(
+            &check_decomp(Some("identity"), &b"Hello world"[..])[..],
+            &b"Hello world"[..]
+        );
+    }
+
+    #[test]
+    fn test_from_content_encoding_err() {
+        let name = "quantum-entanglement";
+        let r = from_content_encoding(Some(name));
+        assert!(r.is_err());
+
+        let e = r.err();
+        let msg = format!("Unrecognized content-encoding \"{}\"", name);
+        let err_msg = format!("{}", anyhow!(e.unwrap()));
+        assert_eq!(msg, err_msg);
     }
 }

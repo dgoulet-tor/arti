@@ -6,8 +6,6 @@
 //! # Limitations
 //!
 //! Multi-hop tunnels are not supported.
-//!
-//! Only zlib, zstd and lzma compression is supported.
 
 // XXXX THIS CODE IS HORRIBLE AND NEEDS REFACTORING.
 
@@ -20,7 +18,7 @@ mod response;
 mod util;
 
 use tor_circmgr::{CircMgr, DirInfo};
-use tor_decompress::{identity, Decompressor, StatusKind};
+use tor_decompress::{Decompressor, StatusKind};
 
 use anyhow::{Context, Result};
 use futures::FutureExt;
@@ -98,7 +96,7 @@ where
     let buf = header.pending;
     let n_in_buf = header.n_pending;
 
-    let decompressor = match get_decompressor(encoding.as_deref()) {
+    let decompressor = match tor_decompress::from_content_encoding(encoding.as_deref()) {
         Err(e) => {
             retire_circ(circ_mgr, &source, &e).await;
             return Err(e);
@@ -292,21 +290,6 @@ async fn read_and_decompress(
     Ok(())
 }
 
-/// Return a decompressor object corresponding to a given Content-Encoding.
-fn get_decompressor(encoding: Option<&str>) -> Result<Box<dyn Decompressor + Send>> {
-    match encoding {
-        None | Some("identity") => Ok(Box::new(identity::Identity)),
-        Some("deflate") => Ok(miniz_oxide::inflate::stream::InflateState::new_boxed(
-            miniz_oxide::DataFormat::Zlib,
-        )),
-        Some("x-tor-lzma") => Ok(Box::new(
-            xz2::stream::Stream::new_lzma_decoder(16 * 1024 * 1024).unwrap(),
-        )),
-        Some("x-zstd") => Ok(Box::new(zstd::stream::raw::Decoder::new().unwrap())),
-        Some(other) => Err(Error::BadEncoding(other.into()).into()),
-    }
-}
-
 /// Retire a directory circuit because of an error we've encountered on it.
 async fn retire_circ<E>(circ_mgr: Arc<CircMgr>, source_info: &SourceInfo, error: &E)
 where
@@ -318,47 +301,4 @@ where
         &id, &error
     );
     circ_mgr.retire_circ(&id).await;
-}
-
-#[cfg(test)]
-mod test {
-
-    use super::*;
-    use anyhow::anyhow;
-
-    fn check_decomp(name: Option<&str>, inp: &[u8]) -> Vec<u8> {
-        let mut d = get_decompressor(name).unwrap();
-        let mut buf = vec![0; 2048];
-        let s = d.process(inp, &mut buf[..], true).unwrap();
-        // TODO: what if d requires multiple steps to work?
-        assert_eq!(s.status, StatusKind::Done);
-        assert_eq!(s.consumed, inp.len());
-        buf.truncate(s.written);
-        buf
-    }
-
-    #[test]
-    fn test_get_decompressor_ident() {
-        assert_eq!(
-            &check_decomp(None, &b"Hello world"[..])[..],
-            &b"Hello world"[..]
-        );
-
-        assert_eq!(
-            &check_decomp(Some("identity"), &b"Hello world"[..])[..],
-            &b"Hello world"[..]
-        );
-    }
-
-    #[test]
-    fn test_get_decompressor_err() {
-        let name = "quantum-entanglement";
-        let r = get_decompressor(Some(name));
-        assert!(r.is_err());
-
-        let e = r.err();
-        let msg = format!("unsupported HTTP encoding \"{}\"", name);
-        let err_msg = format!("{}", anyhow!(e.unwrap()));
-        assert_eq!(msg, err_msg);
-    }
 }
