@@ -128,7 +128,7 @@ pub struct RetryConfig {
 impl Default for RetryConfig {
     fn default() -> Self {
         RetryConfig {
-            num: 3.try_into().unwrap(),
+            num: 3.try_into().expect("3 is not 0"),
             initial_delay: Duration::from_millis(1000),
         }
     }
