@@ -44,11 +44,12 @@ impl CmdLine {
     /// that instead it refers to a single command-line argument.
     fn convert_toml_error(&self, s: &str, pos: Option<(usize, usize)>) -> String {
         /// Regex to match an error message fro the toml crate.
-        static RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"^(.*?) at line \d+ column \d+$").unwrap());
+        static RE: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(r"^(.*?) at line \d+ column \d+$").expect("Can't compile regex")
+        });
         let cap = RE.captures(s);
         let msg = match cap {
-            Some(c) => c.get(1).unwrap().as_str(),
+            Some(c) => c.get(1).expect("mismatch regex: no capture group").as_str(),
             None => &s[..],
         };
 
@@ -89,7 +90,9 @@ impl Source for CmdLine {
             Ok(v) => v,
         };
 
-        Ok(toml_v.try_into().unwrap())
+        toml_v
+            .try_into()
+            .map_err(|e| ConfigError::Foreign(Box::new(e)))
     }
 }
 
@@ -114,7 +117,7 @@ fn tweak_toml_bareword(s: &str) -> Option<String> {
                 ([a-zA-Z0-9_]+)
                \s*$)"#,
         )
-        .unwrap()
+        .expect("Built-in regex compilation failed")
     });
 
     let cap = RE.captures(s);
