@@ -523,7 +523,10 @@ impl UncheckedCert {
     }
     /// Return signing key of the underlying cert.
     pub fn peek_signing_key(&self) -> &ed25519::PublicKey {
-        self.cert.signed_with.as_ref().unwrap()
+        self.cert
+            .signed_with
+            .as_ref()
+            .expect("Made an UncheckedCert without a signing key")
     }
 }
 
@@ -549,7 +552,10 @@ impl tor_checkable::Timebound<Ed25519Cert> for SigCheckedCert {
     fn is_valid_at(&self, t: &time::SystemTime) -> std::result::Result<(), Self::Error> {
         if self.cert.is_expired_at(*t) {
             let expiry = self.cert.expiry();
-            Err(Self::Error::Expired(t.duration_since(expiry).unwrap()))
+            Err(Self::Error::Expired(
+                t.duration_since(expiry)
+                    .expect("certificate expiry time inconsistent"),
+            ))
         } else {
             Ok(())
         }
