@@ -103,11 +103,13 @@ fn main() -> Result<()> {
 
     let dircfg = config.get_dir_config()?;
 
-    if config.socks_port.is_none() {
-        info!("Nothing to do: no socks_port configured.");
-        return Ok(());
-    }
-    let socks_port = config.socks_port.unwrap();
+    let socks_port = match config.socks_port {
+        Some(s) => s,
+        None => {
+            info!("Nothing to do: no socks_port configured.");
+            return Ok(());
+        }
+    };
 
     tor_rtcompat::task::block_on(async {
         let client = Arc::new(TorClient::bootstrap(dircfg).await?);

@@ -71,8 +71,14 @@ async fn handle_socks_conn(
         if action.finished {
             break handshake.into_request();
         }
-    }
-    .unwrap();
+    };
+    let request = match request {
+        Some(r) => r,
+        None => {
+            warn!("SOCKS handshake succeeded, but couldn't convert into a request.");
+            return Ok(());
+        }
+    };
 
     let addr = request.addr().to_string();
     let port = request.port();
