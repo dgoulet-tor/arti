@@ -140,52 +140,53 @@ async fn read_headers(stream: &mut tor_proto::stream::DataStream) -> Result<Head
         // XXXX Better maximum and/or let this expand.
         let mut headers = [httparse::EMPTY_HEADER; 32];
         let mut response = httparse::Response::new(&mut headers);
-        let res = response.parse(&buf[..n_in_buf])?;
 
-        if res.is_partial() {
-            // We didn't get a whole response; we may need to try again.
+        match response.parse(&buf[..n_in_buf])? {
+            httparse::Status::Partial => {
+                // We didn't get a whole response; we may need to try again.
 
-            // XXXX Pick a better maximum
-            if n_in_buf >= buf.len() - 500 {
-                // We should resize the buffer; it's nearly empty.
-                if buf.len() >= 16384 {
-                    return Err(httparse::Error::TooManyHeaders.into());
+                // XXXX Pick a better maximum
+                if n_in_buf >= buf.len() - 500 {
+                    // We should resize the buffer; it's nearly empty.
+                    if buf.len() >= 16384 {
+                        return Err(httparse::Error::TooManyHeaders.into());
+                    }
+                    buf.resize(buf.len() * 2, 0u8);
                 }
-                buf.resize(buf.len() * 2, 0u8);
             }
-        } else {
-            if response.code != Some(200) {
+            httparse::Status::Complete(n_parsed) => {
+                if response.code != Some(200) {
+                    return Ok(HeaderStatus {
+                        status: response.code,
+                        encoding: None,
+                        pending: Vec::new(),
+                        n_pending: 0,
+                    });
+                }
+                let encoding = if let Some(enc) = response
+                    .headers
+                    .iter()
+                    .find(|h| h.name == "Content-Encoding")
+                {
+                    Some(String::from_utf8(enc.value.to_vec())?)
+                } else {
+                    None
+                };
+                /*
+                if let Some(clen) = response.headers.iter().find(|h| h.name == "Content-Length") {
+                    let clen = std::str::from_utf8(clen.value)?;
+                    length = Some(clen.parse()?);
+                }
+                 */
+                n_in_buf -= n_parsed;
+                buf.copy_within(n_parsed.., 0);
                 return Ok(HeaderStatus {
-                    status: response.code,
-                    encoding: None,
-                    pending: Vec::new(),
-                    n_pending: 0,
+                    status: Some(200),
+                    encoding,
+                    pending: buf,
+                    n_pending: n_in_buf,
                 });
             }
-            let encoding = if let Some(enc) = response
-                .headers
-                .iter()
-                .find(|h| h.name == "Content-Encoding")
-            {
-                Some(String::from_utf8(enc.value.to_vec())?)
-            } else {
-                None
-            };
-            /*
-            if let Some(clen) = response.headers.iter().find(|h| h.name == "Content-Length") {
-                let clen = std::str::from_utf8(clen.value)?;
-                length = Some(clen.parse()?);
-            }
-             */
-            let n_parsed = res.unwrap();
-            n_in_buf -= n_parsed;
-            buf.copy_within(n_parsed.., 0);
-            return Ok(HeaderStatus {
-                status: Some(200),
-                encoding,
-                pending: buf,
-                n_pending: n_in_buf,
-            });
         }
         if n == 0 {
             return Err(Error::TruncatedHeaders.into());
