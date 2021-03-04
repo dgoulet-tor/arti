@@ -14,15 +14,13 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
-mod decompress;
 mod err;
 pub mod request;
 mod response;
 mod util;
 
-use crate::decompress::Decompressor;
-
 use tor_circmgr::{CircMgr, DirInfo};
+use tor_decompress::{identity, Decompressor, StatusKind};
 
 use anyhow::{Context, Result};
 use futures::FutureExt;
@@ -230,7 +228,6 @@ async fn read_and_decompress(
     let mut written_total = 0;
 
     let mut done_reading = false;
-    use decompress::StatusKind;
 
     // XXX should be an option and is too long.
     let read_timeout = Duration::from_secs(10);
@@ -298,7 +295,7 @@ async fn read_and_decompress(
 /// Return a decompressor object corresponding to a given Content-Encoding.
 fn get_decompressor(encoding: Option<&str>) -> Result<Box<dyn Decompressor + Send>> {
     match encoding {
-        None | Some("identity") => Ok(Box::new(decompress::identity::Identity)),
+        None | Some("identity") => Ok(Box::new(identity::Identity)),
         Some("deflate") => Ok(miniz_oxide::inflate::stream::InflateState::new_boxed(
             miniz_oxide::DataFormat::Zlib,
         )),
@@ -334,7 +331,7 @@ mod test {
         let mut buf = vec![0; 2048];
         let s = d.process(inp, &mut buf[..], true).unwrap();
         // TODO: what if d requires multiple steps to work?
-        assert_eq!(s.status, decompress::StatusKind::Done);
+        assert_eq!(s.status, StatusKind::Done);
         assert_eq!(s.consumed, inp.len());
         buf.truncate(s.written);
         buf

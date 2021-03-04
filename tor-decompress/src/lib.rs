@@ -11,7 +11,7 @@ use anyhow::Result;
 
 /// Possible return conditions from a decompression operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum StatusKind {
+pub enum StatusKind {
     /// Some data was written.
     Written,
     /// We're out of space in the output buffer.
@@ -23,7 +23,7 @@ pub(crate) enum StatusKind {
 /// Return value from [`Decompressor::process`].  It describes how much data
 /// was transferred, and what the caller needs to do next.
 #[derive(Debug, Clone)]
-pub(crate) struct Status {
+pub struct Status {
     /// The (successful) result of the decompression
     pub status: StatusKind,
     /// How many bytes were consumed from `inp`.
@@ -33,7 +33,7 @@ pub(crate) struct Status {
 }
 
 /// An implementation of a compression algorithm, including its state.
-pub(crate) trait Decompressor {
+pub trait Decompressor {
     /// Decompress data from 'inp' into 'out'.  If 'finished' is true, no
     /// more data will be provided after the current contents of inputs.
     fn process(&mut self, inp: &[u8], out: &mut [u8], finished: bool) -> Result<Status>;
@@ -43,7 +43,7 @@ pub(crate) trait Decompressor {
 ///
 /// This does more copying than Rust best practices would prefer, but
 /// we should never actually use it in practice.
-pub(crate) mod identity {
+pub mod identity {
     use super::{Decompressor, Status, StatusKind};
     use anyhow::Result;
 
@@ -80,7 +80,7 @@ pub(crate) mod identity {
 /// [`::miniz_oxide::inflate::stream::InflateState`].
 ///
 /// This implements zlib compression as used in Tor.
-mod miniz_oxide {
+pub mod miniz_oxide {
     use super::{Decompressor, Status, StatusKind};
 
     use anyhow::{anyhow, Result};
@@ -115,7 +115,7 @@ mod miniz_oxide {
 /// Implementation for the [`Decompressor`] trait on [`zstd::stream`].
 ///
 /// This implements zstd compression as used in Tor.
-mod zstd {
+pub mod zstd {
     use super::{Decompressor, Status, StatusKind};
 
     use anyhow::{anyhow, Result};
@@ -151,7 +151,7 @@ mod zstd {
 /// Implementation for the [`Decompressor`] trait on [`xz2::Stream`].
 ///
 /// This implements lzma compression as used in Tor.
-mod lzma {
+pub mod lzma {
     use super::{Decompressor, Status, StatusKind};
 
     use anyhow::{anyhow, Result};
@@ -189,8 +189,8 @@ mod lzma {
 
 #[cfg(test)]
 mod test {
+    use super::Decompressor;
     use super::StatusKind;
-    use crate::decompress::Decompressor;
     use std::str;
 
     #[test]
