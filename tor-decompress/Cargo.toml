@@ -8,6 +8,6 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.38"
-miniz_oxide = "0.4.3"
+miniz_oxide = "0.4.4"
 xz2 = "0.1.6"
-zstd = "0.6.0"
+zstd = "0.6.1"

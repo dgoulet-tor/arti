@@ -16,12 +16,12 @@ tor-protover = { path="../tor-protover", version= "*" }
 
 base64 = "0.13.0"
 digest = "0.9.0"
-hex = "0.4.2"
+hex = "0.4.3"
 log = "0.4.14"
-once_cell = "1.6.0"
+once_cell = "1.7.2"
 rand = "0.7.3"
 rusqlite = { version = "0.24.2", features = ["chrono"] }
-serde = { version = "1.0.123", features = ["derive"] }
+serde = { version = "1.0.124", features = ["derive"] }
 signature = "1.3.0"
 thiserror = "1.0.24"
 
