@@ -117,7 +117,7 @@ async fn handle_socks_conn(
         .await
         .context("Couldn't write SOCKS reply")?;
 
-    let (mut rstream, wstream) = stream.split();
+    let (mut rstream, mut wstream) = stream.split();
 
     let _t1 = tor_rtcompat::task::spawn(async move {
         let mut buf = [0u8; 1024];

@@ -116,6 +116,14 @@ pub struct DataStream {
 pub struct DataWriter {
     /// The underlying TorStream object.
     s: Arc<TorStream>,
+
+    /// Buffered data to send over the connection.
+    // TODO: this buffer is probably smaller than we want, but it's good
+    // enough for now.
+    buf: [u8; Data::MAXLEN],
+
+    /// Number of unflushed bytes in buf.
+    n_pending: usize,
 }
 
 /// Wrapper for the read part of a DataStream
@@ -126,7 +134,12 @@ pub struct DataReader {
 
     /// If present, data that we received on this stream but have not
     /// been able to send to the caller yet.
-    pending: Option<Vec<u8>>, // bad design, but okay I guess.
+    // TODO: This data structure is probably not what we want, but
+    // it's good enough for now.
+    pending: Vec<u8>,
+
+    /// Index into pending to show what we've already read.
+    offset: usize,
 }
 
 impl DataStream {
@@ -137,15 +150,20 @@ impl DataStream {
         let s = Arc::new(s);
         let r = DataReader {
             s: Arc::clone(&s),
-            pending: None,
+            pending: Vec::new(),
+            offset: 0,
         };
-        let w = DataWriter { s };
+        let w = DataWriter {
+            s,
+            buf: [0; Data::MAXLEN],
+            n_pending: 0,
+        };
         DataStream { r, w }
     }
 
     /// Write all the bytes in b onto the stream, using as few data
     /// cells as possible.
-    pub async fn write_bytes(&self, buf: &[u8]) -> Result<()> {
+    pub async fn write_bytes(&mut self, buf: &[u8]) -> Result<()> {
         self.w.write_bytes(buf).await
     }
 
@@ -168,12 +186,38 @@ impl DataWriter {
     /// TODO: We should have DataWriter implement AsyncWrite.
     ///
     /// TODO: should we do some variant of Nagle's algorithm?
-    pub async fn write_bytes(&self, b: &[u8]) -> Result<()> {
+    pub async fn write_bytes(&mut self, b: &[u8]) -> Result<()> {
         for chunk in b.chunks(Data::MAXLEN) {
-            let cell = Data::new(chunk);
-            self.s.send(cell.into()).await?;
+            self.queue_bytes(&chunk[..]);
+            self.flush_buf().await?;
         }
         Ok(())
+    }
+
+    /// Try to flush the current buffer contents as a data cell
+    async fn flush_buf(&mut self) -> Result<()> {
+        if self.n_pending != 0 {
+            let cell = Data::new(&self.buf[..self.n_pending]);
+            self.n_pending = 0;
+            self.s.send(cell.into()).await
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Add as many bytes as possible from `b` to our internal buffer;
+    /// return the number we were able to add.
+    fn queue_bytes(&mut self, b: &[u8]) -> usize {
+        let empty_space = &mut self.buf[self.n_pending..];
+        if empty_space.is_empty() {
+            // that is, len == 0
+            return 0;
+        }
+
+        let n_to_copy = std::cmp::min(b.len(), empty_space.len());
+        empty_space[..n_to_copy].copy_from_slice(&b[..n_to_copy]);
+        self.n_pending += n_to_copy;
+        n_to_copy
     }
 }
 
@@ -187,44 +231,46 @@ impl DataReader {
     //
     // AsyncRead would be better.
     pub async fn read_bytes(&mut self, buf: &mut [u8]) -> Result<usize> {
-        /// Helper: pull as many bytes as possible out of `v` (from
-        /// the front), and store them into `buf`.  Return a tuple
-        /// containing the number of bytes transferred, and the
-        /// remainder of `v` (if nonempty).
-        fn split_and_write(buf: &mut [u8], mut v: Vec<u8>) -> (usize, Option<Vec<u8>>) {
-            if v.len() > buf.len() {
-                let remainder = v.split_off(buf.len());
-                buf.copy_from_slice(&v[..]);
-                (v.len(), Some(remainder))
-            } else {
-                (&mut buf[..v.len()]).copy_from_slice(&v[..]);
-                (v.len(), None)
-            }
-        }
-
         if self.s.stream_ended.load(Ordering::SeqCst) {
             return Err(Error::StreamClosed("Stream is closed."));
         }
 
-        if let Some(pending) = self.pending.take() {
-            let (n, new_pending) = split_and_write(buf, pending);
-            if new_pending.is_some() {
-                self.pending = new_pending;
-            }
-            return Ok(n);
+        if !self.buf_is_empty() {
+            return Ok(self.extract_bytes(buf));
         }
 
         // We don't loop here; if we did, we might block while we had some
         // data to return.
+
+        self.read_cell().await?;
+
+        Ok(self.extract_bytes(buf))
+    }
+
+    /// Pull as many bytes as we can off of self.pending, and return that
+    /// number of bytes.
+    fn extract_bytes(&mut self, buf: &mut [u8]) -> usize {
+        let remainder = &self.pending[self.offset..];
+        let n_to_copy = std::cmp::min(buf.len(), remainder.len());
+        buf[..n_to_copy].copy_from_slice(&remainder[..n_to_copy]);
+        self.offset += n_to_copy;
+
+        n_to_copy
+    }
+
+    /// Return true iff there are no buffered bytes here to yield
+    fn buf_is_empty(&self) -> bool {
+        self.pending.len() == self.offset
+    }
+
+    /// Load self.pending with the contents of a new data cell.
+    async fn read_cell(&mut self) -> Result<()> {
         let cell = self.s.recv().await;
 
         match cell {
             Ok(RelayMsg::Data(d)) => {
-                let (n, pending) = split_and_write(buf, d.into());
-                if pending.is_some() {
-                    self.pending = pending;
-                }
-                Ok(n)
+                self.add_data(d.into());
+                Ok(())
             }
             Err(_) | Ok(RelayMsg::End(_)) => {
                 self.s.stream_ended.store(true, Ordering::SeqCst);
@@ -237,6 +283,20 @@ impl DataReader {
                     m.cmd()
                 )))
             }
+        }
+    }
+
+    /// Add the data from `d` to the end of our pending bytes.
+    fn add_data(&mut self, d: Vec<u8>) {
+        if self.buf_is_empty() {
+            // No data pending?  Just take d as the new pending.
+            self.pending = d;
+            self.offset = 0;
+        } else {
+            // XXXX This has potential to grow `pending` without
+            // bound.  Fortunately, we don't read data in this
+            // (non-empty) case right now.
+            self.pending.extend_from_slice(&d[..]);
         }
     }
 }
