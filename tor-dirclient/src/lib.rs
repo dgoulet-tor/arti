@@ -21,6 +21,7 @@ use tor_circmgr::{CircMgr, DirInfo};
 use tor_decompress::{Decompressor, StatusKind};
 
 use anyhow::{Context, Result};
+use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::FutureExt;
 use log::info;
 use std::sync::Arc;
@@ -61,9 +62,13 @@ where
                 .await
                 .with_context(|| format!("Failed to open a directory stream to {:?}", source))?;
             stream
-                .write_bytes(encoded.as_bytes())
+                .write_all(encoded.as_bytes())
                 .await
                 .with_context(|| format!("Failed to send HTTP request to {:?}", source))?;
+            stream
+                .flush()
+                .await
+                .with_context(|| format!("Couldn't deliver http request to {:?}", source))?;
 
             // Handle the response
             let hdr = read_headers(&mut stream)
@@ -134,7 +139,7 @@ async fn read_headers(stream: &mut tor_proto::stream::DataStream) -> Result<Head
     let mut n_in_buf = 0;
 
     loop {
-        let n = stream.read_bytes(&mut buf[n_in_buf..]).await?;
+        let n = stream.read(&mut buf[n_in_buf..]).await?;
         n_in_buf += n;
 
         // XXXX Better maximum and/or let this expand.
@@ -235,7 +240,7 @@ async fn read_and_decompress(
 
     loop {
         let status = futures::select! {
-            status = stream.read_bytes(&mut buf[n_in_buf..]).fuse() => status,
+            status = stream.read(&mut buf[n_in_buf..]).fuse() => status,
             _ = timer => {
                 result.resize(written_total, 0);
                 return Err(Error::DirTimeout.into());
@@ -243,7 +248,6 @@ async fn read_and_decompress(
         };
         let n = match status {
             Ok(n) => n,
-            Err(tor_proto::Error::StreamClosed(_)) => 0,
             Err(other) => {
                 result.resize(written_total, 0);
                 return Err(other.into());
