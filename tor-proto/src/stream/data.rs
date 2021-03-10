@@ -19,35 +19,18 @@ pub struct DataStream {
     r: DataReader,
 }
 
-/// Wrapper for the write part of a DataStream
+/// Wrapper for the Write part of a DataStream
 // TODO: I'd like this to implement AsyncWrite.
 pub struct DataWriter {
-    /// The underlying RawCellStream object.
-    s: Arc<RawCellStream>,
-
-    /// Buffered data to send over the connection.
-    // TODO: this buffer is probably smaller than we want, but it's good
-    // enough for now.
-    buf: [u8; Data::MAXLEN],
-
-    /// Number of unflushed bytes in buf.
-    n_pending: usize,
+    /// Internal state for this writer
+    imp: DataWriterImpl,
 }
 
-/// Wrapper for the read part of a DataStream
+/// Wrapper for the Read part of a DataStream
 // TODO: I'd like this to implement AsyncRead
 pub struct DataReader {
-    /// The underlying RawCellStream object.
-    s: Arc<RawCellStream>,
-
-    /// If present, data that we received on this stream but have not
-    /// been able to send to the caller yet.
-    // TODO: This data structure is probably not what we want, but
-    // it's good enough for now.
-    pending: Vec<u8>,
-
-    /// Index into pending to show what we've already read.
-    offset: usize,
+    /// Internal state for this reader
+    imp: DataReaderImpl,
 }
 
 impl DataStream {
@@ -57,14 +40,18 @@ impl DataStream {
     pub(crate) fn new(s: RawCellStream) -> Self {
         let s = Arc::new(s);
         let r = DataReader {
-            s: Arc::clone(&s),
-            pending: Vec::new(),
-            offset: 0,
+            imp: DataReaderImpl {
+                s: Arc::clone(&s),
+                pending: Vec::new(),
+                offset: 0,
+            },
         };
         let w = DataWriter {
-            s,
-            buf: [0; Data::MAXLEN],
-            n_pending: 0,
+            imp: DataWriterImpl {
+                s,
+                buf: [0; Data::MAXLEN],
+                n_pending: 0,
+            },
         };
         DataStream { r, w }
     }
@@ -87,6 +74,20 @@ impl DataStream {
     }
 }
 
+/// Internal: the write part of a DataStream
+struct DataWriterImpl {
+    /// The underlying RawCellStream object.
+    s: Arc<RawCellStream>,
+
+    /// Buffered data to send over the connection.
+    // TODO: this buffer is probably smaller than we want, but it's good
+    // enough for now.
+    buf: [u8; Data::MAXLEN],
+
+    /// Number of unflushed bytes in buf.
+    n_pending: usize,
+}
+
 impl DataWriter {
     /// Write all the bytes in b onto the stream, using as few data
     /// cells as possible.
@@ -96,12 +97,14 @@ impl DataWriter {
     /// TODO: should we do some variant of Nagle's algorithm?
     pub async fn write_bytes(&mut self, b: &[u8]) -> Result<()> {
         for chunk in b.chunks(Data::MAXLEN) {
-            self.queue_bytes(&chunk[..]);
-            self.flush_buf().await?;
+            self.imp.queue_bytes(&chunk[..]);
+            self.imp.flush_buf().await?;
         }
         Ok(())
     }
+}
 
+impl DataWriterImpl {
     /// Try to flush the current buffer contents as a data cell
     async fn flush_buf(&mut self) -> Result<()> {
         if self.n_pending != 0 {
@@ -129,6 +132,21 @@ impl DataWriter {
     }
 }
 
+/// Wrapper for the read part of a DataStream
+pub struct DataReaderImpl {
+    /// The underlying RawCellStream object.
+    s: Arc<RawCellStream>,
+
+    /// If present, data that we received on this stream but have not
+    /// been able to send to the caller yet.
+    // TODO: This data structure is probably not what we want, but
+    // it's good enough for now.
+    pending: Vec<u8>,
+
+    /// Index into pending to show what we've already read.
+    offset: usize,
+}
+
 impl DataReader {
     /// Try to read some amount of bytes from the stream; return how
     /// much we read.
@@ -139,22 +157,24 @@ impl DataReader {
     //
     // AsyncRead would be better.
     pub async fn read_bytes(&mut self, buf: &mut [u8]) -> Result<usize> {
-        if self.s.has_ended() {
+        if self.imp.s.has_ended() {
             return Err(Error::StreamClosed("Stream is closed."));
         }
 
-        if !self.buf_is_empty() {
-            return Ok(self.extract_bytes(buf));
+        if !self.imp.buf_is_empty() {
+            return Ok(self.imp.extract_bytes(buf));
         }
 
         // We don't loop here; if we did, we might block while we had some
         // data to return.
 
-        self.read_cell().await?;
+        self.imp.read_cell().await?;
 
-        Ok(self.extract_bytes(buf))
+        Ok(self.imp.extract_bytes(buf))
     }
+}
 
+impl DataReaderImpl {
     /// Pull as many bytes as we can off of self.pending, and return that
     /// number of bytes.
     fn extract_bytes(&mut self, buf: &mut [u8]) -> usize {
