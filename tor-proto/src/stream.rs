@@ -14,11 +14,13 @@
 
 use crate::{Error, Result};
 use std::sync::Arc;
-use tor_cell::relaycell::msg::{Data, RelayMsg, Resolved};
+use tor_cell::relaycell::msg::{Data, RelayMsg};
 
 mod raw;
+mod resolve;
 
 pub use raw::RawCellStream;
+pub use resolve::ResolveStream;
 
 /// A DataStream is a wrapper around a RawCellStream for byte-oriented IO.
 /// It's suitable for use with BEGIN or BEGIN_DIR streams.
@@ -216,40 +218,6 @@ impl DataReader {
             // bound.  Fortunately, we don't read data in this
             // (non-empty) case right now.
             self.pending.extend_from_slice(&d[..]);
-        }
-    }
-}
-
-/// A ResolveStream represents a pending DNS request made with a RESOLVE
-/// cell.
-pub struct ResolveStream {
-    /// The underlying RawCellStream.
-    s: RawCellStream,
-}
-
-impl ResolveStream {
-    /// Wrap a RawCellStream into a ResolveStream.
-    ///
-    /// Call only after sending a RESOLVE cell.
-    #[allow(dead_code)] // need to implement a caller for this.
-    pub(crate) fn new(s: RawCellStream) -> Self {
-        ResolveStream { s }
-    }
-
-    /// Read a message from this stream telling us the answer to our
-    /// name lookup request.
-    pub async fn read_msg(&mut self) -> Result<Resolved> {
-        let cell = self.s.recv().await?;
-        match cell {
-            RelayMsg::End(_) => Err(Error::StreamClosed("Received end cell on resolve stream")),
-            RelayMsg::Resolved(r) => Ok(r),
-            m => {
-                self.s.protocol_error().await;
-                Err(Error::StreamProto(format!(
-                    "Unexpected {} on resolve stream",
-                    m.cmd()
-                )))
-            }
         }
     }
 }
