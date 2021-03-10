@@ -1,7 +1,7 @@
 //! Implement a simple SOCKS proxy that relays connections over Tor.
 
 #[allow(unused)]
-use futures::io::{AsyncReadExt, AsyncWriteExt};
+use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use futures::stream::StreamExt;
 use log::{error, info, warn};
 use std::net::{Ipv4Addr, Ipv6Addr};
@@ -12,6 +12,9 @@ use tor_rtcompat::traits::*;
 use crate::{client::ConnectPrefs, TorClient};
 use tor_proto::circuit::IPVersionPreference;
 use tor_socksproto::{SocksCmd, SocksRequest};
+
+#[cfg(feature = "tokio")]
+use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use anyhow::{Context, Result};
 
@@ -117,37 +120,39 @@ async fn handle_socks_conn(
         .await
         .context("Couldn't write SOCKS reply")?;
 
-    let (mut rstream, mut wstream) = stream.split();
+    // TODO: Shouldn't have to use these here.
+    #[cfg(feature = "tokio")]
+    let w = w.compat_write();
+    #[cfg(feature = "tokio")]
+    let r = r.compat();
 
-    let _t1 = tor_rtcompat::task::spawn(async move {
-        let mut buf = [0u8; 1024];
-        loop {
-            let n = match r.read(&mut buf[..]).await {
-                Err(e) => break e.into(),
-                Ok(0) => break tor_proto::Error::StreamClosed("closed"),
-                Ok(n) => n,
-            };
-            if let Err(e) = wstream.write_bytes(&buf[..n]).await {
-                break e;
-            }
-        }
-    });
-    let _t2 = tor_rtcompat::task::spawn(async move {
-        let mut buf = [0u8; 1024];
-        loop {
-            let n = match rstream.read_bytes(&mut buf[..]).await {
-                Err(e) => break e,
-                Ok(n) => n,
-            };
-            if let Err(e) = w.write(&buf[..n]).await {
-                break e.into();
-            }
-        }
-    });
+    let (rstream, wstream) = stream.split();
 
-    // TODO: XXXX-A1 we should close the TCP stream if either task fails.
+    let _t1 = tor_rtcompat::task::spawn(copy_interactive(r, wstream));
+    let _t2 = tor_rtcompat::task::spawn(copy_interactive(rstream, w));
+
+    // TODO: XXXX-A1 we should close the TCP stream if either task fails. Do we?
+    // TODO: XXXX-A1 should report the errors.
 
     Ok(())
+}
+
+/// Helper: as futures::io::copy(), but flushes after each write.
+async fn copy_interactive<R, W>(mut reader: R, mut writer: W) -> Result<()>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    let mut buf = [0u8; 498];
+    loop {
+        let n = reader.read(&mut buf[..]).await?;
+        if n == 0 {
+            return Ok(());
+        }
+        // TODO: Some kind of nagling might make sense here.
+        writer.write_all(&buf[..n]).await?;
+        writer.flush().await?;
+    }
 }
 
 /// Launch a SOCKS proxy to listen on a given localhost port, and run until
