@@ -77,20 +77,6 @@ impl DataStream {
         DataStream { r, w }
     }
 
-    /// Write all the bytes in b onto the stream, using as few data
-    /// cells as possible.
-    // TODO: remove this function.
-    pub async fn write_bytes(&mut self, buf: &[u8]) -> Result<()> {
-        self.w.write_bytes(buf).await
-    }
-
-    /// Try to read some amount of bytes from the stream; return how
-    /// much we read.
-    // TODO: remove this function.
-    pub async fn read_bytes(&mut self, buf: &mut [u8]) -> Result<usize> {
-        self.r.read_bytes(buf).await
-    }
-
     /// Divide this DataStream into its consituent parts.
     pub fn split(self) -> (DataReader, DataWriter) {
         (self.r, self.w)
@@ -150,17 +136,6 @@ struct DataWriterImpl {
 }
 
 impl DataWriter {
-    /// Write all the bytes in b onto the stream, using as few data
-    /// cells as possible.
-    ///
-    /// TODO: Remove this function.
-    pub async fn write_bytes(&mut self, b: &[u8]) -> Result<()> {
-        use futures::io::AsyncWriteExt;
-        self.write_all(b).await?;
-        self.flush().await?;
-        Ok(())
-    }
-
     /// Helper for poll_flush() and poll_close(): Performs a flush, then
     /// closes the stream if should_close is true.
     fn poll_flush_impl(
@@ -328,17 +303,6 @@ struct DataReaderImpl {
 
     /// Index into pending to show what we've already read.
     offset: usize,
-}
-
-impl DataReader {
-    /// Try to read some amount of bytes from the stream; return how
-    /// much we read.
-    ///
-    // TODO: Remove this method.
-    pub async fn read_bytes(&mut self, buf: &mut [u8]) -> Result<usize> {
-        use futures::io::AsyncReadExt;
-        Ok(self.read(buf).await?)
-    }
 }
 
 impl AsyncRead for DataReader {
