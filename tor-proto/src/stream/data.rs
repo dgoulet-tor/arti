@@ -380,10 +380,14 @@ impl AsyncRead for DataReader {
                 Poll::Ready((_imp, Err(e))) => {
                     // There aren't any survivable errors in the current
                     // design.
-                    // TODO XXXX-A1: However, detect good closes and
-                    // return Ok(0) to indicate a close.
                     *this.state = Some(DataReaderState::Closed);
-                    return Poll::Ready(Err(e.into()));
+                    let result = if matches!(e, Error::StreamClosed(_)) {
+                        // XXXX-A1 TODO need to check the end status.
+                        Ok(0)
+                    } else {
+                        Err(e.into())
+                    };
+                    return Poll::Ready(result);
                 }
                 Poll::Ready((imp, Ok(()))) => {
                     // It read a cell!  Continue the loop.
