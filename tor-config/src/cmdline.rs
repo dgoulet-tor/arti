@@ -45,7 +45,7 @@ impl CmdLine {
     fn convert_toml_error(&self, s: &str, pos: Option<(usize, usize)>) -> String {
         /// Regex to match an error message fro the toml crate.
         static RE: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"^(.*?) at line \d+ column \d+$").expect("Can't compile regex")
+            Regex::new(r"^(.*?) at line [0-9]+ column [0-9]+$").expect("Can't compile regex")
         });
         let cap = RE.captures(s);
         let msg = match cap {
@@ -108,14 +108,14 @@ fn tweak_toml_bareword(s: &str) -> Option<String> {
     static RE: Lazy<Regex> = Lazy::new(|| {
         Regex::new(
             r#"(?x:
-               ^\s*
+               ^
                 # first capture group: dotted barewords
-                ((?:[a-zA-Z0-9_\-]+\s*\.\s*)*
+                ((?:[a-zA-Z0-9_\-]+\.)*
                  [a-zA-Z0-9_\-]+)
-                 \s*=\s*
+                 =
                 # second group: one bareword without hyphens
                 ([a-zA-Z0-9_]+)
-               \s*$)"#,
+                $)"#,
         )
         .expect("Built-in regex compilation failed")
     });
@@ -142,11 +142,6 @@ mod test {
         assert_eq!(
             tweak_toml_bareword("hello.there.now=a_greeting"),
             Some("hello.there.now=\"a_greeting\"".into())
-        );
-
-        assert_eq!(
-            tweak_toml_bareword(" hello . there . now = a_greeting"),
-            Some("hello . there . now=\"a_greeting\"".into())
         );
     }
 
