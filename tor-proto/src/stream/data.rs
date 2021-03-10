@@ -70,7 +70,7 @@ impl DataStream {
         let w = DataWriter {
             state: Some(DataWriterState::Ready(DataWriterImpl {
                 s,
-                buf: [0; Data::MAXLEN],
+                buf: Box::new([0; Data::MAXLEN]),
                 n_pending: 0,
             })),
         };
@@ -110,7 +110,6 @@ impl AsyncWrite for DataStream {
 /// We have to use an enum here because, for as long as we're waiting
 /// for a flush operation to complete, the future returned by
 /// `flush_cell()` owns the DataWriterImpl.
-#[allow(clippy::large_enum_variant)]
 enum DataWriterState {
     /// The writer has closed or gotten an error: nothing more to do.
     Closed,
@@ -129,7 +128,7 @@ struct DataWriterImpl {
     /// Buffered data to send over the connection.
     // TODO: this buffer is probably smaller than we want, but it's good
     // enough for now.
-    buf: [u8; Data::MAXLEN],
+    buf: Box<[u8; Data::MAXLEN]>,
 
     /// Number of unflushed bytes in buf.
     n_pending: usize,
