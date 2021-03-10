@@ -45,10 +45,10 @@ impl RawCellStream {
             .next()
             .await
             // This probably means that the other side closed the
-            // mpsc channel.
-            .ok_or(Error::StreamClosed(
-                "stream channel disappeared without END cell?",
-            ))?;
+            // mpsc channel.  I'm not sure the error type is correct though?
+            .ok_or_else(|| {
+                Error::StreamProto("stream channel disappeared without END cell?".into())
+            })?;
 
         // Possibly decrement the window for the cell we just received, and
         // send a SENDME if doing so took us under the threshold.

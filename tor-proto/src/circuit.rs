@@ -542,16 +542,16 @@ impl ClientCirc {
 
         let response = tor_rtcompat::timer::timeout(stream_timeout, stream.recv()).await??;
 
-        if response.cmd() == RelayCmd::CONNECTED {
-            Ok(DataStream::new(stream))
-        } else if response.cmd() == RelayCmd::END {
-            Err(Error::StreamClosed("end cell when waiting for connection"))
-        } else {
-            self.protocol_error().await;
-            Err(Error::StreamProto(format!(
-                "Received {} while waiting for connection",
-                response.cmd()
-            )))
+        match response {
+            RelayMsg::Connected(_) => Ok(DataStream::new(stream)),
+            RelayMsg::End(cell) => Err(Error::EndReceived(cell.reason())),
+            _ => {
+                self.protocol_error().await;
+                Err(Error::StreamProto(format!(
+                    "Received {} while waiting for connection",
+                    response.cmd()
+                )))
+            }
         }
     }
 

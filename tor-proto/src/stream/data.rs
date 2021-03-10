@@ -3,6 +3,7 @@
 
 use super::RawCellStream;
 use crate::{Error, Result};
+use tor_cell::relaycell::msg::EndReason;
 
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::task::{Context, Poll};
@@ -161,7 +162,7 @@ impl DataWriter {
             DataWriterState::Flushing(fut) => fut,
             DataWriterState::Closed => {
                 *this.state = Some(DataWriterState::Closed);
-                return Poll::Ready(Err(Error::StreamClosed("flush on closed stream").into()));
+                return Poll::Ready(Err(Error::NotConnected.into()));
             }
         };
 
@@ -209,7 +210,7 @@ impl AsyncWrite for DataWriter {
             DataWriterState::Flushing(fut) => fut,
             DataWriterState::Closed => {
                 *this.state = Some(DataWriterState::Closed);
-                return Poll::Ready(Err(Error::StreamClosed("write on closed stream").into()));
+                return Poll::Ready(Err(Error::NotConnected.into()));
             }
         };
 
@@ -333,7 +334,7 @@ impl AsyncRead for DataReader {
                 DataReaderState::ReadingCell(fut) => fut,
                 DataReaderState::Closed => {
                     *this.state = Some(DataReaderState::Closed);
-                    return Poll::Ready(Err(Error::StreamClosed("read on closed stream").into()));
+                    return Poll::Ready(Err(Error::NotConnected.into()));
                 }
             };
 
@@ -344,8 +345,7 @@ impl AsyncRead for DataReader {
                     // There aren't any survivable errors in the current
                     // design.
                     *this.state = Some(DataReaderState::Closed);
-                    let result = if matches!(e, Error::StreamClosed(_)) {
-                        // XXXX-A1 TODO need to check the end status.
+                    let result = if matches!(e, Error::EndReceived(EndReason::DONE)) {
                         Ok(0)
                     } else {
                         Err(e.into())
@@ -396,7 +396,8 @@ impl DataReaderImpl {
                 self.add_data(d.into());
                 Ok(())
             }
-            Err(_) | Ok(RelayMsg::End(_)) => Err(Error::StreamClosed("received an end cell")),
+            Ok(RelayMsg::End(e)) => Err(Error::EndReceived(e.reason())),
+            Err(e) => Err(e),
             Ok(m) => {
                 self.s.protocol_error().await;
                 Err(Error::StreamProto(format!(

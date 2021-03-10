@@ -1,5 +1,6 @@
 //! Define an error type for the tor-proto crate.
 use thiserror::Error;
+use tor_cell::relaycell::msg::EndReason;
 use tor_rtcompat::timer::TimeoutError;
 
 /// An error type for the tor-proto crate.
@@ -63,9 +64,12 @@ pub enum Error {
     /// Tried to make or use a stream to an invalid destination address.
     #[error("invalid stream target address")]
     BadStreamAddress,
-    /// Stream closed by end cell
-    #[error("stream closed: {0}")]
-    StreamClosed(&'static str), // TODO: make this a better type.
+    /// Received an End cell from the other end of a stream.
+    #[error("Received an End cell with reason {0}")]
+    EndReceived(EndReason),
+    /// Stream was already closed when we tried to use it.
+    #[error("stream not connected")]
+    NotConnected,
     /// Stream protocol violation
     #[error("stream protocol violation: {0}")]
     StreamProto(String),
@@ -103,9 +107,11 @@ impl From<Error> for std::io::Error {
 
             InvalidOutputLength | NoSuchHop | BadStreamAddress => ErrorKind::InvalidInput,
 
-            CircDestroy(_) | ChannelClosed | CircuitClosed | StreamClosed(_) => {
-                ErrorKind::ConnectionReset
-            }
+            NotConnected => ErrorKind::NotConnected,
+
+            EndReceived(end_reason) => end_reason.into(),
+
+            CircDestroy(_) | ChannelClosed | CircuitClosed => ErrorKind::ConnectionReset,
 
             BytesErr(_) | MissingKey | BadCellAuth | BadHandshake | ChanProto(_) | CircProto(_)
             | CellErr(_) | ChanMismatch(_) | StreamProto(_) => ErrorKind::InvalidData,

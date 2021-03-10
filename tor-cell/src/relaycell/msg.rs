@@ -403,6 +403,10 @@ impl End {
             addr: Some((addr, ttl)),
         }
     }
+    /// Return the provided EndReason for this End cell.
+    pub fn reason(&self) -> EndReason {
+        self.reason
+    }
 }
 impl Body for End {
     fn into_message(self) -> RelayMsg {
@@ -448,6 +452,27 @@ impl Body for End {
                 IpAddr::V6(v6) => w.write(&v6),
             }
             w.write_u32(ttl);
+        }
+    }
+}
+
+impl From<EndReason> for std::io::ErrorKind {
+    fn from(e: EndReason) -> Self {
+        use std::io::ErrorKind::*;
+        match e {
+            EndReason::RESOLVEFAILED => NotFound,
+            EndReason::CONNECTREFUSED => ConnectionRefused,
+            EndReason::EXITPOLICY => ConnectionRefused,
+            EndReason::DESTROY => ConnectionAborted,
+            EndReason::DONE => UnexpectedEof,
+            EndReason::TIMEOUT => TimedOut,
+            EndReason::HIBERNATING => ConnectionRefused,
+            EndReason::RESOURCELIMIT => ConnectionRefused,
+            EndReason::CONNRESET => ConnectionReset,
+            EndReason::TORPROTOCOL => InvalidData,
+            EndReason::NOTDIRECTORY => ConnectionRefused,
+            EndReason::INTERNAL | EndReason::NOROUTE | EndReason::MISC => Other,
+            _ => Other,
         }
     }
 }

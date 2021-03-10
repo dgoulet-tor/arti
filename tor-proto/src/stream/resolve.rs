@@ -25,7 +25,7 @@ impl ResolveStream {
     pub async fn read_msg(&mut self) -> Result<Resolved> {
         let cell = self.s.recv().await?;
         match cell {
-            RelayMsg::End(_) => Err(Error::StreamClosed("Received end cell on resolve stream")), // TODO: look at the reason in the End message.
+            RelayMsg::End(e) => Err(Error::EndReceived(e.reason())),
             RelayMsg::Resolved(r) => Ok(r),
             m => {
                 self.s.protocol_error().await;
