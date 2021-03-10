@@ -37,7 +37,7 @@ impl RawCellStream {
     }
 
     /// Try to read the next relay message from this stream.
-    pub async fn recv(&self) -> Result<RelayMsg> {
+    async fn recv_raw(&self) -> Result<RelayMsg> {
         let msg = self
             .receiver
             .lock()
@@ -62,6 +62,19 @@ impl RawCellStream {
         Ok(msg)
     }
 
+    /// As recv_raw, but if there is an error or an end cell, note that this
+    /// stream has ended.
+    pub async fn recv(&self) -> Result<RelayMsg> {
+        let val = self.recv_raw().await;
+        match val {
+            Err(_) | Ok(RelayMsg::End(_)) => {
+                self.note_ended();
+            }
+            _ => {}
+        }
+        val
+    }
+
     /// Send a relay message along this stream
     pub async fn send(&self, msg: RelayMsg) -> Result<()> {
         self.target.lock().await.send(msg).await
@@ -72,14 +85,14 @@ impl RawCellStream {
         self.stream_ended.load(Ordering::SeqCst)
     }
 
-    /// Mark this stream as having ended
-    pub fn note_ended(&self) {
-        // TODO: This shouldn't be public.
+    /// Mark this stream as having ended because of an incoming cell.
+    fn note_ended(&self) {
         self.stream_ended.store(true, Ordering::SeqCst);
     }
 
     /// Inform the circuit-side of this stream about a protocol error
     pub async fn protocol_error(&self) {
+        // TODO: Should this call note_ended?
         self.target.lock().await.protocol_error().await
     }
 

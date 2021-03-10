@@ -180,10 +180,7 @@ impl DataReader {
                 self.add_data(d.into());
                 Ok(())
             }
-            Err(_) | Ok(RelayMsg::End(_)) => {
-                self.s.note_ended();
-                Err(Error::StreamClosed("received an end cell"))
-            }
+            Err(_) | Ok(RelayMsg::End(_)) => Err(Error::StreamClosed("received an end cell")),
             Ok(m) => {
                 self.s.protocol_error().await;
                 Err(Error::StreamProto(format!(
