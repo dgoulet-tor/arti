@@ -4,7 +4,15 @@
 use super::RawCellStream;
 use crate::{Error, Result};
 
+use futures::io::AsyncRead;
+use futures::task::{Context, Poll};
+use futures::Future;
+use pin_project::pin_project;
+
+use std::io::Result as IoResult;
+use std::pin::Pin;
 use std::sync::Arc;
+
 use tor_cell::relaycell::msg::{Data, RelayMsg};
 
 /// A DataStream is a Tor stream packaged so as to be useful for
@@ -28,9 +36,14 @@ pub struct DataWriter {
 
 /// Wrapper for the Read part of a DataStream
 // TODO: I'd like this to implement AsyncRead
+#[pin_project]
 pub struct DataReader {
-    /// Internal state for this reader
-    imp: DataReaderImpl,
+    /// Internal state for this reader.
+    ///
+    /// This is stored in an Option so that we can mutate it in
+    /// poll_read().  It might be possible to do better here, and we
+    /// should refactor if so.
+    state: Option<DataReaderState>,
 }
 
 impl DataStream {
@@ -40,11 +53,11 @@ impl DataStream {
     pub(crate) fn new(s: RawCellStream) -> Self {
         let s = Arc::new(s);
         let r = DataReader {
-            imp: DataReaderImpl {
+            state: Some(DataReaderState::Ready(DataReaderImpl {
                 s: Arc::clone(&s),
                 pending: Vec::new(),
                 offset: 0,
-            },
+            })),
         };
         let w = DataWriter {
             imp: DataWriterImpl {
@@ -132,8 +145,24 @@ impl DataWriterImpl {
     }
 }
 
+/// An enumeration for the state of a DataReader.
+///
+/// We have to use an enum here because, when we're waiting for
+/// ReadingCell to complete, the future returned by `read_cell()` owns the
+/// DataCellImpl.  If we wanted to store the future and the cell at the
+/// same time, we'd need to make a self-referential structure, which isn't
+/// possible in safe Rust AIUI.
+enum DataReaderState {
+    /// In this state the reader is not currently fetching a cell; it
+    /// either has data or not.
+    Ready(DataReaderImpl),
+    /// The reader is currently fetching a cell: this future is the
+    /// progress it is making.
+    ReadingCell(Pin<Box<dyn Future<Output = (DataReaderImpl, Result<()>)> + Send>>),
+}
+
 /// Wrapper for the read part of a DataStream
-pub struct DataReaderImpl {
+struct DataReaderImpl {
     /// The underlying RawCellStream object.
     s: Arc<RawCellStream>,
 
@@ -151,26 +180,64 @@ impl DataReader {
     /// Try to read some amount of bytes from the stream; return how
     /// much we read.
     ///
-    // TODO: this could probably have better behavior when there's
-    // more than one cell to read, but we have to be sure not to
-    // block any more once we have data.
-    //
-    // AsyncRead would be better.
+    // TODO: Remove this method.
     pub async fn read_bytes(&mut self, buf: &mut [u8]) -> Result<usize> {
-        if self.imp.s.has_ended() {
-            return Err(Error::StreamClosed("Stream is closed."));
+        use futures::io::AsyncReadExt;
+        Ok(self.read(buf).await?)
+    }
+}
+
+impl AsyncRead for DataReader {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<IoResult<usize>> {
+        let this = self.project();
+
+        // We're pulling the state object out of the reader.  We MUST
+        // put it back before this function returns.
+        let mut state = this.state.take().expect("Missing state in DataReader");
+
+        loop {
+            let mut future = match state {
+                DataReaderState::Ready(mut imp) => {
+                    // There may be data to read already.
+                    // XXXX-NMNM handle close
+                    let n_copied = imp.extract_bytes(buf);
+                    if n_copied != 0 {
+                        // We read data into the buffer.  Tell the caller.
+                        *this.state = Some(DataReaderState::Ready(imp));
+                        return Poll::Ready(Ok(n_copied));
+                    }
+
+                    // No data available!  We have to launch a read.
+                    Box::pin(imp.read_cell())
+                }
+                DataReaderState::ReadingCell(fut) => fut,
+            };
+
+            // We have a future that reppresents an in-progress read.
+            // See if it can make progress.
+            match future.as_mut().poll(cx) {
+                Poll::Ready((imp, Err(e))) => {
+                    // XXXX-NMNM maybe record this error so we can't call again
+                    // XXXX-NMNM What do we do if a data cell has zero bytes?
+                    *this.state = Some(DataReaderState::Ready(imp));
+                    return Poll::Ready(Err(e.into()));
+                }
+                Poll::Ready((imp, Ok(()))) => {
+                    // It read a cell!  Continue the loop.
+                    state = DataReaderState::Ready(imp);
+                }
+                Poll::Pending => {
+                    // The future is pending; store it and tell the
+                    // caller to get back to us later.
+                    *this.state = Some(DataReaderState::ReadingCell(future));
+                    return Poll::Pending;
+                }
+            }
         }
-
-        if !self.imp.buf_is_empty() {
-            return Ok(self.imp.extract_bytes(buf));
-        }
-
-        // We don't loop here; if we did, we might block while we had some
-        // data to return.
-
-        self.imp.read_cell().await?;
-
-        Ok(self.imp.extract_bytes(buf))
     }
 }
 
@@ -192,10 +259,13 @@ impl DataReaderImpl {
     }
 
     /// Load self.pending with the contents of a new data cell.
-    async fn read_cell(&mut self) -> Result<()> {
+    ///
+    /// This function takes ownership of self so that we can avoid
+    /// self-referential lifetimes.
+    async fn read_cell(mut self) -> (Self, Result<()>) {
         let cell = self.s.recv().await;
 
-        match cell {
+        let result = match cell {
             Ok(RelayMsg::Data(d)) => {
                 self.add_data(d.into());
                 Ok(())
@@ -208,7 +278,9 @@ impl DataReaderImpl {
                     m.cmd()
                 )))
             }
-        }
+        };
+
+        (self, result)
     }
 
     /// Add the data from `d` to the end of our pending bytes.
