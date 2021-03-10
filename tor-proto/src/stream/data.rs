@@ -19,11 +19,13 @@ use tor_cell::relaycell::msg::{Data, RelayMsg};
 /// byte-oriented IO.
 ///
 /// It's suitable for use with BEGIN or BEGIN_DIR streams.
-// TODO: I'd like this to implement AsyncRead and AsyncWrite.
+#[pin_project]
 pub struct DataStream {
     /// Underlying writer for this stream
+    #[pin]
     w: DataWriter,
     /// Underlying reader for this stream
+    #[pin]
     r: DataReader,
 }
 
@@ -77,12 +79,14 @@ impl DataStream {
 
     /// Write all the bytes in b onto the stream, using as few data
     /// cells as possible.
+    // TODO: remove this function.
     pub async fn write_bytes(&mut self, buf: &[u8]) -> Result<()> {
         self.w.write_bytes(buf).await
     }
 
     /// Try to read some amount of bytes from the stream; return how
     /// much we read.
+    // TODO: remove this function.
     pub async fn read_bytes(&mut self, buf: &mut [u8]) -> Result<usize> {
         self.r.read_bytes(buf).await
     }
@@ -90,6 +94,28 @@ impl DataStream {
     /// Divide this DataStream into its consituent parts.
     pub fn split(self) -> (DataReader, DataWriter) {
         (self.r, self.w)
+    }
+}
+
+impl AsyncRead for DataStream {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<IoResult<usize>> {
+        self.project().r.poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for DataStream {
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<IoResult<usize>> {
+        self.project().w.poll_write(cx, buf)
+    }
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<IoResult<()>> {
+        self.project().w.poll_flush(cx)
+    }
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<IoResult<()>> {
+        self.project().w.poll_close(cx)
     }
 }
 
