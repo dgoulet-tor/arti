@@ -93,6 +93,29 @@ impl From<tor_cell::Error> for Error {
     }
 }
 
+impl From<Error> for std::io::Error {
+    fn from(err: Error) -> std::io::Error {
+        use std::io::ErrorKind;
+        use Error::*;
+        let kind = match err {
+            IoErr(e) => return e,
+            StreamTimeout => ErrorKind::TimedOut,
+
+            InvalidOutputLength | NoSuchHop | BadStreamAddress => ErrorKind::InvalidInput,
+
+            CircDestroy(_) | ChannelClosed | CircuitClosed | StreamClosed(_) => {
+                ErrorKind::ConnectionReset
+            }
+
+            BytesErr(_) | MissingKey | BadCellAuth | BadHandshake | ChanProto(_) | CircProto(_)
+            | CellErr(_) | ChanMismatch(_) | StreamProto(_) => ErrorKind::InvalidData,
+
+            InternalError(_) | IDRangeFull | CircExtend(_) => ErrorKind::Other,
+        };
+        std::io::Error::new(kind, err)
+    }
+}
+
 /// Internal type: Error return value from reactor's run_once
 /// function: indicates an error or a shutdown.
 #[derive(Debug)]
