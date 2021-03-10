@@ -25,7 +25,7 @@
 //! circuit's upstream channel.  These cells are either RELAY cells or
 //! DESTROY cells.  DESTROY cells are handled immediately.
 //! RELAY cells are either for a particular stream, in which case they
-//! get forwarded to a TorStream object, or for no particular stream,
+//! get forwarded to a RawCellStream object, or for no particular stream,
 //! in which case they are considered "meta" cells (like EXTENEDED2)
 //! that should only get accepted if something is waiting for them.
 //!
@@ -55,7 +55,7 @@ use crate::crypto::cell::{
     RelayCellBody,
 };
 use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
-use crate::stream::{DataStream, TorStream};
+use crate::stream::{DataStream, RawCellStream};
 use crate::{Error, Result};
 use tor_cell::chancell::{self, msg::ChanMsg, ChanCell, CircId};
 use tor_cell::relaycell::msg::{RelayMsg, Sendme};
@@ -471,7 +471,7 @@ impl ClientCirc {
     ///
     /// The caller will typically want to see the first cell in response,
     /// to see whether it is e.g. an END or a CONNECTED.
-    async fn begin_stream_impl(self: &Arc<Self>, begin_msg: RelayMsg) -> Result<TorStream> {
+    async fn begin_stream_impl(self: &Arc<Self>, begin_msg: RelayMsg) -> Result<RawCellStream> {
         // TODO: Possibly this should take a hop, rather than just
         // assuming it's the last hop.
 
@@ -527,7 +527,7 @@ impl ClientCirc {
             stream_closed: Some(send_close),
         };
 
-        Ok(TorStream::new(target, receiver))
+        Ok(RawCellStream::new(target, receiver))
     }
 
     /// Start a DataStream connection to the given address and port,

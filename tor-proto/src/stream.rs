@@ -22,9 +22,9 @@ use futures::stream::StreamExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-/// A TorStream is a client's cell-oriented view of a stream over the
+/// A RawCellStream is a client's cell-oriented view of a stream over the
 /// Tor network.
-pub struct TorStream {
+pub struct RawCellStream {
     /// Wrapped view of the circuit, hop, and streamid that we're using.
     ///
     /// TODO: do something similar with circuits?
@@ -38,10 +38,10 @@ pub struct TorStream {
     stream_ended: AtomicBool,
 }
 
-impl TorStream {
-    /// Internal: build a new TorStream.
+impl RawCellStream {
+    /// Internal: build a new RawCellStream.
     pub(crate) fn new(target: StreamTarget, receiver: mpsc::Receiver<RelayMsg>) -> Self {
-        TorStream {
+        RawCellStream {
             target: Mutex::new(target),
             receiver: Mutex::new(receiver),
             stream_ended: AtomicBool::new(false),
@@ -101,7 +101,7 @@ impl TorStream {
     }
 }
 
-/// A DataStream is a wrapper around a TorStream for byte-oriented IO.
+/// A DataStream is a wrapper around a RawCellStream for byte-oriented IO.
 /// It's suitable for use with BEGIN or BEGIN_DIR streams.
 // TODO: I'd like this to implement AsyncRead and AsyncWrite.
 pub struct DataStream {
@@ -114,8 +114,8 @@ pub struct DataStream {
 /// Wrapper for the write part of a DataStream
 // TODO: I'd like this to implement AsyncWrite.
 pub struct DataWriter {
-    /// The underlying TorStream object.
-    s: Arc<TorStream>,
+    /// The underlying RawCellStream object.
+    s: Arc<RawCellStream>,
 
     /// Buffered data to send over the connection.
     // TODO: this buffer is probably smaller than we want, but it's good
@@ -129,8 +129,8 @@ pub struct DataWriter {
 /// Wrapper for the read part of a DataStream
 // TODO: I'd like this to implement AsyncRead
 pub struct DataReader {
-    /// The underlying TorStream object.
-    s: Arc<TorStream>,
+    /// The underlying RawCellStream object.
+    s: Arc<RawCellStream>,
 
     /// If present, data that we received on this stream but have not
     /// been able to send to the caller yet.
@@ -143,10 +143,10 @@ pub struct DataReader {
 }
 
 impl DataStream {
-    /// Wrap a TorStream as a DataStream.
+    /// Wrap a RawCellStream as a DataStream.
     ///
     /// Call only after a CONNECTED cell has been received.
-    pub(crate) fn new(s: TorStream) -> Self {
+    pub(crate) fn new(s: RawCellStream) -> Self {
         let s = Arc::new(s);
         let r = DataReader {
             s: Arc::clone(&s),
@@ -304,16 +304,16 @@ impl DataReader {
 /// A ResolveStream represents a pending DNS request made with a RESOLVE
 /// cell.
 pub struct ResolveStream {
-    /// The underlying TorStream.
-    s: TorStream,
+    /// The underlying RawCellStream.
+    s: RawCellStream,
 }
 
 impl ResolveStream {
-    /// Wrap a TorStream into a ResolveStream.
+    /// Wrap a RawCellStream into a ResolveStream.
     ///
     /// Call only after sending a RESOLVE cell.
     #[allow(dead_code)] // need to implement a caller for this.
-    pub(crate) fn new(s: TorStream) -> Self {
+    pub(crate) fn new(s: RawCellStream) -> Self {
         ResolveStream { s }
     }
 
