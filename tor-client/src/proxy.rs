@@ -4,6 +4,7 @@
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use futures::stream::StreamExt;
 use log::{error, info, warn};
+use std::io::Result as IoResult;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
 #[allow(unused)]
@@ -137,22 +138,60 @@ async fn handle_socks_conn(
     Ok(())
 }
 
-/// Helper: as futures::io::copy(), but flushes after each write.
-async fn copy_interactive<R, W>(mut reader: R, mut writer: W) -> Result<()>
+/// Copy all the data from `reader` into `writer` until we encounter an EOF or
+/// an error.
+///
+/// Unlike as futures::io::copy(), this function is meant for use with
+/// interactive readers and writers, in which the writer might need to
+/// be flushed for any buffered data to be sent.  It tries to minimize
+/// the number of flushes, by only flushing the writer when the reader
+/// has no data.
+async fn copy_interactive<R, W>(mut reader: R, mut writer: W) -> IoResult<()>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut buf = [0u8; 498];
-    loop {
-        let n = reader.read(&mut buf[..]).await?;
-        if n == 0 {
-            return Ok(());
+    use futures::{poll, task::Poll};
+
+    let mut buf = [0u8; 1024];
+
+    // At this point we could just loop, calling read().await,
+    // write_all().await, and flush().await.  But we want to be more
+    // clever than that: we only want to flush when the reader is
+    // stalled.  That way we can pack our data into as few cells as
+    // possible, but flush it immediately whenever there's no more
+    // data coming.
+    let loop_result: IoResult<()> = loop {
+        let mut read_future = reader.read(&mut buf[..]);
+        match poll!(&mut read_future) {
+            Poll::Ready(Err(e)) => break Err(e),
+            Poll::Ready(Ok(0)) => break Ok(()), // EOF
+            Poll::Ready(Ok(n)) => {
+                writer.write_all(&buf[..n]).await?;
+                continue;
+            }
+            Poll::Pending => writer.flush().await?,
         }
-        // TODO: Some kind of nagling might make sense here.
-        writer.write_all(&buf[..n]).await?;
-        writer.flush().await?;
-    }
+
+        // The read future is pending, so we should wait on it.
+        match read_future.await {
+            Err(e) => break Err(e),
+            Ok(0) => break Ok(()),
+            Ok(n) => writer.write_all(&buf[..n]).await?,
+        }
+    };
+
+    // Make sure that we flush any lingering data if we can.
+    //
+    // If there is a difference between closing and dropping, then we
+    // only want to do a "proper" close if the reader closed cleanly.
+    let flush_result = if loop_result.is_ok() {
+        writer.close().await
+    } else {
+        writer.flush().await
+    };
+
+    loop_result.or(flush_result)
 }
 
 /// Launch a SOCKS proxy to listen on a given localhost port, and run until
