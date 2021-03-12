@@ -8,6 +8,7 @@
 //!
 
 use crate::{Error, Result};
+use std::convert::TryInto;
 use tor_cell::chancell::RawCellBody;
 
 use generic_array::GenericArray;
@@ -159,7 +160,7 @@ impl OutboundClientCrypt {
     ///
     /// On success, returns a reference to tag that should be expected
     /// for an authenticated SENDME sent in response to this cell.
-    pub fn encrypt(&mut self, cell: &mut RelayCellBody, hop: HopNum) -> Result<&[u8]> {
+    pub fn encrypt(&mut self, cell: &mut RelayCellBody, hop: HopNum) -> Result<&[u8; 20]> {
         let hop: usize = hop.into();
         if hop >= self.layers.len() {
             return Err(Error::NoSuchHop);
@@ -171,7 +172,7 @@ impl OutboundClientCrypt {
         for layer in layers {
             layer.encrypt_outbound(cell);
         }
-        Ok(tag)
+        Ok(tag.try_into().expect("wrong SENDME digest size"))
     }
 
     /// Add a new layer to this OutboundClientCrypt
