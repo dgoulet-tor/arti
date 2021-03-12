@@ -109,12 +109,14 @@ fn tweak_toml_bareword(s: &str) -> Option<String> {
         Regex::new(
             r#"(?x:
                ^
+                [ \t]*
                 # first capture group: dotted barewords
                 ((?:[a-zA-Z0-9_\-]+\.)*
                  [a-zA-Z0-9_\-]+)
-                 =
+                [ \t]*=[ \t]*
                 # second group: one bareword without hyphens
                 ([a-zA-Z0-9_]+)
+                [ \t]*
                 $)"#,
         )
         .expect("Built-in regex compilation failed")
