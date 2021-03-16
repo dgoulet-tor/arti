@@ -336,9 +336,16 @@ impl ClientCirc {
 
         trace!("{}: waiting for EXTENDED2 cell", unique_id);
         // ... and now we wait for a response.
-        let (from_hop, msg) = receiver.await.map_err(|_| {
-            Error::CircDestroy("Circuit closed while waiting for extended cell".into())
-        })??;
+        let (from_hop, msg) = match receiver.await {
+            Ok(Ok((h, m))) => Ok((h, m)),
+            Err(_) => Err(Error::InternalError(
+                "Receiver cancelled while waiting for EXTENDED2".into(),
+            )),
+            Ok(Err(Error::CircuitClosed)) => Err(Error::CircDestroy(
+                "Circuit closed while waiting for EXTENDED2".into(),
+            )),
+            Ok(Err(e)) => Err(e),
+        }?;
 
         // XXXX If two EXTEND cells are of these are launched on the
         // same circuit at once, could they collide in this part of
@@ -350,7 +357,7 @@ impl ClientCirc {
         if from_hop != hop || msg.cmd() != RelayCmd::EXTENDED2 {
             self.protocol_error().await;
             return Err(Error::CircProto(format!(
-                "wanted EXTENDED2 from {}; got {} from {}",
+                "wanted EXTENDED2 from hop {}; got {} from hop {}",
                 hop,
                 msg.cmd(),
                 from_hop
