@@ -70,7 +70,7 @@ impl From<&PublicKey> for Ed25519Identity {
     fn from(pk: &PublicKey) -> Self {
         // This unwrap is safe because the public key is always 32 bytes
         // long.
-        Ed25519Identity::from_bytes(pk.as_bytes()).unwrap()
+        Ed25519Identity::from_bytes(pk.as_bytes()).expect("Ed25519 public key had wrong length?")
     }
 }
 
