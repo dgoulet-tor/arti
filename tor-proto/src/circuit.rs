@@ -1204,9 +1204,11 @@ mod test {
         }
     }
 
-    // Helper: set up a 3-hop circuit with no encryption.
-    async fn newcirc(
+    // Helper: set up a 3-hop circuit with no encryption, where the
+    // next inbound message seems to come from hop next_msg_from
+    async fn newcirc_ext(
         chan: Arc<Channel>,
+        next_msg_from: HopNum,
     ) -> (
         Arc<ClientCirc>,
         reactor::Reactor,
@@ -1237,7 +1239,7 @@ mod test {
                 circ.add_hop(
                     true,
                     Box::new(DummyCrypto::new(idx == 2)),
-                    Box::new(DummyCrypto::new(idx == 2)),
+                    Box::new(DummyCrypto::new(idx == next_msg_from.into())),
                     &params,
                 ),
                 reactor.run_once()
@@ -1247,6 +1249,18 @@ mod test {
         }
 
         (circ, reactor, circmsg_send)
+    }
+
+    // Helper: set up a 3-hop circuit with no encryption, where the
+    // next inbound message seems to come from hop next_msg_from
+    async fn newcirc(
+        chan: Arc<Channel>,
+    ) -> (
+        Arc<ClientCirc>,
+        reactor::Reactor,
+        mpsc::Sender<ClientCircChanMsg>,
+    ) {
+        newcirc_ext(chan, 2.into()).await
     }
 
     // Try sending a cell via send_relay_cell
@@ -1372,6 +1386,82 @@ mod test {
 
         // Did we really add another hop?
         assert_eq!(circ.n_hops().await, 4);
+    }
+
+    async fn bad_extend_test_impl(reply_hop: HopNum, bad_reply: ClientCircChanMsg) -> Error {
+        // Test for getting an EXTENDED cell from the wrong hop. If that
+        // happens, we've gotta bail.
+        let (chan, _ch) = fake_channel();
+        let (circ, mut reactor, mut sink) = newcirc_ext(chan, reply_hop).await;
+        let params = CircParameters::default();
+
+        let extend_fut = async move {
+            let target = example_target();
+            let mut rng = thread_rng();
+            let outcome = circ.extend_ntor(&mut rng, &target, &params).await;
+            (outcome, circ) // keep the circ alive, or the reactor will exit.
+        };
+        let bad_reply_fut = async move {
+            sink.send(bad_reply).await.unwrap();
+            sink // keep the sink alive, or the reactor will exit.
+        };
+        let reactor_fut = async move {
+            let res = reactor.run_once().await;
+            if res.is_err() {
+                reactor.propagate_close().await;
+            }
+        };
+        let ((outcome, circ), _, _) = futures::join!(extend_fut, bad_reply_fut, reactor_fut);
+
+        assert_eq!(circ.n_hops().await, 3);
+        assert!(outcome.is_err());
+        outcome.unwrap_err()
+    }
+
+    #[async_test]
+    async fn bad_extend_wronghop() {
+        let mut rng = thread_rng();
+        let rc = RelayCell::new(0.into(), relaymsg::Extended2::new(vec![]).into())
+            .encode(&mut rng)
+            .unwrap();
+        let rm = chanmsg::Relay::from_raw(rc.into());
+        let cc = ClientCircChanMsg::Relay(rm.into());
+
+        let error = bad_extend_test_impl(1.into(), cc).await;
+        match error {
+            Error::CircProto(s) => {
+                assert_eq!(s, "wanted EXTENDED2 from hop 2; got EXTENDED2 from hop 1")
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[async_test]
+    async fn bad_extend_wrongtype() {
+        let mut rng = thread_rng();
+        let rc = RelayCell::new(0.into(), relaymsg::Extended::new(vec![7; 200]).into())
+            .encode(&mut rng)
+            .unwrap();
+        let rm = chanmsg::Relay::from_raw(rc.into());
+        let cc = ClientCircChanMsg::Relay(rm.into());
+
+        let error = bad_extend_test_impl(2.into(), cc).await;
+        match error {
+            Error::CircProto(s) => {
+                assert_eq!(s, "wanted EXTENDED2 from hop 2; got EXTENDED from hop 2")
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[async_test]
+    async fn bad_extend_destroy() {
+        let cc = ClientCircChanMsg::Destroy(chanmsg::Destroy::new(4.into()));
+        let error = bad_extend_test_impl(2.into(), cc).await;
+        match error {
+            Error::CircDestroy(s) => assert_eq!(s, "Circuit closed while waiting for EXTENDED2"),
+            _ => panic!(),
+        }
     }
 
     #[test]
