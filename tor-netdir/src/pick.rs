@@ -7,6 +7,12 @@
 ///
 /// We'll return None if and only if there are no values with nonzero
 /// weight.
+///
+/// Note that if the total values of `weightfn()` over all values has
+/// a sum greater than `u64::MAX`, this function may use incorrect
+/// approximations for its probabilities.  Try to make sure that the
+/// maximum value of `weightfn()` is no more than `u64::MAX / i.len()`.
+//
 // Performance note: this implementation requires a fast RNG, but
 // doesn't need much storage.
 pub fn pick_weighted<R, I, F>(rng: &mut R, i: I, weightfn: F) -> Option<I::Item>
@@ -15,21 +21,44 @@ where
     F: Fn(&I::Item) -> u64,
     R: rand::Rng,
 {
-    let mut result = None;
-    let mut weight_so_far: u64 = 0;
-
     // Correctness argument: at the end of each iteration of the loop,
     // `result` holds a value chosen with weighted probabability from
     // all of the items yielded so far.  The loop body preserves this
     // invariant.
 
+    let mut shift = 0_u8;
+    let mut result = None;
+    let mut weight_so_far: u64 = 0;
+
     for item in i {
-        let w = weightfn(&item);
+        let mut w = weightfn(&item) >> shift;
         if w == 0 {
             continue;
         }
-        // TODO-A1: panics on overflow. Probably not best.
-        weight_so_far = weight_so_far.checked_add(w).unwrap();
+        weight_so_far = match weight_so_far.checked_add(w) {
+            Some(sum) => sum,
+            None => {
+                // We can't represent the total using u64.  We
+                // increment the 'shift' value to reflect this, and
+                // adjust the total accordingly.  It's not perfectly
+                // accurate, but it's better than nothing.
+                shift += 1;
+                // This will always be true, since by the time 'shift' is 63,
+                // w will be at most 1 for any item.   So we can't overflow
+                // with shift == 63 unless we have over 2^63 items in the
+                // iterator.  Even if the caller does pass us an iterator
+                // with so many items (like an infinite one), we will
+                // never be able to iterate over 2^63 of them.
+                assert!(shift < 64);
+                w >>= 1;
+                weight_so_far >>= 1;
+                // w and weight_so_far are <= 2^64-1.  After the
+                // shift, each one is <= 2^63 - 1. Adding those together
+                // gives a value no larger than 2^64 - 2, so this addition
+                // is safe.
+                weight_so_far + w
+            }
+        };
 
         let x = rng.gen_range(0, weight_so_far);
         // TODO: we could probably do this in constant-time, if we are
@@ -130,6 +159,20 @@ mod test {
         check_fclose((cnt[1] as f64) / (n_iters as f64), 0.0);
         check_fclose((cnt[2] as f64) / (n_iters as f64), 0.9901);
         check_fclose((cnt[3] as f64) / (n_iters as f64), 0.0);
+
+        // Try again with huuuge numbers.
+        let mut cnt = [0_isize; 4];
+        #[cfg(not(feature = "stochastic_tests"))]
+        let n_iters = n_iters * 2;
+        for _ in 1..n_iters {
+            let r = pick_weighted(&mut rng, arry.iter(), |_| u64::MAX).unwrap();
+            let pos = arry.iter().position(|x| x == r);
+            cnt[pos.unwrap()] += 1;
+        }
+        check_close(cnt[0], n_iters / 4);
+        check_close(cnt[1], n_iters / 4);
+        check_close(cnt[2], n_iters / 4);
+        check_close(cnt[3], n_iters / 4);
     }
 
     /// Try picking at random when no member can be chosen.

@@ -390,7 +390,7 @@ impl<'a> UncheckedRelay<'a> {
         if self.is_usable() {
             Some(Relay {
                 rs: self.rs,
-                md: self.md.unwrap(),
+                md: self.md?,
             })
         } else {
             None

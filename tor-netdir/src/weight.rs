@@ -139,7 +139,7 @@ impl RelayWeight {
             .iter()
             .max()
             .copied()
-            .unwrap()
+            .unwrap() // unwrap is safe since the input is nonempty.
     }
     /// Return the weight we should give this kind of relay's
     /// bandwidth for a given role.
@@ -302,6 +302,7 @@ impl WeightSet {
         ];
 
         // This is the largest weight value.
+        // The unwrap() is safe because `w` is nonempty.
         let w_max = w.iter().map(RelayWeight::max_weight).max().unwrap();
 
         // We want "shift" such that (total * w_max) >> shift <= u64::max
