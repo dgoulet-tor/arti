@@ -1464,6 +1464,19 @@ mod test {
         }
     }
 
+    #[async_test]
+    async fn bad_extend_crypto() {
+        let mut rng = thread_rng();
+        let rc = RelayCell::new(0.into(), relaymsg::Extended2::new(vec![99; 256]).into())
+            .encode(&mut rng)
+            .unwrap();
+        let rm = chanmsg::Relay::from_raw(rc.into());
+        let cc = ClientCircChanMsg::Relay(rm.into());
+
+        let error = bad_extend_test_impl(2.into(), cc).await;
+        assert!(matches!(error, Error::BadHandshake));
+    }
+
     #[test]
     fn begindir() {
         tor_rtcompat::task::block_on(async {
