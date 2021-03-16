@@ -514,4 +514,43 @@ pub(crate) mod test {
         let tls = MsgBuf::new(&b""[..]);
         let _outbound = builder.launch(tls);
     }
+
+    #[test]
+    fn check_match() {
+        use std::net::SocketAddr;
+        let (chan, _reactor, _output, _input) = new_reactor();
+
+        struct ChanT {
+            ed_id: Ed25519Identity,
+            rsa_id: RSAIdentity,
+        };
+        impl ChanTarget for ChanT {
+            fn ed_identity(&self) -> &Ed25519Identity {
+                &self.ed_id
+            }
+            fn rsa_identity(&self) -> &RSAIdentity {
+                &self.rsa_id
+            }
+            fn addrs(&self) -> &[SocketAddr] {
+                &[]
+            }
+        }
+
+        let t1 = ChanT {
+            ed_id: [0x1; 32].into(),
+            rsa_id: [0x2; 20].into(),
+        };
+        let t2 = ChanT {
+            ed_id: [0x1; 32].into(),
+            rsa_id: [0x3; 20].into(),
+        };
+        let t3 = ChanT {
+            ed_id: [0x3; 32].into(),
+            rsa_id: [0x2; 20].into(),
+        };
+
+        assert!(chan.check_match(&t1).is_ok());
+        assert!(chan.check_match(&t2).is_err());
+        assert!(chan.check_match(&t3).is_err());
+    }
 }
