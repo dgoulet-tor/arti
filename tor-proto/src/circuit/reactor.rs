@@ -185,6 +185,12 @@ impl Reactor {
             }
         };
         debug!("{}: Circuit reactor stopped: {:?}", self.unique_id, result);
+        self.propagate_close().await;
+        result
+    }
+
+    /// Tell the circuit that this reactor has been closed.
+    pub(super) async fn propagate_close(self) {
         if let Some(circ) = self.circuit.upgrade() {
             // TODO: should this call terminate?
             circ.closed.store(true, Ordering::SeqCst);
@@ -193,7 +199,6 @@ impl Reactor {
                 let _ignore_err = sender.send(Err(Error::CircuitClosed));
             }
         }
-        result
     }
 
     /// Helper for run: doesn't mark the circuit closed on finish.  Only
