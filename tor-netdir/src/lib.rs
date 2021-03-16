@@ -446,12 +446,12 @@ impl<'a> Relay<'a> {
     }
 
     /// Return the IPv4 exit policy for this relay.
-    pub fn ipv4_policy(&self) -> &'a PortPolicy {
+    pub fn ipv4_policy(&self) -> &Arc<PortPolicy> {
         self.md.ipv4_policy()
     }
 
     /// Return the IPv6 exit policy for this relay.
-    pub fn ipv6_policy(&self) -> &'a PortPolicy {
+    pub fn ipv6_policy(&self) -> &Arc<PortPolicy> {
         self.md.ipv6_policy()
     }
 }

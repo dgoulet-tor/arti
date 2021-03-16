@@ -53,9 +53,6 @@ impl<'a> TorPath<'a> {
     /// is a path for use with exit circuits.
     pub(crate) fn exit_policy(&self) -> Option<super::ExitPolicy> {
         if let Some(exit_relay) = self.exit_relay() {
-            // TODO: Doing these clones is wasteful; maybe we should
-            // have Arcs for all exit policies.  That could also
-            // save some memory.
             Some(super::ExitPolicy {
                 v4: exit_relay.ipv4_policy().clone(),
                 v6: exit_relay.ipv6_policy().clone(),

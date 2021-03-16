@@ -211,9 +211,9 @@ impl CircEntry {
 #[derive(Clone, Debug)]
 struct ExitPolicy {
     /// Permitted IPv4 ports.
-    v4: PortPolicy, // XXXX refcount!
+    v4: Arc<PortPolicy>,
     /// Permitted IPv6 ports.
-    v6: PortPolicy, // XXXX refcount!
+    v6: Arc<PortPolicy>,
 }
 
 /// A port that we want to connect to as a client.

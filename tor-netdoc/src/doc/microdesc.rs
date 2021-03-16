@@ -26,6 +26,7 @@ use tor_llcrypto::pk::{curve25519, ed25519, rsa};
 
 use digest::Digest;
 use once_cell::sync::Lazy;
+use std::sync::Arc;
 
 use std::time;
 
@@ -59,9 +60,9 @@ pub struct Microdesc {
     /// Declared family for this relay.
     family: RelayFamily,
     /// List of IPv4 ports to which this relay will exit
-    ipv4_policy: PortPolicy,
+    ipv4_policy: Arc<PortPolicy>,
     /// List of IPv6 ports to which this relay will exit
-    ipv6_policy: PortPolicy,
+    ipv6_policy: Arc<PortPolicy>,
     /// Ed25519 identity for this relay
     ed25519_id: ed25519::Ed25519Identity,
     // addr is obsolete and doesn't go here any more
@@ -78,11 +79,11 @@ impl Microdesc {
         &self.ntor_onion_key
     }
     /// Return the ipv4 exit policy for this microdesc
-    pub fn ipv4_policy(&self) -> &PortPolicy {
+    pub fn ipv4_policy(&self) -> &Arc<PortPolicy> {
         &self.ipv4_policy
     }
     /// Return the ipv6 exit policy for this microdesc
-    pub fn ipv6_policy(&self) -> &PortPolicy {
+    pub fn ipv6_policy(&self) -> &Arc<PortPolicy> {
         &self.ipv6_policy
     }
     /// Return the relay family for this microdesc
@@ -308,8 +309,8 @@ impl Microdesc {
             tap_onion_key,
             ntor_onion_key,
             family,
-            ipv4_policy,
-            ipv6_policy,
+            ipv4_policy: Arc::new(ipv4_policy),
+            ipv6_policy: Arc::new(ipv6_policy),
             ed25519_id,
         };
         Ok((md, location))
