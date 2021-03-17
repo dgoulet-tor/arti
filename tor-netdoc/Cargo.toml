@@ -5,6 +5,7 @@ authors = ["Nick Mathewson <nickm@torproject.org>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
 publish = false
+homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 
 [dependencies]
 tor-llcrypto = { path="../tor-llcrypto", version="*" }
