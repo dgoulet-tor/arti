@@ -6,6 +6,7 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
+description = "Types to represent and use a Tor network directory"
 
 [dependencies]
 caret = { path = "../caret", version= "*" }

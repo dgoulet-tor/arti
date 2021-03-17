@@ -6,6 +6,7 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
+description = "Helpers for encoding and decoding byte-orientted data, as used by Tor"
 
 [dependencies]
 tor-llcrypto = { path="../tor-llcrypto" }

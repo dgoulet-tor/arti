@@ -6,6 +6,7 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
+description = "Wrapper for data compression formats used by the Tor directory protocols"
 
 [dependencies]
 anyhow = "1.0.38"
