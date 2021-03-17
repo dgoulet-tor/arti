@@ -1,0 +1,33 @@
+[package]
+name = "arti"
+version = "0.0.0"
+authors = ["The Tor Project, Inc.", "Nick Mathewson <nickm@torproject.org>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+publish = false
+homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
+description = "A rust implementation of the Tor privacy tools."
+keywords = [ "tor", "arti", "privacy", "anonymity" ]
+categories = [ "command-line-utilities", "cryptography" ]
+
+[features]
+default = [ "tokio" ]
+async-std = [ "tor-client/async-std", "tor-rtcompat/async-std" ]
+tokio = [ "tor-client/tokio", "tor-rtcompat/tokio", "tokio-util" ]
+
+[dependencies]
+tor-client = { path = "../tor-client", version = "*", default-features=false }
+tor-dirmgr = { path="../tor-dirmgr", version="*" }
+tor-proto = { path="../tor-proto", version= "*" }
+tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
+tor-socksproto = { path="../tor-socksproto", version= "*" }
+tor-config = { path="../tor-config", version = "*" }
+
+anyhow = "1.0.38"
+config = { version = "0.10.1", default-features=false }
+futures = "0.3.13"
+log = "0.4.14"
+serde = { version = "1.0.124", features = ["derive"] }
+simple-logging = "2.0.2"
+argh = "0.1.4"
+tokio-util = { version = "0.6.4", features = [ "compat" ], optional = true }

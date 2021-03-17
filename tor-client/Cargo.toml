@@ -13,7 +13,7 @@ categories = [ "network-programming", "cryptography" ]
 [features]
 default = [ "tokio" ]
 async-std = [ "tor-rtcompat/async-std", "tor-chanmgr/async-std" ]
-tokio = [ "tor-rtcompat/tokio", "tor-chanmgr/tokio", "tokio-util" ]
+tokio = [ "tor-rtcompat/tokio", "tor-chanmgr/tokio" ]
 
 [dependencies]
 tor-circmgr = { path="../tor-circmgr", version= "*" }
@@ -23,18 +23,11 @@ tor-netdir = { path="../tor-netdir", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
-tor-socksproto = { path="../tor-socksproto", version= "*" }
 tor-dirclient = { path="../tor-dirclient", version = "*" }
 tor-linkspec = { path="../tor-linkspec", version = "*" }
-tor-config = { path="../tor-config", version = "*" }
 
 anyhow = "1.0.38"
 config = { version = "0.10.1", default-features=false }
 futures = "0.3.13"
 log = "0.4.14"
-rand = "0.7.3"
-serde = { version = "1.0.124", features = ["derive"] }
-simple-logging = "2.0.2"
 thiserror = "1.0.24"
-argh = "0.1.4"
-tokio-util = { version = "0.6.4", features = [ "compat" ], optional = true }

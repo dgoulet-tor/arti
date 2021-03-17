@@ -2,6 +2,8 @@
 
 #![warn(missing_docs)]
 
+mod proxy;
+
 use std::sync::Arc;
 
 use tor_client::TorClient;
@@ -113,7 +115,7 @@ fn main() -> Result<()> {
 
     tor_rtcompat::task::block_on(async {
         let client = Arc::new(TorClient::bootstrap(dircfg).await?);
-        tor_client::proxy::run_socks_proxy(client, socks_port).await
+        proxy::run_socks_proxy(client, socks_port).await
     })
 }
 

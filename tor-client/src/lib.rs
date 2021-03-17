@@ -9,6 +9,5 @@
 #![deny(clippy::missing_docs_in_private_items)]
 
 mod client;
-pub mod proxy;
 
 pub use client::{ConnectPrefs, TorClient};

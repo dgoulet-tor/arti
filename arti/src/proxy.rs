@@ -10,7 +10,7 @@ use std::sync::Arc;
 #[allow(unused)]
 use tor_rtcompat::traits::*;
 
-use crate::{client::ConnectPrefs, TorClient};
+use tor_client::{ConnectPrefs, TorClient};
 use tor_proto::circuit::IPVersionPreference;
 use tor_socksproto::{SocksCmd, SocksRequest};
 
