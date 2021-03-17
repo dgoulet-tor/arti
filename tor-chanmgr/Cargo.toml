@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Manage a set of connections to the Tor network"
+keywords = [ "tor", "arti", "async" ]
 
 [features]
 default = [ "tokio" ]

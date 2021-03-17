@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Types to ensure that signed or time-bound data is validated before use"
+keywords = [ "tor", "arti", "typestate" ]
 
 [dependencies]
 tor-llcrypto = { path="../tor-llcrypto", version = "*" }

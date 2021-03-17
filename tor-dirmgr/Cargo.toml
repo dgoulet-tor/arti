@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Bootstrap and update an accurate Tor network directory"
+keywords = [ "tor", "arti", "download", "async" ]
 
 [features]
 default = [ "mmap" ]

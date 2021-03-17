@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Handle the consensus-diff format used in the Tor directory protocol"
+keywords = [ "tor", "arti", "diff" ]
 
 [features]
 default = []

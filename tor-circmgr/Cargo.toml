@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Manage a set of anonymous circuits over the Tor network"
+keywords = [ "tor", "arti", "async" ]
 
 [dependencies]
 tor-chanmgr = { path="../tor-chanmgr", version= "*", default-features=false }

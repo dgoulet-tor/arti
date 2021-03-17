@@ -1,4 +1,3 @@
-
 [package]
 name = "tor-config"
 version = "0.0.0"
@@ -8,6 +7,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Configuration types and code used by the Arti Tor implementation"
+keywords = [ "tor", "arti" ]
 
 [dependencies]
 config = {version="0.10.1", default-features=false, features=["toml"]}
