@@ -8,6 +8,7 @@ publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Encode and decode the SOCKS protocol, as extended in Tor"
 keywords = [ "tor", "arti", "socks" ]
+categories = [ "network-programming" ]
 
 [dependencies]
 caret = { path="../caret" }

@@ -8,6 +8,7 @@ publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Handle the consensus-diff format used in the Tor directory protocol"
 keywords = [ "tor", "arti", "diff" ]
+categories = [ "parser-implementations", "network-programming" ]
 
 [features]
 default = []

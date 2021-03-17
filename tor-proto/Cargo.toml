@@ -8,6 +8,7 @@ publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Asynchronous client-side implementation of the central Tor network protocols"
 keywords = [ "tor", "arti", "networking", "anonymity" ]
+categories = [ "network-programming", "cryptography" ]
 
 [dependencies]
 tor-rtcompat = { path="../tor-rtcompat", default-features=false }
