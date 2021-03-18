@@ -77,10 +77,11 @@ mod tests {
     fn curve_to_ed_compatible() {
         use super::*;
         use crate::pk::{curve25519, ed25519};
+        use crate::util::rand_compat::RngCompatExt;
         use rand::thread_rng;
         use signature::Verifier;
 
-        let rng = thread_rng();
+        let rng = thread_rng().rng_compat();
 
         let curve_sk = curve25519::StaticSecret::new(rng);
         let curve_pk = curve25519::PublicKey::from(&curve_sk);

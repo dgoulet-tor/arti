@@ -20,8 +20,8 @@ tor-linkspec = { path="../tor-linkspec" }
 arrayref = "0.3.6"
 bitflags = "1.2.1"
 bytes = "1.0.1"
-rand = "0.7.3"
-rand_core = "0.5.1"
+rand = "0.8.3"
+rand_core = "0.6.2"
 thiserror = "1.0.24"
 
 [dev-dependencies]

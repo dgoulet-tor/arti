@@ -137,7 +137,7 @@ impl DirectoryUpdater {
             let lt = netdir.lifetime();
             let (lowbound, uncertainty) = client_download_range(&lt);
             let zero = Duration::new(0, 0);
-            let t = lowbound + rand::thread_rng().gen_range(zero, uncertainty);
+            let t = lowbound + rand::thread_rng().gen_range(zero..uncertainty);
             info!("Current directory is fresh until {}, valid until {}. I've picked {} as the earliest to download a new one.",
                       DateTime::<Utc>::from(lt.fresh_until()),
                       DateTime::<Utc>::from(lt.valid_until()),

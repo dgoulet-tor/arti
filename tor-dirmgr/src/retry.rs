@@ -93,7 +93,7 @@ impl RetryDelay {
         let (low, high) = self.delay_bounds();
         assert!(low < high);
 
-        let val = rng.gen_range(low, high);
+        let val = rng.gen_range(low..high);
         self.last_delay_ms = val;
         val
     }

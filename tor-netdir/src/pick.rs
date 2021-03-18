@@ -60,9 +60,11 @@ where
             }
         };
 
-        let x = rng.gen_range(0, weight_so_far);
+        let x = rng.gen_range(0..weight_so_far);
         // TODO: we could probably do this in constant-time, if we are
         // worried about a side-channel.
+        assert!(x < weight_so_far);
+        assert!(w <= weight_so_far);
         if x < w {
             result = Some(item);
         }
@@ -95,7 +97,7 @@ mod test {
 
     #[cfg(not(feature = "stochastic_tests"))]
     fn get_iters() -> usize {
-        1000
+        5000
     }
 
     #[cfg(feature = "stochastic_tests")]
@@ -106,6 +108,17 @@ mod test {
     #[cfg(feature = "stochastic_tests")]
     fn get_iters() -> usize {
         1000000
+    }
+
+    /// Assert that a is close to b.
+    #[cfg(not(feature = "stochastic_tests"))]
+    fn check_close(a: isize, b: isize) {
+        assert!((a - b).abs() <= (b / 20) + 5);
+    }
+
+    #[cfg(feature = "stochastic_tests")]
+    fn check_close(a: isize, b: isize) {
+        assert!((a - b).abs() <= (b / 100));
     }
 
     #[test]
@@ -126,9 +139,7 @@ mod test {
         assert!(cnt[0] < cnt[2]);
 
         assert_eq!(cnt[1], 0);
-        fn check_close(a: isize, b: isize) {
-            assert!((a - b).abs() < (b / 20) + 1);
-        }
+        dbg!(cnt);
         check_close(cnt[0], (n_iters * 100) / 1101);
         check_close(cnt[2], (n_iters * 1000) / 1101);
         check_close(cnt[3], (n_iters) / 1101);

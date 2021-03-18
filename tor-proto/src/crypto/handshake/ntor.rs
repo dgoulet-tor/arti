@@ -12,6 +12,7 @@ use tor_bytes::{Reader, Writer};
 use tor_llcrypto::d;
 use tor_llcrypto::pk::curve25519::*;
 use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::util::rand_compat::RngCompatExt;
 
 use crypto_mac::{self, Mac, NewMac};
 use rand_core::{CryptoRng, RngCore};
@@ -138,7 +139,7 @@ fn client_handshake_ntor_v1<R>(
 where
     R: RngCore + CryptoRng,
 {
-    let my_sk = StaticSecret::new(rng);
+    let my_sk = StaticSecret::new(rng.rng_compat());
     let my_public = PublicKey::from(&my_sk);
 
     client_handshake_ntor_v1_no_keygen(my_public, my_sk, relay_public)
@@ -255,7 +256,7 @@ where
     // XXXX we generate this key whether or not we are actually going to
     // find our nodeid or keyid. Perhaps we should delay that till later.
     // But if we do, we'll need to refactor a bit to keep our tests working.
-    let ephem = EphemeralSecret::new(rng);
+    let ephem = EphemeralSecret::new(rng.rng_compat());
     let ephem_pub = PublicKey::from(&ephem);
 
     server_handshake_ntor_v1_no_keygen(ephem_pub, ephem, msg, keys)
@@ -306,7 +307,7 @@ mod tests {
     #[test]
     fn simple() -> Result<()> {
         use crate::crypto::handshake::{ClientHandshake, ServerHandshake};
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::thread_rng().rng_compat();
         let relay_secret = StaticSecret::new(&mut rng);
         let relay_public = PublicKey::from(&relay_secret);
         let relay_identity = RSAIdentity::from_bytes(&[12; 20]).unwrap();
@@ -336,7 +337,7 @@ mod tests {
 
     fn make_fake_ephem_key(bytes: &[u8]) -> EphemeralSecret {
         assert_eq!(bytes.len(), 32);
-        let mut rng = FakePRNG::new(bytes);
+        let mut rng = FakePRNG::new(bytes).rng_compat();
         EphemeralSecret::new(&mut rng)
     }
 
@@ -387,7 +388,7 @@ mod tests {
     #[test]
     fn failing_handshakes() {
         use crate::crypto::handshake::{ClientHandshake, ServerHandshake};
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::thread_rng().rng_compat();
 
         // Set up keys.
         let relay_secret = StaticSecret::new(&mut rng);

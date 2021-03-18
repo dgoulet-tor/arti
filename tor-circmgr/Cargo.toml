@@ -23,7 +23,7 @@ anyhow = "1.0.38"
 async-trait = "0.1.48"
 event-listener = "2.5.1"
 futures = "0.3.13"
-rand = "0.7.3"
+rand = "0.8.3"
 log = "0.4.14"
 thiserror = "1.0.24"
 

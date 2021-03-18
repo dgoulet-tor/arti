@@ -40,10 +40,11 @@ fn test_ed25519_identity() {
 #[test]
 fn batch_verify() {
     use ll::pk::ed25519::*;
-    use rand::RngCore;
+    use ll::util::rand_compat::RngCompatExt;
+    use rand_core::RngCore;
     use signature::Signer;
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::thread_rng().rng_compat();
     let mut sigs = Vec::new();
     for _ in 0..3 {
         let kp = Keypair::generate(&mut rng);

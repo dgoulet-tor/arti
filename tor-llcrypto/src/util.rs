@@ -4,6 +4,7 @@
 //! lack of full x509 support
 
 use simple_asn1::{oid, ASN1Block, BigUint, OID};
+pub mod rand_compat;
 
 /// Given an X.509 certificate, return its SubjectPublicKey if that key
 /// is an RSA key.
