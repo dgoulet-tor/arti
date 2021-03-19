@@ -1053,6 +1053,18 @@ mod test {
     use tor_cell::relaycell::msg as relaymsg;
     use tor_llcrypto::pk;
 
+    fn rmsg_to_ccmsg<ID>(id: ID, msg: relaymsg::RelayMsg) -> ClientCircChanMsg
+    where
+        ID: Into<StreamId>,
+    {
+        let body: RelayCellBody = RelayCell::new(id.into(), msg)
+            .encode(&mut thread_rng())
+            .unwrap()
+            .into();
+        let chanmsg = chanmsg::Relay::from_raw(body.into());
+        ClientCircChanMsg::Relay(chanmsg)
+    }
+
     struct ExampleTarget {
         ntor_key: pk::curve25519::PublicKey,
         protovers: tor_protover::Protocols,
@@ -1307,16 +1319,8 @@ mod test {
         assert!(matches!(msg, RelayMsg::Extended2(_)));
 
         // 2: Try doing it via the reactor.
-        let body: RelayCellBody = RelayCell::new(0.into(), extended.clone())
-            .encode(&mut thread_rng())
-            .unwrap()
-            .into();
-        let relay = chanmsg::Relay::from_raw(body.into());
-
         let meta_receiver = circ.register_meta_handler().await.unwrap();
-        sink.send(ClientCircChanMsg::Relay(relay.clone()))
-            .await
-            .unwrap();
+        sink.send(rmsg_to_ccmsg(0, extended.clone())).await.unwrap();
         reactor.run_once().await.unwrap();
         let (hop, msg) = meta_receiver.await.unwrap().unwrap();
         assert_eq!(hop, 2.into());
@@ -1368,13 +1372,8 @@ mod test {
             let mut rng = thread_rng();
             let (_, reply) =
                 NtorServer::server(&mut rng, &[example_serverkey()], e2.handshake()).unwrap();
-            let rc = RelayCell::new(0.into(), relaymsg::Extended2::new(reply).into())
-                .encode(&mut rng)
-                .unwrap();
-            let rm = chanmsg::Relay::from_raw(rc.into());
-            sink.send(ClientCircChanMsg::Relay(rm.into()))
-                .await
-                .unwrap();
+            let extended2 = relaymsg::Extended2::new(reply).into();
+            sink.send(rmsg_to_ccmsg(0, extended2)).await.unwrap();
             sink // gotta keep the sink alive, or the reactor will exit.
         };
         let reactor_fut = async move {
@@ -1420,12 +1419,8 @@ mod test {
 
     #[async_test]
     async fn bad_extend_wronghop() {
-        let mut rng = thread_rng();
-        let rc = RelayCell::new(0.into(), relaymsg::Extended2::new(vec![]).into())
-            .encode(&mut rng)
-            .unwrap();
-        let rm = chanmsg::Relay::from_raw(rc.into());
-        let cc = ClientCircChanMsg::Relay(rm.into());
+        let extended2 = relaymsg::Extended2::new(vec![]).into();
+        let cc = rmsg_to_ccmsg(0, extended2);
 
         let error = bad_extend_test_impl(1.into(), cc).await;
         match error {
@@ -1438,12 +1433,8 @@ mod test {
 
     #[async_test]
     async fn bad_extend_wrongtype() {
-        let mut rng = thread_rng();
-        let rc = RelayCell::new(0.into(), relaymsg::Extended::new(vec![7; 200]).into())
-            .encode(&mut rng)
-            .unwrap();
-        let rm = chanmsg::Relay::from_raw(rc.into());
-        let cc = ClientCircChanMsg::Relay(rm.into());
+        let extended = relaymsg::Extended::new(vec![7; 200]).into();
+        let cc = rmsg_to_ccmsg(0, extended);
 
         let error = bad_extend_test_impl(2.into(), cc).await;
         match error {
@@ -1466,13 +1457,8 @@ mod test {
 
     #[async_test]
     async fn bad_extend_crypto() {
-        let mut rng = thread_rng();
-        let rc = RelayCell::new(0.into(), relaymsg::Extended2::new(vec![99; 256]).into())
-            .encode(&mut rng)
-            .unwrap();
-        let rm = chanmsg::Relay::from_raw(rc.into());
-        let cc = ClientCircChanMsg::Relay(rm.into());
-
+        let extended2 = relaymsg::Extended2::new(vec![99; 256]).into();
+        let cc = rmsg_to_ccmsg(0, extended2);
         let error = bad_extend_test_impl(2.into(), cc).await;
         assert!(matches!(error, Error::BadHandshake));
     }
@@ -1486,7 +1472,7 @@ mod test {
             let begin_fut = async move { circ.begin_dir_stream().await.unwrap() };
             let reply_fut = async move {
                 // We've disabled encryption on this circuit, so we can just
-                // read the extend2 cell.
+                // read the begindir cell.
                 let (id, chmsg) = ch.cells.next().await.unwrap().into_circid_and_msg();
                 assert_eq!(id, 128.into());
                 let rmsg = match chmsg {
@@ -1495,14 +1481,8 @@ mod test {
                 };
                 let (streamid, rmsg) = rmsg.into_streamid_and_msg();
                 assert!(matches!(rmsg, RelayMsg::BeginDir));
-                let mut rng = thread_rng();
-                let rc = RelayCell::new(streamid, relaymsg::Connected::new_empty().into())
-                    .encode(&mut rng)
-                    .unwrap();
-                let rm = chanmsg::Relay::from_raw(rc.into());
-                sink.send(ClientCircChanMsg::Relay(rm.into()))
-                    .await
-                    .unwrap();
+                let connected = relaymsg::Connected::new_empty().into();
+                sink.send(rmsg_to_ccmsg(streamid, connected)).await.unwrap();
                 sink // gotta keep the sink alive, or the reactor will exit.
             };
             let reactor_fut = async move {
