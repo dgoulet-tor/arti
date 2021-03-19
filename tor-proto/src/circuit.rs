@@ -1046,6 +1046,7 @@ mod test {
     use super::*;
     use crate::channel::test::fake_channel;
     use chanmsg::{ChanMsg, Created2, CreatedFast};
+    use futures::io::{AsyncReadExt, AsyncWriteExt};
     use futures::stream::StreamExt;
     use futures_await_test::async_test;
     use hex_literal::hex;
@@ -1469,30 +1470,70 @@ mod test {
             let (chan, mut ch) = fake_channel();
             let (circ, mut reactor, mut sink) = newcirc(chan).await;
 
-            let begin_fut = async move { circ.begin_dir_stream().await.unwrap() };
+            let begin_and_send_fut = async move {
+                // Here we'll say we've got a circuit, and we want to
+                // make a simple BEGINDIR request with it.
+                let mut stream = circ.begin_dir_stream().await.unwrap();
+                stream.write_all(b"HTTP/1.0 GET /\r\n").await.unwrap();
+                stream.flush().await.unwrap();
+                let mut buf = [0_u8; 1024];
+                let n = stream.read(&mut buf).await.unwrap();
+                assert_eq!(&buf[..n], b"HTTP/1.0 404 Not found\r\n");
+                let n = stream.read(&mut buf).await.unwrap();
+                assert_eq!(n, 0);
+                stream
+            };
             let reply_fut = async move {
                 // We've disabled encryption on this circuit, so we can just
                 // read the begindir cell.
                 let (id, chmsg) = ch.cells.next().await.unwrap().into_circid_and_msg();
-                assert_eq!(id, 128.into());
+                assert_eq!(id, 128.into()); // hardcoded circid.
                 let rmsg = match chmsg {
                     ChanMsg::Relay(r) => RelayCell::decode(r.into_relay_body()).unwrap(),
                     _ => panic!(),
                 };
                 let (streamid, rmsg) = rmsg.into_streamid_and_msg();
                 assert!(matches!(rmsg, RelayMsg::BeginDir));
+
+                // Reply with a Connected cell to indicate success.
                 let connected = relaymsg::Connected::new_empty().into();
                 sink.send(rmsg_to_ccmsg(streamid, connected)).await.unwrap();
+
+                // Now read a DATA cell...
+                let (id, chmsg) = ch.cells.next().await.unwrap().into_circid_and_msg();
+                assert_eq!(id, 128.into());
+                let rmsg = match chmsg {
+                    ChanMsg::Relay(r) => RelayCell::decode(r.into_relay_body()).unwrap(),
+                    _ => panic!(),
+                };
+                let (streamid_2, rmsg) = rmsg.into_streamid_and_msg();
+                assert_eq!(streamid_2, streamid);
+                if let RelayMsg::Data(d) = rmsg {
+                    assert_eq!(d.as_ref(), &b"HTTP/1.0 GET /\r\n"[..]);
+                } else {
+                    panic!();
+                }
+
+                // Write another data cell in reply!
+                let data = relaymsg::Data::new(b"HTTP/1.0 404 Not found\r\n").into();
+                sink.send(rmsg_to_ccmsg(streamid, data)).await.unwrap();
+
+                // Send an END cell to say that the conversation is over.
+                let end = relaymsg::End::new_with_reason(relaymsg::EndReason::DONE).into();
+                sink.send(rmsg_to_ccmsg(streamid, end)).await.unwrap();
+
                 sink // gotta keep the sink alive, or the reactor will exit.
             };
             let reactor_fut = async move {
                 reactor.run_once().await.unwrap(); // AddStream
                 reactor.run_once().await.unwrap(); // Register stream closer
                 reactor.run_once().await.unwrap(); // Connected cell
+                reactor.run_once().await.unwrap(); // Data cell
+                reactor.run_once().await.unwrap(); // End cell
                 reactor
             };
 
-            let (_stream, _, _) = futures::join!(begin_fut, reply_fut, reactor_fut);
+            let (_stream, _, _) = futures::join!(begin_and_send_fut, reply_fut, reactor_fut);
         })
     }
 }
