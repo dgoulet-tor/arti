@@ -201,6 +201,15 @@ where
         }
         Some(v)
     }
+
+    /// For testing: get a copy of the current send window, and the
+    /// expected incoming tags.
+    #[cfg(test)]
+    pub(crate) async fn window_and_expected_tags(&self) -> (u16, Vec<T>) {
+        let inner = self.w.lock().await;
+        let tags = inner.tags.iter().map(Clone::clone).collect();
+        (inner.window, tags)
+    }
 }
 
 /// Structure to track when we need to send SENDME cells for incoming data.

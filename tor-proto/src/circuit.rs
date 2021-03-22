@@ -1188,21 +1188,34 @@ mod test {
         test_create(false).await
     }
 
-    // An encryption layer that doesn't do any crypto.
+    // An encryption layer that doesn't do any crypto.   Can be used
+    // as inbound or outbound, but not both at once.
     struct DummyCrypto {
-        fixed_tag: [u8; 20],
+        counter_tag: [u8; 20],
+        counter: u32,
         lasthop: bool,
     }
+    impl DummyCrypto {
+        fn next_tag(&mut self) -> &[u8; 20] {
+            self.counter_tag[0] = ((self.counter >> 0) & 255) as u8;
+            self.counter_tag[1] = ((self.counter >> 8) & 255) as u8;
+            self.counter_tag[2] = ((self.counter >> 16) & 255) as u8;
+            self.counter_tag[3] = ((self.counter >> 24) & 255) as u8;
+            self.counter += 1;
+            &self.counter_tag
+        }
+    }
+
     impl crate::crypto::cell::OutboundClientLayer for DummyCrypto {
         fn originate_for(&mut self, _cell: &mut RelayCellBody) -> &[u8] {
-            &self.fixed_tag
+            self.next_tag()
         }
         fn encrypt_outbound(&mut self, _cell: &mut RelayCellBody) {}
     }
     impl crate::crypto::cell::InboundClientLayer for DummyCrypto {
         fn decrypt_inbound(&mut self, _cell: &mut RelayCellBody) -> Option<&[u8]> {
             if self.lasthop {
-                Some(&self.fixed_tag)
+                Some(self.next_tag())
             } else {
                 None
             }
@@ -1211,7 +1224,8 @@ mod test {
     impl DummyCrypto {
         fn new(lasthop: bool) -> Self {
             DummyCrypto {
-                fixed_tag: [77; 20],
+                counter_tag: [0; 20],
+                counter: 0,
                 lasthop,
             }
         }
@@ -1535,5 +1549,184 @@ mod test {
 
             let (_stream, _, _) = futures::join!(begin_and_send_fut, reply_fut, reactor_fut);
         })
+    }
+
+    // Set up a circuit and stream that expects some incoming SENDMEs.
+    async fn setup_incoming_sendme_case(
+        n_to_send: usize,
+    ) -> (
+        Arc<ClientCirc>,
+        DataStream,
+        mpsc::Sender<ClientCircChanMsg>,
+        StreamId,
+        crate::circuit::reactor::Reactor,
+        usize,
+    ) {
+        let (chan, mut ch) = fake_channel();
+        let (circ, mut reactor, mut sink) = newcirc(chan).await;
+        let (snd_done, mut rcv_done) = oneshot::channel::<()>();
+
+        let circ_clone = Arc::clone(&circ);
+        let begin_and_send_fut = async move {
+            // Take our circuit and make a stream on it.
+            let mut stream = circ_clone
+                .begin_stream("www.example.com", 443, None)
+                .await
+                .unwrap();
+            let junk = [0_u8; 1024];
+            let mut remaining = n_to_send;
+            while remaining > 0 {
+                let n = std::cmp::min(remaining, junk.len());
+                stream.write_all(&junk[..n]).await.unwrap();
+                remaining -= n;
+            }
+            stream.flush().await.unwrap();
+            stream
+        };
+
+        let receive_fut = async move {
+            // Read the begindir cell.
+            let (_id, chmsg) = ch.cells.next().await.unwrap().into_circid_and_msg();
+            let rmsg = match chmsg {
+                ChanMsg::Relay(r) => RelayCell::decode(r.into_relay_body()).unwrap(),
+                _ => panic!(),
+            };
+            let (streamid, rmsg) = rmsg.into_streamid_and_msg();
+            assert!(matches!(rmsg, RelayMsg::Begin(_)));
+            // Reply with a connected cell...
+            let connected = relaymsg::Connected::new_empty().into();
+            sink.send(rmsg_to_ccmsg(streamid, connected)).await.unwrap();
+            // Now read bytes from the stream until we have them all.
+            let mut bytes_received = 0_usize;
+            let mut cells_received = 0_usize;
+            while bytes_received < n_to_send {
+                // Read a data cell, and remember how much we got.
+                let (id, chmsg) = ch.cells.next().await.unwrap().into_circid_and_msg();
+                assert_eq!(id, 128.into());
+
+                let rmsg = match chmsg {
+                    ChanMsg::Relay(r) => RelayCell::decode(r.into_relay_body()).unwrap(),
+                    _ => panic!(),
+                };
+                let (streamid2, rmsg) = rmsg.into_streamid_and_msg();
+                assert_eq!(streamid2, streamid);
+                if let RelayMsg::Data(dat) = rmsg {
+                    cells_received += 1;
+                    bytes_received += dat.as_ref().len();
+                } else {
+                    panic!()
+                }
+            }
+            snd_done.send(()).unwrap();
+
+            (sink, streamid, cells_received)
+        };
+
+        let reactor_fut = async move {
+            use futures::FutureExt;
+            loop {
+                futures::select! {
+                    r = reactor.run_once().fuse() => r.unwrap(),
+                    _ = rcv_done => break,
+                }
+            }
+            reactor
+        };
+
+        let (stream, (sink, streamid, cells_received), reactor) =
+            futures::join!(begin_and_send_fut, receive_fut, reactor_fut);
+
+        (circ, stream, sink, streamid, reactor, cells_received)
+    }
+
+    #[test]
+    fn accept_valid_sendme() {
+        tor_rtcompat::task::block_on(async {
+            let (circ, _stream, mut sink, streamid, mut reactor, cells_received) =
+                setup_incoming_sendme_case(300 * 498 + 3).await;
+
+            assert_eq!(cells_received, 301);
+
+            // Make sure that the circuit is indeed expecting the right sendmes
+            {
+                let mut c = circ.c.lock().await;
+                let hop = c.hop_mut(2.into()).unwrap();
+                let (window, tags) = hop.sendwindow.window_and_expected_tags().await;
+                assert_eq!(window, 1000 - 301);
+                assert_eq!(tags.len(), 3);
+                // 100
+                assert_eq!(tags[0], hex!("6400000000000000000000000000000000000000"));
+                // 200
+                assert_eq!(tags[1], hex!("c800000000000000000000000000000000000000"));
+                // 300
+                assert_eq!(tags[2], hex!("2c01000000000000000000000000000000000000"));
+            }
+
+            let reply_with_sendme_fut = async move {
+                // make and send a circuit-level sendme.
+                let c_sendme =
+                    relaymsg::Sendme::new_tag(hex!("6400000000000000000000000000000000000000"))
+                        .into();
+                sink.send(rmsg_to_ccmsg(0_u16, c_sendme)).await.unwrap();
+
+                // Make and send a stream-level sendme.
+                let s_sendme = relaymsg::Sendme::new_empty().into();
+                sink.send(rmsg_to_ccmsg(streamid, s_sendme)).await.unwrap();
+
+                sink
+            };
+
+            let reactor_fut = async move {
+                reactor.run_once().await.unwrap(); // circuit sendme
+                reactor.run_once().await.unwrap(); // stream sendme
+                reactor
+            };
+
+            let (_, _) = futures::join!(reply_with_sendme_fut, reactor_fut);
+
+            // Now make sure that the circuit is still happy, and its
+            // window is updated.
+            {
+                let mut c = circ.c.lock().await;
+                let hop = c.hop_mut(2.into()).unwrap();
+                let (window, _tags) = hop.sendwindow.window_and_expected_tags().await;
+                assert_eq!(window, 1000 - 201);
+            }
+        })
+    }
+
+    #[test]
+    fn invalid_circ_sendme() {
+        // Same setup as accept_valid_sendme() test above but try giving
+        // a sendme with the wrong tag.
+        tor_rtcompat::task::block_on(async {
+            let (_circ, _stream, mut sink, _streamid, mut reactor, _cells_received) =
+                setup_incoming_sendme_case(300 * 498 + 3).await;
+
+            let reply_with_sendme_fut = async move {
+                // make and send a circuit-level sendme with a bad tag.
+                let c_sendme =
+                    relaymsg::Sendme::new_tag(hex!("FFFF0000000000000000000000000000000000FF"))
+                        .into();
+                sink.send(rmsg_to_ccmsg(0_u16, c_sendme)).await.unwrap();
+                sink
+            };
+
+            let reactor_fut = async move {
+                use crate::util::err::ReactorError;
+                let r = reactor.run_once().await;
+                match r {
+                    Err(ReactorError::Err(Error::CircProto(m))) => {
+                        assert_eq!(m, "bad auth tag on circuit sendme")
+                    }
+                    _ => panic!(),
+                }
+                reactor
+            };
+
+            let (_, _) = futures::join!(reply_with_sendme_fut, reactor_fut);
+
+            // TODO: check that the circuit is shut down too
+        });
     }
 }
