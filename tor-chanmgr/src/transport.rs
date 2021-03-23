@@ -1,10 +1,14 @@
 //! Types for launching TLS connections to relays
+//!
+//! TODO: Perhaps this type is no longer needed, and we should just
+//! use the TlsConnector trait in tor_rtcompat.
 
 pub mod nativetls;
 
 use crate::Result;
 
 use tor_linkspec::ChanTarget;
+use tor_rtcompat::tls::CertifiedConn;
 
 use async_trait::async_trait;
 use futures::io::{AsyncRead, AsyncWrite};
@@ -26,13 +30,4 @@ pub trait Transport {
         &self,
         target: &T,
     ) -> Result<(std::net::SocketAddr, Self::Connection)>;
-}
-
-/// A CertifiedConn is a connection that has authenticated using some
-/// certificate.
-///
-/// (As far as Tor is concerned, this certificate is just a bunch of bytes.)
-pub trait CertifiedConn {
-    /// Return the peer's certificate, if it has one.
-    fn peer_cert(&self) -> Result<Option<Vec<u8>>>;
 }

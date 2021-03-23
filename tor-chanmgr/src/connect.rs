@@ -32,14 +32,14 @@ pub(crate) trait Connector {
 #[async_trait]
 impl<TR: Transport + Send + Sync> Connector for TR {
     async fn build_channel(&self, target: &TargetInfo) -> Result<Arc<Channel>> {
-        use crate::transport::CertifiedConn;
+        use tor_rtcompat::tls::CertifiedConn;
         let (addr, tls) = self
             .connect(target)
             .await
             .context("Can't negotiate TLS with channel target")?;
 
         let peer_cert = tls
-            .peer_cert()?
+            .peer_certificate()?
             .ok_or_else(|| anyhow!("Somehow got a TLS connection without a certificate"))?;
 
         let mut builder = ChannelBuilder::new();

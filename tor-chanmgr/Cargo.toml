@@ -22,9 +22,8 @@ async-trait = "0.1.48"
 event-listener = "2.5.1"
 futures = "0.3.13"
 log = "0.4.14"
+native-tls = "0.2.7"
 thiserror = "1.0.24"
-async-native-tls = { version = "0.3.3" }
-native-tls = { version = "0.2.7" }
 
 [dev-dependencies]
 futures-await-test = "0.3.0"

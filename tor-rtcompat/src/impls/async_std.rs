@@ -43,5 +43,67 @@ pub mod timer {
     pub use async_std_crate::future::{timeout, TimeoutError};
 }
 
+/// Implement TLS using async_std and async_native_tls.
+pub mod tls {
+    use async_std_crate::net::TcpStream;
+    use async_trait::async_trait;
+    use futures::io::{AsyncRead, AsyncWrite};
+
+    use std::convert::TryFrom;
+    use std::io::{Error as IoError, Result as IoResult};
+    use std::net::SocketAddr;
+
+    /// The TLS-over-TCP type returned by this module.
+    pub type TlsStream = async_native_tls::TlsStream<TcpStream>;
+
+    /// A connection factory for use with async_std.
+    pub struct TlsConnector {
+        connector: async_native_tls::TlsConnector,
+    }
+
+    impl TryFrom<native_tls::TlsConnectorBuilder> for TlsConnector {
+        type Error = std::convert::Infallible;
+        fn try_from(builder: native_tls::TlsConnectorBuilder) -> Result<TlsConnector, Self::Error> {
+            let connector = builder.into();
+            Ok(TlsConnector { connector })
+        }
+    }
+
+    #[async_trait]
+    impl crate::tls::TlsConnector for TlsConnector {
+        type Conn = TlsStream;
+
+        async fn connect(&self, addr: &SocketAddr, hostname: &str) -> IoResult<Self::Conn> {
+            let stream = TcpStream::connect(addr).await?;
+
+            let conn = self
+                .connector
+                .connect(hostname, stream)
+                .await
+                .map_err(|e| IoError::new(std::io::ErrorKind::Other, e))?;
+            Ok(conn)
+        }
+    }
+
+    impl<S> crate::tls::CertifiedConn for async_native_tls::TlsStream<S>
+    where
+        S: AsyncRead + AsyncWrite + Unpin,
+    {
+        fn peer_certificate(&self) -> IoResult<Option<Vec<u8>>> {
+            let cert = self.peer_certificate();
+            match cert {
+                Ok(Some(c)) => {
+                    let der = c
+                        .to_der()
+                        .map_err(|e| IoError::new(std::io::ErrorKind::Other, e))?;
+                    Ok(Some(der))
+                }
+                Ok(None) => Ok(None),
+                Err(e) => Err(IoError::new(std::io::ErrorKind::Other, e)),
+            }
+        }
+    }
+}
+
 /// Traits specific to async_std
 pub mod traits {}

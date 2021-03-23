@@ -146,6 +146,109 @@ pub mod timer {
     pub use tokio_crate::time::{error::Elapsed as TimeoutError, sleep, timeout};
 }
 
+/// Implement a set of TLS wrappers for use with tokio.
+///
+/// Right now only tokio_native_tls is supported.
+pub mod tls {
+    use async_trait::async_trait;
+    use tokio_util::compat::{Compat, TokioAsyncReadCompatExt as _};
+
+    use futures::io::{AsyncRead, AsyncWrite};
+    use pin_project::pin_project;
+
+    use std::convert::TryFrom;
+    use std::io::{Error as IoError, Result as IoResult};
+    use std::net::SocketAddr;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
+    /// Connection factory for building tls connections with tokio and
+    /// native_tls.
+    pub struct TlsConnector {
+        /// The inner connector objject
+        connector: tokio_native_tls::TlsConnector,
+    }
+
+    impl TryFrom<native_tls::TlsConnectorBuilder> for TlsConnector {
+        type Error = native_tls::Error;
+        fn try_from(builder: native_tls::TlsConnectorBuilder) -> native_tls::Result<TlsConnector> {
+            let connector = builder.build()?.into();
+            Ok(TlsConnector { connector })
+        }
+    }
+
+    /// A TLS-over-TCP stream, using Tokio.
+    #[pin_project]
+    pub struct TlsStream {
+        /// The inner stream object.
+        #[pin]
+        s: Compat<tokio_native_tls::TlsStream<tokio_crate::net::TcpStream>>,
+    }
+
+    #[async_trait]
+    impl crate::tls::TlsConnector for TlsConnector {
+        type Conn = TlsStream;
+
+        async fn connect(&self, addr: &SocketAddr, hostname: &str) -> IoResult<Self::Conn> {
+            let stream = tokio_crate::net::TcpStream::connect(addr).await?;
+
+            let conn = self
+                .connector
+                .connect(hostname, stream)
+                .await
+                .map_err(|e| IoError::new(std::io::ErrorKind::Other, e))?;
+            let conn = conn.compat();
+            Ok(TlsStream { s: conn })
+        }
+    }
+
+    impl AsyncRead for TlsStream {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &mut [u8],
+        ) -> Poll<IoResult<usize>> {
+            let p = self.project();
+            p.s.poll_read(cx, buf)
+        }
+    }
+
+    impl AsyncWrite for TlsStream {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<IoResult<usize>> {
+            let p = self.project();
+            p.s.poll_write(cx, buf)
+        }
+        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+            let p = self.project();
+            p.s.poll_flush(cx)
+        }
+        fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+            let p = self.project();
+            p.s.poll_close(cx)
+        }
+    }
+
+    impl crate::tls::CertifiedConn for TlsStream {
+        fn peer_certificate(&self) -> IoResult<Option<Vec<u8>>> {
+            let cert = self.s.get_ref().get_ref().peer_certificate();
+            match cert {
+                Ok(Some(c)) => {
+                    let der = c
+                        .to_der()
+                        .map_err(|e| IoError::new(std::io::ErrorKind::Other, e))?;
+                    Ok(Some(der))
+                }
+                Ok(None) => Ok(None),
+                Err(e) => Err(IoError::new(std::io::ErrorKind::Other, e)),
+            }
+        }
+    }
+}
+
 /// Traits specific to the runtime.
 pub mod traits {
     pub use tokio_crate::io::{

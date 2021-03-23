@@ -202,6 +202,7 @@ mod test {
     use futures::io::{AsyncRead, AsyncWrite};
     use futures::join;
     use futures::task::Context;
+    use std::io::Result as IoResult;
     use std::net::SocketAddr;
     use std::pin::Pin;
     use std::task::Poll;
@@ -225,8 +226,8 @@ mod test {
         }
     }
 
-    impl crate::transport::CertifiedConn for FakeConnection {
-        fn peer_cert(&self) -> Result<Option<Vec<u8>>> {
+    impl tor_rtcompat::tls::CertifiedConn for FakeConnection {
+        fn peer_certificate(&self) -> IoResult<Option<Vec<u8>>> {
             Ok(Some(vec![]))
         }
     }

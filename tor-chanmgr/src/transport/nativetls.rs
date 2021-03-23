@@ -7,28 +7,29 @@
 // Probably, much of this code should move into tor-rtcompat, or a new
 // crate similar to tor-rtcompat, that can handle our TLS drama.
 
-use super::{CertifiedConn, Transport};
+use super::Transport;
 use crate::{Error, Result};
 use tor_linkspec::ChanTarget;
-use tor_rtcompat::net::TcpStream;
+use tor_rtcompat::tls::TlsConnector;
 
-use anyhow::Context;
 use async_trait::async_trait;
-// use futures::io::{AsyncRead, AsyncWrite};
-use async_native_tls::{TlsConnector, TlsStream};
 
 use log::info;
+use std::convert::{TryFrom, TryInto};
 
-/// A Transport that uses async_native_tls.
-pub struct NativeTlsTransport {
+/// A Transport that uses a connector based on native_tls.
+pub struct NativeTlsTransport<C: TlsConnector> {
     /// connector object used to build TLS connections
-    connector: TlsConnector,
+    connector: C,
 }
 
-impl NativeTlsTransport {
+impl<C: TlsConnector> NativeTlsTransport<C>
+where
+    C: TryFrom<native_tls::TlsConnectorBuilder>,
+{
     /// Construct a new NativeTlsTransport.
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self> {
         // These function names are scary, but they just mean that
         // we're skipping web pki, and using our own PKI functions.
         let mut builder = native_tls::TlsConnector::builder();
@@ -36,18 +37,17 @@ impl NativeTlsTransport {
             .danger_accept_invalid_certs(true)
             .danger_accept_invalid_hostnames(true);
 
-        let connector = builder.into();
+        let connector = builder
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Can't make TlsConnector."))?;
 
-        NativeTlsTransport { connector }
+        Ok(NativeTlsTransport { connector })
     }
 }
 
-/// The connection type returned by NativeTlsTransport.
-type TlsConnection = TlsStream<TcpStream>;
-
 #[async_trait]
-impl Transport for NativeTlsTransport {
-    type Connection = TlsConnection;
+impl<C: TlsConnector + Send + Sync + Unpin> Transport for NativeTlsTransport<C> {
+    type Connection = C::Conn;
 
     async fn connect<T: ChanTarget + Sync + ?Sized>(
         &self,
@@ -61,27 +61,10 @@ impl Transport for NativeTlsTransport {
             .get(0)
             .ok_or_else(|| Error::UnusableTarget("No addresses for chosen relay".into()))?;
 
-        info!("Connecting to {}", addr);
-        let stream = TcpStream::connect(addr)
-            .await
-            .context("Can't make a TCP stream to target relay.")?;
-
         info!("Negotiating TLS with {}", addr);
 
         // TODO: add a random hostname here if it will be used for SNI?
-        let connection = self.connector.connect("ignored", stream).await?;
+        let connection = self.connector.connect(addr, "ignored").await?;
         Ok((*addr, connection))
-    }
-}
-
-impl CertifiedConn for TlsConnection {
-    fn peer_cert(&self) -> Result<Option<Vec<u8>>> {
-        let cert = self.peer_certificate();
-
-        match cert {
-            Ok(Some(cert)) => Ok(Some(cert.to_der()?)),
-            Ok(None) => Ok(None),
-            Err(e) => Err(e.into()),
-        }
     }
 }
