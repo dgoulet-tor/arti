@@ -10,10 +10,6 @@ description = "Manage a set of connections to the Tor network"
 keywords = [ "tor", "arti", "async" ]
 
 [features]
-default = [ "tokio" ]
-
-async-std = [ "async-native-tls" ]
-tokio = [ "tokio-util", "tokio-native-tls" ]
 
 [dependencies]
 tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
@@ -27,9 +23,7 @@ event-listener = "2.5.1"
 futures = "0.3.13"
 log = "0.4.14"
 thiserror = "1.0.24"
-tokio-util = { version = "0.6.4", features = [ "compat" ], optional = true }
-tokio-native-tls = { version = "0.3.0", optional = true }
-async-native-tls = { version = "0.3.3", optional = true }
+async-native-tls = { version = "0.3.3" }
 native-tls = { version = "0.2.7" }
 
 [dev-dependencies]

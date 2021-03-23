@@ -14,16 +14,8 @@ use tor_rtcompat::net::TcpStream;
 
 use anyhow::Context;
 use async_trait::async_trait;
-#[allow(unused)]
-use futures::io::{AsyncRead, AsyncWrite};
-
-#[cfg(feature = "async-std")]
+// use futures::io::{AsyncRead, AsyncWrite};
 use async_native_tls::{TlsConnector, TlsStream};
-
-#[cfg(feature = "tokio")]
-use tokio_native_tls::{TlsConnector, TlsStream};
-#[cfg(feature = "tokio")]
-use tokio_util::compat::Compat;
 
 use log::info;
 
@@ -44,23 +36,14 @@ impl NativeTlsTransport {
             .danger_accept_invalid_certs(true)
             .danger_accept_invalid_hostnames(true);
 
-        #[cfg(feature = "async-std")]
         let connector = builder.into();
-
-        #[cfg(feature = "tokio")]
-        let connector = builder.build().unwrap().into(); // XXXX-A2 can panic
 
         NativeTlsTransport { connector }
     }
 }
 
 /// The connection type returned by NativeTlsTransport.
-#[cfg(feature = "async-std")]
 type TlsConnection = TlsStream<TcpStream>;
-
-/// The connection type returned by NativeTlsTransport.
-#[cfg(feature = "tokio")]
-type TlsConnection = Compat<TlsStream<TcpStream>>;
 
 #[async_trait]
 impl Transport for NativeTlsTransport {
@@ -87,21 +70,13 @@ impl Transport for NativeTlsTransport {
 
         // TODO: add a random hostname here if it will be used for SNI?
         let connection = self.connector.connect("ignored", stream).await?;
-        #[cfg(feature = "tokio")]
-        let connection = {
-            use tokio_util::compat::TokioAsyncReadCompatExt;
-            connection.compat()
-        };
         Ok((*addr, connection))
     }
 }
 
 impl CertifiedConn for TlsConnection {
     fn peer_cert(&self) -> Result<Option<Vec<u8>>> {
-        #[cfg(feature = "async-std")]
         let cert = self.peer_certificate();
-        #[cfg(feature = "tokio")]
-        let cert = self.get_ref().get_ref().peer_certificate();
 
         match cert {
             Ok(Some(cert)) => Ok(Some(cert.to_der()?)),

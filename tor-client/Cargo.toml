@@ -12,12 +12,12 @@ categories = [ "network-programming", "cryptography" ]
 
 [features]
 default = [ "tokio" ]
-async-std = [ "tor-rtcompat/async-std", "tor-chanmgr/async-std" ]
-tokio = [ "tor-rtcompat/tokio", "tor-chanmgr/tokio" ]
+async-std = [ "tor-rtcompat/async-std" ]
+tokio = [ "tor-rtcompat/tokio" ]
 
 [dependencies]
 tor-circmgr = { path="../tor-circmgr", version= "*" }
-tor-chanmgr = { path="../tor-chanmgr", version= "*", default-features=false }
+tor-chanmgr = { path="../tor-chanmgr", version= "*" }
 tor-dirmgr = { path="../tor-dirmgr", version="*" }
 tor-netdir = { path="../tor-netdir", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }

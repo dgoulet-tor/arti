@@ -13,7 +13,7 @@ categories = [ "command-line-utilities", "cryptography" ]
 [features]
 default = [ "tokio" ]
 async-std = [ "tor-client/async-std", "tor-rtcompat/async-std" ]
-tokio = [ "tor-client/tokio", "tor-rtcompat/tokio", "tokio-util" ]
+tokio = [ "tor-client/tokio", "tor-rtcompat/tokio" ]
 
 [dependencies]
 tor-client = { path = "../tor-client", version = "*", default-features=false }
@@ -30,4 +30,3 @@ log = "0.4.14"
 serde = { version = "1.0.124", features = ["derive"] }
 simple-logging = "2.0.2"
 argh = "0.1.4"
-tokio-util = { version = "0.6.4", features = [ "compat" ], optional = true }
