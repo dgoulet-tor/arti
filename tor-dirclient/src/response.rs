@@ -11,7 +11,7 @@ pub struct DirResponse {
     /// The decompressed output that we got from the directory cache.
     output: String,
     /// Information about the directory cache we used.
-    source: SourceInfo,
+    source: Option<SourceInfo>,
 }
 
 /// Information about the source of a directory response.
@@ -29,7 +29,7 @@ pub struct SourceInfo {
 
 impl DirResponse {
     /// Construct a new DirResponse from its parts
-    pub(crate) fn new(status: u16, output: String, source: SourceInfo) -> Self {
+    pub(crate) fn new(status: u16, output: String, source: Option<SourceInfo>) -> Self {
         DirResponse {
             status,
             output,
@@ -53,8 +53,8 @@ impl DirResponse {
     }
 
     /// Return the source information about this response.
-    pub fn source(&self) -> &SourceInfo {
-        &self.source
+    pub fn source(&self) -> Option<&SourceInfo> {
+        self.source.as_ref()
     }
 }
 

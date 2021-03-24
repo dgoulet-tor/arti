@@ -21,7 +21,7 @@ use tor_circmgr::{CircMgr, DirInfo};
 use tor_decompress::{Decompressor, StatusKind};
 
 use anyhow::{Context, Result};
-use futures::io::{AsyncReadExt, AsyncWriteExt};
+use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use futures::FutureExt;
 use log::info;
 use std::sync::Arc;
@@ -44,97 +44,112 @@ where
 {
     use tor_rtcompat::timer::timeout;
 
+    let circuit = circ_mgr.get_or_launch_dir(dirinfo).await?;
+
+    // XXXX should be an option, and is too long.
+    let begin_timeout = Duration::from_secs(5);
+    let source = SourceInfo::new(circuit.unique_id());
+    let mut stream = timeout(begin_timeout, async {
+        // Send the HTTP request
+        circuit
+            .begin_dir_stream()
+            .await
+            .with_context(|| format!("Failed to open a directory stream to {:?}", source))
+    })
+    .await??;
+
+    // TODO: Perhaps we want separate timeouts for each phase of this.
+    // For now, we just use higher-level timeouts in `dirmgr`.
+    let r = download(req, &mut stream, Some(source.clone())).await;
+
+    // If this is a "persistent" error, then we shouldn't use this circuit
+    // any more.
+    if let Err(ref e) = r {
+        if false {
+            // e.is_fatal() { XXXX
+            retire_circ(circ_mgr, &source, &e).await;
+        }
+    }
+
+    r
+}
+
+/// Fetch a Tor directory object from a provided stream.
+///
+/// To do this, we send a simple HTTP/1.0 request for the described
+/// object in `req` over `stream`, and then wait for a response.  In
+/// log messatges, we describe the origin of the data as coming from
+/// `source`.
+///
+/// # Notes
+///
+/// This code does no timeouts.
+///
+/// It's kind of bogus to have a 'source' field here at all.
+pub async fn download<R, S>(
+    req: R,
+    stream: &mut S,
+    source: Option<SourceInfo>,
+) -> Result<DirResponse>
+where
+    R: request::ClientRequest,
+    S: AsyncRead + AsyncWrite + Unpin,
+{
     let partial_ok = req.partial_docs_ok();
     let maxlen = req.max_response_len();
     let req = req.into_request()?;
     let encoded = util::encode_request(req);
 
-    let circuit = circ_mgr.get_or_launch_dir(dirinfo).await?;
-    let source = SourceInfo::new(circuit.unique_id());
+    // Write the request.
+    stream
+        .write_all(encoded.as_bytes())
+        .await
+        .with_context(|| format!("Failed to send HTTP request to {:?}", source))?;
+    stream
+        .flush()
+        .await
+        .with_context(|| format!("Couldn't deliver http request to {:?}", source))?;
 
-    let (header, stream) = {
-        // XXXX should be an option, and is too long.
-        let begin_timeout = Duration::from_secs(5);
-        let r = timeout(begin_timeout, async {
-            // Send the HTTP request
-            let mut stream = circuit
-                .begin_dir_stream()
-                .await
-                .with_context(|| format!("Failed to open a directory stream to {:?}", source))?;
-            stream
-                .write_all(encoded.as_bytes())
-                .await
-                .with_context(|| format!("Failed to send HTTP request to {:?}", source))?;
-            stream
-                .flush()
-                .await
-                .with_context(|| format!("Couldn't deliver http request to {:?}", source))?;
+    // Handle the response
+    let header = read_headers(stream)
+        .await
+        .with_context(|| format!("Failed to handle the HTTP response from {:?}", source))?;
 
-            // Handle the response
-            let hdr = read_headers(&mut stream)
-                .await
-                .with_context(|| format!("Failed to handle the HTTP response from {:?}", source))?;
-            Result::<_, anyhow::Error>::Ok((hdr, stream))
-        })
-        .await;
+    if header.status != Some(200) {
+        return Err(Error::HttpStatus(header.status).into());
+    }
 
-        match r {
-            Err(e) => {
-                retire_circ(circ_mgr, &source, &e).await;
-                return Err(e.into());
-            }
-            Ok(Err(e)) => {
-                retire_circ(circ_mgr, &source, &e).await;
-                return Err(e);
-            }
-            Ok(Ok((hdr, stream))) => {
-                if hdr.status != Some(200) {
-                    // XXXX-A1 we should retire the circuit in some of
-                    // these cases, and return a response in others.
-                    return Err(Error::HttpStatus(hdr.status).into());
-                }
-                (hdr, stream)
-            }
-        }
-    };
     let encoding = header.encoding;
     let buf = header.pending;
     let n_in_buf = header.n_pending;
 
-    let decompressor = match tor_decompress::from_content_encoding(encoding.as_deref()) {
-        Err(e) => {
-            retire_circ(circ_mgr, &source, &e).await;
-            return Err(e);
-        }
-        Ok(x) => x,
-    };
+    let decompressor = tor_decompress::from_content_encoding(encoding.as_deref())?;
 
     let mut result = vec![0_u8; 2048];
 
     let ok = read_and_decompress(stream, maxlen, decompressor, buf, n_in_buf, &mut result).await;
     match (partial_ok, ok, result.len()) {
-        (true, Err(e), n) if n > 0 => {
-            retire_circ(Arc::clone(&circ_mgr), &source, &e).await;
+        (true, Err(_), n) if n > 0 => {
+            // retire_circ(Arc::clone(&circ_mgr), &source, &e).await; //XXXX
             // Note that we _don't_ return here: we want the partial response.
         }
         (_, Err(e), _) => {
-            retire_circ(circ_mgr, &source, &e).await;
             return Err(e);
         }
         (_, _, _) => (),
     }
 
     match String::from_utf8(result) {
-        Err(e) => {
-            retire_circ(circ_mgr, &source, &e).await;
-            Err(e.into())
-        }
+        Err(e) => Err(e.into()),
         Ok(output) => Ok(DirResponse::new(200, output, source)),
     }
 }
 
 /// Read and parse HTTP/1 headers from `stream`.
-async fn read_headers(stream: &mut tor_proto::stream::DataStream) -> Result<HeaderStatus> {
+async fn read_headers<S>(stream: &mut S) -> Result<HeaderStatus>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
     let mut buf = vec![0; 1024];
     let mut n_in_buf = 0;
 
@@ -220,14 +235,17 @@ struct HeaderStatus {
 /// Returns the status of our download attempt, stores any data that
 /// we were able to download into `result`.  Existing contents of
 /// `result` are overwritten.
-async fn read_and_decompress(
-    mut stream: tor_proto::stream::DataStream,
+async fn read_and_decompress<S>(
+    mut stream: S,
     maxlen: usize,
     mut decompressor: Box<dyn Decompressor + Send>,
     mut buf: Vec<u8>,
     mut n_in_buf: usize,
     result: &mut Vec<u8>,
-) -> Result<()> {
+) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
     let mut read_total = n_in_buf;
     let mut written_total = 0;
 
