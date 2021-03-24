@@ -467,8 +467,8 @@ pub(crate) mod test {
         };
         let channel = Channel {
             unique_id,
-            ed25519_id: [0u8; 32].into(),
-            rsa_id: [0u8; 20].into(),
+            ed25519_id: [6_u8; 32].into(),
+            rsa_id: [10_u8; 20].into(),
             closed: AtomicBool::new(false),
             inner: Mutex::new(inner),
         };

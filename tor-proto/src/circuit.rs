@@ -61,7 +61,7 @@ use tor_cell::chancell::{self, msg::ChanMsg, ChanCell, CircId};
 use tor_cell::relaycell::msg::{RelayMsg, Sendme};
 use tor_cell::relaycell::{RelayCell, RelayCmd, StreamId};
 
-use tor_linkspec::LinkSpec;
+use tor_linkspec::{ChanTarget, CircTarget, LinkSpec};
 
 pub use tor_cell::relaycell::msg::IPVersionPreference;
 
@@ -435,7 +435,9 @@ impl ClientCirc {
     }
 
     /// Extend the circuit via the ntor handshake to a new target last
-    /// hop.  Same caveats apply from extend_impl.
+    /// hop.
+    ///
+    /// The same caveats apply from extend_impl.
     pub async fn extend_ntor<R, Tg>(
         &self,
         rng: &mut R,
@@ -444,7 +446,7 @@ impl ClientCirc {
     ) -> Result<()>
     where
         R: Rng + CryptoRng,
-        Tg: tor_linkspec::CircTarget,
+        Tg: CircTarget,
     {
         use crate::crypto::cell::Tor1RelayCrypto;
         use crate::crypto::handshake::ntor::{NtorClient, NtorPublicKey};
@@ -803,6 +805,13 @@ impl PendingClientCirc {
         (pending, reactor)
     }
 
+    /// Check whether this pending circuit matches a given channel target;
+    /// return an error if it doesn't.
+    async fn check_chan_match<T: ChanTarget>(&self, target: &T) -> Result<()> {
+        let c = self.circ.c.lock().await;
+        c.channel.check_match(target)
+    }
+
     /// Testing only: extract the circuit ID for thid pending circuit.
     #[cfg(test)]
     pub(crate) async fn peek_circid(&self) -> CircId {
@@ -916,6 +925,10 @@ impl PendingClientCirc {
     {
         use crate::crypto::cell::Tor1RelayCrypto;
         use crate::crypto::handshake::ntor::{NtorClient, NtorPublicKey};
+
+        // Exit now if we have an Ed25519 or RSA identity mismatch.
+        self.check_chan_match(target).await?;
+
         let wrap = Create2Wrap {
             handshake_type: 0x0002, // ntor
         };
@@ -1126,7 +1139,7 @@ mod test {
             unique_id,
         );
 
-        // one to reply as a relay, and one to be the reactor.
+        // Future to pretend to be a relay on the other end of the circuit.
         let simulate_relay_fut = async move {
             let mut rng = rand::thread_rng();
             let create_cell = ch.cells.next().await.unwrap();
@@ -1149,6 +1162,7 @@ mod test {
             };
             created_send.send(reply).unwrap();
         };
+        // Future to pretend to be a client.
         let client_fut = async move {
             let mut rng = rand::thread_rng();
             let target = example_target();
@@ -1161,6 +1175,7 @@ mod test {
                     .await
             }
         };
+        // Future to run the reactor.
         let reactor_fut = reactor.run_once().map(|_| ());
 
         let (circ, _, _) = futures::join!(client_fut, reactor_fut, simulate_relay_fut);
