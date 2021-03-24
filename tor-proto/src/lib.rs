@@ -19,9 +19,12 @@
 //! This crate does _not_ implement higher level protocols, like onion
 //! services or the Tor directory protocol, that are based on the Tor
 //! protocol here.  Nor does it decide _when_, _how_, or _where_ to
-//! build channels and circuits: that's the role of a future
-//! "tor-client" crate, or possibly a related "circmanager" crate or
-//! something.
+//! build channels and circuits: that's the role of higher-level crates.
+//!
+//! This crate also has no support for timeouts, so every network
+//! operation here has the potential to block the current task
+//! indefinitely.  Timeouts are another necessary piece that gets
+//! added at a higher level.
 //!
 //! In order to create channels and circuits, you'll need to know
 //! about some Tor relays, and expose their information via
