@@ -24,7 +24,7 @@ tor-socksproto = { path="../tor-socksproto", version= "*" }
 tor-config = { path="../tor-config", version = "*" }
 
 anyhow = "1.0.38"
-config = { version = "0.10.1", default-features=false }
+config = { version = "0.11.0", default-features = false }
 futures = "0.3.13"
 log = "0.4.14"
 serde = { version = "1.0.124", features = ["derive"] }

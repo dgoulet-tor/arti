@@ -10,7 +10,7 @@ description = "Configuration types and code used by the Arti Tor implementation"
 keywords = [ "tor", "arti" ]
 
 [dependencies]
-config = {version="0.10.1", default-features=false, features=["toml"]}
+config = { version = "0.11.0", default-features = false, features = ["toml"] }
 directories = "3.0.1"
 serde = { version = "1.0.124", features = ["derive"] }
 toml = "0.5.8"
