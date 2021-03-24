@@ -2,14 +2,18 @@
 
 use tor_proto::circuit::UniqId;
 
+use crate::Error;
+
 /// A successful (or at any rate, well-formed) response to a directory
 /// request.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DirResponse {
     /// An HTTP status code.
     status: u16,
     /// The decompressed output that we got from the directory cache.
     output: String,
+    /// The error, if any, that caused us to stop getting this response early.
+    error: Option<Error>,
     /// Information about the directory cache we used.
     source: Option<SourceInfo>,
 }
@@ -29,9 +33,15 @@ pub struct SourceInfo {
 
 impl DirResponse {
     /// Construct a new DirResponse from its parts
-    pub(crate) fn new(status: u16, output: String, source: Option<SourceInfo>) -> Self {
+    pub(crate) fn new(
+        status: u16,
+        error: Option<Error>,
+        output: String,
+        source: Option<SourceInfo>,
+    ) -> Self {
         DirResponse {
             status,
+            error,
             output,
             source,
         }
@@ -40,6 +50,16 @@ impl DirResponse {
     /// Return the HTTP status code for this response.
     pub fn status_code(&self) -> u16 {
         self.status
+    }
+
+    /// Return true if this is in incomplete response.
+    pub fn is_partial(&self) -> bool {
+        self.error.is_some()
+    }
+
+    /// Return the error from this response, if any.
+    pub fn error(&self) -> Option<&Error> {
+        self.error.as_ref()
     }
 
     /// Return the output from this response.

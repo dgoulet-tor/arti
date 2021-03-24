@@ -10,7 +10,7 @@ description = "Wrapper for data compression formats used by the Tor directory pr
 keywords = [ "tor", "arti", "compression" ]
 
 [dependencies]
-anyhow = "1.0.38"
 miniz_oxide = "0.4.4"
+thiserror = "1.0.24"
 xz2 = "0.1.6"
 zstd = "0.6.1"

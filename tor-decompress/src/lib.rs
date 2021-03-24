@@ -10,7 +10,11 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
-use anyhow::{anyhow, Result};
+mod err;
+pub use err::Error;
+
+/// Result type used in this crate.
+type Result<T> = std::result::Result<T, Error>;
 
 /// Possible return conditions from a decompression operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,7 +53,7 @@ pub fn from_content_encoding(encoding: Option<&str>) -> Result<Box<dyn Decompres
         Some("deflate") => miniz_oxide::new_boxed(),
         Some("x-tor-lzma") => lzma::new_boxed(),
         Some("x-zstd") => zstd::new_boxed(),
-        Some(other) => Err(anyhow!("Unrecognized content-encoding {:?}", other)),
+        Some(other) => Err(Error::ContentEncoding(other.into())),
     }
 }
 
@@ -58,8 +62,7 @@ pub fn from_content_encoding(encoding: Option<&str>) -> Result<Box<dyn Decompres
 /// This does more copying than Rust best practices would prefer, but
 /// we should never actually use it in practice.
 pub mod identity {
-    use super::{Decompressor, Status, StatusKind};
-    use anyhow::Result;
+    use super::{Decompressor, Result, Status, StatusKind};
 
     /// An identity decompressor
     pub struct Identity;
@@ -100,9 +103,8 @@ pub mod identity {
 ///
 /// This implements zlib compression as used in Tor.
 pub mod miniz_oxide {
-    use super::{Decompressor, Status, StatusKind};
+    use super::{Decompressor, Error, Result, Status, StatusKind};
 
-    use anyhow::{anyhow, Result};
     use miniz_oxide::inflate::stream::InflateState;
     use miniz_oxide::{MZError, MZFlush, MZStatus};
 
@@ -123,8 +125,9 @@ pub mod miniz_oxide {
             let statuskind = match res.status {
                 Ok(MZStatus::StreamEnd) => StatusKind::Done,
                 Ok(MZStatus::Ok) => StatusKind::Written,
+                Ok(_) => return Err(Error::UnexpectedStatus),
                 Err(MZError::Buf) => StatusKind::OutOfSpace,
-                other => return Err(anyhow!("miniz compression error: {:?}", other)),
+                Err(other) => return Err(other.into()),
             };
 
             Ok(Status {
@@ -140,9 +143,8 @@ pub mod miniz_oxide {
 ///
 /// This implements zstd compression as used in Tor.
 pub mod zstd {
-    use super::{Decompressor, Status, StatusKind};
+    use super::{Decompressor, Result, Status, StatusKind};
 
-    use anyhow::{anyhow, Result};
     use zstd::stream::raw::{Decoder, Operation};
 
     /// Create a new boxed zstd decompressor.
@@ -152,27 +154,23 @@ pub mod zstd {
 
     impl Decompressor for Decoder<'static> {
         fn process(&mut self, inp: &[u8], out: &mut [u8], finished: bool) -> Result<Status> {
-            let result = self.run_on_buffers(inp, out);
+            let result = self.run_on_buffers(inp, out)?;
             if finished {
                 // It does not do anything, just returns Ok(0) if finished_frame = true
                 //self.finish(output, finished_frame)
             }
-            match result {
-                Ok(res) => {
-                    let status = if finished {
-                        StatusKind::Done
-                    } else {
-                        StatusKind::Written
-                    };
 
-                    Ok(Status {
-                        status,
-                        consumed: res.bytes_read,
-                        written: res.bytes_written,
-                    })
-                }
-                Err(err) => Err(anyhow!("zstd compression error: {:?}", err)),
-            }
+            let status = if finished {
+                StatusKind::Done
+            } else {
+                StatusKind::Written
+            };
+
+            Ok(Status {
+                status,
+                consumed: result.bytes_read,
+                written: result.bytes_written,
+            })
         }
     }
 }
@@ -181,9 +179,8 @@ pub mod zstd {
 ///
 /// This implements lzma compression as used in Tor.
 pub mod lzma {
-    use super::{Decompressor, Status, StatusKind};
+    use super::{Decompressor, Result, Status, StatusKind};
 
-    use anyhow::{anyhow, Result};
     use xz2::stream::{Action, Status as Xz2Status, Stream};
 
     /// Create a new boxed lzma decompressor.
@@ -204,12 +201,11 @@ pub mod lzma {
 
             let res = self.process(inp, out, action);
 
-            let statuskind = match res {
-                Ok(Xz2Status::StreamEnd) => StatusKind::Done,
-                Ok(Xz2Status::Ok) => StatusKind::Written,
-                Ok(Xz2Status::GetCheck) => StatusKind::Written,
-                Ok(Xz2Status::MemNeeded) => StatusKind::OutOfSpace,
-                other => return Err(anyhow!("lzma compression error: {:?}", other)),
+            let statuskind = match res? {
+                Xz2Status::StreamEnd => StatusKind::Done,
+                Xz2Status::Ok => StatusKind::Written,
+                Xz2Status::GetCheck => StatusKind::Written,
+                Xz2Status::MemNeeded => StatusKind::OutOfSpace,
             };
 
             Ok(Status {
@@ -224,7 +220,6 @@ pub mod lzma {
 #[cfg(test)]
 mod test {
     use super::{from_content_encoding, Decompressor, StatusKind};
-    use anyhow::anyhow;
     use std::str;
 
     #[test]
@@ -322,7 +317,7 @@ mod test {
 
         let e = r.err();
         let msg = format!("Unrecognized content-encoding \"{}\"", name);
-        let err_msg = format!("{}", anyhow!(e.unwrap()));
+        let err_msg = format!("{}", e.unwrap());
         assert_eq!(msg, err_msg);
     }
 }

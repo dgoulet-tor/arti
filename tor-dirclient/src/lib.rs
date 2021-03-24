@@ -20,7 +20,6 @@ mod util;
 use tor_circmgr::{CircMgr, DirInfo};
 use tor_decompress::{Decompressor, StatusKind};
 
-use anyhow::{Context, Result};
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use futures::FutureExt;
 use log::info;
@@ -30,15 +29,26 @@ use std::time::Duration;
 pub use err::Error;
 pub use response::{DirResponse, SourceInfo};
 
+/// Type for results returned in this crate.
+pub type Result<T> = std::result::Result<T, Error>;
+
 /// Fetch the resource described by `req` over the Tor network.
 ///
 /// Circuits are built or found using `circ_mgr`, using paths
 /// constructed using `dirinfo`.
+///
+/// For more fine-grained control over the circuit and stream used,
+/// construct them yourself, and then call [`download`] instead.
+///
+/// # TODO
+///
+/// This is the only function in this crate that knows about CircMgr and
+/// DirInfo.  Perhaps this function should move up a level into DirMgr?
 pub async fn get_resource<CR>(
     req: CR,
     dirinfo: DirInfo<'_>,
     circ_mgr: Arc<CircMgr>,
-) -> Result<DirResponse>
+) -> anyhow::Result<DirResponse>
 where
     CR: request::ClientRequest,
 {
@@ -49,29 +59,24 @@ where
     // XXXX should be an option, and is too long.
     let begin_timeout = Duration::from_secs(5);
     let source = SourceInfo::new(circuit.unique_id());
-    let mut stream = timeout(begin_timeout, async {
-        // Send the HTTP request
-        circuit
-            .begin_dir_stream()
-            .await
-            .with_context(|| format!("Failed to open a directory stream to {:?}", source))
-    })
-    .await??;
+
+    // Launch the stream.
+    let mut stream = timeout(begin_timeout, circuit.begin_dir_stream()).await??; // XXXX handle fatalities here too
 
     // TODO: Perhaps we want separate timeouts for each phase of this.
     // For now, we just use higher-level timeouts in `dirmgr`.
     let r = download(req, &mut stream, Some(source.clone())).await;
 
-    // If this is a "persistent" error, then we shouldn't use this circuit
-    // any more.
-    if let Err(ref e) = r {
-        if false {
-            // e.is_fatal() { XXXX
-            retire_circ(circ_mgr, &source, &e).await;
-        }
+    let retire = match &r {
+        Err(e) => e.should_retire_circ(),
+        Ok(dr) => dr.error().map(Error::should_retire_circ) == Some(true),
+    };
+
+    if retire {
+        retire_circ(circ_mgr, &source, "Partial response").await;
     }
 
-    r
+    Ok(r?)
 }
 
 /// Fetch a Tor directory object from a provided stream.
@@ -83,9 +88,8 @@ where
 ///
 /// # Notes
 ///
-/// This code does no timeouts.
-///
-/// It's kind of bogus to have a 'source' field here at all.
+/// It's kind of bogus to have a 'source' field here at all; we may
+/// eventually want to remove it.
 pub async fn download<R, S>(
     req: R,
     stream: &mut S,
@@ -101,22 +105,13 @@ where
     let encoded = util::encode_request(req);
 
     // Write the request.
-    stream
-        .write_all(encoded.as_bytes())
-        .await
-        .with_context(|| format!("Failed to send HTTP request to {:?}", source))?;
-    stream
-        .flush()
-        .await
-        .with_context(|| format!("Couldn't deliver http request to {:?}", source))?;
+    stream.write_all(encoded.as_bytes()).await?;
+    stream.flush().await?;
 
     // Handle the response
-    let header = read_headers(stream)
-        .await
-        .with_context(|| format!("Failed to handle the HTTP response from {:?}", source))?;
-
+    let header = read_headers(stream).await?;
     if header.status != Some(200) {
-        return Err(Error::HttpStatus(header.status).into());
+        return Err(Error::HttpStatus(header.status));
     }
 
     let encoding = header.encoding;
@@ -128,21 +123,21 @@ where
     let mut result = vec![0_u8; 2048];
 
     let ok = read_and_decompress(stream, maxlen, decompressor, buf, n_in_buf, &mut result).await;
-    match (partial_ok, ok, result.len()) {
-        (true, Err(_), n) if n > 0 => {
-            // retire_circ(Arc::clone(&circ_mgr), &source, &e).await; //XXXX
+
+    let ok = match (partial_ok, ok, result.len()) {
+        (true, Err(e), n) if n > 0 => {
             // Note that we _don't_ return here: we want the partial response.
+            Err(e)
         }
         (_, Err(e), _) => {
             return Err(e);
         }
-        (_, _, _) => (),
-    }
+        (_, Ok(()), _) => Ok(()),
+    };
 
-    match String::from_utf8(result) {
-        Err(e) => Err(e.into()),
-        Ok(output) => Ok(DirResponse::new(200, output, source)),
-    }
+    let output = String::from_utf8(result)?;
+
+    Ok(DirResponse::new(200, ok.err(), output, source))
 }
 
 /// Read and parse HTTP/1 headers from `stream`.
@@ -209,7 +204,7 @@ where
             }
         }
         if n == 0 {
-            return Err(Error::TruncatedHeaders.into());
+            return Err(Error::TruncatedHeaders);
         }
     }
 }
@@ -251,7 +246,8 @@ where
 
     let mut done_reading = false;
 
-    // XXX should be an option and is too long.
+    // XXXX should be an option and is maybe too long.  Though for some
+    // users this may be too short?
     let read_timeout = Duration::from_secs(10);
     let timer = tor_rtcompat::timer::sleep(read_timeout).fuse();
     futures::pin_mut!(timer);
@@ -261,7 +257,7 @@ where
             status = stream.read(&mut buf[n_in_buf..]).fuse() => status,
             _ = timer => {
                 result.resize(written_total, 0);
-                return Err(Error::DirTimeout.into());
+                return Err(Error::DirTimeout);
             }
         };
         let n = match status {
@@ -286,7 +282,7 @@ where
             Ok(st) => st,
             Err(e) => {
                 result.resize(written_total, 0);
-                return Err(e);
+                return Err(e.into());
             }
         };
         n_in_buf -= st.consumed;
@@ -295,11 +291,11 @@ where
 
         if written_total > 2048 && written_total > read_total * 20 {
             result.resize(written_total, 0);
-            return Err(Error::CompressionBomb.into());
+            return Err(Error::CompressionBomb);
         }
         if written_total > maxlen {
             result.resize(maxlen, 0);
-            return Err(Error::ResponseTooLong(written_total).into());
+            return Err(Error::ResponseTooLong(written_total));
         }
 
         match st.status {
@@ -316,7 +312,7 @@ where
 /// Retire a directory circuit because of an error we've encountered on it.
 async fn retire_circ<E>(circ_mgr: Arc<CircMgr>, source_info: &SourceInfo, error: &E)
 where
-    E: std::fmt::Display,
+    E: std::fmt::Display + ?Sized,
 {
     let id = source_info.unique_circ_id();
     info!(

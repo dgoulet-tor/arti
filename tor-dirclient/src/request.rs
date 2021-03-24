@@ -5,7 +5,8 @@ use tor_llcrypto::pk::rsa::RSAIdentity;
 use tor_netdoc::doc::authcert::AuthCertKeyIds;
 use tor_netdoc::doc::microdesc::MDDigest;
 
-use anyhow::{Context, Result};
+use crate::Result;
+
 use std::time::SystemTime;
 
 /// A request for an object that can be served over the Tor directory system.
@@ -125,9 +126,7 @@ impl ClientRequest for ConsensusRequest {
             req = req.header("X-Or-Diff-From-Consensus", &digests.join(", "));
         }
 
-        Ok(req
-            .body(())
-            .context("Bug: Unable to form consensus HTTP request")?)
+        Ok(req.body(())?)
     }
 
     fn partial_docs_ok(&self) -> bool {
@@ -181,9 +180,7 @@ impl ClientRequest for AuthCertRequest {
         let req = http::Request::builder().method("GET").uri(uri);
         let req = add_common_headers(req);
 
-        Ok(req
-            .body(())
-            .context("Bug: Unable to form authority certificate HTTP request")?)
+        Ok(req.body(())?)
     }
 
     fn partial_docs_ok(&self) -> bool {
@@ -237,9 +234,7 @@ impl ClientRequest for MicrodescRequest {
 
         let req = add_common_headers(req);
 
-        Ok(req
-            .body(())
-            .context("Bug: Unable to form microdescriptor HTTP request")?)
+        Ok(req.body(())?)
     }
 
     fn partial_docs_ok(&self) -> bool {
