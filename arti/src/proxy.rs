@@ -11,6 +11,7 @@ use tor_rtcompat::traits::*;
 
 use tor_client::{ConnectPrefs, TorClient};
 use tor_proto::circuit::IPVersionPreference;
+use tor_rtcompat::timer::TimeoutError;
 use tor_socksproto::{SocksCmd, SocksRequest};
 
 use anyhow::{Context, Result};
@@ -97,13 +98,13 @@ async fn handle_socks_conn(
         Err(e) => {
             // TODO: Using downcast_ref() here is ugly. maybe we shouldn't
             // be using anyhow at this point?
-            match e.downcast_ref::<tor_proto::Error>() {
-                Some(tor_proto::Error::StreamTimeout) => {
+            match e.downcast_ref::<TimeoutError>() {
+                Some(_) => {
                     let reply = request.reply(tor_socksproto::SocksStatus::TTL_EXPIRED, None);
                     w.write(&reply[..])
                         .await
                         .context("Couldn't write SOCKS reply")?;
-                    return Err(tor_proto::Error::StreamTimeout.into());
+                    return Err(e);
                 }
                 _ => return Err(e),
             }

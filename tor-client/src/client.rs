@@ -10,6 +10,7 @@ use tor_proto::circuit::IPVersionPreference;
 use tor_proto::stream::DataStream;
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use log::info;
@@ -109,9 +110,11 @@ impl TorClient {
         info!("Got a circuit for {}:{}", addr, port);
         drop(dir); // This decreases the refcount on the netdir.
 
-        let stream = circ
-            .begin_stream(&addr, port, Some(flags.begin_flags()))
-            .await?;
+        // TODO: make this configurable.
+        let stream_timeout = Duration::new(10, 0);
+
+        let stream_future = circ.begin_stream(&addr, port, Some(flags.begin_flags()));
+        let stream = tor_rtcompat::timer::timeout(stream_timeout, stream_future).await??;
 
         Ok(stream)
     }

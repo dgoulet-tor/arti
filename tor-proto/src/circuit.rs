@@ -71,7 +71,7 @@ use futures::sink::SinkExt;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+// use std::time::Duration;
 
 use rand::{thread_rng, CryptoRng, Rng};
 
@@ -543,12 +543,7 @@ impl ClientCirc {
         let stream = self.begin_stream_impl(msg).await?;
         // TODO: waiting for a response here preculdes optimistic data.
 
-        // Setup a timeout for new streams
-        // XXXX: Make this configurable (is it the same as SocksTimeout)?
-        let stream_timeout = Duration::from_secs(120);
-
-        let response = tor_rtcompat::timer::timeout(stream_timeout, stream.recv()).await??;
-
+        let response = stream.recv().await?;
         match response {
             RelayMsg::Connected(_) => Ok(DataStream::new(stream)),
             RelayMsg::End(cell) => Err(Error::EndReceived(cell.reason())),
@@ -1478,77 +1473,75 @@ mod test {
         assert!(matches!(error, Error::BadHandshake));
     }
 
-    #[test]
-    fn begindir() {
-        tor_rtcompat::task::block_on(async {
-            let (chan, mut ch) = fake_channel();
-            let (circ, mut reactor, mut sink) = newcirc(chan).await;
+    #[async_test]
+    async fn begindir() {
+        let (chan, mut ch) = fake_channel();
+        let (circ, mut reactor, mut sink) = newcirc(chan).await;
 
-            let begin_and_send_fut = async move {
-                // Here we'll say we've got a circuit, and we want to
-                // make a simple BEGINDIR request with it.
-                let mut stream = circ.begin_dir_stream().await.unwrap();
-                stream.write_all(b"HTTP/1.0 GET /\r\n").await.unwrap();
-                stream.flush().await.unwrap();
-                let mut buf = [0_u8; 1024];
-                let n = stream.read(&mut buf).await.unwrap();
-                assert_eq!(&buf[..n], b"HTTP/1.0 404 Not found\r\n");
-                let n = stream.read(&mut buf).await.unwrap();
-                assert_eq!(n, 0);
-                stream
+        let begin_and_send_fut = async move {
+            // Here we'll say we've got a circuit, and we want to
+            // make a simple BEGINDIR request with it.
+            let mut stream = circ.begin_dir_stream().await.unwrap();
+            stream.write_all(b"HTTP/1.0 GET /\r\n").await.unwrap();
+            stream.flush().await.unwrap();
+            let mut buf = [0_u8; 1024];
+            let n = stream.read(&mut buf).await.unwrap();
+            assert_eq!(&buf[..n], b"HTTP/1.0 404 Not found\r\n");
+            let n = stream.read(&mut buf).await.unwrap();
+            assert_eq!(n, 0);
+            stream
+        };
+        let reply_fut = async move {
+            // We've disabled encryption on this circuit, so we can just
+            // read the begindir cell.
+            let (id, chmsg) = ch.cells.next().await.unwrap().into_circid_and_msg();
+            assert_eq!(id, 128.into()); // hardcoded circid.
+            let rmsg = match chmsg {
+                ChanMsg::Relay(r) => RelayCell::decode(r.into_relay_body()).unwrap(),
+                _ => panic!(),
             };
-            let reply_fut = async move {
-                // We've disabled encryption on this circuit, so we can just
-                // read the begindir cell.
-                let (id, chmsg) = ch.cells.next().await.unwrap().into_circid_and_msg();
-                assert_eq!(id, 128.into()); // hardcoded circid.
-                let rmsg = match chmsg {
-                    ChanMsg::Relay(r) => RelayCell::decode(r.into_relay_body()).unwrap(),
-                    _ => panic!(),
-                };
-                let (streamid, rmsg) = rmsg.into_streamid_and_msg();
-                assert!(matches!(rmsg, RelayMsg::BeginDir));
+            let (streamid, rmsg) = rmsg.into_streamid_and_msg();
+            assert!(matches!(rmsg, RelayMsg::BeginDir));
 
-                // Reply with a Connected cell to indicate success.
-                let connected = relaymsg::Connected::new_empty().into();
-                sink.send(rmsg_to_ccmsg(streamid, connected)).await.unwrap();
+            // Reply with a Connected cell to indicate success.
+            let connected = relaymsg::Connected::new_empty().into();
+            sink.send(rmsg_to_ccmsg(streamid, connected)).await.unwrap();
 
-                // Now read a DATA cell...
-                let (id, chmsg) = ch.cells.next().await.unwrap().into_circid_and_msg();
-                assert_eq!(id, 128.into());
-                let rmsg = match chmsg {
-                    ChanMsg::Relay(r) => RelayCell::decode(r.into_relay_body()).unwrap(),
-                    _ => panic!(),
-                };
-                let (streamid_2, rmsg) = rmsg.into_streamid_and_msg();
-                assert_eq!(streamid_2, streamid);
-                if let RelayMsg::Data(d) = rmsg {
-                    assert_eq!(d.as_ref(), &b"HTTP/1.0 GET /\r\n"[..]);
-                } else {
-                    panic!();
-                }
-
-                // Write another data cell in reply!
-                let data = relaymsg::Data::new(b"HTTP/1.0 404 Not found\r\n").into();
-                sink.send(rmsg_to_ccmsg(streamid, data)).await.unwrap();
-
-                // Send an END cell to say that the conversation is over.
-                let end = relaymsg::End::new_with_reason(relaymsg::EndReason::DONE).into();
-                sink.send(rmsg_to_ccmsg(streamid, end)).await.unwrap();
-
-                sink // gotta keep the sink alive, or the reactor will exit.
+            // Now read a DATA cell...
+            let (id, chmsg) = ch.cells.next().await.unwrap().into_circid_and_msg();
+            assert_eq!(id, 128.into());
+            let rmsg = match chmsg {
+                ChanMsg::Relay(r) => RelayCell::decode(r.into_relay_body()).unwrap(),
+                _ => panic!(),
             };
-            let reactor_fut = async move {
-                reactor.run_once().await.unwrap(); // AddStream
-                reactor.run_once().await.unwrap(); // Register stream closer
-                reactor.run_once().await.unwrap(); // Connected cell
-                reactor.run_once().await.unwrap(); // Data cell
-                reactor.run_once().await.unwrap(); // End cell
-                reactor
-            };
+            let (streamid_2, rmsg) = rmsg.into_streamid_and_msg();
+            assert_eq!(streamid_2, streamid);
+            if let RelayMsg::Data(d) = rmsg {
+                assert_eq!(d.as_ref(), &b"HTTP/1.0 GET /\r\n"[..]);
+            } else {
+                panic!();
+            }
 
-            let (_stream, _, _) = futures::join!(begin_and_send_fut, reply_fut, reactor_fut);
-        })
+            // Write another data cell in reply!
+            let data = relaymsg::Data::new(b"HTTP/1.0 404 Not found\r\n").into();
+            sink.send(rmsg_to_ccmsg(streamid, data)).await.unwrap();
+
+            // Send an END cell to say that the conversation is over.
+            let end = relaymsg::End::new_with_reason(relaymsg::EndReason::DONE).into();
+            sink.send(rmsg_to_ccmsg(streamid, end)).await.unwrap();
+
+            sink // gotta keep the sink alive, or the reactor will exit.
+        };
+        let reactor_fut = async move {
+            reactor.run_once().await.unwrap(); // AddStream
+            reactor.run_once().await.unwrap(); // Register stream closer
+            reactor.run_once().await.unwrap(); // Connected cell
+            reactor.run_once().await.unwrap(); // Data cell
+            reactor.run_once().await.unwrap(); // End cell
+            reactor
+        };
+
+        let (_stream, _, _) = futures::join!(begin_and_send_fut, reply_fut, reactor_fut);
     }
 
     // Set up a circuit and stream that expects some incoming SENDMEs.
@@ -1639,94 +1632,89 @@ mod test {
         (circ, stream, sink, streamid, reactor, cells_received)
     }
 
-    #[test]
-    fn accept_valid_sendme() {
-        tor_rtcompat::task::block_on(async {
-            let (circ, _stream, mut sink, streamid, mut reactor, cells_received) =
-                setup_incoming_sendme_case(300 * 498 + 3).await;
+    #[async_test]
+    async fn accept_valid_sendme() {
+        let (circ, _stream, mut sink, streamid, mut reactor, cells_received) =
+            setup_incoming_sendme_case(300 * 498 + 3).await;
 
-            assert_eq!(cells_received, 301);
+        assert_eq!(cells_received, 301);
 
-            // Make sure that the circuit is indeed expecting the right sendmes
-            {
-                let mut c = circ.c.lock().await;
-                let hop = c.hop_mut(2.into()).unwrap();
-                let (window, tags) = hop.sendwindow.window_and_expected_tags().await;
-                assert_eq!(window, 1000 - 301);
-                assert_eq!(tags.len(), 3);
-                // 100
-                assert_eq!(tags[0], hex!("6400000000000000000000000000000000000000"));
-                // 200
-                assert_eq!(tags[1], hex!("c800000000000000000000000000000000000000"));
-                // 300
-                assert_eq!(tags[2], hex!("2c01000000000000000000000000000000000000"));
-            }
+        // Make sure that the circuit is indeed expecting the right sendmes
+        {
+            let mut c = circ.c.lock().await;
+            let hop = c.hop_mut(2.into()).unwrap();
+            let (window, tags) = hop.sendwindow.window_and_expected_tags().await;
+            assert_eq!(window, 1000 - 301);
+            assert_eq!(tags.len(), 3);
+            // 100
+            assert_eq!(tags[0], hex!("6400000000000000000000000000000000000000"));
+            // 200
+            assert_eq!(tags[1], hex!("c800000000000000000000000000000000000000"));
+            // 300
+            assert_eq!(tags[2], hex!("2c01000000000000000000000000000000000000"));
+        }
 
-            let reply_with_sendme_fut = async move {
-                // make and send a circuit-level sendme.
-                let c_sendme =
-                    relaymsg::Sendme::new_tag(hex!("6400000000000000000000000000000000000000"))
-                        .into();
-                sink.send(rmsg_to_ccmsg(0_u16, c_sendme)).await.unwrap();
+        let reply_with_sendme_fut = async move {
+            // make and send a circuit-level sendme.
+            let c_sendme =
+                relaymsg::Sendme::new_tag(hex!("6400000000000000000000000000000000000000")).into();
+            sink.send(rmsg_to_ccmsg(0_u16, c_sendme)).await.unwrap();
 
-                // Make and send a stream-level sendme.
-                let s_sendme = relaymsg::Sendme::new_empty().into();
-                sink.send(rmsg_to_ccmsg(streamid, s_sendme)).await.unwrap();
+            // Make and send a stream-level sendme.
+            let s_sendme = relaymsg::Sendme::new_empty().into();
+            sink.send(rmsg_to_ccmsg(streamid, s_sendme)).await.unwrap();
 
-                sink
-            };
+            sink
+        };
 
-            let reactor_fut = async move {
-                reactor.run_once().await.unwrap(); // circuit sendme
-                reactor.run_once().await.unwrap(); // stream sendme
-                reactor
-            };
+        let reactor_fut = async move {
+            reactor.run_once().await.unwrap(); // circuit sendme
+            reactor.run_once().await.unwrap(); // stream sendme
+            reactor
+        };
 
-            let (_, _) = futures::join!(reply_with_sendme_fut, reactor_fut);
+        let (_, _) = futures::join!(reply_with_sendme_fut, reactor_fut);
 
-            // Now make sure that the circuit is still happy, and its
-            // window is updated.
-            {
-                let mut c = circ.c.lock().await;
-                let hop = c.hop_mut(2.into()).unwrap();
-                let (window, _tags) = hop.sendwindow.window_and_expected_tags().await;
-                assert_eq!(window, 1000 - 201);
-            }
-        })
+        // Now make sure that the circuit is still happy, and its
+        // window is updated.
+        {
+            let mut c = circ.c.lock().await;
+            let hop = c.hop_mut(2.into()).unwrap();
+            let (window, _tags) = hop.sendwindow.window_and_expected_tags().await;
+            assert_eq!(window, 1000 - 201);
+        }
     }
 
-    #[test]
-    fn invalid_circ_sendme() {
+    #[async_test]
+    async fn invalid_circ_sendme() {
         // Same setup as accept_valid_sendme() test above but try giving
         // a sendme with the wrong tag.
-        tor_rtcompat::task::block_on(async {
-            let (_circ, _stream, mut sink, _streamid, mut reactor, _cells_received) =
-                setup_incoming_sendme_case(300 * 498 + 3).await;
 
-            let reply_with_sendme_fut = async move {
-                // make and send a circuit-level sendme with a bad tag.
-                let c_sendme =
-                    relaymsg::Sendme::new_tag(hex!("FFFF0000000000000000000000000000000000FF"))
-                        .into();
-                sink.send(rmsg_to_ccmsg(0_u16, c_sendme)).await.unwrap();
-                sink
-            };
+        let (_circ, _stream, mut sink, _streamid, mut reactor, _cells_received) =
+            setup_incoming_sendme_case(300 * 498 + 3).await;
 
-            let reactor_fut = async move {
-                use crate::util::err::ReactorError;
-                let r = reactor.run_once().await;
-                match r {
-                    Err(ReactorError::Err(Error::CircProto(m))) => {
-                        assert_eq!(m, "bad auth tag on circuit sendme")
-                    }
-                    _ => panic!(),
+        let reply_with_sendme_fut = async move {
+            // make and send a circuit-level sendme with a bad tag.
+            let c_sendme =
+                relaymsg::Sendme::new_tag(hex!("FFFF0000000000000000000000000000000000FF")).into();
+            sink.send(rmsg_to_ccmsg(0_u16, c_sendme)).await.unwrap();
+            sink
+        };
+
+        let reactor_fut = async move {
+            use crate::util::err::ReactorError;
+            let r = reactor.run_once().await;
+            match r {
+                Err(ReactorError::Err(Error::CircProto(m))) => {
+                    assert_eq!(m, "bad auth tag on circuit sendme")
                 }
-                reactor
-            };
+                _ => panic!(),
+            }
+            reactor
+        };
 
-            let (_, _) = futures::join!(reply_with_sendme_fut, reactor_fut);
+        let (_, _) = futures::join!(reply_with_sendme_fut, reactor_fut);
 
-            // TODO: check that the circuit is shut down too
-        });
+        // TODO: check that the circuit is shut down too
     }
 }
