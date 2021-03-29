@@ -28,6 +28,8 @@ caret_enum! {
     /// For the full semantics of each subprotocol, see tor-spec.txt.
     #[non_exhaustive]
     #[derive(Debug)]
+    #[allow(clippy::unknown_clippy_lints)]
+    #[allow(clippy::upper_case_acronyms)]
     pub enum ProtoKind as u16 {
         /// Initiating and receiving channels, and getting cells on them.
         Link = 0,
