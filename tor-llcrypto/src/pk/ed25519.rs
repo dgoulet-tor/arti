@@ -7,10 +7,10 @@ use arrayref::array_ref;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Debug, Display, Formatter};
 use subtle::*;
+use thiserror::Error;
 
 pub use ed25519_dalek::{ExpandedSecretKey, Keypair, PublicKey, SecretKey, Signature};
 
-use anyhow::{anyhow, Context, Result};
 use curve25519_dalek::edwards::CompressedEdwardsY;
 use curve25519_dalek::scalar::Scalar;
 
@@ -242,9 +242,27 @@ pub fn validate_batch(sigs: &[&ValidatableEd25519Signature]) -> bool {
     }
 }
 
+/// An error during our blinding operation
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum BlindingError {
+    /// A bad public key was provided for blinding
+    #[error("Bad pubkey provided")]
+    BadPubkey,
+    /// Dalek failed the scalar multiplication
+    #[error("Key blinding Failed")]
+    BlindingFailed,
+}
+
+// Convert this dalek error to a Blinding Error
+impl From<ed25519_dalek::SignatureError> for BlindingError {
+    fn from(_: ed25519_dalek::SignatureError) -> BlindingError {
+        BlindingError::BlindingFailed
+    }
+}
+
 /// Blind the ed25519 public key 'pk' using the blinding parameter 'param' and
 /// return the blinded public key.
-pub fn blind_pubkey(pk: &PublicKey, mut param: [u8; 32]) -> Result<PublicKey> {
+pub fn blind_pubkey(pk: &PublicKey, mut param: [u8; 32]) -> Result<PublicKey, BlindingError> {
     // Clamp the blinding parameter
     param[0] &= 248;
     param[31] &= 63;
@@ -256,13 +274,12 @@ pub fn blind_pubkey(pk: &PublicKey, mut param: [u8; 32]) -> Result<PublicKey> {
     // Convert the public key to a point on the curve
     let pubkey_point = CompressedEdwardsY(pk.to_bytes())
         .decompress()
-        .ok_or_else(|| anyhow!("Bad pubkey provided"))?;
+        .ok_or_else(|| BlindingError::BadPubkey)?;
 
     // Do the scalar multiplication and get a point back
     let blinded_pubkey_point = (blinding_factor * pubkey_point).compress();
     // Turn the point back into bytes and return it
-    return PublicKey::from_bytes(&blinded_pubkey_point.0)
-        .with_context(|| format!("Blinding failed"));
+    return Ok(PublicKey::from_bytes(&blinded_pubkey_point.0)?);
 }
 
 #[cfg(test)]
