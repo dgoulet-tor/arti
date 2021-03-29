@@ -55,6 +55,10 @@ pub struct DirMgr {
     /// Handle to our sqlite cache.
     // XXXX I'd like to use an rwlock, but that's not feasible, since
     // rusqlite::Connection isn't Sync.
+    // TODO: Does this have to be a futures::Mutex?  I would rather have
+    // a rule that we never hold the guard for this mutex across an async
+    // suspend point.  But that will be hard to enforce until the
+    // `must_not_suspend` lint is in stable.
     store: Mutex<SqliteStore>,
     /// Our latest sufficiently bootstrapped directory, if we have one.
     ///
@@ -67,6 +71,27 @@ pub struct DirMgr {
 }
 
 impl DirMgr {
+    /// Try to load the directory from disk, without launching any
+    /// kind of update process.
+    ///
+    /// This function will give an error if the result is not
+    /// up-to-date, or not fully downloaded.
+    ///
+    /// In general, you shouldn't use this function in a long-running
+    /// program; it's only suitable for command-line or batch tools.
+    // TODO: I wish this function didn't have to be async.
+    pub async fn load_once(config: NetDirConfig) -> Result<Arc<NetDir>> {
+        let dirmgr = DirMgr::from_config(config, None)?;
+
+        // TODO: add some way to return a directory that isn't up-to-date
+        let _success = dirmgr.load_directory().await?;
+
+        dirmgr
+            .opt_netdir()
+            .await
+            .ok_or_else(|| Error::DirectoryNotPresent.into())
+    }
+
     /// Return a new directory manager from a given configuration,
     /// bootstrapping from the network as necessary.
     ///

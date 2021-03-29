@@ -30,4 +30,8 @@ pub enum Error {
     /// We couldn't configure the network.
     #[error("bad network configuration")]
     BadNetworkConfig(&'static str),
+    /// User requested an operation that required a usable
+    /// bootstrapped directory, but we didn't have one.
+    #[error("directory not present or not up-to-date")]
+    DirectoryNotPresent,
 }
