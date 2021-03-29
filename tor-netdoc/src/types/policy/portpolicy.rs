@@ -4,8 +4,10 @@
 
 use std::fmt::Display;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use super::{PolicyError, PortRange};
+use crate::util::intern::InternCache;
 
 /// A policy to match zero or more TCP/UDP ports.
 ///
@@ -29,7 +31,7 @@ use super::{PolicyError, PortRange};
 /// assert!(! policy.allows_port(1024));
 /// assert!(! policy.allows_port(9000));
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PortPolicy {
     /// A list of port ranges that this policy allows.
     ///
@@ -104,6 +106,10 @@ impl PortPolicy {
             .binary_search_by(|range| range.compare_to_port(port))
             .is_ok()
     }
+    /// Replace this PortPolicy with an interned copy, to save memory.
+    pub fn intern(self) -> Arc<Self> {
+        POLICY_CACHE.intern(self)
+    }
 }
 
 impl FromStr for PortPolicy {
@@ -130,6 +136,12 @@ impl FromStr for PortPolicy {
         Ok(result)
     }
 }
+
+/// Cache of PortPolicy objects, for saving memory.
+//
+/// This only holds weak references to the policy objects, so we don't
+/// need to worry about running out of space because of stale entries.
+static POLICY_CACHE: InternCache<PortPolicy> = InternCache::new();
 
 #[cfg(test)]
 mod test {

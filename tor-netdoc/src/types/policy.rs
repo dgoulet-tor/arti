@@ -64,7 +64,7 @@ pub enum PolicyError {
 /// assert!(! r.contains(21));
 /// assert!(! r.contains(8001));
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PortRange {
     /// The first port in this range.
     pub lo: u16,

@@ -309,8 +309,8 @@ impl Microdesc {
             tap_onion_key,
             ntor_onion_key,
             family,
-            ipv4_policy: Arc::new(ipv4_policy),
-            ipv6_policy: Arc::new(ipv6_policy),
+            ipv4_policy: ipv4_policy.intern(),
+            ipv6_policy: ipv6_policy.intern(),
             ed25519_id,
         };
         Ok((md, location))
