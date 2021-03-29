@@ -34,4 +34,7 @@ pub enum Error {
     /// bootstrapped directory, but we didn't have one.
     #[error("directory not present or not up-to-date")]
     DirectoryNotPresent,
+    /// Another process has locked the store for writing.
+    #[error("couldn't get write lock on directory cache")]
+    CacheIsLocked,
 }

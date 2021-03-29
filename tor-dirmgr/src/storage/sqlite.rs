@@ -19,7 +19,7 @@ use std::time::SystemTime;
 use anyhow::Context;
 use chrono::prelude::*;
 use chrono::Duration as CDuration;
-use rusqlite::{params, OptionalExtension, Transaction, NO_PARAMS};
+use rusqlite::{params, OpenFlags, OptionalExtension, Transaction, NO_PARAMS};
 
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::DirBuilderExt;
@@ -28,24 +28,49 @@ use std::os::unix::fs::DirBuilderExt;
 pub struct SqliteStore {
     /// Connection to the sqlite3 database.
     conn: rusqlite::Connection,
+    /// Location for the sqlite3 database; used to reopen it.
+    sql_path: Option<PathBuf>,
     /// Location to store blob files.
     path: PathBuf,
+    /// Lockfile to prevent concurrent write attempts from different
+    /// processes.
+    ///
+    /// If this is None we aren't using a lockfile.  Watch out!
+    ///
+    /// (sqlite supports that with connection locking, but we want to
+    /// be a little more coarse-grained here)
+    // XXXX This can behave oddly fail if this process already has
+    // XXXX another instance of this file; see fslock documentation.
+    lockfile: Option<fslock::LockFile>,
 }
 
 impl SqliteStore {
-    /// Construct a new SquliteStore from a location on disk.  The provided
-    /// location must be a directory, or a possible location for a directory:
-    /// the directory will be created if necessary.
-    pub fn from_path<P>(path: P) -> Result<Self>
+    #[allow(unused)]
+    /// Open a read-only sqlstore at some location on disk.
+    pub fn from_path_readonly<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::from_path_impl(path, true)
+    }
+
+    /// Construct or open a new SqliteStore at some location on disk.
+    /// The provided location must be a directory, or a possible
+    /// location for a directory: the directory will be created if
+    /// necessary.
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::from_path_impl(path, false)
+    }
+
+    /// Helper for from_path_* functions: takes a read-only argument.
+    pub fn from_path_impl<P>(path: P, readonly: bool) -> Result<Self>
     where
         P: AsRef<Path>,
     {
         let path = path.as_ref();
         let sqlpath = path.join("dir.sqlite3");
         let blobpath = path.join("dir_blobs/");
+        let lockpath = path.join("dir.lock");
 
         #[cfg(target_family = "unix")]
-        {
+        if !readonly {
             std::fs::DirBuilder::new()
                 .recursive(true)
                 .mode(0o700)
@@ -53,28 +78,81 @@ impl SqliteStore {
                 .with_context(|| format!("Creating directory at {:?}", &blobpath))?;
         }
         #[cfg(not(target_family = "unix"))]
-        {
+        if !readonly {
             std::fs::DirBuilder::new()
                 .recursive(true)
                 .create(&blobpath)
                 .with_context(|| format!("Creating directory at {:?}", &blobpath))?;
         }
-        let conn = rusqlite::Connection::open(&sqlpath)?;
-        SqliteStore::from_conn(conn, &blobpath)
+
+        let mut lockfile = fslock::LockFile::open(&lockpath)?;
+        if !readonly && !lockfile.try_lock()? {
+            // TODO: we might want some means to block until we have the
+            // lock.
+            return Err(Error::CacheIsLocked.into());
+        };
+        let flags = if readonly {
+            OpenFlags::SQLITE_OPEN_READ_ONLY
+        } else {
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE
+        };
+        let conn = rusqlite::Connection::open_with_flags(&sqlpath, flags)?;
+        let mut store = SqliteStore::from_conn(conn, &blobpath)?;
+        store.sql_path = Some(sqlpath);
+        store.lockfile = Some(lockfile);
+        Ok(store)
     }
 
-    /// Construct a new SqliteStore from a location on disk, and a location
+    /// Construct a new SqliteStore from a database connection and a location
     /// for blob files.
+    ///
+    /// Used for testing with a memory-backed database.
     pub fn from_conn<P>(conn: rusqlite::Connection, path: P) -> Result<Self>
     where
         P: AsRef<Path>,
     {
         let path = path.as_ref().to_path_buf();
-        let mut result = SqliteStore { conn, path };
+        let mut result = SqliteStore {
+            conn,
+            path,
+            lockfile: None,
+            sql_path: None,
+        };
 
         result.check_schema()?;
 
         Ok(result)
+    }
+
+    #[allow(unused)]
+    /// Return true if this store is opened in read-only mode.
+    pub fn is_readonly(&self) -> bool {
+        match &self.lockfile {
+            Some(f) => !f.owns_lock(),
+            None => false,
+        }
+    }
+
+    #[allow(unused)]
+    /// Try to upgrade from a read-oinly connection to a read-write connection.
+    pub fn upgrade_to_readwrite(&mut self) -> Result<()> {
+        if self.is_readonly() && self.sql_path.is_some() {
+            let lf = self.lockfile.as_mut().unwrap();
+            if !lf.try_lock()? {
+                // Somebody else has the lock.
+                return Err(Error::CacheIsLocked.into());
+            }
+            match rusqlite::Connection::open(self.sql_path.as_ref().unwrap()) {
+                Ok(conn) => {
+                    self.conn = conn;
+                }
+                Err(e) => {
+                    let _ignore = lf.unlock();
+                    return Err(e.into());
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Check whether this database has a schema format we can read, and
