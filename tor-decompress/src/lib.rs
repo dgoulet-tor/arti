@@ -139,7 +139,8 @@ pub mod miniz_oxide {
     }
 }
 
-/// Implementation for the [`Decompressor`] trait on [`zstd::stream`].
+/// Implementation for the [`Decompressor`] trait on a zstd
+/// [`Decoder`](::zstd::stream::raw::Decoder).
 ///
 /// This implements zstd compression as used in Tor.
 pub mod zstd {
@@ -175,7 +176,8 @@ pub mod zstd {
     }
 }
 
-/// Implementation for the [`Decompressor`] trait on [`xz2::Stream`].
+/// Implementation for the [`Decompressor`] trait on
+/// an xz2 [`Stream`](::xz2::stream::Stream).
 ///
 /// This implements lzma compression as used in Tor.
 pub mod lzma {

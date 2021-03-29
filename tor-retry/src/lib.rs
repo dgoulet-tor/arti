@@ -6,6 +6,7 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
+use std::error::Error;
 use std::fmt::{Display, Error as FmtError, Formatter};
 
 /// An error type for use when we're going to do something a few times,
@@ -28,7 +29,7 @@ pub struct RetryError {
 }
 
 // TODO: Should we declare that some error is the 'source' of this one?
-impl std::error::Error for RetryError {}
+impl Error for RetryError {}
 
 impl RetryError {
     /// Crate a new RetryError, with no failed attempts,
