@@ -50,7 +50,7 @@ impl CmdLine {
         let cap = RE.captures(s);
         let msg = match cap {
             Some(c) => c.get(1).expect("mismatch regex: no capture group").as_str(),
-            None => &s[..],
+            None => s,
         };
 
         let location = match pos {
