@@ -47,7 +47,25 @@ pub use config::{DownloadScheduleConfig, NetDirConfig, NetDirConfigBuilder, Netw
 pub use err::Error;
 pub use updater::DirectoryUpdater;
 
-/// A directory manager to download, fetch, and cache a Tor directory
+/// A directory manager to download, fetch, and cache a Tor directory.
+///
+/// A DirMgr can operate in three modes:
+///   * In **offline** mode, it only reads from the cache, and can
+///     only read once.
+///   * In **read-only** mode, it reads from the cache, but checks
+///     whether it can acquire an associated lock file.  If it can, then
+///     it enters read-write mode.  If not, it checks the cache
+///     periodically for new information.
+///   * In **read-write** mode, it knows that no other process will be
+///     writing to the cache, and it takes responsibility for fetching
+///     data from the network and updating the directory with new
+///     directory information.
+///
+/// # Limitations
+///
+/// Because of portability issues in [`fslock::LockFile`], you might
+/// get weird results if you run two of these in the same process with
+/// the same underlying cache.
 pub struct DirMgr {
     /// Configuration information: where to find directories, how to
     /// validate them, and so on.
@@ -74,8 +92,8 @@ impl DirMgr {
     /// Try to load the directory from disk, without launching any
     /// kind of update process.
     ///
-    /// This function will give an error if the result is not
-    /// up-to-date, or not fully downloaded.
+    /// This function runs in **offline** mode: it will give an error
+    /// if the result is not up-to-date, or not fully downloaded.
     ///
     /// In general, you shouldn't use this function in a long-running
     /// program; it's only suitable for command-line or batch tools.
@@ -95,8 +113,9 @@ impl DirMgr {
     /// Return a current netdir, either loading it or bootstrapping it
     /// as needed.
     ///
-    /// Like load_once, but will try to bootstrap if we don't have an
-    /// up-to-date bootstrapped directory.
+    /// Like load_once, but will try to bootstrap (or wait for another
+    /// process ot bootstrap) if we don't have an up-to-date
+    /// bootstrapped directory.
     ///
     /// In general, you shouldn't use this function in a long-running
     /// program; it's only suitable for command-line or batch tools.
@@ -130,22 +149,8 @@ impl DirMgr {
             info!("Loaded a good directory from cache.")
         } else {
             // Okay, we didn't get a directory from the cache.  We need to
-            // try fetching it.
-            info!("Didn't find a usable directory in the cache. Trying to booststrap.");
-            let retry_config = dirmgr.config.timing().retry_bootstrap();
-            let mut retry: RetryDelay = retry_config.schedule();
-
-            for _ in retry_config.attempts() {
-                match dirmgr.bootstrap_directory().await {
-                    Ok(()) => break,
-                    Err(e) => {
-                        warn!("Can't bootstrap: {}. Will wait and try again.", e);
-                    }
-                }
-
-                let delay = retry.next_delay(&mut rand::thread_rng());
-                tor_rtcompat::task::sleep(delay).await;
-            }
+            // try fetching it if we can, or maybe loading it.
+            Arc::clone(&dirmgr).initial_bootstrap_or_delay().await?;
             info!("Bootstrapped successfully.");
         }
 
@@ -156,6 +161,60 @@ impl DirMgr {
         Ok(dirmgr)
     }
 
+    /// Try to bootstrap the directory from the network, or wait for
+    /// another process to do so.
+    async fn initial_bootstrap_or_delay(self: Arc<Self>) -> Result<()> {
+        let mut logged = false;
+        loop {
+            if self.try_upgrade_to_readwrite().await? {
+                // We now own the lock!  (Maybe we owned it before; the
+                // upgrade_to_readwrite() function is idempotent.)  We can
+                // do our own bootstrapping.
+                return self.initial_bootstrap().await;
+            }
+
+            if !logged {
+                logged = true;
+                info!("Another process is bootstrapping. Waiting till it finishes or exits.");
+            }
+
+            // We don't own the lock.  Somebody else owns the cache.  They
+            // should be updating it.  Wait a second, then try again.
+            let one_sec = std::time::Duration::new(1, 0);
+            tor_rtcompat::task::sleep(one_sec).await;
+            // TODO: instead of loading the whole thing we should have a
+            // database entry that says when the last update was.
+
+            if self.load_directory().await? {
+                // Successfully loaded.
+                return Ok(());
+            }
+        }
+    }
+
+    /// Used when we are starting and don't have a directory yet: tries a few
+    /// times to bootstrap it from the network.
+    async fn initial_bootstrap(self: Arc<Self>) -> Result<()> {
+        info!("Didn't find a usable directory in the cache, and we have write access. Trying to booststrap.");
+
+        let retry_config = self.config.timing().retry_bootstrap();
+
+        let mut retry: RetryDelay = retry_config.schedule();
+        // XXXX actually we need to return an error if all the attmpts fail!
+        for _ in retry_config.attempts() {
+            match self.bootstrap_directory().await {
+                Ok(()) => break,
+                Err(e) => {
+                    warn!("Can't bootstrap: {}. Will wait and try again.", e);
+                }
+            }
+
+            let delay = retry.next_delay(&mut rand::thread_rng());
+            tor_rtcompat::task::sleep(delay).await;
+        }
+        Ok(())
+    }
+
     /// Get a reference to the circuit manager, if we have one.
     fn circmgr(&self) -> Result<Arc<CircMgr>> {
         self.circmgr
@@ -164,9 +223,20 @@ impl DirMgr {
             .ok_or_else(|| Error::NoDownloadSupport.into())
     }
 
+    /// Try to make this a directory manager with read-write access to its
+    /// storage.
+    ///
+    /// Return true if we got the lock, or if we already had it.
+    ///
+    /// Return false if another process has the lock
+    async fn try_upgrade_to_readwrite(&self) -> Result<bool> {
+        self.store.lock().await.upgrade_to_readwrite()
+    }
+
     /// Construct a DirMgr from a NetDirConfig.
     fn from_config(config: NetDirConfig, circmgr: Option<Arc<CircMgr>>) -> Result<Self> {
-        let store = Mutex::new(config.open_sqlite_store()?);
+        let readonly = circmgr.is_none();
+        let store = Mutex::new(config.open_sqlite_store(readonly)?);
         let netdir = RwLock::new(None);
         Ok(DirMgr {
             config,
@@ -299,19 +369,13 @@ impl DirMgr {
         Ok(new_netdir.missing_microdescs().count())
     }
 
-    /// Launch an updater task that periodically re-fetches the
+    /// Launch an updater task that periodically re-fetches or re-loads the
     /// directory to keep it up-to-date.
-    fn launch_updater(self: Arc<Self>) -> Arc<DirectoryUpdater> {
-        // TODO: XXXX: Need some way to keep two of these from running at
-        // once.
-        let updater = Arc::new(updater::DirectoryUpdater::new(self));
-
-        let updater_ref = Arc::clone(&updater);
+    fn launch_updater(self: Arc<Self>) {
+        let updater = updater::DirectoryUpdater::new(self);
         tor_rtcompat::task::spawn(async move {
-            let _ = updater_ref.run().await;
+            let _ = updater.run().await;
         });
-
-        updater
     }
 
     /// Run a complete bootstrapping process, using information from our
@@ -937,7 +1001,9 @@ async fn load_mds(
 
     if let Some(when) = mark_listed {
         let mut w = store.lock().await;
-        w.update_microdescs_listed(loaded, when)?;
+        if !w.is_readonly() {
+            w.update_microdescs_listed(loaded, when)?;
+        }
     }
 
     Ok(())

@@ -193,8 +193,10 @@ impl NetDirConfig {
     ///
     /// Note that each time this is called, a new store object will be
     /// created: you probably only want to call this once.
-    pub(crate) fn open_sqlite_store(&self) -> Result<SqliteStore> {
-        SqliteStore::from_path(&self.cache_path)
+    ///
+    /// The `readonly` argument is as for [`SqliteStore::from_path`]
+    pub(crate) fn open_sqlite_store(&self, readonly: bool) -> Result<SqliteStore> {
+        SqliteStore::from_path(&self.cache_path, readonly)
     }
 
     /// Return a slice of the configured authorities

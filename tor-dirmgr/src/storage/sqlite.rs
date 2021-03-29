@@ -45,25 +45,16 @@ pub struct SqliteStore {
 }
 
 impl SqliteStore {
-    #[allow(unused)]
-    /// Open a read-only sqlstore at some location on disk.
-    pub fn from_path_readonly<P: AsRef<Path>>(path: P) -> Result<Self> {
-        Self::from_path_impl(path, true)
-    }
-
     /// Construct or open a new SqliteStore at some location on disk.
     /// The provided location must be a directory, or a possible
     /// location for a directory: the directory will be created if
     /// necessary.
-    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
-        Self::from_path_impl(path, false)
-    }
-
-    /// Helper for from_path_* functions: takes a read-only argument.
-    pub fn from_path_impl<P>(path: P, readonly: bool) -> Result<Self>
-    where
-        P: AsRef<Path>,
-    {
+    ///
+    /// If readonly is true, the result will be a read-only store.
+    /// Otherwise,, when readonly is false, the result may be
+    /// read-only or read-write, depending on whether we can acquire
+    /// the lock.
+    pub fn from_path<P: AsRef<Path>>(path: P, mut readonly: bool) -> Result<Self> {
         let path = path.as_ref();
         let sqlpath = path.join("dir.sqlite3");
         let blobpath = path.join("dir_blobs/");
@@ -87,9 +78,7 @@ impl SqliteStore {
 
         let mut lockfile = fslock::LockFile::open(&lockpath)?;
         if !readonly && !lockfile.try_lock()? {
-            // TODO: we might want some means to block until we have the
-            // lock.
-            return Err(Error::CacheIsLocked.into());
+            readonly = true; // we couldn't get the lock!
         };
         let flags = if readonly {
             OpenFlags::SQLITE_OPEN_READ_ONLY
@@ -124,7 +113,6 @@ impl SqliteStore {
         Ok(result)
     }
 
-    #[allow(unused)]
     /// Return true if this store is opened in read-only mode.
     pub fn is_readonly(&self) -> bool {
         match &self.lockfile {
@@ -133,14 +121,15 @@ impl SqliteStore {
         }
     }
 
-    #[allow(unused)]
-    /// Try to upgrade from a read-oinly connection to a read-write connection.
-    pub fn upgrade_to_readwrite(&mut self) -> Result<()> {
+    /// Try to upgrade from a read-only connection to a read-write connection.
+    ///
+    /// Return true on succcess; false if another process had the lock.
+    pub fn upgrade_to_readwrite(&mut self) -> Result<bool> {
         if self.is_readonly() && self.sql_path.is_some() {
             let lf = self.lockfile.as_mut().unwrap();
             if !lf.try_lock()? {
                 // Somebody else has the lock.
-                return Err(Error::CacheIsLocked.into());
+                return Ok(false);
             }
             match rusqlite::Connection::open(self.sql_path.as_ref().unwrap()) {
                 Ok(conn) => {
@@ -152,7 +141,7 @@ impl SqliteStore {
                 }
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     /// Check whether this database has a schema format we can read, and

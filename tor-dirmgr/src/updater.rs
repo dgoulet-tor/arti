@@ -43,6 +43,50 @@ impl DirectoryUpdater {
 
     /// Run in a loop, and keep the directory manager's directory up-to-date.
     pub(crate) async fn run(&self) -> Result<()> {
+        let readonly = self.is_readonly().await?;
+        if readonly {
+            self.run_offline().await?;
+        }
+        self.run_online().await
+    }
+
+    /// Run forever, trying to load a new directory from disk, or get the lock
+    /// to become a read-write dirmgr.
+    ///
+    /// Returns Ok(()) if we got the lock.
+    pub(crate) async fn run_offline(&self) -> Result<()> {
+        loop {
+            if self.stopping.load(Ordering::SeqCst) {
+                return Err(Error::UpdaterShutdown.into());
+            }
+
+            // TODO: we should do this in some way that is smarter.  Five
+            // minutes is too short for avoiding CPU usage, and too
+            // long for chutney or other uses.
+            let five_minutes = Duration::new(5 * 60, 0);
+            tor_rtcompat::task::sleep(five_minutes).await;
+
+            if let Some(dm) = self.dir_mgr.upgrade() {
+                if dm.try_upgrade_to_readwrite().await? {
+                    // Hey, it's a read-write dirmgr now!  We can take over
+                    // responsibility for bootstrapping!
+                    info!("Lock acquired: it's our responsibility to download directory info.");
+                    break;
+                }
+
+                // No, we should just try loading.
+                dm.load_directory().await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Run in a loop, and keep the directory manager's directory
+    /// up-to-date by downloading directory information.
+    ///
+    /// Requires that the underlying directory manager has a circuit
+    /// manager and a read-write store.
+    pub(crate) async fn run_online(&self) -> Result<()> {
         loop {
             let download_time = self.pick_download_time().await;
 
@@ -95,7 +139,7 @@ impl DirectoryUpdater {
                     let delay = retry.next_delay(&mut rand::thread_rng());
                     tor_rtcompat::task::sleep(delay).await;
                 } else {
-                    return Ok(());
+                    return Err(Error::UpdaterShutdown.into());
                 }
             } else {
                 return Ok(());
@@ -142,6 +186,15 @@ impl DirectoryUpdater {
         }
 
         None
+    }
+
+    /// Check whether the underlying directory manager has a read-only store.
+    async fn is_readonly(&self) -> Result<bool> {
+        if let Some(dm) = self.dir_mgr.upgrade() {
+            Ok(dm.store.lock().await.is_readonly())
+        } else {
+            Err(Error::UpdaterShutdown.into())
+        }
     }
 }
 
