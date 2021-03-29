@@ -87,14 +87,14 @@ pub enum DirInfo<'a> {
     Directory(&'a NetDir),
 }
 
-impl<'a> Into<DirInfo<'a>> for &'a [FallbackDir] {
-    fn into(self) -> DirInfo<'a> {
-        DirInfo::Fallbacks(self)
+impl<'a> From<&'a [FallbackDir]> for DirInfo<'a> {
+    fn from(v: &'a [FallbackDir]) -> DirInfo<'a> {
+        DirInfo::Fallbacks(v)
     }
 }
-impl<'a> Into<DirInfo<'a>> for &'a NetDir {
-    fn into(self) -> DirInfo<'a> {
-        DirInfo::Directory(self)
+impl<'a> From<&'a NetDir> for DirInfo<'a> {
+    fn from(v: &'a NetDir) -> DirInfo<'a> {
+        DirInfo::Directory(v)
     }
 }
 impl<'a> DirInfo<'a> {

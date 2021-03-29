@@ -837,9 +837,7 @@ impl SharedRandVal {
     /// SharedRandPreviousValue or SharedRandCurrentValue.
     fn from_item(item: &Item<'_, NetstatusKwd>) -> Result<Self> {
         match item.kwd() {
-            NetstatusKwd::SHARED_RAND_PREVIOUS_VALUE | NetstatusKwd::SHARED_RAND_CURRENT_VALUE => {
-                ()
-            }
+            NetstatusKwd::SHARED_RAND_PREVIOUS_VALUE | NetstatusKwd::SHARED_RAND_CURRENT_VALUE => {}
             _ => return Err(Error::Internal(item.pos())),
         }
         let n_reveals: u8 = item.parse_arg(0)?;
@@ -1037,10 +1035,9 @@ impl MdConsensusRouterStatus {
         let or_port = r_item.required_arg(5)?.parse::<u16>()?;
         let dir_port = r_item.required_arg(6)?.parse::<u16>()?;
 
-        let mut addrs: Vec<net::SocketAddr> = Vec::new();
-        addrs.push(net::SocketAddr::V4(net::SocketAddrV4::new(
+        let mut addrs: Vec<net::SocketAddr> = vec![net::SocketAddr::V4(net::SocketAddrV4::new(
             ipv4addr, or_port,
-        )));
+        ))];
 
         // A lines
         for a_item in sec.slice(RS_A) {
@@ -1422,7 +1419,7 @@ impl ExternallySigned<MdConsensus> for UnvalidatedMdConsensus {
     type Error = Error;
 
     fn key_is_correct(&self, k: &Self::Key) -> result::Result<(), Self::KeyHint> {
-        let (n_ok, missing) = self.siggroup.list_missing(&k[..]);
+        let (n_ok, missing) = self.siggroup.list_missing(k);
         match self.n_authorities {
             Some(n) if n_ok > (n / 2) as usize => Ok(()),
             _ => Err(missing.iter().map(|cert| cert.key_ids.clone()).collect()),
@@ -1432,7 +1429,7 @@ impl ExternallySigned<MdConsensus> for UnvalidatedMdConsensus {
         if self.n_authorities.is_none() {
             return Err(Error::Internal(Pos::None));
         }
-        if self.siggroup.validate(self.n_authorities.unwrap(), &k[..]) {
+        if self.siggroup.validate(self.n_authorities.unwrap(), k) {
             Ok(())
         } else {
             Err(Error::BadSignature(Pos::None))

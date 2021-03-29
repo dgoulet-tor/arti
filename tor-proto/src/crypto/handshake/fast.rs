@@ -75,7 +75,7 @@ impl super::ServerHandshake for CreateFastServer {
         rng.fill_bytes(&mut reply[0..20]);
 
         let mut inp = Vec::new();
-        inp.extend(&msg[..]);
+        inp.extend(msg);
         inp.extend(&reply[0..20]);
         let kh = LegacyKdf::new(0).derive(&inp[..], 20)?;
         reply[20..].copy_from_slice(&kh);

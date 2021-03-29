@@ -79,7 +79,7 @@ impl ArtiConfig {
         dircfg.set_network_config(self.network.clone());
         dircfg.set_timing_config(self.download_schedule.clone());
         dircfg.set_cache_path(&self.storage.cache_dir.path()?);
-        Ok(dircfg.finalize()?)
+        dircfg.finalize()
     }
 }
 

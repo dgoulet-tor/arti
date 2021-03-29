@@ -336,9 +336,8 @@ impl AuthCert {
             key_ids,
         };
 
-        let mut signatures: Vec<Box<dyn pk::ValidatableSignature>> = Vec::new();
-        signatures.push(Box::new(v_crosscert));
-        signatures.push(Box::new(v_sig));
+        let signatures: Vec<Box<dyn pk::ValidatableSignature>> =
+            vec![Box::new(v_crosscert), Box::new(v_sig)];
 
         let timed = timed::TimerangeBound::new(authcert, published..expires);
         let signed = signed::SignatureGated::new(timed, signatures);

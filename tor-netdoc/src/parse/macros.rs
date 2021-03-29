@@ -27,6 +27,7 @@ macro_rules! decl_keyword {
         #[derive(Copy,Clone,Eq,PartialEq,Debug,std::hash::Hash)]
         #[allow(non_camel_case_types)]
         $(#[$meta])*
+        #[allow(unknown_lints)]
         #[allow(clippy::unknown_clippy_lints)]
         #[allow(clippy::upper_case_acronyms)]
         $v enum $name {

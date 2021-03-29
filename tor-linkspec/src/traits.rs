@@ -39,9 +39,10 @@ pub trait CircTarget: ChanTarget {
     // of link specifiers, but that's not so easy to do, since it seems
     // doing so correctly would require default associated types.
     fn linkspecs(&self) -> Vec<crate::LinkSpec> {
-        let mut result = Vec::new();
-        result.push(self.ed_identity().clone().into());
-        result.push(self.rsa_identity().clone().into());
+        let mut result = vec![
+            self.ed_identity().clone().into(),
+            self.rsa_identity().clone().into(),
+        ];
         for addr in self.addrs().iter() {
             result.push(addr.into());
         }

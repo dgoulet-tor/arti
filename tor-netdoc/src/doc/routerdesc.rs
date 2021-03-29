@@ -593,12 +593,14 @@ impl RouterDesc {
         // Now we're going to collect signatures and expiration times.
         let (identity_cert, identity_sig) = identity_cert.dangerously_split()?;
         let (crosscert_cert, cc_sig) = crosscert_cert.dangerously_split()?;
-        let mut signatures: Vec<Box<dyn ll::pk::ValidatableSignature>> = Vec::new();
-        signatures.push(Box::new(rsa_signature));
-        signatures.push(Box::new(ed_signature));
-        signatures.push(Box::new(identity_sig));
-        signatures.push(Box::new(cc_sig));
-        signatures.push(Box::new(tap_crosscert_sig));
+        let signatures: Vec<Box<dyn ll::pk::ValidatableSignature>> = vec![
+            Box::new(rsa_signature),
+            Box::new(ed_signature),
+            Box::new(identity_sig),
+            Box::new(cc_sig),
+            Box::new(tap_crosscert_sig),
+        ];
+
         let identity_cert = identity_cert.dangerously_assume_timely();
         let crosscert_cert = crosscert_cert.dangerously_assume_timely();
         let expirations = &[
