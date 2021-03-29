@@ -26,7 +26,7 @@ pub mod params;
 mod pick;
 mod weight;
 
-use ll::pk::rsa::RSAIdentity;
+use ll::pk::rsa::RsaIdentity;
 use tor_llcrypto as ll;
 use tor_netdoc::doc::microdesc::{MDDigest, Microdesc};
 use tor_netdoc::doc::netstatus::{self, MDConsensus};
@@ -403,8 +403,8 @@ impl<'a> Relay<'a> {
     pub fn id(&self) -> &ll::pk::ed25519::Ed25519Identity {
         self.md.ed25519_id()
     }
-    /// Return the RSAIdentity for this relay.
-    pub fn rsa_id(&self) -> &RSAIdentity {
+    /// Return the RsaIdentity for this relay.
+    pub fn rsa_id(&self) -> &RsaIdentity {
         self.rs.rsa_identity()
     }
     /// Return true if this relay and `other` seem to be the same relay.
@@ -463,7 +463,7 @@ impl<'a> tor_linkspec::ChanTarget for Relay<'a> {
     fn ed_identity(&self) -> &ll::pk::ed25519::Ed25519Identity {
         self.id()
     }
-    fn rsa_identity(&self) -> &RSAIdentity {
+    fn rsa_identity(&self) -> &RsaIdentity {
         self.rsa_id()
     }
 }

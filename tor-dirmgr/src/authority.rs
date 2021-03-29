@@ -4,7 +4,7 @@
 //! consensus directory.
 
 use serde::Deserialize;
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
 
 /// A single authority that signs a consensus directory.
@@ -19,16 +19,16 @@ pub struct Authority {
     /// A SHA1 digest of the DER-encoded long-term v3 RSA identity key for
     /// this authority.
     // TODO: It would be lovely to use a better hash for these identities.
-    v3ident: RSAIdentity,
+    v3ident: RsaIdentity,
 }
 
 impl Authority {
     /// Construct information about a new authority.
-    pub fn new(name: String, v3ident: RSAIdentity) -> Self {
+    pub fn new(name: String, v3ident: RsaIdentity) -> Self {
         Authority { name, v3ident }
     }
     /// Return the v3 identity key of this certificate.
-    pub fn v3ident(&self) -> &RSAIdentity {
+    pub fn v3ident(&self) -> &RsaIdentity {
         &self.v3ident
     }
     /// Return true if this authority matches a given certificate.

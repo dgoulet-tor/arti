@@ -66,7 +66,7 @@ pub(crate) struct TargetInfo {
     /// Copy of the ed25519 id from the underlying ChanTarget.
     ed_identity: pk::ed25519::Ed25519Identity,
     /// Copy of the rsa id from the underlying ChanTarget.
-    rsa_identity: pk::rsa::RSAIdentity,
+    rsa_identity: pk::rsa::RsaIdentity,
 }
 
 impl ChanTarget for TargetInfo {
@@ -76,7 +76,7 @@ impl ChanTarget for TargetInfo {
     fn ed_identity(&self) -> &pk::ed25519::Ed25519Identity {
         &self.ed_identity
     }
-    fn rsa_identity(&self) -> &pk::rsa::RSAIdentity {
+    fn rsa_identity(&self) -> &pk::rsa::RsaIdentity {
         &self.rsa_identity
     }
 }

@@ -7,7 +7,7 @@ use std::net::{IpAddr, SocketAddr};
 
 use tor_bytes::{Error, Readable, Reader, Result, Writeable, Writer};
 use tor_llcrypto::pk::ed25519;
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 
 /// A piece of information about a relay and how to connect to it.
 #[non_exhaustive]
@@ -16,7 +16,7 @@ pub enum LinkSpec {
     /// The TCP address of an OR Port for a relay
     OrPort(IpAddr, u16),
     /// The RSA identity fingerprint of the relay
-    RSAId(RSAIdentity),
+    RSAId(RsaIdentity),
     /// The Ed25519 identity of the relay
     Ed25519Id(ed25519::Ed25519Identity),
     /// A link specifier that we didn't recognize
@@ -112,8 +112,8 @@ impl From<SocketAddr> for LinkSpec {
         (&sa).into()
     }
 }
-impl From<RSAIdentity> for LinkSpec {
-    fn from(id: RSAIdentity) -> Self {
+impl From<RsaIdentity> for LinkSpec {
+    fn from(id: RsaIdentity) -> Self {
         LinkSpec::RSAId(id)
     }
 }
@@ -181,7 +181,7 @@ mod test {
                 2, 20, 104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 33, 33, 33, 33, 33,
                 33, 33, 33, 33,
             ],
-            &LinkSpec::RSAId(RSAIdentity::from_bytes(b"hello world!!!!!!!!!").unwrap()),
+            &LinkSpec::RSAId(RsaIdentity::from_bytes(b"hello world!!!!!!!!!").unwrap()),
         );
         let key = ed25519::PublicKey::from_bytes(&hex!(
             "B440EEDB32D5C89EF21D6B16BE85A658774CE5992355737411678EE1041BDFBA"

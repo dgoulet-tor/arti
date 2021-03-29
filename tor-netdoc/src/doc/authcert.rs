@@ -15,7 +15,7 @@ use crate::{Error, Result};
 
 use tor_checkable::{signed, timed};
 use tor_llcrypto::pk::rsa;
-use tor_llcrypto::{d, pk, pk::rsa::RSAIdentity};
+use tor_llcrypto::{d, pk, pk::rsa::RsaIdentity};
 
 use once_cell::sync::Lazy;
 
@@ -89,9 +89,9 @@ pub struct AuthCert {
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct AuthCertKeyIds {
     /// Fingerprint of identity key
-    pub id_fingerprint: rsa::RSAIdentity,
+    pub id_fingerprint: rsa::RsaIdentity,
     /// Fingerprint of signing key
-    pub sk_fingerprint: rsa::RSAIdentity,
+    pub sk_fingerprint: rsa::RsaIdentity,
 }
 
 impl Ord for AuthCertKeyIds {
@@ -168,13 +168,13 @@ impl AuthCert {
         &self.key_ids
     }
 
-    /// Return an RSAIdentity for this certificate's identity key.
-    pub fn id_fingerprint(&self) -> &rsa::RSAIdentity {
+    /// Return an RsaIdentity for this certificate's identity key.
+    pub fn id_fingerprint(&self) -> &rsa::RsaIdentity {
         &self.key_ids.id_fingerprint
     }
 
-    /// Return an RSAIdentity for this certificate's signing key.
-    pub fn sk_fingerprint(&self) -> &rsa::RSAIdentity {
+    /// Return an RsaIdentity for this certificate's signing key.
+    pub fn sk_fingerprint(&self) -> &rsa::RsaIdentity {
         &self.key_ids.sk_fingerprint
     }
 
@@ -264,7 +264,7 @@ impl AuthCert {
         {
             // Check fingerprint for consistency with key.
             let fp_tok = body.required(FINGERPRINT)?;
-            let fingerprint: RSAIdentity = fp_tok.args_as_str().parse::<Fingerprint>()?.into();
+            let fingerprint: RsaIdentity = fp_tok.args_as_str().parse::<Fingerprint>()?.into();
             if fingerprint != identity_key.to_rsa_identity() {
                 return Err(Error::BadArgument(
                     fp_tok.pos(),
@@ -290,7 +290,7 @@ impl AuthCert {
             let signed = identity_key.to_rsa_identity();
             // TODO: we need to accept prefixes here. COMPAT BLOCKER.
 
-            rsa::ValidatableRSASignature::new(&signing_key, &sig, signed.as_bytes())
+            rsa::ValidatableRsaSignature::new(&signing_key, &sig, signed.as_bytes())
         };
 
         // check the signature
@@ -307,7 +307,7 @@ impl AuthCert {
             let sha1 = sha1.finalize();
             // TODO: we need to accept prefixes here. COMPAT BLOCKER.
 
-            rsa::ValidatableRSASignature::new(&identity_key, &sig, &sha1)
+            rsa::ValidatableRsaSignature::new(&identity_key, &sig, &sha1)
         };
 
         let id_fingerprint = identity_key.to_rsa_identity();

@@ -5,7 +5,7 @@
 
 use crate::types::misc::LongIdent;
 use crate::{Error, Result};
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 
 /// Information about a relay family.
 ///
@@ -20,7 +20,7 @@ use tor_llcrypto::pk::rsa::RSAIdentity;
 ///
 /// TODO: This type probably belongs in a different crate.
 #[derive(Clone, Debug)]
-pub struct RelayFamily(Vec<RSAIdentity>);
+pub struct RelayFamily(Vec<RsaIdentity>);
 
 impl RelayFamily {
     /// Return a new empty RelayFamily.
@@ -29,7 +29,7 @@ impl RelayFamily {
     }
 
     /// Does this family include the given relay?
-    pub fn contains(&self, rsa_id: &RSAIdentity) -> bool {
+    pub fn contains(&self, rsa_id: &RsaIdentity) -> bool {
         self.0.contains(rsa_id)
     }
 }
@@ -43,7 +43,7 @@ impl Default for RelayFamily {
 impl std::str::FromStr for RelayFamily {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
-        let v: Result<Vec<RSAIdentity>> = s
+        let v: Result<Vec<RsaIdentity>> = s
             .split(crate::parse::tokenize::is_sp)
             .map(|e| e.parse::<LongIdent>().map(|v| v.into()))
             .filter(Result::is_ok)
@@ -61,20 +61,20 @@ mod test {
         let f = "nickname1 nickname2 $ffffffffffffffffffffffffffffffffffffffff=foo eeeeeeeeeeeeeeeeeeeEEEeeeeeeeeeeeeeeeeee ddddddddddddddddddddddddddddddddd  $cccccccccccccccccccccccccccccccccccccccc~blarg ".parse::<RelayFamily>()?;
         let mut v = Vec::new();
         v.push(
-            RSAIdentity::from_bytes(
+            RsaIdentity::from_bytes(
                 &hex::decode("ffffffffffffffffffffffffffffffffffffffff").unwrap()[..],
             )
             .unwrap(),
         );
         v.push(
-            RSAIdentity::from_bytes(
+            RsaIdentity::from_bytes(
                 &hex::decode("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee").unwrap()[..],
             )
             .unwrap(),
         );
         // "d" key is too short.
         v.push(
-            RSAIdentity::from_bytes(
+            RsaIdentity::from_bytes(
                 &hex::decode("cccccccccccccccccccccccccccccccccccccccc").unwrap()[..],
             )
             .unwrap(),
@@ -88,11 +88,11 @@ mod test {
         let family =
             "ffffffffffffffffffffffffffffffffffffffff eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
                 .parse::<RelayFamily>()?;
-        let in_family = RSAIdentity::from_bytes(
+        let in_family = RsaIdentity::from_bytes(
             &hex::decode("ffffffffffffffffffffffffffffffffffffffff").unwrap()[..],
         )
         .unwrap();
-        let not_in_family = RSAIdentity::from_bytes(
+        let not_in_family = RsaIdentity::from_bytes(
             &hex::decode("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap()[..],
         )
         .unwrap();

@@ -26,7 +26,7 @@ pub trait ChanTarget {
         self.ed_identity().try_into().ok()
     }
     /// Return the RSA identity for this relay.
-    fn rsa_identity(&self) -> &pk::rsa::RSAIdentity;
+    fn rsa_identity(&self) -> &pk::rsa::RsaIdentity;
 }
 
 /// Information about a Tor relay used to extend a circuit to it.
@@ -63,7 +63,7 @@ mod test {
     struct Example {
         addrs: Vec<SocketAddr>,
         ed_id: pk::ed25519::Ed25519Identity,
-        rsa_id: pk::rsa::RSAIdentity,
+        rsa_id: pk::rsa::RsaIdentity,
         ntor: pk::curve25519::PublicKey,
         pv: tor_protover::Protocols,
     }
@@ -74,7 +74,7 @@ mod test {
         fn ed_identity(&self) -> &pk::ed25519::Ed25519Identity {
             &self.ed_id
         }
-        fn rsa_identity(&self) -> &pk::rsa::RSAIdentity {
+        fn rsa_identity(&self) -> &pk::rsa::RsaIdentity {
             &self.rsa_id
         }
     }
@@ -100,7 +100,7 @@ mod test {
             ))
             .unwrap()
             .into(),
-            rsa_id: pk::rsa::RSAIdentity::from_bytes(&hex!(
+            rsa_id: pk::rsa::RsaIdentity::from_bytes(&hex!(
                 "1234567890abcdef12341234567890abcdef1234"
             ))
             .unwrap(),
@@ -129,7 +129,7 @@ mod test {
         assert_eq!(
             specs[1],
             LinkSpec::RSAId(
-                pk::rsa::RSAIdentity::from_bytes(&hex!("1234567890abcdef12341234567890abcdef1234"))
+                pk::rsa::RsaIdentity::from_bytes(&hex!("1234567890abcdef12341234567890abcdef1234"))
                     .unwrap()
             )
         );

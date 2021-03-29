@@ -67,7 +67,7 @@ use crate::{Error, Result};
 use tor_cell::chancell::{msg, ChanCell, CircId};
 use tor_linkspec::ChanTarget;
 use tor_llcrypto::pk::ed25519::Ed25519Identity;
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 
 use asynchronous_codec as futures_codec;
 use futures::channel::{mpsc, oneshot};
@@ -98,7 +98,7 @@ pub struct Channel {
     /// Validated Ed25519 identity for this peer.
     ed25519_id: Ed25519Identity,
     /// Validated RSA identity for this peer.
-    rsa_id: RSAIdentity,
+    rsa_id: RsaIdentity,
     /// If true, this channel is closing.
     closed: AtomicBool,
 
@@ -190,7 +190,7 @@ impl Channel {
         tls_stream: T,
         unique_id: UniqId,
         ed25519_id: Ed25519Identity,
-        rsa_id: RSAIdentity,
+        rsa_id: RsaIdentity,
     ) -> (Arc<Self>, reactor::Reactor<T>)
     where
         T: Stream<Item = std::result::Result<ChanCell, tor_cell::Error>> + Send + Unpin + 'static,
@@ -522,13 +522,13 @@ pub(crate) mod test {
 
         struct ChanT {
             ed_id: Ed25519Identity,
-            rsa_id: RSAIdentity,
+            rsa_id: RsaIdentity,
         };
         impl ChanTarget for ChanT {
             fn ed_identity(&self) -> &Ed25519Identity {
                 &self.ed_id
             }
-            fn rsa_identity(&self) -> &RSAIdentity {
+            fn rsa_identity(&self) -> &RsaIdentity {
                 &self.rsa_id
             }
             fn addrs(&self) -> &[SocketAddr] {

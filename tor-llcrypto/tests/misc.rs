@@ -81,7 +81,7 @@ fn batch_verify() {
 fn ser_de_rsaid() {
     use serde_test::{assert_tokens, Configure, Token};
 
-    let rsa_id = ll::pk::rsa::RSAIdentity::from_bytes(b"example key id here!").unwrap();
+    let rsa_id = ll::pk::rsa::RsaIdentity::from_bytes(b"example key id here!").unwrap();
 
     assert_tokens(
         &rsa_id.readable(),

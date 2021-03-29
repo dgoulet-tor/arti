@@ -11,7 +11,7 @@ use crate::{Error, Result, SecretBytes};
 use tor_bytes::{Reader, Writer};
 use tor_llcrypto::d;
 use tor_llcrypto::pk::curve25519::*;
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 use tor_llcrypto::util::rand_compat::RngCompatExt;
 
 use crypto_mac::{self, Mac, NewMac};
@@ -59,7 +59,7 @@ impl super::ServerHandshake for NtorServer {
 pub struct NtorPublicKey {
     /// Public RSA identity fingerprint for the relay; used in authentication
     /// calculation.
-    pub id: RSAIdentity,
+    pub id: RsaIdentity,
     /// Public curve25519 ntor key for the relay.
     pub pk: PublicKey,
 }
@@ -77,7 +77,7 @@ use subtle::{Choice, ConstantTimeEq};
 impl NtorSecretKey {
     /// Construct a new NtorSecretKey from its components.
     #[allow(unused)]
-    pub fn new(sk: StaticSecret, pk: PublicKey, id: RSAIdentity) -> Self {
+    pub fn new(sk: StaticSecret, pk: PublicKey, id: RsaIdentity) -> Self {
         NtorSecretKey {
             pk: NtorPublicKey { pk, id },
             sk,
@@ -274,7 +274,7 @@ where
 {
     let mut cur = Reader::from_slice(msg.as_ref());
 
-    let my_id: RSAIdentity = cur.extract()?;
+    let my_id: RsaIdentity = cur.extract()?;
     let my_key: PublicKey = cur.extract()?;
     let their_pk: PublicKey = cur.extract()?;
 
@@ -310,7 +310,7 @@ mod tests {
         let mut rng = rand::thread_rng().rng_compat();
         let relay_secret = StaticSecret::new(&mut rng);
         let relay_public = PublicKey::from(&relay_secret);
-        let relay_identity = RSAIdentity::from_bytes(&[12; 20]).unwrap();
+        let relay_identity = RsaIdentity::from_bytes(&[12; 20]).unwrap();
         let relay_ntpk = NtorPublicKey {
             id: relay_identity,
             pk: relay_public.clone(),
@@ -357,7 +357,7 @@ mod tests {
         let keys = hex!("0c62dee7f48893370d0ef896758d35729867beef1a5121df80e00f79ed349af39b51cae125719182f19d932a667dae1afbf2e336e6910e7822223e763afad0a13342157969dc6b79");
 
         let relay_pk = NtorPublicKey {
-            id: RSAIdentity::from_bytes(&id).unwrap(),
+            id: RsaIdentity::from_bytes(&id).unwrap(),
             pk: b_pk.into(),
         };
         let relay_sk = NtorSecretKey {
@@ -394,8 +394,8 @@ mod tests {
         let relay_secret = StaticSecret::new(&mut rng);
         let relay_public = PublicKey::from(&relay_secret);
         let wrong_public = PublicKey::from([16u8; 32]);
-        let relay_identity = RSAIdentity::from_bytes(&[12; 20]).unwrap();
-        let wrong_identity = RSAIdentity::from_bytes(&[13; 20]).unwrap();
+        let relay_identity = RsaIdentity::from_bytes(&[12; 20]).unwrap();
+        let wrong_identity = RsaIdentity::from_bytes(&[13; 20]).unwrap();
         let relay_ntpk = NtorPublicKey {
             id: relay_identity.clone(),
             pk: relay_public.clone(),

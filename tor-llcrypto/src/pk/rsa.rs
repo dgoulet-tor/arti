@@ -27,31 +27,31 @@ pub const RSA_ID_LEN: usize = 20;
 /// identity key.  These are used all over the Tor protocol.
 #[derive(Clone, Copy, Hash, Zeroize, Ord, PartialOrd)]
 #[allow(clippy::derive_hash_xor_eq)]
-pub struct RSAIdentity {
+pub struct RsaIdentity {
     /// SHA1 digest of a DER encoded public key.
     id: [u8; RSA_ID_LEN],
 }
 
-impl PartialEq<RSAIdentity> for RSAIdentity {
-    fn eq(&self, rhs: &RSAIdentity) -> bool {
+impl PartialEq<RsaIdentity> for RsaIdentity {
+    fn eq(&self, rhs: &RsaIdentity) -> bool {
         self.id.ct_eq(&rhs.id).unwrap_u8() == 1
     }
 }
 
-impl Eq for RSAIdentity {}
+impl Eq for RsaIdentity {}
 
-impl fmt::Display for RSAIdentity {
+impl fmt::Display for RsaIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "${}", hex::encode(&self.id[..]))
     }
 }
-impl fmt::Debug for RSAIdentity {
+impl fmt::Debug for RsaIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RSAIdentity {{ ${} }}", hex::encode(&self.id[..]))
+        write!(f, "RsaIdentity {{ ${} }}", hex::encode(&self.id[..]))
     }
 }
 
-impl serde::Serialize for RSAIdentity {
+impl serde::Serialize for RsaIdentity {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -64,16 +64,16 @@ impl serde::Serialize for RSAIdentity {
     }
 }
 
-impl<'de> serde::Deserialize<'de> for RSAIdentity {
+impl<'de> serde::Deserialize<'de> for RsaIdentity {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
             /// Deserialization helper
-            struct RSAIdentityVisitor;
-            impl<'de> serde::de::Visitor<'de> for RSAIdentityVisitor {
-                type Value = RSAIdentity;
+            struct RsaIdentityVisitor;
+            impl<'de> serde::de::Visitor<'de> for RsaIdentityVisitor {
+                type Value = RsaIdentity;
                 fn expecting(&self, fmt: &mut std::fmt::Formatter<'_>) -> fmt::Result {
                     fmt.write_str("hex-encoded RSA identity")
                 }
@@ -82,17 +82,17 @@ impl<'de> serde::Deserialize<'de> for RSAIdentity {
                     E: serde::de::Error,
                 {
                     let bytes = hex::decode(s).map_err(E::custom)?;
-                    RSAIdentity::from_bytes(&bytes)
+                    RsaIdentity::from_bytes(&bytes)
                         .ok_or_else(|| E::custom("wrong length for RSA identity"))
                 }
             }
 
-            deserializer.deserialize_str(RSAIdentityVisitor)
+            deserializer.deserialize_str(RsaIdentityVisitor)
         } else {
             /// Deserialization helper
-            struct RSAIdentityVisitor;
-            impl<'de> serde::de::Visitor<'de> for RSAIdentityVisitor {
-                type Value = RSAIdentity;
+            struct RsaIdentityVisitor;
+            impl<'de> serde::de::Visitor<'de> for RsaIdentityVisitor {
+                type Value = RsaIdentity;
                 fn expecting(&self, fmt: &mut std::fmt::Formatter<'_>) -> fmt::Result {
                     fmt.write_str("RSA identity")
                 }
@@ -100,38 +100,38 @@ impl<'de> serde::Deserialize<'de> for RSAIdentity {
                 where
                     E: serde::de::Error,
                 {
-                    RSAIdentity::from_bytes(&bytes)
+                    RsaIdentity::from_bytes(&bytes)
                         .ok_or_else(|| E::custom("wrong length for RSA identity"))
                 }
             }
-            deserializer.deserialize_bytes(RSAIdentityVisitor)
+            deserializer.deserialize_bytes(RsaIdentityVisitor)
         }
     }
 }
 
-impl RSAIdentity {
-    /// Expose and RSAIdentity as a slice of bytes.
+impl RsaIdentity {
+    /// Expose and RsaIdentity as a slice of bytes.
     pub fn as_bytes(&self) -> &[u8] {
         &self.id[..]
     }
-    /// Construct an RSAIdentity from a slice of bytes.
+    /// Construct an RsaIdentity from a slice of bytes.
     ///
     /// Returns None if the input is not of the correct length.
     ///
     /// ```
-    /// use tor_llcrypto::pk::rsa::RSAIdentity;
+    /// use tor_llcrypto::pk::rsa::RsaIdentity;
     ///
     /// let bytes = b"xyzzyxyzzyxyzzyxyzzy";
-    /// let id = RSAIdentity::from_bytes(bytes);
+    /// let id = RsaIdentity::from_bytes(bytes);
     /// assert_eq!(id.unwrap().as_bytes(), bytes);
     ///
     /// let truncated = b"xyzzy";
-    /// let id = RSAIdentity::from_bytes(truncated);
+    /// let id = RsaIdentity::from_bytes(truncated);
     /// assert_eq!(id, None);
     /// ```
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() == RSA_ID_LEN {
-            Some(RSAIdentity {
+            Some(RsaIdentity {
                 id: *array_ref![bytes, 0, RSA_ID_LEN],
             })
         } else {
@@ -140,9 +140,9 @@ impl RSAIdentity {
     }
 }
 
-impl From<[u8; 20]> for RSAIdentity {
-    fn from(id: [u8; 20]) -> RSAIdentity {
-        RSAIdentity { id }
+impl From<[u8; 20]> for RsaIdentity {
+    fn from(id: [u8; 20]) -> RsaIdentity {
+        RsaIdentity { id }
     }
 }
 
@@ -226,17 +226,17 @@ impl PublicKey {
         simple_asn1::to_der(&asn1).expect("RSA key not encodeable as DER")
     }
 
-    /// Compute the RSAIdentity for this public key.
-    pub fn to_rsa_identity(&self) -> RSAIdentity {
+    /// Compute the RsaIdentity for this public key.
+    pub fn to_rsa_identity(&self) -> RsaIdentity {
         use crate::d::Sha1;
         use digest::Digest;
         let id = Sha1::digest(&self.to_der()).into();
-        RSAIdentity { id }
+        RsaIdentity { id }
     }
 }
 
 /// An RSA signature plus all the information needed to validate it.
-pub struct ValidatableRSASignature {
+pub struct ValidatableRsaSignature {
     /// The key that allegedly signed this signature
     key: PublicKey,
     /// The signature in question
@@ -245,10 +245,10 @@ pub struct ValidatableRSASignature {
     expected_hash: Vec<u8>,
 }
 
-impl ValidatableRSASignature {
-    /// Construct a new ValidatableRSASignature.
+impl ValidatableRsaSignature {
+    /// Construct a new ValidatableRsaSignature.
     pub fn new(key: &PublicKey, sig: &[u8], expected_hash: &[u8]) -> Self {
-        ValidatableRSASignature {
+        ValidatableRsaSignature {
             key: key.clone(),
             sig: sig.into(),
             expected_hash: expected_hash.into(),
@@ -256,7 +256,7 @@ impl ValidatableRSASignature {
     }
 }
 
-impl super::ValidatableSignature for ValidatableRSASignature {
+impl super::ValidatableSignature for ValidatableRsaSignature {
     fn is_valid(&self) -> bool {
         self.key
             .verify(&self.expected_hash[..], &self.sig[..])

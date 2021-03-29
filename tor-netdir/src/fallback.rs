@@ -9,7 +9,7 @@
 //! fallbacks, and replace it in the fallback::pregen module.
 
 use tor_llcrypto::pk::ed25519::Ed25519Identity;
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 
 use serde::Deserialize;
 use std::net::SocketAddr;
@@ -24,7 +24,7 @@ use std::net::SocketAddr;
 #[derive(Debug, Clone, Deserialize)]
 pub struct FallbackDir {
     /// RSA identity for the directory relay
-    rsa_identity: RSAIdentity,
+    rsa_identity: RsaIdentity,
     /// Ed25519 identity for the directory relay
     ed_identity: Ed25519Identity,
     /// List of ORPorts for the directory relay
@@ -34,7 +34,7 @@ pub struct FallbackDir {
 impl FallbackDir {
     /// Construct a new FallbackDir
     pub fn new(
-        rsa_identity: RSAIdentity,
+        rsa_identity: RsaIdentity,
         ed_identity: Ed25519Identity,
         orports: Vec<SocketAddr>,
     ) -> Self {
@@ -53,7 +53,7 @@ impl tor_linkspec::ChanTarget for FallbackDir {
     fn ed_identity(&self) -> &Ed25519Identity {
         &self.ed_identity
     }
-    fn rsa_identity(&self) -> &RSAIdentity {
+    fn rsa_identity(&self) -> &RsaIdentity {
         &self.rsa_identity
     }
 }

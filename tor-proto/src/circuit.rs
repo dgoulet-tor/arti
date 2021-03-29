@@ -1078,7 +1078,7 @@ mod test {
         ntor_key: pk::curve25519::PublicKey,
         protovers: tor_protover::Protocols,
         ed_id: pk::ed25519::Ed25519Identity,
-        rsa_id: pk::rsa::RSAIdentity,
+        rsa_id: pk::rsa::RsaIdentity,
     }
     impl tor_linkspec::ChanTarget for ExampleTarget {
         fn addrs(&self) -> &[std::net::SocketAddr] {
@@ -1087,7 +1087,7 @@ mod test {
         fn ed_identity(&self) -> &pk::ed25519::Ed25519Identity {
             &self.ed_id
         }
-        fn rsa_identity(&self) -> &pk::rsa::RSAIdentity {
+        fn rsa_identity(&self) -> &pk::rsa::RsaIdentity {
             &self.rsa_id
         }
     }

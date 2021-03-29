@@ -1,7 +1,7 @@
 //! Descriptions objects for different kinds of directory requests
 //! that we can make.
 
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 use tor_netdoc::doc::authcert::AuthCertKeyIds;
 use tor_netdoc::doc::microdesc::MDDigest;
 
@@ -36,7 +36,7 @@ pub struct ConsensusRequest {
     /// A list of the authority identities that we believe in.  We tell the
     /// directory cache only to give us a consensus if it is signed by enough
     /// of these authorities.
-    authority_ids: Vec<RSAIdentity>,
+    authority_ids: Vec<RsaIdentity>,
     /// The publication time of the most recent consensus we have.  Used to
     /// generate an If-Modified-Since header so that we don't get a document
     /// we already have.
@@ -61,7 +61,7 @@ impl ConsensusRequest {
 
     /// Add `id` to the list of authorities that this request should
     /// say we believe in.
-    pub fn push_authority_id(&mut self, id: RSAIdentity) {
+    pub fn push_authority_id(&mut self, id: RsaIdentity) {
         self.authority_ids.push(id);
     }
 
@@ -314,7 +314,7 @@ mod test {
 
     #[test]
     fn test_consensus_request() -> Result<()> {
-        let d1 = RSAIdentity::from_bytes(
+        let d1 = RsaIdentity::from_bytes(
             &hex::decode("03479E93EBF3FF2C58C1C9DBF2DE9DE9C2801B3E").unwrap(),
         )
         .unwrap();

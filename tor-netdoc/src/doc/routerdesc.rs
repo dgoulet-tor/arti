@@ -41,7 +41,7 @@ use std::sync::Arc;
 use std::{net, time};
 use tor_checkable::{signed, timed, Timebound};
 use tor_llcrypto as ll;
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 
 use digest::Digest;
 use signature::Signature;
@@ -447,7 +447,7 @@ impl RouterDesc {
         };
 
         // Extract legacy RSA signature.
-        let rsa_signature: ll::pk::rsa::ValidatableRSASignature = {
+        let rsa_signature: ll::pk::rsa::ValidatableRsaSignature = {
             let mut d = ll::d::Sha1::new();
             let signed_end = rsa_sig_pos + b"router-signature\n".len();
             d.update(&s[start_offset..signed_end]);
@@ -455,7 +455,7 @@ impl RouterDesc {
             let sig = rsa_sig.obj("SIGNATURE")?;
             // TODO: we need to accept prefixes here. COMPAT BLOCKER.
 
-            ll::pk::rsa::ValidatableRSASignature::new(&rsa_identity, &sig, &d)
+            ll::pk::rsa::ValidatableRsaSignature::new(&rsa_identity, &sig, &d)
         };
 
         // router nickname ipv4addr orport socksport dirport
@@ -516,7 +516,7 @@ impl RouterDesc {
             let mut signed = Vec::new();
             signed.extend(rsa_identity.to_rsa_identity().as_bytes());
             signed.extend(identity_cert.peek_signing_key().as_bytes());
-            ll::pk::rsa::ValidatableRSASignature::new(&tap_onion_key, &cc_val, &signed)
+            ll::pk::rsa::ValidatableRsaSignature::new(&tap_onion_key, &cc_val, &signed)
         };
 
         // List of subprotocol versions
@@ -536,7 +536,7 @@ impl RouterDesc {
 
         // fingerprint: check for consistency with RSA identity.
         if let Some(fp_tok) = body.get(FINGERPRINT) {
-            let fp: RSAIdentity = fp_tok.args_as_str().parse::<SpFingerprint>()?.into();
+            let fp: RsaIdentity = fp_tok.args_as_str().parse::<SpFingerprint>()?.into();
             if fp != rsa_identity.to_rsa_identity() {
                 return Err(Error::BadArgument(
                     fp_tok.pos(),

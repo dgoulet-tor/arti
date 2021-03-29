@@ -6,7 +6,7 @@
 
 use crate::{Error, Result};
 use tor_linkspec::ChanTarget;
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,7 +20,7 @@ pub struct FakeChannel {
 #[derive(Debug)]
 pub(crate) struct FakeChannelInner {
     closing: AtomicBool,
-    want_rsa_id: Option<RSAIdentity>,
+    want_rsa_id: Option<RsaIdentity>,
     addr: SocketAddr,
 }
 

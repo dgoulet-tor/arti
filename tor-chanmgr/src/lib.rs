@@ -196,7 +196,7 @@ impl ChanMgr {
 mod test {
     use super::*;
 
-    use tor_llcrypto::pk::rsa::RSAIdentity;
+    use tor_llcrypto::pk::rsa::RsaIdentity;
 
     use async_trait::async_trait;
     use futures::io::{AsyncRead, AsyncWrite};
@@ -265,7 +265,7 @@ mod test {
     struct Target {
         addr: [std::net::SocketAddr; 1],
         ed_id: Ed25519Identity,
-        rsa_id: RSAIdentity,
+        rsa_id: RsaIdentity,
     }
     impl ChanTarget for Target {
         fn addrs(&self) -> &[SocketAddr] {
@@ -274,7 +274,7 @@ mod test {
         fn ed_identity(&self) -> &Ed25519Identity {
             &self.ed_id
         }
-        fn rsa_identity(&self) -> &RSAIdentity {
+        fn rsa_identity(&self) -> &RsaIdentity {
             &self.rsa_id
         }
     }

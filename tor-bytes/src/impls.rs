@@ -219,20 +219,20 @@ mod curve25519_impls {
     }
 }
 
-/// Implement readable and writeable for the the RSAIdentity type.
+/// Implement readable and writeable for the the RsaIdentity type.
 mod rsa_impls {
     use super::*;
     use tor_llcrypto::pk::rsa::*;
 
-    impl Writeable for RSAIdentity {
+    impl Writeable for RsaIdentity {
         fn write_onto<B: Writer + ?Sized>(&self, b: &mut B) {
             b.write_all(self.as_bytes())
         }
     }
-    impl Readable for RSAIdentity {
+    impl Readable for RsaIdentity {
         fn take_from(b: &mut Reader<'_>) -> Result<Self> {
             let m = b.take(RSA_ID_LEN)?;
-            Ok(RSAIdentity::from_bytes(m).expect("take gave wrong length"))
+            Ok(RsaIdentity::from_bytes(m).expect("take gave wrong length"))
         }
     }
 }
@@ -410,8 +410,8 @@ mod tests {
 
     #[test]
     fn rsa_id() {
-        use tor_llcrypto::pk::rsa::RSAIdentity;
+        use tor_llcrypto::pk::rsa::RsaIdentity;
         let b = &hex!("9432D4CEA2621ED09F5A8088BE0E31E0D271435C");
-        check_roundtrip!(RSAIdentity, RSAIdentity::from_bytes(b).unwrap(), b);
+        check_roundtrip!(RsaIdentity, RsaIdentity::from_bytes(b).unwrap(), b);
     }
 }

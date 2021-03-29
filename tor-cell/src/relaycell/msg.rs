@@ -11,7 +11,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use tor_bytes::{Error, Result};
 use tor_bytes::{Readable, Reader, Writeable, Writer};
 use tor_linkspec::LinkSpec;
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 
 use bitflags::bitflags;
 
@@ -629,11 +629,11 @@ pub struct Extend {
     /// A TAP handshake to send
     handshake: Vec<u8>,
     /// The RSA identity of the target relay
-    rsaid: RSAIdentity,
+    rsaid: RsaIdentity,
 }
 impl Extend {
     /// Construct a new (deprecated) extend cell
-    pub fn new(addr: Ipv4Addr, port: u16, handshake: Vec<u8>, rsaid: RSAIdentity) -> Self {
+    pub fn new(addr: Ipv4Addr, port: u16, handshake: Vec<u8>, rsaid: RsaIdentity) -> Self {
         Extend {
             addr,
             port,

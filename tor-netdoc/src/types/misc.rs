@@ -300,41 +300,41 @@ mod edcert {
 /// Types for decoding RSA fingerprints
 mod fingerprint {
     use crate::{Error, Pos, Result};
-    use tor_llcrypto::pk::rsa::RSAIdentity;
+    use tor_llcrypto::pk::rsa::RsaIdentity;
 
     /// A hex-encoded fingerprint with spaces in it.
-    pub struct SpFingerprint(RSAIdentity);
+    pub struct SpFingerprint(RsaIdentity);
 
     /// A hex-encoded fingerprint with no spaces.
-    pub struct Fingerprint(RSAIdentity);
+    pub struct Fingerprint(RsaIdentity);
 
     /// A "long identity" in the format used for Family members.
-    pub struct LongIdent(RSAIdentity);
+    pub struct LongIdent(RsaIdentity);
 
-    impl From<SpFingerprint> for RSAIdentity {
-        fn from(f: SpFingerprint) -> RSAIdentity {
+    impl From<SpFingerprint> for RsaIdentity {
+        fn from(f: SpFingerprint) -> RsaIdentity {
             f.0
         }
     }
 
-    impl From<LongIdent> for RSAIdentity {
-        fn from(f: LongIdent) -> RSAIdentity {
+    impl From<LongIdent> for RsaIdentity {
+        fn from(f: LongIdent) -> RsaIdentity {
             f.0
         }
     }
 
-    impl From<Fingerprint> for RSAIdentity {
-        fn from(f: Fingerprint) -> RSAIdentity {
+    impl From<Fingerprint> for RsaIdentity {
+        fn from(f: Fingerprint) -> RsaIdentity {
             f.0
         }
     }
 
     /// Helper: parse an identity from a hexadecimal string
-    fn parse_hex_ident(s: &str) -> Result<RSAIdentity> {
+    fn parse_hex_ident(s: &str) -> Result<RsaIdentity> {
         let bytes = hex::decode(s).map_err(|_| {
             Error::BadArgument(Pos::at(s), "invalid hexadecimal in fingerprint".into())
         })?;
-        RSAIdentity::from_bytes(&bytes)
+        RsaIdentity::from_bytes(&bytes)
             .ok_or_else(|| Error::BadArgument(Pos::at(s), "wrong length on fingerprint".into()))
     }
 
@@ -470,29 +470,29 @@ mod test {
 
     #[test]
     fn fingerprint() -> Result<()> {
-        use tor_llcrypto::pk::rsa::RSAIdentity;
+        use tor_llcrypto::pk::rsa::RsaIdentity;
         let fp1 = "7467 A97D 19CD 2B4F 2BC0 388A A99C 5E67 710F 847E";
         let fp2 = "7467A97D19CD2B4F2BC0388AA99C5E67710F847E";
         let fp3 = "$7467A97D19CD2B4F2BC0388AA99C5E67710F847E";
         let fp4 = "$7467A97D19CD2B4F2BC0388AA99C5E67710F847E=fred";
 
         let k = hex::decode(fp2).unwrap();
-        let k = RSAIdentity::from_bytes(&k[..]).unwrap();
+        let k = RsaIdentity::from_bytes(&k[..]).unwrap();
 
-        assert_eq!(RSAIdentity::from(fp1.parse::<SpFingerprint>()?), k);
-        assert_eq!(RSAIdentity::from(fp2.parse::<SpFingerprint>()?), k);
+        assert_eq!(RsaIdentity::from(fp1.parse::<SpFingerprint>()?), k);
+        assert_eq!(RsaIdentity::from(fp2.parse::<SpFingerprint>()?), k);
         assert!(fp3.parse::<SpFingerprint>().is_err());
         assert!(fp4.parse::<SpFingerprint>().is_err());
 
         assert!(fp1.parse::<Fingerprint>().is_err());
-        assert_eq!(RSAIdentity::from(fp2.parse::<Fingerprint>()?), k);
+        assert_eq!(RsaIdentity::from(fp2.parse::<Fingerprint>()?), k);
         assert!(fp3.parse::<Fingerprint>().is_err());
         assert!(fp4.parse::<Fingerprint>().is_err());
 
         assert!(fp1.parse::<LongIdent>().is_err());
-        assert_eq!(RSAIdentity::from(fp2.parse::<LongIdent>()?), k);
-        assert_eq!(RSAIdentity::from(fp3.parse::<LongIdent>()?), k);
-        assert_eq!(RSAIdentity::from(fp4.parse::<LongIdent>()?), k);
+        assert_eq!(RsaIdentity::from(fp2.parse::<LongIdent>()?), k);
+        assert_eq!(RsaIdentity::from(fp3.parse::<LongIdent>()?), k);
+        assert_eq!(RsaIdentity::from(fp4.parse::<LongIdent>()?), k);
 
         assert!("xxxx".parse::<Fingerprint>().is_err());
         assert!("ffffffffff".parse::<Fingerprint>().is_err());

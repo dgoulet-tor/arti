@@ -59,7 +59,7 @@ use digest::Digest;
 use once_cell::sync::Lazy;
 use tor_checkable::{timed::TimerangeBound, ExternallySigned};
 use tor_llcrypto as ll;
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 
 use serde::{Deserialize, Deserializer};
 
@@ -269,7 +269,7 @@ struct DirSource {
     /// DOCDOC -- I forget.  Is this the identity fingerprint for the
     /// authority identity key, or for the identity key of the authority
     /// when it's runnign as a relay?
-    identity: RSAIdentity,
+    identity: RsaIdentity,
     /// Address of the authority in string form.
     // XXXX why do we have this _and_ IP?
     address: String,
@@ -362,7 +362,7 @@ pub struct MDConsensusRouterStatus {
     /// there is no mechanism to enforce their uniqueness.
     nickname: String,
     /// Fingerprint of the old-style RSA identity for this relay.
-    identity: RSAIdentity,
+    identity: RsaIdentity,
     /// Declared time at which the router descriptor for this relay
     /// was published.
     ///
@@ -396,7 +396,7 @@ impl MDConsensusRouterStatus {
         &self.md_digest
     }
     /// Return the expected microdescriptor digest for this routerstatus
-    pub fn rsa_identity(&self) -> &RSAIdentity {
+    pub fn rsa_identity(&self) -> &RsaIdentity {
         &self.identity
     }
     /// Return an iterator of ORPort addresses for this routerstatus
@@ -1019,7 +1019,7 @@ impl MDConsensusRouterStatus {
         let r_item = sec.required(RS_R)?;
         let nickname = r_item.required_arg(0)?.to_string();
         let ident = r_item.required_arg(1)?.parse::<B64>()?;
-        let identity = RSAIdentity::from_bytes(ident.as_bytes())
+        let identity = RsaIdentity::from_bytes(ident.as_bytes())
             .ok_or_else(|| Error::BadArgument(r_item.pos(), "Wrong identity length".to_string()))?;
         let published: time::SystemTime = {
             // TODO: It's annoying to have to do this allocation, since we
@@ -1407,7 +1407,7 @@ impl UnvalidatedMDConsensus {
     ///
     /// (This is the case if the consensus claims to be signed by more than
     /// half of the authorities in the list.)
-    pub fn authorities_are_correct(&self, authorities: &[&RSAIdentity]) -> bool {
+    pub fn authorities_are_correct(&self, authorities: &[&RsaIdentity]) -> bool {
         self.siggroup.could_validate(authorities)
     }
 }
@@ -1447,7 +1447,7 @@ impl SignatureGroup {
     /// signatures in this object for which we _could_ find certs, and
     /// a list of the signatures we couldn't find certificates for.
     fn list_missing(&self, certs: &[AuthCert]) -> (usize, Vec<&Signature>) {
-        let mut ok: HashSet<RSAIdentity> = HashSet::new();
+        let mut ok: HashSet<RsaIdentity> = HashSet::new();
         let mut missing = Vec::new();
         for sig in self.signatures.iter() {
             let id_fingerprint = &sig.key_ids.id_fingerprint;
@@ -1467,8 +1467,8 @@ impl SignatureGroup {
     /// Given a list of authority identity key fingerprints, return true if
     /// this signature group is _potentially_ well-signed according to those
     /// authorities.
-    fn could_validate(&self, authorities: &[&RSAIdentity]) -> bool {
-        let mut signed_by: HashSet<RSAIdentity> = HashSet::new();
+    fn could_validate(&self, authorities: &[&RsaIdentity]) -> bool {
+        let mut signed_by: HashSet<RsaIdentity> = HashSet::new();
         for sig in self.signatures.iter() {
             let id_fp = &sig.key_ids.id_fingerprint;
             if signed_by.contains(id_fp) {
@@ -1490,7 +1490,7 @@ impl SignatureGroup {
     /// authorities we believe in, and that every cert in `certs` belongs
     /// to a real authority.
     fn validate(&self, n_authorities: u16, certs: &[AuthCert]) -> bool {
-        let mut ok: HashSet<RSAIdentity> = HashSet::new();
+        let mut ok: HashSet<RsaIdentity> = HashSet::new();
 
         for sig in self.signatures.iter() {
             let id_fingerprint = &sig.key_ids.id_fingerprint;

@@ -533,11 +533,11 @@ qiBHRBGbtkF/Re5pb438HC/CGyuujp43oZ3CUYosJOfY/X+sD0aVAgMBAAE=";
     );
     assert_eq!(
         format!("{:?}", public.to_rsa_identity()),
-        "RSAIdentity { $9367f9781da8eabbf96b691175f0e701b43c602e }"
+        "RsaIdentity { $9367f9781da8eabbf96b691175f0e701b43c602e }"
     );
 
     assert_eq!(
-        rsa::RSAIdentity::from_bytes(&hex!("9367f9781da8eabbf96b691175f0e701b43c602e")).unwrap(),
+        rsa::RsaIdentity::from_bytes(&hex!("9367f9781da8eabbf96b691175f0e701b43c602e")).unwrap(),
         public.to_rsa_identity()
     );
     assert_eq!(
@@ -546,10 +546,10 @@ qiBHRBGbtkF/Re5pb438HC/CGyuujp43oZ3CUYosJOfY/X+sD0aVAgMBAAE=";
     );
 
     assert!(
-        rsa::RSAIdentity::from_bytes(&hex!("67f9781da8eabbf96b691175f0e701b43c602e")).is_none()
+        rsa::RsaIdentity::from_bytes(&hex!("67f9781da8eabbf96b691175f0e701b43c602e")).is_none()
     );
     assert!(
-        rsa::RSAIdentity::from_bytes(&hex!("67f9781da8eabbf96b691175f0e701b43c602effff")).is_none()
+        rsa::RsaIdentity::from_bytes(&hex!("67f9781da8eabbf96b691175f0e701b43c602effff")).is_none()
     );
 
     assert_eq!(public.to_der(), to_der(pk_pem));
@@ -568,7 +568,7 @@ rI2rzhqqBIhzFFaYuxyRAhkSBxCKTdl6X0k74ahT3MM=
     assert!(public.verify(&digest, &to_der(sig)).is_ok());
     assert!(!public.verify(&wrong_digest, &to_der(sig)).is_ok());
 
-    let val = rsa::ValidatableRSASignature::new(&public, &to_der(sig), &digest);
+    let val = rsa::ValidatableRsaSignature::new(&public, &to_der(sig), &digest);
 
     assert!(val.is_valid());
 }

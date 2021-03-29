@@ -17,7 +17,7 @@ use tor_bytes::Reader;
 use tor_linkspec::ChanTarget;
 use tor_llcrypto as ll;
 use tor_llcrypto::pk::ed25519::Ed25519Identity;
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 
 use digest::Digest;
 
@@ -82,7 +82,7 @@ pub struct VerifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// Validated Ed25519 identity for this peer.
     ed25519_id: Ed25519Identity,
     /// Validated RSA identity for this peer.
-    rsa_id: RSAIdentity,
+    rsa_id: RsaIdentity,
 }
 
 impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake<T> {
@@ -579,7 +579,7 @@ pub(super) mod test {
 
     struct DummyChanTarget {
         ed: Ed25519Identity,
-        rsa: RSAIdentity,
+        rsa: RsaIdentity,
     }
     impl ChanTarget for DummyChanTarget {
         fn addrs(&self) -> &[SocketAddr] {
@@ -588,7 +588,7 @@ pub(super) mod test {
         fn ed_identity(&self) -> &Ed25519Identity {
             &self.ed
         }
-        fn rsa_identity(&self) -> &RSAIdentity {
+        fn rsa_identity(&self) -> &RsaIdentity {
             &self.rsa
         }
     }
@@ -607,7 +607,7 @@ pub(super) mod test {
     ) -> Result<VerifiedChannel<MsgBuf>> {
         let unver = make_unverified(certs);
         let ed = Ed25519Identity::from_bytes(peer_ed).unwrap();
-        let rsa = RSAIdentity::from_bytes(peer_rsa).unwrap();
+        let rsa = RsaIdentity::from_bytes(peer_rsa).unwrap();
         let chan = DummyChanTarget { ed, rsa };
         unver.check_internal(&chan, peer_cert_sha256, when)
     }

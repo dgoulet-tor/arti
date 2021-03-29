@@ -4,7 +4,7 @@
 /// 0.4.5.0-alpha-dev to dump all of its cells to the logs, and
 /// running in a chutney network with "test-network-all".
 use tor_cell::relaycell::{msg, RelayCmd};
-use tor_llcrypto::pk::rsa::RSAIdentity;
+use tor_llcrypto::pk::rsa::RsaIdentity;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
@@ -137,7 +137,7 @@ fn test_extend2() {
 
     let handshake = hex::decode("03479E93EBF3FF2C58C1C9DBF2DE9DE9C2801B3E36A3E0BDB1F1A10579820243DD2E228B902940EB49EF842646E3926768C28410074BEE50A535116D657C6BFB7E5114119DC69F05DF907EF62002EA782B0A357F").unwrap();
     let rsa =
-        RSAIdentity::from_bytes(&hex::decode("03479E93EBF3FF2C58C1C9DBF2DE9DE9C2801B3E").unwrap())
+        RsaIdentity::from_bytes(&hex::decode("03479E93EBF3FF2C58C1C9DBF2DE9DE9C2801B3E").unwrap())
             .unwrap();
     let addr = "127.0.0.1:5000".parse::<SocketAddr>().unwrap();
 
@@ -158,7 +158,7 @@ fn test_extend() {
     let addr = "127.0.0.1".parse::<Ipv4Addr>().unwrap();
     let handshake = hex::decode("71510FC729E1DBE35586F0031D69A38FC684B26D657821EE640C299BA9F8FD38D3A3376F2DD3A79A0B73836AB4B42E5FB3BEE1383F3184A852B292626DCC64AF672A8FAEFC263C38370768EF9EA6C244BA079142D3E23835F6914DE0C7F468316C4265E109F5312987275D61E1DC831A3323195DDE70841CEE2DC30F6DCDBDABA40A75FDFB714431FC5EB8F84D4150EE2C2478A79018F18D7F30F6BB677516CF03390F5180B371DEAEBB89175798864D2130B13ED1D20B254F07").unwrap();
     let rsa =
-        RSAIdentity::from_bytes(&hex::decode("CF555174CBE8AD62A7E764A8F3D85D40C5145ABB").unwrap())
+        RsaIdentity::from_bytes(&hex::decode("CF555174CBE8AD62A7E764A8F3D85D40C5145ABB").unwrap())
             .unwrap();
 
     msg(
