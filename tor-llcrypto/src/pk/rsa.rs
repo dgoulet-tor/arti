@@ -194,14 +194,14 @@ impl PublicKey {
     ///
     /// Return None  if the DER string does not have a valid PublicKey.
     ///
-    /// (This function expects an RSAPublicKey, as used by Tor.  It
+    /// (This function expects an RsaPublicKey, as used by Tor.  It
     /// does not expect or accept a PublicKeyInfo.)
     pub fn from_der(der: &[u8]) -> Option<Self> {
         Some(PublicKey(rsa::RSAPublicKey::from_pkcs1(der).ok()?))
     }
     /// Encode this public key into the DER format as used by Tor.
     ///
-    /// The result is an RSAPublicKey, not a PublicKeyInfo.
+    /// The result is an RsaPublicKey, not a PublicKeyInfo.
     pub fn to_der(&self) -> Vec<u8> {
         // There seem to be version issues with these two versions of
         // bigint. XXXX

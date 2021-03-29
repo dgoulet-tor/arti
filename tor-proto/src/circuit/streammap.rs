@@ -98,7 +98,7 @@ impl StreamMap {
             }
         }
 
-        Err(Error::IDRangeFull)
+        Err(Error::IdRangeFull)
     }
 
     /// Return the entry for `id` in this map, if any.

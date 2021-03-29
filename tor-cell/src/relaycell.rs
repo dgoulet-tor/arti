@@ -71,7 +71,7 @@ caret_int! {
 }
 
 /// Possible requirements on stream IDs for a relay command.
-enum StreamIDReq {
+enum StreamIdReq {
     /// Can only be used with a stream ID of 0
     WantZero,
     /// Can only be used with a stream ID that isn't 0
@@ -82,8 +82,8 @@ enum StreamIDReq {
 
 impl RelayCmd {
     /// Check whether this command requires a certain kind of
-    /// StreamId, and return a corresponding StreamIDReq.
-    fn expects_streamid(self) -> StreamIDReq {
+    /// StreamId, and return a corresponding StreamIdReq.
+    fn expects_streamid(self) -> StreamIdReq {
         match self {
             RelayCmd::BEGIN
             | RelayCmd::DATA
@@ -91,7 +91,7 @@ impl RelayCmd {
             | RelayCmd::CONNECTED
             | RelayCmd::RESOLVE
             | RelayCmd::RESOLVED
-            | RelayCmd::BEGIN_DIR => StreamIDReq::WantNonZero,
+            | RelayCmd::BEGIN_DIR => StreamIdReq::WantNonZero,
             RelayCmd::EXTEND
             | RelayCmd::EXTENDED
             | RelayCmd::TRUNCATE
@@ -107,17 +107,17 @@ impl RelayCmd {
             | RelayCmd::RENDEZVOUS2
             | RelayCmd::INTRO_ESTABLISHED
             | RelayCmd::RENDEZVOUS_ESTABLISHED
-            | RelayCmd::INTRODUCE_ACK => StreamIDReq::WantZero,
-            RelayCmd::SENDME => StreamIDReq::Any,
-            _ => StreamIDReq::Any,
+            | RelayCmd::INTRODUCE_ACK => StreamIdReq::WantZero,
+            RelayCmd::SENDME => StreamIdReq::Any,
+            _ => StreamIdReq::Any,
         }
     }
     /// Return true if this command is one that accepts the particular
     /// stream ID `id`
     pub fn accepts_streamid_val(self, id: StreamId) -> bool {
         match (self.expects_streamid(), id.is_zero()) {
-            (StreamIDReq::WantNonZero, true) => false,
-            (StreamIDReq::WantZero, false) => false,
+            (StreamIdReq::WantNonZero, true) => false,
+            (StreamIdReq::WantZero, false) => false,
             (_, _) => true,
         }
     }

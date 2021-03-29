@@ -56,7 +56,7 @@ pub enum Error {
     CircuitClosed,
     /// Can't allocate any more circuit or stream IDs on a channel.
     #[error("too many entries in map: can't allocate ID")]
-    IDRangeFull,
+    IdRangeFull,
     /// Couldn't extend a circuit.
     #[error("circuit extension handshake error: {0}")]
     CircExtend(&'static str),
@@ -104,7 +104,7 @@ impl From<Error> for std::io::Error {
             BytesErr(_) | MissingKey | BadCellAuth | BadHandshake | ChanProto(_) | CircProto(_)
             | CellErr(_) | ChanMismatch(_) | StreamProto(_) => ErrorKind::InvalidData,
 
-            InternalError(_) | IDRangeFull | CircExtend(_) => ErrorKind::Other,
+            InternalError(_) | IdRangeFull | CircExtend(_) => ErrorKind::Other,
         };
         std::io::Error::new(kind, err)
     }

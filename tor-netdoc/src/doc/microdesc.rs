@@ -41,7 +41,7 @@ pub struct MicrodescAnnotation {
 }
 
 /// The digest of a microdescriptor as used in microdesc consensuses
-pub type MDDigest = [u8; 32];
+pub type MdDigest = [u8; 32];
 
 /// A single microdescriptor.
 #[allow(dead_code)]
@@ -52,7 +52,7 @@ pub struct Microdesc {
     /// it, and when listing it in a consensus document.
     // TODO: maybe this belongs somewhere else. Once it's used to store
     // correlate the microdesc to a consensus, it's never used again.
-    sha256: MDDigest,
+    sha256: MdDigest,
     /// Public key used for the deprecated TAP circuit extension protocol.
     tap_onion_key: rsa::PublicKey,
     /// Public key used for the ntor circuit extension protocol.
@@ -71,7 +71,7 @@ pub struct Microdesc {
 
 impl Microdesc {
     /// Return the sha256 digest of this microdesc.
-    pub fn digest(&self) -> &MDDigest {
+    pub fn digest(&self) -> &MdDigest {
         &self.sha256
     }
     /// Return the ntor onion key for this microdesc
@@ -135,7 +135,7 @@ impl AnnotatedMicrodesc {
 
 decl_keyword! {
     /// Keyword type for recognized objects in microdescriptors.
-    MicrodescKW {
+    MicrodescKwd {
         annotation "@last-listed" => ANN_LAST_LISTED,
         "onion-key" => ONION_KEY,
         "ntor-onion-key" => NTOR_ONION_KEY,
@@ -147,8 +147,8 @@ decl_keyword! {
 }
 
 /// Rules about annotations that can appear before a Microdescriptor
-static MICRODESC_ANNOTATIONS: Lazy<SectionRules<MicrodescKW>> = Lazy::new(|| {
-    use MicrodescKW::*;
+static MICRODESC_ANNOTATIONS: Lazy<SectionRules<MicrodescKwd>> = Lazy::new(|| {
+    use MicrodescKwd::*;
     let mut rules = SectionRules::new();
     rules.add(ANN_LAST_LISTED.rule().args(1..));
     rules.add(ANN_UNRECOGNIZED.rule().may_repeat().obj_optional());
@@ -156,8 +156,8 @@ static MICRODESC_ANNOTATIONS: Lazy<SectionRules<MicrodescKW>> = Lazy::new(|| {
 });
 /// Rules about entries that must appear in an Microdesc, and how they must
 /// be formed.
-static MICRODESC_RULES: Lazy<SectionRules<MicrodescKW>> = Lazy::new(|| {
-    use MicrodescKW::*;
+static MICRODESC_RULES: Lazy<SectionRules<MicrodescKwd>> = Lazy::new(|| {
+    use MicrodescKwd::*;
 
     let mut rules = SectionRules::new();
     rules.add(ONION_KEY.rule().required().no_args().obj_required());
@@ -181,16 +181,16 @@ impl MicrodescAnnotation {
     /// reader.
     #[allow(dead_code)]
     fn parse_from_reader(
-        reader: &mut NetDocReader<'_, MicrodescKW>,
+        reader: &mut NetDocReader<'_, MicrodescKwd>,
     ) -> Result<MicrodescAnnotation> {
-        use MicrodescKW::*;
+        use MicrodescKwd::*;
 
         let mut items = reader.pause_at(|item| item.is_ok_with_non_annotation());
         let body = MICRODESC_ANNOTATIONS.parse(&mut items)?;
 
         let last_listed = match body.get(ANN_LAST_LISTED) {
             None => None,
-            Some(item) => Some(item.args_as_str().parse::<ISO8601TimeSp>()?.into()),
+            Some(item) => Some(item.args_as_str().parse::<Iso8601TimeSp>()?.into()),
         };
 
         Ok(MicrodescAnnotation { last_listed })
@@ -208,9 +208,9 @@ impl Microdesc {
 
     /// Extract a single microdescriptor from a NetDocReader.
     fn parse_from_reader(
-        reader: &mut NetDocReader<'_, MicrodescKW>,
+        reader: &mut NetDocReader<'_, MicrodescKwd>,
     ) -> Result<(Microdesc, Option<Extent>)> {
-        use MicrodescKW::*;
+        use MicrodescKwd::*;
         let s = reader.str();
 
         let mut first_onion_key = true;
@@ -249,7 +249,7 @@ impl Microdesc {
         // Legacy (tap) onion key
         let tap_onion_key: rsa::PublicKey = body
             .required(ONION_KEY)?
-            .parse_obj::<RSAPublic>("RSA PUBLIC KEY")?
+            .parse_obj::<RsaPublic>("RSA PUBLIC KEY")?
             .check_len_eq(1024)?
             .check_exponent(65537)?
             .into();
@@ -320,8 +320,8 @@ impl Microdesc {
 /// Consume tokens from 'reader' until the next token is the beginning
 /// of a microdescriptor: an annotation or an ONION_KEY.  If no such
 /// token exists, advance to the end of the reader.
-fn advance_to_next_microdesc(reader: &mut NetDocReader<'_, MicrodescKW>, annotated: bool) {
-    use MicrodescKW::*;
+fn advance_to_next_microdesc(reader: &mut NetDocReader<'_, MicrodescKwd>, annotated: bool) {
+    use MicrodescKwd::*;
     let iter = reader.iter();
     loop {
         let item = iter.peek();
@@ -350,7 +350,7 @@ pub struct MicrodescReader<'a> {
     /// True if we accept annotations; false otherwise.
     annotated: bool,
     /// An underlying reader to give us Items for the microdescriptors
-    reader: NetDocReader<'a, MicrodescKW>,
+    reader: NetDocReader<'a, MicrodescKwd>,
 }
 
 impl<'a> MicrodescReader<'a> {

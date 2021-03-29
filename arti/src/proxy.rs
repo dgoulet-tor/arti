@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tor_rtcompat::traits::*;
 
 use tor_client::{ConnectPrefs, TorClient};
-use tor_proto::circuit::IPVersionPreference;
+use tor_proto::circuit::IpVersionPreference;
 use tor_rtcompat::timer::TimeoutError;
 use tor_socksproto::{SocksCmd, SocksRequest};
 
@@ -18,19 +18,19 @@ use anyhow::{Context, Result};
 
 /// Find out which kind of address family we can/should use for a
 /// given socks request.
-fn ip_preference(req: &SocksRequest, addr: &str) -> IPVersionPreference {
+fn ip_preference(req: &SocksRequest, addr: &str) -> IpVersionPreference {
     if addr.parse::<Ipv4Addr>().is_ok() {
         // If they asked for an IPv4 address correctly, nothing else will do.
-        IPVersionPreference::Ipv4Only
+        IpVersionPreference::Ipv4Only
     } else if addr.parse::<Ipv6Addr>().is_ok() {
         // If they asked for an IPv6 address correctly, nothing else will do.
-        IPVersionPreference::Ipv6Only
+        IpVersionPreference::Ipv6Only
     } else if req.version() == 4 {
         // SOCKS4 and SOCKS4a only support IPv4
-        IPVersionPreference::Ipv4Only
+        IpVersionPreference::Ipv4Only
     } else {
         // Otherwise, default to saying IPv4 is preferred.
-        IPVersionPreference::Ipv4Preferred
+        IpVersionPreference::Ipv4Preferred
     }
 }
 

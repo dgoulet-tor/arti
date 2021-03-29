@@ -355,7 +355,7 @@ impl RouterWeight {
 /// A single relay's status, as represented in a microdesc consensus.
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct MDConsensusRouterStatus {
+pub struct MdConsensusRouterStatus {
     /// The nickname for this relay.
     ///
     /// Nicknames can be used for convenience purpose, but no more:
@@ -376,7 +376,7 @@ pub struct MDConsensusRouterStatus {
     /// Declared directory port for this relay.
     dir_port: u16,
     /// Digest of the microdescriptor for this relay.
-    md_digest: crate::doc::microdesc::MDDigest,
+    md_digest: crate::doc::microdesc::MdDigest,
     /// Flags applied by the authorities to this relay.
     flags: RouterFlags,
     /// Version of the software that this relay is running.
@@ -390,9 +390,9 @@ pub struct MDConsensusRouterStatus {
 
 // TODO: These methods should probably become, in whole or in part,
 // methods on a RouterStatus trait.
-impl MDConsensusRouterStatus {
+impl MdConsensusRouterStatus {
     /// Return the expected microdescriptor digest for this routerstatus
-    pub fn md_digest(&self) -> &crate::doc::microdesc::MDDigest {
+    pub fn md_digest(&self) -> &crate::doc::microdesc::MdDigest {
         &self.md_digest
     }
     /// Return the expected microdescriptor digest for this routerstatus
@@ -469,25 +469,25 @@ struct Footer {
 /// votes and ns consensuses.
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct MDConsensus {
+pub struct MdConsensus {
     /// Part of the header shared by all consensus types.
     header: ConsensusHeader,
     /// List of voters whose votes contributed to this consensus.
     voters: Vec<ConsensusVoterInfo>,
     /// A list of the relays on the network, with one entry per relay.
-    routers: Vec<MDConsensusRouterStatus>,
+    routers: Vec<MdConsensusRouterStatus>,
     /// Footer for the consensus object.
     footer: Footer,
 }
 
-impl MDConsensus {
+impl MdConsensus {
     /// Return the Lifetime for this consensus.
     pub fn lifetime(&self) -> &Lifetime {
         &self.header.hdr.lifetime
     }
 
     /// Return a slice of all the routerstatus entries in this consensus.
-    pub fn routers(&self) -> &[MDConsensusRouterStatus] {
+    pub fn routers(&self) -> &[MdConsensusRouterStatus] {
         &self.routers[..]
     }
 
@@ -505,7 +505,7 @@ impl MDConsensus {
 
 decl_keyword! {
     /// Keywords that can be used in votes and consensuses.
-    NetstatusKW {
+    NetstatusKwd {
         // Header
         "network-status-version" => NETWORK_STATUS_VERSION,
         "vote-status" => VOTE_STATUS,
@@ -567,8 +567,8 @@ decl_keyword! {
 }
 
 /// Shared parts of rules for all kinds of netstatus headers
-static NS_HEADER_RULES_COMMON_: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
-    use NetstatusKW::*;
+static NS_HEADER_RULES_COMMON_: Lazy<SectionRules<NetstatusKwd>> = Lazy::new(|| {
+    use NetstatusKwd::*;
     let mut rules = SectionRules::new();
     rules.add(NETWORK_STATUS_VERSION.rule().required().args(1..=2));
     rules.add(VOTE_STATUS.rule().required().args(1..));
@@ -587,8 +587,8 @@ static NS_HEADER_RULES_COMMON_: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
     rules
 });
 /// Rules for parsing the header of a consensus.
-static NS_HEADER_RULES_CONSENSUS: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
-    use NetstatusKW::*;
+static NS_HEADER_RULES_CONSENSUS: Lazy<SectionRules<NetstatusKwd>> = Lazy::new(|| {
+    use NetstatusKwd::*;
     let mut rules = NS_HEADER_RULES_COMMON_.clone();
     rules.add(CONSENSUS_METHOD.rule().args(1..=1));
     rules.add(SHARED_RAND_PREVIOUS_VALUE.rule().args(2..));
@@ -598,8 +598,8 @@ static NS_HEADER_RULES_CONSENSUS: Lazy<SectionRules<NetstatusKW>> = Lazy::new(||
 });
 /*
 /// Rules for parsing the header of a vote.
-static NS_HEADER_RULES_VOTE: SectionRules<NetstatusKW> = {
-    use NetstatusKW::*;
+static NS_HEADER_RULES_VOTE: SectionRules<NetstatusKwd> = {
+    use NetstatusKwd::*;
     let mut rules = NS_HEADER_RULES_COMMON_.clone();
     rules.add(CONSENSUS_METHODS.rule().args(1..));
     rules.add(FLAG_THRESHOLDS.rule());
@@ -609,8 +609,8 @@ static NS_HEADER_RULES_VOTE: SectionRules<NetstatusKW> = {
     rules
 };
 /// Rules for parsing a single voter's information in a vote.
-static NS_VOTERINFO_RULES_VOTE: SectionRules<NetstatusKW> = {
-    use NetstatusKW::*;
+static NS_VOTERINFO_RULES_VOTE: SectionRules<NetstatusKwd> = {
+    use NetstatusKwd::*;
     let mut rules = SectionRules::new();
     rules.add(DIR_SOURCE.rule().required().args(6..));
     rules.add(CONTACT.rule().required());
@@ -626,8 +626,8 @@ static NS_VOTERINFO_RULES_VOTE: SectionRules<NetstatusKW> = {
 };
  */
 /// Rules for parsing a single voter's information in a consensus
-static NS_VOTERINFO_RULES_CONSENSUS: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
-    use NetstatusKW::*;
+static NS_VOTERINFO_RULES_CONSENSUS: Lazy<SectionRules<NetstatusKwd>> = Lazy::new(|| {
+    use NetstatusKwd::*;
     let mut rules = SectionRules::new();
     rules.add(DIR_SOURCE.rule().required().args(6..));
     rules.add(CONTACT.rule().required());
@@ -636,8 +636,8 @@ static NS_VOTERINFO_RULES_CONSENSUS: Lazy<SectionRules<NetstatusKW>> = Lazy::new
     rules
 });
 /// Shared rules for parsing a single routerstatus
-static NS_ROUTERSTATUS_RULES_COMMON_: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
-    use NetstatusKW::*;
+static NS_ROUTERSTATUS_RULES_COMMON_: Lazy<SectionRules<NetstatusKwd>> = Lazy::new(|| {
+    use NetstatusKwd::*;
     let mut rules = SectionRules::new();
     rules.add(RS_A.rule().may_repeat().args(1..));
     rules.add(RS_S.rule().required());
@@ -650,15 +650,15 @@ static NS_ROUTERSTATUS_RULES_COMMON_: Lazy<SectionRules<NetstatusKW>> = Lazy::ne
 });
 /*
     /// Rules for parsing a single routerstatus in an NS consensus
-    static NS_ROUTERSTATUS_RULES_NSCON: SectionRules<NetstatusKW> = {
-        use NetstatusKW::*;
+    static NS_ROUTERSTATUS_RULES_NSCON: SectionRules<NetstatusKwd> = {
+        use NetstatusKwd::*;
         let mut rules = NS_ROUTERSTATUS_RULES_COMMON_.clone();
         rules.add(RS_R.rule().required().args(8..));
         rules
     };
     /// Rules for parsing a single routerstatus in a vote
-    static NS_ROUTERSTATUS_RULES_VOTE: SectionRules<NetstatusKW> = {
-        use NetstatusKW::*;
+    static NS_ROUTERSTATUS_RULES_VOTE: SectionRules<NetstatusKwd> = {
+        use NetstatusKwd::*;
         let mut rules = NS_ROUTERSTATUS_RULES_COMMON_.clone();
         rules.add(RS_R.rule().required().args(8..));
         rules.add(RS_M.rule().may_repeat().args(2..));
@@ -667,16 +667,16 @@ static NS_ROUTERSTATUS_RULES_COMMON_: Lazy<SectionRules<NetstatusKW>> = Lazy::ne
     };
 */
 /// Rules for parsing a single routerstatus in a microdesc consensus
-static NS_ROUTERSTATUS_RULES_MDCON: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
-    use NetstatusKW::*;
+static NS_ROUTERSTATUS_RULES_MDCON: Lazy<SectionRules<NetstatusKwd>> = Lazy::new(|| {
+    use NetstatusKwd::*;
     let mut rules = NS_ROUTERSTATUS_RULES_COMMON_.clone();
     rules.add(RS_R.rule().required().args(6..));
     rules.add(RS_M.rule().required().args(1..));
     rules
 });
 /// Rules for parsing consensus fields from a footer.
-static NS_FOOTER_RULES: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
-    use NetstatusKW::*;
+static NS_FOOTER_RULES: Lazy<SectionRules<NetstatusKwd>> = Lazy::new(|| {
+    use NetstatusKwd::*;
     let mut rules = SectionRules::new();
     rules.add(DIRECTORY_FOOTER.rule().required().no_args());
     // consensus only
@@ -688,12 +688,12 @@ static NS_FOOTER_RULES: Lazy<SectionRules<NetstatusKW>> = Lazy::new(|| {
 impl ProtoStatus {
     /// Construct a ProtoStatus from two chosen keywords in a section.
     fn from_section(
-        sec: &Section<'_, NetstatusKW>,
-        recommend_token: NetstatusKW,
-        required_token: NetstatusKW,
+        sec: &Section<'_, NetstatusKwd>,
+        recommend_token: NetstatusKwd,
+        required_token: NetstatusKwd,
     ) -> Result<ProtoStatus> {
         /// Helper: extract a Protocols entry from an item's arguments.
-        fn parse(t: Option<&Item<'_, NetstatusKW>>) -> Result<Protocols> {
+        fn parse(t: Option<&Item<'_, NetstatusKwd>>) -> Result<Protocols> {
             if let Some(item) = t {
                 item.args_as_str()
                     .parse::<Protocols>()
@@ -749,8 +749,8 @@ where
 
 impl CommonHeader {
     /// Extract the CommonHeader members from a single header section.
-    fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<CommonHeader> {
-        use NetstatusKW::*;
+    fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<CommonHeader> {
+        use NetstatusKwd::*;
 
         {
             // this unwrap is safe because if there is not at least one
@@ -772,17 +772,17 @@ impl CommonHeader {
         let valid_after = sec
             .required(VALID_AFTER)?
             .args_as_str()
-            .parse::<ISO8601TimeSp>()?
+            .parse::<Iso8601TimeSp>()?
             .into();
         let fresh_until = sec
             .required(FRESH_UNTIL)?
             .args_as_str()
-            .parse::<ISO8601TimeSp>()?
+            .parse::<Iso8601TimeSp>()?
             .into();
         let valid_until = sec
             .required(VALID_UNTIL)?
             .args_as_str()
-            .parse::<ISO8601TimeSp>()?
+            .parse::<Iso8601TimeSp>()?
             .into();
         let lifetime = Lifetime::new(valid_after, fresh_until, valid_until)?;
 
@@ -835,9 +835,11 @@ impl CommonHeader {
 impl SharedRandVal {
     /// Parse a current or previous shared rand value from a given
     /// SharedRandPreviousValue or SharedRandCurrentValue.
-    fn from_item(item: &Item<'_, NetstatusKW>) -> Result<Self> {
+    fn from_item(item: &Item<'_, NetstatusKwd>) -> Result<Self> {
         match item.kwd() {
-            NetstatusKW::SHARED_RAND_PREVIOUS_VALUE | NetstatusKW::SHARED_RAND_CURRENT_VALUE => (),
+            NetstatusKwd::SHARED_RAND_PREVIOUS_VALUE | NetstatusKwd::SHARED_RAND_CURRENT_VALUE => {
+                ()
+            }
             _ => return Err(Error::Internal(item.pos())),
         }
         let n_reveals: u8 = item.parse_arg(0)?;
@@ -849,8 +851,8 @@ impl SharedRandVal {
 
 impl ConsensusHeader {
     /// Parse the ConsensusHeader members from a provided section.
-    fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<ConsensusHeader> {
-        use NetstatusKW::*;
+    fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<ConsensusHeader> {
+        use NetstatusKwd::*;
 
         let status: &str = sec.required(VOTE_STATUS)?.arg(0).unwrap_or("");
         if status != "consensus" {
@@ -884,8 +886,8 @@ impl ConsensusHeader {
 
 impl DirSource {
     /// Parse a "dir-source" item
-    fn from_item(item: &Item<'_, NetstatusKW>) -> Result<Self> {
-        if item.kwd() != NetstatusKW::DIR_SOURCE {
+    fn from_item(item: &Item<'_, NetstatusKwd>) -> Result<Self> {
+        if item.kwd() != NetstatusKwd::DIR_SOURCE {
             return Err(Error::Internal(item.pos()));
         }
         let nickname = item.required_arg(0)?.to_string();
@@ -908,8 +910,8 @@ impl DirSource {
 
 impl ConsensusVoterInfo {
     /// Parse a single ConsensusVoterInfo from a voter info section.
-    fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<ConsensusVoterInfo> {
-        use NetstatusKW::*;
+    fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<ConsensusVoterInfo> {
+        use NetstatusKwd::*;
         if sec.first_item().unwrap().kwd() != DIR_SOURCE {
             return Err(Error::Internal(sec.first_item().unwrap().pos()));
         }
@@ -950,8 +952,8 @@ impl std::str::FromStr for RouterFlags {
 
 impl RouterFlags {
     /// Parse a router-flags entry from an "s" line.
-    fn from_item(item: &Item<'_, NetstatusKW>) -> Result<RouterFlags> {
-        if item.kwd() != NetstatusKW::RS_S {
+    fn from_item(item: &Item<'_, NetstatusKwd>) -> Result<RouterFlags> {
+        if item.kwd() != NetstatusKwd::RS_S {
             return Err(Error::Internal(item.pos()));
         }
         // These flags are implicit.
@@ -985,8 +987,8 @@ impl Default for RouterWeight {
 
 impl RouterWeight {
     /// Parse a routerweight from a "w" line.
-    fn from_item(item: &Item<'_, NetstatusKW>) -> Result<RouterWeight> {
-        if item.kwd() != NetstatusKW::RS_W {
+    fn from_item(item: &Item<'_, NetstatusKwd>) -> Result<RouterWeight> {
+        if item.kwd() != NetstatusKwd::RS_W {
             return Err(Error::Internal(item.pos()));
         }
 
@@ -1011,10 +1013,10 @@ impl RouterWeight {
     }
 }
 
-impl MDConsensusRouterStatus {
-    /// Parse a single routerstatus section onto an MDConsensusRouterStatus.
-    fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<MDConsensusRouterStatus> {
-        use NetstatusKW::*;
+impl MdConsensusRouterStatus {
+    /// Parse a single routerstatus section onto an MdConsensusRouterStatus.
+    fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<MdConsensusRouterStatus> {
+        use NetstatusKwd::*;
         // R line
         let r_item = sec.required(RS_R)?;
         let nickname = r_item.required_arg(0)?.to_string();
@@ -1029,7 +1031,7 @@ impl MDConsensusRouterStatus {
             let mut p = r_item.required_arg(2)?.to_string();
             p.push(' ');
             p.push_str(r_item.required_arg(3)?);
-            p.parse::<ISO8601TimeSp>()?.into()
+            p.parse::<Iso8601TimeSp>()?.into()
         };
         let ipv4addr = r_item.required_arg(4)?.parse::<net::Ipv4Addr>()?;
         let or_port = r_item.required_arg(5)?.parse::<u16>()?;
@@ -1081,7 +1083,7 @@ impl MDConsensusRouterStatus {
                 .map_err(|_| Error::Internal(m_item.pos()))?
         };
 
-        Ok(MDConsensusRouterStatus {
+        Ok(MdConsensusRouterStatus {
             nickname,
             identity,
             published,
@@ -1099,8 +1101,8 @@ impl MDConsensusRouterStatus {
 
 impl Footer {
     /// Parse a directory footer from a footer section.
-    fn from_section(sec: &Section<'_, NetstatusKW>) -> Result<Footer> {
-        use NetstatusKW::*;
+    fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<Footer> {
+        use NetstatusKwd::*;
         sec.required(DIRECTORY_FOOTER)?;
 
         let weights = sec
@@ -1127,8 +1129,8 @@ enum SigCheckResult {
 
 impl Signature {
     /// Parse a Signature from a directory-signature section
-    fn from_item(item: &Item<'_, NetstatusKW>) -> Result<Signature> {
-        if item.kwd() != NetstatusKW::DIRECTORY_SIGNATURE {
+    fn from_item(item: &Item<'_, NetstatusKwd>) -> Result<Signature> {
+        if item.kwd() != NetstatusKwd::DIRECTORY_SIGNATURE {
             return Err(Error::Internal(item.pos()));
         }
 
@@ -1192,20 +1194,22 @@ impl Signature {
     }
 }
 
-/// A MDConsensus object that has been parsed, but not checked for signatures
+/// A MdConsensus object that has been parsed, but not checked for signatures
 /// and time.
-pub type UncheckedMDConsensus = TimerangeBound<UnvalidatedMDConsensus>;
+pub type UncheckedMdConsensus = TimerangeBound<UnvalidatedMdConsensus>;
 
-impl MDConsensus {
+impl MdConsensus {
     /// Try to parse a single networkstatus document from a string.
-    pub fn parse(s: &str) -> Result<(&str, &str, UncheckedMDConsensus)> {
+    pub fn parse(s: &str) -> Result<(&str, &str, UncheckedMdConsensus)> {
         let mut reader = NetDocReader::new(s);
         Self::parse_from_reader(&mut reader).map_err(|e| e.within(s))
     }
     /// Extract a voter-info section from the reader; return
     /// Ok(None) when we are out of voter-info sections.
-    fn take_voterinfo(r: &mut NetDocReader<'_, NetstatusKW>) -> Result<Option<ConsensusVoterInfo>> {
-        use NetstatusKW::*;
+    fn take_voterinfo(
+        r: &mut NetDocReader<'_, NetstatusKwd>,
+    ) -> Result<Option<ConsensusVoterInfo>> {
+        use NetstatusKwd::*;
 
         match r.iter().peek() {
             None => return Ok(None),
@@ -1237,8 +1241,8 @@ impl MDConsensus {
     }
 
     /// Extract the footer (but not signatures) from the reader.
-    fn take_footer(r: &mut NetDocReader<'_, NetstatusKW>) -> Result<Footer> {
-        use NetstatusKW::*;
+    fn take_footer(r: &mut NetDocReader<'_, NetstatusKwd>) -> Result<Footer> {
+        use NetstatusKwd::*;
         let mut p = r.pause_at(|i| i.is_ok_with_kwd_in(&[DIRECTORY_SIGNATURE]));
         let footer_sec = NS_FOOTER_RULES.parse(&mut p)?;
         let footer = Footer::from_section(&footer_sec)?;
@@ -1248,9 +1252,9 @@ impl MDConsensus {
     /// Extract a routerstatus from the reader.  Return Ok(None) if we're
     /// out of routerstatus entries.
     fn take_routerstatus(
-        r: &mut NetDocReader<'_, NetstatusKW>,
-    ) -> Result<Option<(Pos, MDConsensusRouterStatus)>> {
-        use NetstatusKW::*;
+        r: &mut NetDocReader<'_, NetstatusKwd>,
+    ) -> Result<Option<(Pos, MdConsensusRouterStatus)>> {
+        use NetstatusKwd::*;
         match r.iter().peek() {
             None => return Ok(None),
             Some(e) if e.is_ok_with_kwd_in(&[DIRECTORY_FOOTER]) => return Ok(None),
@@ -1275,18 +1279,18 @@ impl MDConsensus {
         });
 
         let rs_sec = NS_ROUTERSTATUS_RULES_MDCON.parse(&mut p)?;
-        let rs = MDConsensusRouterStatus::from_section(&rs_sec)?;
+        let rs = MdConsensusRouterStatus::from_section(&rs_sec)?;
         Ok(Some((pos, rs)))
     }
 
-    /// Extract an entire UncheckedMDConsensus from a reader.
+    /// Extract an entire UncheckedMdConsensus from a reader.
     ///
     /// Returns the signed portion of the string, the remainder of the
-    /// string, and an UncheckedMDConsensus.
+    /// string, and an UncheckedMdConsensus.
     fn parse_from_reader<'a>(
-        r: &mut NetDocReader<'a, NetstatusKW>,
-    ) -> Result<(&'a str, &'a str, UncheckedMDConsensus)> {
-        use NetstatusKW::*;
+        r: &mut NetDocReader<'a, NetstatusKwd>,
+    ) -> Result<(&'a str, &'a str, UncheckedMdConsensus)> {
+        use NetstatusKwd::*;
         let (header, start_pos) = {
             let mut h = r.pause_at(|i| i.is_ok_with_kwd_in(&[DIR_SOURCE]));
             let header_sec = NS_HEADER_RULES_CONSENSUS.parse(&mut h)?;
@@ -1300,12 +1304,12 @@ impl MDConsensus {
 
         let mut voters = Vec::new();
 
-        while let Some(voter) = MDConsensus::take_voterinfo(r)? {
+        while let Some(voter) = MdConsensus::take_voterinfo(r)? {
             voters.push(voter);
         }
 
-        let mut routers: Vec<MDConsensusRouterStatus> = Vec::new();
-        while let Some((pos, router)) = MDConsensus::take_routerstatus(r)? {
+        let mut routers: Vec<MdConsensusRouterStatus> = Vec::new();
+        while let Some((pos, router)) = MdConsensus::take_routerstatus(r)? {
             if let Some(prev) = routers.last() {
                 if prev.rsa_identity() >= router.rsa_identity() {
                     return Err(Error::WrongSortOrder(pos));
@@ -1314,9 +1318,9 @@ impl MDConsensus {
             routers.push(router);
         }
 
-        let footer = MDConsensus::take_footer(r)?;
+        let footer = MdConsensus::take_footer(r)?;
 
-        let consensus = MDConsensus {
+        let consensus = MdConsensus {
             header,
             voters,
             routers,
@@ -1324,7 +1328,7 @@ impl MDConsensus {
         };
 
         // Find the signatures.
-        let mut first_sig: Option<Item<'_, NetstatusKW>> = None;
+        let mut first_sig: Option<Item<'_, NetstatusKwd>> = None;
         let mut signatures = Vec::new();
         for item in r.iter() {
             let item = item?;
@@ -1351,7 +1355,7 @@ impl MDConsensus {
         let sha256 = ll::d::Sha256::digest(signed_str.as_bytes()).into();
         let siggroup = SignatureGroup { sha256, signatures };
 
-        let unval = UnvalidatedMDConsensus {
+        let unval = UnvalidatedMdConsensus {
             consensus,
             siggroup,
             n_authorities: None,
@@ -1372,10 +1376,10 @@ impl MDConsensus {
 /// have.  Make sure only to provide authority certificates representing
 /// real authorities!
 #[derive(Debug, Clone)]
-pub struct UnvalidatedMDConsensus {
+pub struct UnvalidatedMdConsensus {
     /// The consensus object. We don't want to expose this until it's
     /// validated.
-    consensus: MDConsensus,
+    consensus: MdConsensus,
     /// The signatures that need to be validated before we can call
     /// this consensus valid.
     siggroup: SignatureGroup,
@@ -1385,12 +1389,12 @@ pub struct UnvalidatedMDConsensus {
     n_authorities: Option<u16>,
 }
 
-impl UnvalidatedMDConsensus {
+impl UnvalidatedMdConsensus {
     /// Tell the unvalidated consensus how many authorities we believe in.
     ///
     /// Without knowing this number, we can't validate the signature.
     pub fn set_n_authorities(self, n_authorities: u16) -> Self {
-        UnvalidatedMDConsensus {
+        UnvalidatedMdConsensus {
             n_authorities: Some(n_authorities),
             ..self
         }
@@ -1412,7 +1416,7 @@ impl UnvalidatedMDConsensus {
     }
 }
 
-impl ExternallySigned<MDConsensus> for UnvalidatedMDConsensus {
+impl ExternallySigned<MdConsensus> for UnvalidatedMdConsensus {
     type Key = [AuthCert];
     type KeyHint = Vec<AuthCertKeyIds>;
     type Error = Error;
@@ -1434,7 +1438,7 @@ impl ExternallySigned<MDConsensus> for UnvalidatedMDConsensus {
             Err(Error::BadSignature(Pos::None))
         }
     }
-    fn dangerously_assume_wellsigned(self) -> MDConsensus {
+    fn dangerously_assume_wellsigned(self) -> MdConsensus {
         self.consensus
     }
 }
@@ -1550,7 +1554,7 @@ mod test {
 
         assert_eq!(certs.len(), 3);
 
-        let (_, _, consensus) = MDConsensus::parse(CONSENSUS)?;
+        let (_, _, consensus) = MdConsensus::parse(CONSENSUS)?;
         let consensus = consensus.dangerously_assume_timely().set_n_authorities(3);
 
         // The set of authorities we know _could_ validate this cert.
@@ -1611,7 +1615,7 @@ mod test {
         use crate::Pos;
         fn check(fname: &str, e: Error) {
             let content = read_bad(fname);
-            let res = MDConsensus::parse(&content);
+            let res = MdConsensus::parse(&content);
             assert!(res.is_err());
             assert_eq!(res.err().unwrap(), e);
         }
@@ -1646,7 +1650,7 @@ mod test {
         check("wrong-version", Error::BadDocumentVersion(10));
     }
 
-    fn gettok(s: &str) -> Result<Item<'_, NetstatusKW>> {
+    fn gettok(s: &str) -> Result<Item<'_, NetstatusKwd>> {
         let mut reader = NetDocReader::new(s);
         let it = reader.iter();
         let tok = it.next().unwrap();

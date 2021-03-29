@@ -63,7 +63,7 @@ use tor_cell::relaycell::{RelayCell, RelayCmd, StreamId};
 
 use tor_linkspec::{ChanTarget, CircTarget, LinkSpec};
 
-pub use tor_cell::relaycell::msg::IPVersionPreference;
+pub use tor_cell::relaycell::msg::IpVersionPreference;
 
 use futures::channel::{mpsc, oneshot};
 use futures::lock::Mutex;
@@ -568,7 +568,7 @@ impl ClientCirc {
         self: Arc<Self>,
         target: &str,
         port: u16,
-        flags: Option<IPVersionPreference>,
+        flags: Option<IpVersionPreference>,
     ) -> Result<DataStream> {
         let flags = flags.unwrap_or_default();
         let beginmsg = tor_cell::relaycell::msg::Begin::new(target, port, flags)?;

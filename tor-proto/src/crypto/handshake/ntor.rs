@@ -24,7 +24,7 @@ pub struct NtorClient;
 impl super::ClientHandshake for NtorClient {
     type KeyType = NtorPublicKey;
     type StateType = NtorHandshakeState;
-    type KeyGen = NtorHKDFKeyGenerator;
+    type KeyGen = NtorHkdfKeyGenerator;
 
     fn client1<R: RngCore + CryptoRng>(
         rng: &mut R,
@@ -43,7 +43,7 @@ pub struct NtorServer;
 
 impl super::ServerHandshake for NtorServer {
     type KeyType = NtorSecretKey;
-    type KeyGen = NtorHKDFKeyGenerator;
+    type KeyGen = NtorHkdfKeyGenerator;
 
     fn server<R: RngCore + CryptoRng, T: AsRef<[u8]>>(
         rng: &mut R,
@@ -106,25 +106,25 @@ pub struct NtorHandshakeState {
 }
 
 /// KeyGenerator for use with ntor circuit handshake.
-pub struct NtorHKDFKeyGenerator {
+pub struct NtorHkdfKeyGenerator {
     /// Secret key information derived from the handshake, used as input
     /// to HKDF
     seed: SecretBytes,
 }
 
-impl NtorHKDFKeyGenerator {
+impl NtorHkdfKeyGenerator {
     /// Create a new key generator to expand a given seed
     pub fn new(seed: SecretBytes) -> Self {
-        NtorHKDFKeyGenerator { seed }
+        NtorHkdfKeyGenerator { seed }
     }
 }
 
-impl KeyGenerator for NtorHKDFKeyGenerator {
+impl KeyGenerator for NtorHkdfKeyGenerator {
     fn expand(self, keylen: usize) -> Result<SecretBytes> {
         let ntor1_key = &b"ntor-curve25519-sha256-1:key_extract"[..];
         let ntor1_expand = &b"ntor-curve25519-sha256-1:key_expand"[..];
-        use crate::crypto::ll::kdf::{Ntor1KDF, KDF};
-        Ntor1KDF::new(ntor1_key, ntor1_expand).derive(&self.seed[..], keylen)
+        use crate::crypto::ll::kdf::{Kdf, Ntor1Kdf};
+        Ntor1Kdf::new(ntor1_key, ntor1_expand).derive(&self.seed[..], keylen)
     }
 }
 
@@ -169,7 +169,7 @@ fn client_handshake_ntor_v1_no_keygen(
 }
 
 /// Complete a client handshake, returning a key generator on success.
-fn client_handshake2_ntor_v1<T>(msg: T, state: NtorHandshakeState) -> Result<NtorHKDFKeyGenerator>
+fn client_handshake2_ntor_v1<T>(msg: T, state: NtorHandshakeState) -> Result<NtorHkdfKeyGenerator>
 where
     T: AsRef<[u8]>,
 {
@@ -200,7 +200,7 @@ fn ntor_derive(
     server_pk: &NtorPublicKey,
     x: &PublicKey,
     y: &PublicKey,
-) -> (NtorHKDFKeyGenerator, Authcode) {
+) -> (NtorHkdfKeyGenerator, Authcode) {
     let ntor1_protoid = &b"ntor-curve25519-sha256-1"[..];
     let ntor1_mac = &b"ntor-curve25519-sha256-1:mac"[..];
     let ntor1_verify = &b"ntor-curve25519-sha256-1:verify"[..];
@@ -237,7 +237,7 @@ fn ntor_derive(
         m.finalize()
     };
 
-    let keygen = NtorHKDFKeyGenerator::new(secret_input);
+    let keygen = NtorHkdfKeyGenerator::new(secret_input);
     (keygen, auth_mac)
 }
 
@@ -248,7 +248,7 @@ fn server_handshake_ntor_v1<R, T>(
     rng: &mut R,
     msg: T,
     keys: &[NtorSecretKey],
-) -> Result<(NtorHKDFKeyGenerator, Vec<u8>)>
+) -> Result<(NtorHkdfKeyGenerator, Vec<u8>)>
 where
     R: RngCore + CryptoRng,
     T: AsRef<[u8]>,
@@ -268,7 +268,7 @@ fn server_handshake_ntor_v1_no_keygen<T>(
     ephem: EphemeralSecret,
     msg: T,
     keys: &[NtorSecretKey],
-) -> Result<(NtorHKDFKeyGenerator, Vec<u8>)>
+) -> Result<(NtorHkdfKeyGenerator, Vec<u8>)>
 where
     T: AsRef<[u8]>,
 {

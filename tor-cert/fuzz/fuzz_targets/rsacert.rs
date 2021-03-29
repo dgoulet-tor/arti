@@ -1,7 +1,7 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use tor_cert::rsa::RSACrosscert;
+use tor_cert::rsa::RsaCrosscert;
 
 fuzz_target!(|data: &[u8]| {
-    let _ = RSACrosscert::decode(data);
+    let _ = RsaCrosscert::decode(data);
 });

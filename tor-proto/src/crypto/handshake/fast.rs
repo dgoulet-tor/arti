@@ -1,7 +1,7 @@
 //! Implementation for the (deprecated) CreateFast handshake.
 //!
 
-use crate::crypto::ll::kdf::{LegacyKDF, KDF};
+use crate::crypto::ll::kdf::{Kdf, LegacyKdf};
 use crate::util::ct::bytes_eq;
 use crate::{Error, Result};
 
@@ -23,7 +23,7 @@ pub struct CreateFastClient;
 impl super::ClientHandshake for CreateFastClient {
     type KeyType = ();
     type StateType = CreateFastClientState;
-    type KeyGen = super::TAPKeyGenerator;
+    type KeyGen = super::TapKeyGenerator;
 
     fn client1<R: RngCore + CryptoRng>(
         rng: &mut R,
@@ -43,13 +43,13 @@ impl super::ClientHandshake for CreateFastClient {
         inp.extend(&state.0[..]);
         inp.extend(&msg[0..20]);
 
-        let kh_expect = LegacyKDF::new(0).derive(&inp[..], 20)?;
+        let kh_expect = LegacyKdf::new(0).derive(&inp[..], 20)?;
 
         if !bytes_eq(&kh_expect, &msg[20..40]) {
             return Err(Error::BadHandshake);
         }
 
-        Ok(super::TAPKeyGenerator::new(inp.into()))
+        Ok(super::TapKeyGenerator::new(inp.into()))
     }
 }
 
@@ -60,7 +60,7 @@ pub struct CreateFastServer;
 
 impl super::ServerHandshake for CreateFastServer {
     type KeyType = ();
-    type KeyGen = super::TAPKeyGenerator;
+    type KeyGen = super::TapKeyGenerator;
 
     fn server<R: RngCore + CryptoRng, T: AsRef<[u8]>>(
         rng: &mut R,
@@ -77,10 +77,10 @@ impl super::ServerHandshake for CreateFastServer {
         let mut inp = Vec::new();
         inp.extend(&msg[..]);
         inp.extend(&reply[0..20]);
-        let kh = LegacyKDF::new(0).derive(&inp[..], 20)?;
+        let kh = LegacyKdf::new(0).derive(&inp[..], 20)?;
         reply[20..].copy_from_slice(&kh);
 
-        Ok((super::TAPKeyGenerator::new(inp.into()), reply))
+        Ok((super::TapKeyGenerator::new(inp.into()), reply))
     }
 }
 

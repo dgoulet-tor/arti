@@ -174,25 +174,25 @@ mod timeimpl {
     use crate::{Error, Pos, Result};
     use std::time::SystemTime;
 
-    /// A wall-clock time, encoded in ISO8601 format with an intervening
+    /// A wall-clock time, encoded in Iso8601 format with an intervening
     /// space between the date and time.
     ///
     /// (Example: "2020-10-09 17:38:12")
-    pub struct ISO8601TimeSp(SystemTime);
+    pub struct Iso8601TimeSp(SystemTime);
 
-    impl std::str::FromStr for ISO8601TimeSp {
+    impl std::str::FromStr for Iso8601TimeSp {
         type Err = Error;
-        fn from_str(s: &str) -> Result<ISO8601TimeSp> {
+        fn from_str(s: &str) -> Result<Iso8601TimeSp> {
             use chrono::{DateTime, NaiveDateTime, Utc};
             let d = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
                 .map_err(|e| Error::BadArgument(Pos::at(s), format!("invalid time: {}", e)))?;
             let dt = DateTime::<Utc>::from_utc(d, Utc);
-            Ok(ISO8601TimeSp(dt.into()))
+            Ok(Iso8601TimeSp(dt.into()))
         }
     }
 
-    impl From<ISO8601TimeSp> for SystemTime {
-        fn from(t: ISO8601TimeSp) -> SystemTime {
+    impl From<Iso8601TimeSp> for SystemTime {
+        fn from(t: Iso8601TimeSp) -> SystemTime {
             t.0
         }
     }
@@ -206,22 +206,22 @@ mod rsa {
 
     /// An RSA public key, as parsed from a base64-encoded object.
     #[allow(non_camel_case_types)]
-    pub struct RSAPublic(PublicKey, Pos);
+    pub struct RsaPublic(PublicKey, Pos);
 
-    impl From<RSAPublic> for PublicKey {
-        fn from(k: RSAPublic) -> PublicKey {
+    impl From<RsaPublic> for PublicKey {
+        fn from(k: RsaPublic) -> PublicKey {
             k.0
         }
     }
-    impl super::FromBytes for RSAPublic {
+    impl super::FromBytes for RsaPublic {
         fn from_bytes(b: &[u8], pos: Pos) -> Result<Self> {
             let key = PublicKey::from_der(b).ok_or_else(|| {
                 Error::BadObjectVal(Pos::None, "unable to decode RSA public key".into())
             })?;
-            Ok(RSAPublic(key, pos))
+            Ok(RsaPublic(key, pos))
         }
     }
-    impl RSAPublic {
+    impl RsaPublic {
         /// Give an error if the exponent of this key is not 'e'
         pub fn check_exponent(self, e: u32) -> Result<Self> {
             if self.0.exponent_is(e) {
@@ -453,14 +453,14 @@ mod test {
     fn time() -> Result<()> {
         use std::time::{Duration, SystemTime};
 
-        let t = "2020-09-29 13:36:33".parse::<ISO8601TimeSp>()?;
+        let t = "2020-09-29 13:36:33".parse::<Iso8601TimeSp>()?;
         let t: SystemTime = t.into();
         assert_eq!(t, SystemTime::UNIX_EPOCH + Duration::new(1601386593, 0));
 
-        assert!("2020-FF-29 13:36:33".parse::<ISO8601TimeSp>().is_err());
-        assert!("2020-09-29Q13:99:33".parse::<ISO8601TimeSp>().is_err());
-        assert!("2020-09-29".parse::<ISO8601TimeSp>().is_err());
-        assert!("too bad, waluigi time".parse::<ISO8601TimeSp>().is_err());
+        assert!("2020-FF-29 13:36:33".parse::<Iso8601TimeSp>().is_err());
+        assert!("2020-09-29Q13:99:33".parse::<Iso8601TimeSp>().is_err());
+        assert!("2020-09-29".parse::<Iso8601TimeSp>().is_err());
+        assert!("too bad, waluigi time".parse::<Iso8601TimeSp>().is_err());
 
         Ok(())
     }

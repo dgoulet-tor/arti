@@ -1,5 +1,5 @@
 use tor_bytes::Error;
-//use tor_cert::rsa::RSACrosscert;
+//use tor_cert::rsa::RsaCrosscert;
 use tor_cert::Ed25519Cert;
 use tor_llcrypto::pk::ed25519;
 //use tor_checkable::{ExternallySigned, SelfSigned, Timebound};

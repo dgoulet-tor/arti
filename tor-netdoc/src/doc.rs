@@ -2,13 +2,13 @@
 //!
 //! Right now, we recognize four kinds of documents.
 //!
-//! A [netstatus::MDConsensus] is a multi-signed document that the
+//! A [netstatus::MdConsensus] is a multi-signed document that the
 //! directory authorities use to tell clients and relays who is on the
 //! network.  It contains information about each relay, and it links to
 //! additional microdescriptors ([microdesc::Microdesc]) that have
 //! more information about each relay.
 //!
-//! In order to validate a [netstatus::MDConsensus], you need to have
+//! In order to validate a [netstatus::MdConsensus], you need to have
 //! the authority certificate ([authcert::AuthCert]) for the directory
 //! authorities that signed it.
 //!

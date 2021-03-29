@@ -75,22 +75,22 @@ pub trait KeyGenerator {
 /// Generates keys based on the KDF-TOR function.
 ///
 /// This is deprecated and shouldn't be used for new keys.
-pub struct TAPKeyGenerator {
+pub struct TapKeyGenerator {
     /// Seed for the TAP KDF.
     seed: SecretBytes,
 }
 
-impl TAPKeyGenerator {
+impl TapKeyGenerator {
     /// Create a key generator based on a provided seed
     pub fn new(seed: SecretBytes) -> Self {
-        TAPKeyGenerator { seed }
+        TapKeyGenerator { seed }
     }
 }
 
-impl KeyGenerator for TAPKeyGenerator {
+impl KeyGenerator for TapKeyGenerator {
     fn expand(self, keylen: usize) -> Result<SecretBytes> {
-        use crate::crypto::ll::kdf::{LegacyKDF, KDF};
-        LegacyKDF::new(1).derive(&self.seed[..], keylen)
+        use crate::crypto::ll::kdf::{Kdf, LegacyKdf};
+        LegacyKdf::new(1).derive(&self.seed[..], keylen)
     }
 }
 
@@ -110,7 +110,7 @@ impl ShakeKeyGenerator {
 
 impl KeyGenerator for ShakeKeyGenerator {
     fn expand(self, keylen: usize) -> Result<SecretBytes> {
-        use crate::crypto::ll::kdf::{ShakeKDF, KDF};
-        ShakeKDF::new().derive(&self.seed[..], keylen)
+        use crate::crypto::ll::kdf::{Kdf, ShakeKdf};
+        ShakeKdf::new().derive(&self.seed[..], keylen)
     }
 }

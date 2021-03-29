@@ -17,7 +17,7 @@ use digest::Digest;
 /// (There is no coverse type for certifying Ed25519 identity keys with
 /// RSA identity keys, since the RSA identity keys are too weak to trust.)
 #[must_use]
-pub struct RSACrosscert {
+pub struct RsaCrosscert {
     /// The key that is being certified
     subject_key: ll::pk::ed25519::PublicKey,
     /// The expiration time of this certificate, in hours since the
@@ -29,7 +29,7 @@ pub struct RSACrosscert {
     signature: Vec<u8>,
 }
 
-impl RSACrosscert {
+impl RsaCrosscert {
     /// Return the time at which this certificate becomes expired
     pub fn expiry(&self) -> std::time::SystemTime {
         let d = std::time::Duration::new((self.exp_hours as u64) * 3600, 0);
@@ -42,7 +42,7 @@ impl RSACrosscert {
     }
 
     /// Decode a slice of bytes into an RSA crosscert.
-    pub fn decode(bytes: &[u8]) -> tor_bytes::Result<UncheckedRSACrosscert> {
+    pub fn decode(bytes: &[u8]) -> tor_bytes::Result<UncheckedRsaCrosscert> {
         let mut r = Reader::from_slice(bytes);
         let signed_portion = r.peek(36)?; // a bit ugly XXXX
         let subject_key = r.extract()?;
@@ -55,21 +55,21 @@ impl RSACrosscert {
         d.update(signed_portion);
         let digest = d.finalize().into();
 
-        let cc = RSACrosscert {
+        let cc = RsaCrosscert {
             subject_key,
             exp_hours,
             digest,
             signature,
         };
 
-        Ok(UncheckedRSACrosscert(cc))
+        Ok(UncheckedRsaCrosscert(cc))
     }
 }
 
-/// An RSACrosscert whos signature has not been checked.
-pub struct UncheckedRSACrosscert(RSACrosscert);
+/// An RsaCrosscert whos signature has not been checked.
+pub struct UncheckedRsaCrosscert(RsaCrosscert);
 
-impl ExternallySigned<TimerangeBound<RSACrosscert>> for UncheckedRSACrosscert {
+impl ExternallySigned<TimerangeBound<RsaCrosscert>> for UncheckedRsaCrosscert {
     type Key = ll::pk::rsa::PublicKey;
     type KeyHint = ();
     type Error = tor_bytes::Error;
@@ -87,7 +87,7 @@ impl ExternallySigned<TimerangeBound<RSACrosscert>> for UncheckedRSACrosscert {
         Ok(())
     }
 
-    fn dangerously_assume_wellsigned(self) -> TimerangeBound<RSACrosscert> {
+    fn dangerously_assume_wellsigned(self) -> TimerangeBound<RsaCrosscert> {
         let expiration = self.0.expiry();
         TimerangeBound::new(self.0, ..expiration)
     }

@@ -8,7 +8,7 @@ use crate::storage::InputString;
 use crate::{Error, Result};
 
 use tor_netdoc::doc::authcert::AuthCertKeyIds;
-use tor_netdoc::doc::microdesc::MDDigest;
+use tor_netdoc::doc::microdesc::MdDigest;
 use tor_netdoc::doc::netstatus::Lifetime;
 
 use std::collections::HashMap;
@@ -468,9 +468,9 @@ impl SqliteStore {
     }
 
     /// Read all the microdescriptors listed in `input` from the cache.
-    pub fn microdescs<'a, I>(&self, input: I) -> Result<HashMap<MDDigest, String>>
+    pub fn microdescs<'a, I>(&self, input: I) -> Result<HashMap<MdDigest, String>>
     where
-        I: IntoIterator<Item = &'a MDDigest>,
+        I: IntoIterator<Item = &'a MdDigest>,
     {
         let mut result = HashMap::new();
         let mut stmt = self.conn.prepare(FIND_MD)?;
@@ -494,7 +494,7 @@ impl SqliteStore {
     /// `input` to `when` or later.
     pub fn update_microdescs_listed<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
     where
-        I: IntoIterator<Item = &'a MDDigest>,
+        I: IntoIterator<Item = &'a MdDigest>,
     {
         let tx = self.conn.transaction()?;
         let mut stmt = tx.prepare(UPDATE_MD_LISTED)?;
@@ -514,7 +514,7 @@ impl SqliteStore {
     /// it was last listed at `when`.
     pub fn store_microdescs<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
     where
-        I: IntoIterator<Item = (&'a str, &'a MDDigest)>,
+        I: IntoIterator<Item = (&'a str, &'a MdDigest)>,
     {
         let when: DateTime<Utc> = when.into();
 

@@ -24,10 +24,10 @@ use crate::retry::RetryDelay;
 use crate::storage::sqlite::SqliteStore;
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
 use tor_circmgr::{CircMgr, DirInfo};
-use tor_netdir::{MDReceiver, NetDir, PartialNetDir};
+use tor_netdir::{MdReceiver, NetDir, PartialNetDir};
 use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
-use tor_netdoc::doc::microdesc::{MDDigest, Microdesc, MicrodescReader};
-use tor_netdoc::doc::netstatus::{MDConsensus, UnvalidatedMDConsensus};
+use tor_netdoc::doc::microdesc::{MdDigest, Microdesc, MicrodescReader};
+use tor_netdoc::doc::netstatus::{MdConsensus, UnvalidatedMdConsensus};
 use tor_netdoc::AllowAnnotations;
 use tor_retry::RetryError;
 
@@ -514,7 +514,7 @@ struct UnvalidatedDir {
     /// True if we loaded this consensus from our local cache.
     from_cache: bool,
     /// The consensus we've received
-    consensus: UnvalidatedMDConsensus,
+    consensus: UnvalidatedMdConsensus,
     /// Information about digests and lifetimes of that consensus,
     consensus_meta: ConsensusMeta,
     /// The certificates that we've received for this consensus.
@@ -566,7 +566,7 @@ impl NoInformation {
 
         let (consensus_meta, unvalidated) = {
             let string = consensus_text.as_str()?;
-            let (signedval, remainder, parsed) = MDConsensus::parse(string)?;
+            let (signedval, remainder, parsed) = MdConsensus::parse(string)?;
             if let Ok(timely) = parsed.check_valid_now() {
                 let meta = ConsensusMeta::from_unvalidated(signedval, remainder, &timely);
 
@@ -681,7 +681,7 @@ impl NoInformation {
             None => text,
         };
 
-        let (signedval, remainder, parsed) = MDConsensus::parse(&text)?;
+        let (signedval, remainder, parsed) = MdConsensus::parse(&text)?;
         debug!("Successfully parsed the consensus");
         let unvalidated = parsed.check_valid_now()?;
         let meta = ConsensusMeta::from_unvalidated(signedval, remainder, &unvalidated);
@@ -937,7 +937,7 @@ impl PartialDir {
     ) -> Result<()> {
         let mark_listed = self.dir.lifetime().valid_after();
 
-        let missing: Vec<MDDigest> = self.dir.missing_microdescs().map(Clone::clone).collect();
+        let missing: Vec<MdDigest> = self.dir.missing_microdescs().map(Clone::clone).collect();
         let mds = download_mds(missing, mark_listed, config, store, info, circmgr).await?;
         for md in mds {
             self.dir.add_microdesc(md);
@@ -1012,7 +1012,7 @@ async fn load_mds(
 /// Helper to fetch microdescriptors from the network and store them either
 /// into a PartialNetDir or a NetDir.
 async fn download_mds(
-    mut missing: Vec<MDDigest>,
+    mut missing: Vec<MdDigest>,
     mark_listed: SystemTime,
     config: &NetDirConfig,
     store: &Mutex<SqliteStore>,

@@ -28,8 +28,8 @@ mod weight;
 
 use ll::pk::rsa::RsaIdentity;
 use tor_llcrypto as ll;
-use tor_netdoc::doc::microdesc::{MDDigest, Microdesc};
-use tor_netdoc::doc::netstatus::{self, MDConsensus};
+use tor_netdoc::doc::microdesc::{MdDigest, Microdesc};
+use tor_netdoc::doc::netstatus::{self, MdConsensus};
 use tor_netdoc::types::policy::PortPolicy;
 
 use log::warn;
@@ -49,50 +49,50 @@ use params::{NetParameters, Param};
 /// This is a separate type so we can use a HashSet instead of
 /// HashMap.
 #[derive(Clone, Debug)]
-enum MDEntry {
+enum MdEntry {
     /// The digest for a microdescriptor that is wanted
     /// but not present.
     // TODO: I'd like to make thtis a reference, but that's nontrivial.
-    Absent(MDDigest),
+    Absent(MdDigest),
     /// A microdescriptor that we have.
     Present(Arc<Microdesc>),
 }
 
-impl std::borrow::Borrow<MDDigest> for MDEntry {
-    fn borrow(&self) -> &MDDigest {
+impl std::borrow::Borrow<MdDigest> for MdEntry {
+    fn borrow(&self) -> &MdDigest {
         self.digest()
     }
 }
 
-impl MDEntry {
+impl MdEntry {
     /// Return the digest for this entry.
-    fn digest(&self) -> &MDDigest {
+    fn digest(&self) -> &MdDigest {
         match self {
-            MDEntry::Absent(d) => d,
-            MDEntry::Present(md) => md.digest(),
+            MdEntry::Absent(d) => d,
+            MdEntry::Present(md) => md.digest(),
         }
     }
 }
 
-impl From<Microdesc> for MDEntry {
-    fn from(md: Microdesc) -> MDEntry {
-        MDEntry::Present(Arc::new(md))
+impl From<Microdesc> for MdEntry {
+    fn from(md: Microdesc) -> MdEntry {
+        MdEntry::Present(Arc::new(md))
     }
 }
-impl From<MDDigest> for MDEntry {
-    fn from(d: MDDigest) -> MDEntry {
-        MDEntry::Absent(d)
+impl From<MdDigest> for MdEntry {
+    fn from(d: MdDigest) -> MdEntry {
+        MdEntry::Absent(d)
     }
 }
 
-impl PartialEq for MDEntry {
-    fn eq(&self, rhs: &MDEntry) -> bool {
+impl PartialEq for MdEntry {
+    fn eq(&self, rhs: &MdEntry) -> bool {
         self.digest() == rhs.digest()
     }
 }
-impl Eq for MDEntry {}
+impl Eq for MdEntry {}
 
-impl std::hash::Hash for MDEntry {
+impl std::hash::Hash for MdEntry {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.digest().hash(state);
     }
@@ -105,13 +105,13 @@ pub struct NetDir {
     /// A microdescriptor consensus that lists the members of the network,
     /// and maps each one to a 'microdescriptor' that has more information
     /// about it
-    consensus: Arc<MDConsensus>,
+    consensus: Arc<MdConsensus>,
     /// A map from keys to integer values, distributed in the consensus,
     /// and clamped to certain defaults.
     params: NetParameters,
     /// Map from SHA256 digest of microdescriptors to the
     /// microdescriptors themselves.
-    mds: HashSet<MDEntry>,
+    mds: HashSet<MdEntry>,
     /// Weight values to apply to a given relay when deciding how frequently
     /// to choose it for a given role.
     weights: weight::WeightSet,
@@ -130,7 +130,7 @@ pub struct PartialNetDir {
 // that implements it.
 pub struct Relay<'a> {
     /// A router descriptor for this relay.
-    rs: &'a netstatus::MDConsensusRouterStatus,
+    rs: &'a netstatus::MdConsensusRouterStatus,
     /// A microdescriptor for this relay.
     md: &'a Microdesc,
 }
@@ -139,17 +139,17 @@ pub struct Relay<'a> {
 /// routing.
 struct UncheckedRelay<'a> {
     /// A router descriptor for this relay.
-    rs: &'a netstatus::MDConsensusRouterStatus,
+    rs: &'a netstatus::MdConsensusRouterStatus,
     /// A microdescriptor for this relay, if there is one.
     md: Option<&'a Microdesc>,
 }
 
 /// A partial or full network directory that we can download
 /// microdescriptors for.
-pub trait MDReceiver {
+pub trait MdReceiver {
     /// Return an iterator over the digests for all of the microdescriptors
     /// that this netdir is missing.
-    fn missing_microdescs(&self) -> Box<dyn Iterator<Item = &MDDigest> + '_>;
+    fn missing_microdescs(&self) -> Box<dyn Iterator<Item = &MdDigest> + '_>;
     /// Add a microdescriptor to this netdir, if it was wanted.
     ///
     /// Return true if it was indeed wanted.
@@ -163,7 +163,7 @@ impl PartialNetDir {
     /// If `replacement_params` is provided, override network parameters from
     /// the consensus with those from `replacement_params`.
     pub fn new(
-        consensus: MDConsensus,
+        consensus: MdConsensus,
         replacement_params: Option<&netstatus::NetParams<i32>>,
     ) -> Self {
         let mut params = NetParameters::default();
@@ -188,7 +188,7 @@ impl PartialNetDir {
         };
 
         for rs in netdir.consensus.routers().iter() {
-            netdir.mds.insert(MDEntry::Absent(*rs.md_digest()));
+            netdir.mds.insert(MdEntry::Absent(*rs.md_digest()));
         }
         PartialNetDir { netdir }
     }
@@ -199,10 +199,10 @@ impl PartialNetDir {
     }
     /// Fill in as many missing microdescriptors as possible in this
     /// netdir, using the microdescriptors from the previous netdir.
-    pub fn fill_from_previous_netdir<'a>(&mut self, prev: &'a NetDir) -> Vec<&'a MDDigest> {
+    pub fn fill_from_previous_netdir<'a>(&mut self, prev: &'a NetDir) -> Vec<&'a MdDigest> {
         let mut loaded = Vec::new();
         for ent in prev.mds.iter() {
-            if let MDEntry::Present(md) = ent {
+            if let MdEntry::Present(md) = ent {
                 if self.netdir.mds.contains(md.digest()) {
                     loaded.push(md.digest());
                     self.netdir.mds.replace(ent.clone());
@@ -227,8 +227,8 @@ impl PartialNetDir {
     }
 }
 
-impl MDReceiver for PartialNetDir {
-    fn missing_microdescs(&self) -> Box<dyn Iterator<Item = &MDDigest> + '_> {
+impl MdReceiver for PartialNetDir {
+    fn missing_microdescs(&self) -> Box<dyn Iterator<Item = &MdDigest> + '_> {
         self.netdir.missing_microdescs()
     }
     fn add_microdesc(&mut self, md: Microdesc) -> bool {
@@ -246,10 +246,10 @@ impl NetDir {
     /// microdescriptor (if any).
     fn relay_from_rs<'a>(
         &'a self,
-        rs: &'a netstatus::MDConsensusRouterStatus,
+        rs: &'a netstatus::MdConsensusRouterStatus,
     ) -> UncheckedRelay<'a> {
         let md = match self.mds.get(rs.md_digest()) {
-            Some(MDEntry::Present(md)) => Some(Arc::as_ref(md)),
+            Some(MdEntry::Present(md)) => Some(Arc::as_ref(md)),
             _ => None,
         };
         UncheckedRelay { rs, md }
@@ -355,12 +355,12 @@ impl NetDir {
     }
 }
 
-impl MDReceiver for NetDir {
-    fn missing_microdescs(&self) -> Box<dyn Iterator<Item = &MDDigest> + '_> {
+impl MdReceiver for NetDir {
+    fn missing_microdescs(&self) -> Box<dyn Iterator<Item = &MdDigest> + '_> {
         Box::new(self.consensus.routers().iter().filter_map(move |rs| {
             let d = rs.md_digest();
             match self.mds.get(d) {
-                Some(MDEntry::Absent(d)) => Some(d),
+                Some(MdEntry::Absent(d)) => Some(d),
                 _ => None,
             }
         }))

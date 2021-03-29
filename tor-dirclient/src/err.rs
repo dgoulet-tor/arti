@@ -28,7 +28,7 @@ pub enum Error {
 
     /// Data received was not UTF-8 encoded.
     #[error("Couldn't decode data as UTF-8.")]
-    UTF8Encoding(#[from] std::string::FromUtf8Error),
+    Utf8Encoding(#[from] std::string::FromUtf8Error),
 
     /// Io error while reading on connection
     #[error("IO error: {0}")]

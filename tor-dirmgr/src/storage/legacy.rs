@@ -10,14 +10,14 @@ use log::{debug, info, warn};
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
 use tor_netdoc::doc::authcert::AuthCert;
 use tor_netdoc::doc::microdesc::{AnnotatedMicrodesc, Microdesc, MicrodescReader};
-use tor_netdoc::doc::netstatus::MDConsensus;
+use tor_netdoc::doc::netstatus::MdConsensus;
 use tor_netdoc::AllowAnnotations;
 
 use std::path::{Path, PathBuf};
 use std::time;
 
 use super::InputString;
-use crate::{Authority, Error, MDReceiver, PartialNetDir, Result};
+use crate::{Authority, Error, MdReceiver, PartialNetDir, Result};
 
 /// A location on disk where we can try to find cached directory
 /// information.
@@ -114,10 +114,10 @@ impl LegacyStore {
 
     /// Read the consensus from a provided store, and check it
     /// with a list of authcerts.
-    fn load_consensus(&self, certs: &[AuthCert], authorities: &[Authority]) -> Result<MDConsensus> {
+    fn load_consensus(&self, certs: &[AuthCert], authorities: &[Authority]) -> Result<MdConsensus> {
         let input = self.latest_consensus()?;
         let text = input.as_str()?;
-        let (_, _, consensus) = MDConsensus::parse(text)?;
+        let (_, _, consensus) = MdConsensus::parse(text)?;
         let consensus = consensus
             .extend_tolerance(time::Duration::new(86400, 0))
             .check_valid_now()?

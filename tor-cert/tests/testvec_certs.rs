@@ -1,4 +1,4 @@
-use tor_cert::rsa::RSACrosscert;
+use tor_cert::rsa::RsaCrosscert;
 use tor_cert::{Ed25519Cert, KeyType};
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
 
@@ -96,7 +96,7 @@ fn test_valid_rsa_cc() {
          DCAF04BE0A72D548A27BF2E77BD876ECFE5E1BE622350DA6BF31F6E306ED8964
          88DD5B39409B23FC3EB7B2C9F7328EB18DA36D54D80575899EA6507CCBFCDF1F"
     );
-    let cert = RSACrosscert::decode(&c[..]).unwrap();
+    let cert = RsaCrosscert::decode(&c[..]).unwrap();
 
     // This returns correct for all keys.
     assert!(cert.key_is_correct(&pk).is_ok());

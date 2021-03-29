@@ -16,7 +16,7 @@ pub enum LinkSpec {
     /// The TCP address of an OR Port for a relay
     OrPort(IpAddr, u16),
     /// The RSA identity fingerprint of the relay
-    RSAId(RsaIdentity),
+    RsaId(RsaIdentity),
     /// The Ed25519 identity of the relay
     Ed25519Id(ed25519::Ed25519Identity),
     /// A link specifier that we didn't recognize
@@ -60,7 +60,7 @@ impl Readable for LinkSpec {
                 let addr = IpAddr::V6(r.extract()?);
                 LinkSpec::OrPort(addr, r.take_u16()?)
             }
-            LSTYPE_RSAID => LinkSpec::RSAId(r.extract()?),
+            LSTYPE_RSAID => LinkSpec::RsaId(r.extract()?),
             LSTYPE_ED25519ID => LinkSpec::Ed25519Id(r.extract()?),
             _ => LinkSpec::Unrecognized(lstype, r.take(lslen)?.into()),
         })
@@ -82,7 +82,7 @@ impl Writeable for LinkSpec {
                 w.write(v6);
                 w.write_u16(*port);
             }
-            RSAId(r) => {
+            RsaId(r) => {
                 w.write_u8(LSTYPE_RSAID);
                 w.write_u8(20); // Length
                 w.write(r);
@@ -114,7 +114,7 @@ impl From<SocketAddr> for LinkSpec {
 }
 impl From<RsaIdentity> for LinkSpec {
     fn from(id: RsaIdentity) -> Self {
-        LinkSpec::RSAId(id)
+        LinkSpec::RsaId(id)
     }
 }
 impl From<ed25519::Ed25519Identity> for LinkSpec {
@@ -135,7 +135,7 @@ impl LinkSpec {
         use LinkSpec::*;
         match self {
             OrPort(IpAddr::V4(_), _) => 0,
-            RSAId(_) => 1,
+            RsaId(_) => 1,
             Ed25519Id(_) => 2,
             OrPort(IpAddr::V6(_), _) => 3,
             Unrecognized(n, _) => *n,
@@ -181,7 +181,7 @@ mod test {
                 2, 20, 104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 33, 33, 33, 33, 33,
                 33, 33, 33, 33,
             ],
-            &LinkSpec::RSAId(RsaIdentity::from_bytes(b"hello world!!!!!!!!!").unwrap()),
+            &LinkSpec::RsaId(RsaIdentity::from_bytes(b"hello world!!!!!!!!!").unwrap()),
         );
         let key = ed25519::PublicKey::from_bytes(&hex!(
             "B440EEDB32D5C89EF21D6B16BE85A658774CE5992355737411678EE1041BDFBA"

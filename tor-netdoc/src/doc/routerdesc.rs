@@ -160,9 +160,9 @@ impl std::str::FromStr for RelayPlatform {
 }
 
 decl_keyword! {
-    /// RouterKW is an instance of Keyword, used to denote the different
+    /// RouterKwd is an instance of Keyword, used to denote the different
     /// Items that are recognized as appearing in a router descriptor.
-    RouterKW {
+    RouterKwd {
         annotation "@source" => ANN_SOURCE,
         annotation "@downloaded-at" => ANN_DOWNLOADED_AT,
         annotation "@purpose" => ANN_PURPOSE,
@@ -199,8 +199,8 @@ decl_keyword! {
 }
 
 /// Rules for parsing a set of router annotations.
-static ROUTER_ANNOTATIONS: Lazy<SectionRules<RouterKW>> = Lazy::new(|| {
-    use RouterKW::*;
+static ROUTER_ANNOTATIONS: Lazy<SectionRules<RouterKwd>> = Lazy::new(|| {
+    use RouterKwd::*;
 
     let mut rules = SectionRules::new();
     rules.add(ANN_SOURCE.rule());
@@ -211,8 +211,8 @@ static ROUTER_ANNOTATIONS: Lazy<SectionRules<RouterKW>> = Lazy::new(|| {
 });
 /// Rules for tokens that are allowed in the first part of a
 /// router descriptor.
-static ROUTER_HEADER_RULES: Lazy<SectionRules<RouterKW>> = Lazy::new(|| {
-    use RouterKW::*;
+static ROUTER_HEADER_RULES: Lazy<SectionRules<RouterKwd>> = Lazy::new(|| {
+    use RouterKwd::*;
 
     let mut rules = SectionRules::new();
     rules.add(ROUTER.rule().required().args(5..));
@@ -221,8 +221,8 @@ static ROUTER_HEADER_RULES: Lazy<SectionRules<RouterKW>> = Lazy::new(|| {
 });
 /// Rules for  tokens that are allowed in the first part of a
 /// router descriptor.
-static ROUTER_BODY_RULES: Lazy<SectionRules<RouterKW>> = Lazy::new(|| {
-    use RouterKW::*;
+static ROUTER_BODY_RULES: Lazy<SectionRules<RouterKwd>> = Lazy::new(|| {
+    use RouterKwd::*;
 
     let mut rules = SectionRules::new();
     rules.add(MASTER_KEY_ED25519.rule().required().args(1..));
@@ -270,8 +270,8 @@ static ROUTER_BODY_RULES: Lazy<SectionRules<RouterKW>> = Lazy::new(|| {
 });
 
 /// Rules for items that appear at the end of a router descriptor.
-static ROUTER_SIG_RULES: Lazy<SectionRules<RouterKW>> = Lazy::new(|| {
-    use RouterKW::*;
+static ROUTER_SIG_RULES: Lazy<SectionRules<RouterKwd>> = Lazy::new(|| {
+    use RouterKwd::*;
 
     let mut rules = SectionRules::new();
     rules.add(ROUTER_SIG_ED25519.rule().required().args(1..));
@@ -291,8 +291,8 @@ impl Default for RouterAnnotation {
 
 impl RouterAnnotation {
     /// Extract a single RouterAnnotation (possibly empty) from a reader.
-    fn take_from_reader(reader: &mut NetDocReader<'_, RouterKW>) -> Result<RouterAnnotation> {
-        use RouterKW::*;
+    fn take_from_reader(reader: &mut NetDocReader<'_, RouterKwd>) -> Result<RouterAnnotation> {
+        use RouterKwd::*;
         let mut items = reader.pause_at(|item| item.is_ok_with_non_annotation());
 
         let body = ROUTER_ANNOTATIONS.parse(&mut items)?;
@@ -301,7 +301,7 @@ impl RouterAnnotation {
         let purpose = body.maybe(ANN_PURPOSE).args_as_str().map(String::from);
         let downloaded = body
             .maybe(ANN_DOWNLOADED_AT)
-            .parse_args_as_str::<ISO8601TimeSp>()?
+            .parse_args_as_str::<Iso8601TimeSp>()?
             .map(|t| t.into());
         Ok(RouterAnnotation {
             source,
@@ -326,13 +326,13 @@ const ROUTER_PRE_VALIDITY_SECONDS: u64 = 86400;
 impl RouterDesc {
     /// Helper: tokenize `s`, and divide it into three validated sections.
     fn parse_sections<'a>(
-        reader: &mut NetDocReader<'a, RouterKW>,
+        reader: &mut NetDocReader<'a, RouterKwd>,
     ) -> Result<(
-        Section<'a, RouterKW>,
-        Section<'a, RouterKW>,
-        Section<'a, RouterKW>,
+        Section<'a, RouterKwd>,
+        Section<'a, RouterKwd>,
+        Section<'a, RouterKwd>,
     )> {
-        use RouterKW::*;
+        use RouterKwd::*;
 
         // Parse everything up through the header.
         let mut reader =
@@ -368,10 +368,10 @@ impl RouterDesc {
     /// This function does the same as parse(), but returns errors based on
     /// byte-wise positions.  The parse() function converts such errors
     /// into line-and-byte positions.
-    fn parse_internal(r: &mut NetDocReader<'_, RouterKW>) -> Result<UncheckedRouterDesc> {
+    fn parse_internal(r: &mut NetDocReader<'_, RouterKwd>) -> Result<UncheckedRouterDesc> {
         // TODO: This function is too long!  The little "paragraphs" here
         // that parse one item at a time should be made into sub-functions.
-        use RouterKW::*;
+        use RouterKwd::*;
 
         let s = r.str();
         let (header, body, sig) = RouterDesc::parse_sections(r)?;
@@ -413,7 +413,7 @@ impl RouterDesc {
         // Legacy RSA identity
         let rsa_identity: ll::pk::rsa::PublicKey = body
             .required(SIGNING_KEY)?
-            .parse_obj::<RSAPublic>("RSA PUBLIC KEY")?
+            .parse_obj::<RsaPublic>("RSA PUBLIC KEY")?
             .check_len_eq(1024)?
             .check_exponent(65537)?
             .into();
@@ -477,7 +477,7 @@ impl RouterDesc {
         let published = body
             .required(PUBLISHED)?
             .args_as_str()
-            .parse::<ISO8601TimeSp>()?
+            .parse::<Iso8601TimeSp>()?
             .into();
 
         // ntor key
@@ -504,7 +504,7 @@ impl RouterDesc {
         // TAP key
         let tap_onion_key: ll::pk::rsa::PublicKey = body
             .required(ONION_KEY)?
-            .parse_obj::<RSAPublic>("RSA PUBLIC KEY")?
+            .parse_obj::<RsaPublic>("RSA PUBLIC KEY")?
             .check_len_eq(1024)?
             .check_exponent(65537)?
             .into();
@@ -647,15 +647,15 @@ pub struct RouterReader<'a> {
     /// True iff we accept annotations
     annotated: bool,
     /// Reader that we're extracting items from.
-    reader: NetDocReader<'a, RouterKW>,
+    reader: NetDocReader<'a, RouterKwd>,
 }
 
 /// Skip this reader forward until the next thing it reads looks like the
 /// start of a router descriptor.
 ///
 /// Used to recover from errors.
-fn advance_to_next_routerdesc(reader: &mut NetDocReader<'_, RouterKW>, annotated: bool) {
-    use RouterKW::*;
+fn advance_to_next_routerdesc(reader: &mut NetDocReader<'_, RouterKwd>, annotated: bool) {
+    use RouterKwd::*;
     let iter = reader.iter();
     loop {
         let item = iter.peek();

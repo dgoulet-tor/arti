@@ -322,7 +322,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         let rsa_cert = c
             .cert_body(CertType::RSA_ID_V_IDENTITY)
             .ok_or_else(|| Error::ChanProto("No RSA->Ed crosscert".into()))?;
-        let rsa_cert = tor_cert::rsa::RSACrosscert::decode(rsa_cert)?
+        let rsa_cert = tor_cert::rsa::RsaCrosscert::decode(rsa_cert)?
             .check_signature(&pkrsa)
             .map_err(|_| Error::ChanProto("Bad RSA->Ed crosscert signature".into()))?
             .check_valid_at_opt(now)

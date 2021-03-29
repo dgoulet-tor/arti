@@ -3,7 +3,7 @@
 
 use tor_llcrypto::pk::rsa::RsaIdentity;
 use tor_netdoc::doc::authcert::AuthCertKeyIds;
-use tor_netdoc::doc::microdesc::MDDigest;
+use tor_netdoc::doc::microdesc::MdDigest;
 
 use crate::Result;
 
@@ -197,7 +197,7 @@ impl ClientRequest for AuthCertRequest {
 #[derive(Debug, Clone)]
 pub struct MicrodescRequest {
     /// The SHA256 digests of the microdescriptors we want.
-    digests: Vec<MDDigest>,
+    digests: Vec<MdDigest>,
 }
 
 impl MicrodescRequest {
@@ -208,7 +208,7 @@ impl MicrodescRequest {
         }
     }
     /// Add `d` to the list of microdescriptors we want to request.
-    pub fn push(&mut self, d: MDDigest) {
+    pub fn push(&mut self, d: MdDigest) {
         self.digests.push(d)
     }
 }

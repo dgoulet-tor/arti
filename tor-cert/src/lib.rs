@@ -140,8 +140,8 @@ pub struct Ed25519Cert {
 pub enum CertifiedKey {
     /// An Ed25519 public key, signed directly.
     Ed25519(ed25519::PublicKey),
-    /// The SHA256 digest of a DER-encoded RSAPublicKey
-    RSASha256Digest([u8; 32]),
+    /// The SHA256 digest of a DER-encoded RsaPublicKey
+    RsaSha256Digest([u8; 32]),
     /// The SHA256 digest of an X.509 certificate.
     X509Sha256Digest([u8; 32]),
     /// Some unrecognized key type.
@@ -161,7 +161,7 @@ impl CertifiedKey {
     pub fn key_type(&self) -> KeyType {
         match self {
             CertifiedKey::Ed25519(_) => KeyType::ED25519_KEY,
-            CertifiedKey::RSASha256Digest(_) => KeyType::SHA256_OF_RSA,
+            CertifiedKey::RsaSha256Digest(_) => KeyType::SHA256_OF_RSA,
             CertifiedKey::X509Sha256Digest(_) => KeyType::SHA256_OF_X509,
 
             CertifiedKey::Unrecognized(u) => u.key_type,
@@ -172,7 +172,7 @@ impl CertifiedKey {
     pub fn as_bytes(&self) -> &[u8] {
         match self {
             CertifiedKey::Ed25519(k) => k.as_bytes(),
-            CertifiedKey::RSASha256Digest(k) => &k[..],
+            CertifiedKey::RsaSha256Digest(k) => &k[..],
             CertifiedKey::X509Sha256Digest(k) => &k[..],
             CertifiedKey::Unrecognized(u) => &u.key_digest[..],
         }
@@ -190,7 +190,7 @@ impl CertifiedKey {
     fn from_reader(key_type: KeyType, r: &mut Reader<'_>) -> Result<Self> {
         Ok(match key_type {
             KeyType::ED25519_KEY => CertifiedKey::Ed25519(r.extract()?),
-            KeyType::SHA256_OF_RSA => CertifiedKey::RSASha256Digest(r.extract()?),
+            KeyType::SHA256_OF_RSA => CertifiedKey::RsaSha256Digest(r.extract()?),
             KeyType::SHA256_OF_X509 => CertifiedKey::X509Sha256Digest(r.extract()?),
             _ => CertifiedKey::Unrecognized(UnrecognizedKey {
                 key_type,

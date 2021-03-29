@@ -115,7 +115,7 @@ impl CircMap {
                 return Ok(id);
             }
         }
-        Err(Error::IDRangeFull)
+        Err(Error::IdRangeFull)
     }
 
     /// Testing only: install an entry in this circuit map without regard

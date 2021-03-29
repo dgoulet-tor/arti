@@ -162,7 +162,7 @@ impl From<u32> for BeginFlags {
 /// A preference for IPv4 vs IPv6 addresses; usable as a nicer frontend for
 /// BeginFlags.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum IPVersionPreference {
+pub enum IpVersionPreference {
     /// Only IPv4 is allowed.
     Ipv4Only,
     /// IPv4 and IPv6 are both allowed, and IPv4 is preferred.
@@ -172,9 +172,9 @@ pub enum IPVersionPreference {
     /// Only IPv6 is allowed.
     Ipv6Only,
 }
-impl From<IPVersionPreference> for BeginFlags {
-    fn from(v: IPVersionPreference) -> Self {
-        use IPVersionPreference::*;
+impl From<IpVersionPreference> for BeginFlags {
+    fn from(v: IpVersionPreference) -> Self {
+        use IpVersionPreference::*;
         match v {
             Ipv4Only => 0.into(),
             Ipv4Preferred => BeginFlags::IPV6_OKAY,
@@ -183,9 +183,9 @@ impl From<IPVersionPreference> for BeginFlags {
         }
     }
 }
-impl Default for IPVersionPreference {
+impl Default for IpVersionPreference {
     fn default() -> Self {
-        IPVersionPreference::Ipv4Preferred
+        IpVersionPreference::Ipv4Preferred
     }
 }
 

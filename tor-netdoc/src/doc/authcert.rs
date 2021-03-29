@@ -9,7 +9,7 @@
 use crate::parse::keyword::Keyword;
 use crate::parse::parser::SectionRules;
 use crate::parse::tokenize::{ItemResult, NetDocReader};
-use crate::types::misc::{Fingerprint, ISO8601TimeSp, RSAPublic};
+use crate::types::misc::{Fingerprint, Iso8601TimeSp, RsaPublic};
 use crate::util::str::Extent;
 use crate::{Error, Result};
 
@@ -24,7 +24,7 @@ use std::{net, time};
 use digest::Digest;
 
 decl_keyword! {
-    AuthCertKW {
+    AuthCertKwd {
         "dir-key-certificate-version" => DIR_KEY_CERTIFICATE_VERSION,
         "dir-address" => DIR_ADDRESS,
         "fingerprint" => FINGERPRINT,
@@ -39,8 +39,8 @@ decl_keyword! {
 
 /// Rules about entries that must appear in an AuthCert, and how they must
 /// be formed.
-static AUTHCERT_RULES: Lazy<SectionRules<AuthCertKW>> = Lazy::new(|| {
-    use AuthCertKW::*;
+static AUTHCERT_RULES: Lazy<SectionRules<AuthCertKwd>> = Lazy::new(|| {
+    use AuthCertKwd::*;
 
     let mut rules = SectionRules::new();
     rules.add(DIR_KEY_CERTIFICATE_VERSION.rule().required().args(1..));
@@ -189,8 +189,8 @@ impl AuthCert {
     }
 
     /// Parse an authority certificate from a reader.
-    fn take_from_reader(reader: &mut NetDocReader<'_, AuthCertKW>) -> Result<UncheckedAuthCert> {
-        use AuthCertKW::*;
+    fn take_from_reader(reader: &mut NetDocReader<'_, AuthCertKwd>) -> Result<UncheckedAuthCert> {
+        use AuthCertKwd::*;
 
         let mut start_found = false;
         let mut iter = reader.pause_at(|item| {
@@ -237,14 +237,14 @@ impl AuthCert {
 
         let signing_key: rsa::PublicKey = body
             .required(DIR_SIGNING_KEY)?
-            .parse_obj::<RSAPublic>("RSA PUBLIC KEY")?
+            .parse_obj::<RsaPublic>("RSA PUBLIC KEY")?
             .check_len(1024..)?
             .check_exponent(65537)?
             .into();
 
         let identity_key: rsa::PublicKey = body
             .required(DIR_IDENTITY_KEY)?
-            .parse_obj::<RSAPublic>("RSA PUBLIC KEY")?
+            .parse_obj::<RsaPublic>("RSA PUBLIC KEY")?
             .check_len(1024..)?
             .check_exponent(65537)?
             .into();
@@ -252,13 +252,13 @@ impl AuthCert {
         let published = body
             .required(DIR_KEY_PUBLISHED)?
             .args_as_str()
-            .parse::<ISO8601TimeSp>()?
+            .parse::<Iso8601TimeSp>()?
             .into();
 
         let expires = body
             .required(DIR_KEY_EXPIRES)?
             .args_as_str()
-            .parse::<ISO8601TimeSp>()?
+            .parse::<Iso8601TimeSp>()?
             .into();
 
         {
@@ -351,8 +351,8 @@ impl AuthCert {
 
     /// Skip tokens from the reader until the next token (if any) is
     /// the start of cert.
-    fn advance_reader_to_next(reader: &mut NetDocReader<'_, AuthCertKW>) {
-        use AuthCertKW::*;
+    fn advance_reader_to_next(reader: &mut NetDocReader<'_, AuthCertKwd>) {
+        use AuthCertKwd::*;
         let iter = reader.iter();
         while let Some(Ok(item)) = iter.peek() {
             if item.kwd() == DIR_KEY_CERTIFICATE_VERSION {
@@ -365,7 +365,7 @@ impl AuthCert {
 
 /// Iterator type to read a series of concatenated certificates from a
 /// string.
-struct AuthCertIterator<'a>(NetDocReader<'a, AuthCertKW>);
+struct AuthCertIterator<'a>(NetDocReader<'a, AuthCertKwd>);
 
 impl tor_checkable::SelfSigned<timed::TimerangeBound<AuthCert>> for UncheckedAuthCert {
     type Error = signature::Error;

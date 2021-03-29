@@ -128,7 +128,7 @@ mod test {
         );
         assert_eq!(
             specs[1],
-            LinkSpec::RSAId(
+            LinkSpec::RsaId(
                 pk::rsa::RsaIdentity::from_bytes(&hex!("1234567890abcdef12341234567890abcdef1234"))
                     .unwrap()
             )

@@ -6,7 +6,7 @@
 use tor_chanmgr::transport::nativetls::NativeTlsTransport;
 use tor_circmgr::TargetPort;
 use tor_dirmgr::NetDirConfig;
-use tor_proto::circuit::IPVersionPreference;
+use tor_proto::circuit::IpVersionPreference;
 use tor_proto::stream::DataStream;
 
 use std::sync::Arc;
@@ -35,7 +35,7 @@ pub struct TorClient {
 #[derive(Debug, Default, Clone)]
 pub struct ConnectPrefs {
     /// What kind of IPv6/IPv4 we'd prefer, and how strongly.
-    ip_ver_pref: IPVersionPreference,
+    ip_ver_pref: IpVersionPreference,
 }
 
 impl ConnectPrefs {
@@ -47,13 +47,13 @@ impl ConnectPrefs {
     /// like to make.
     ///
     /// (By default, IPv4 is preferred.)
-    pub fn set_ip_preference(&mut self, pref: IPVersionPreference) {
+    pub fn set_ip_preference(&mut self, pref: IpVersionPreference) {
         self.ip_ver_pref = pref;
     }
 
     /// Get the begin_flags fields that we should use for the BEGIN
     /// cell for this stream.
-    fn begin_flags(&self) -> IPVersionPreference {
+    fn begin_flags(&self) -> IpVersionPreference {
         self.ip_ver_pref
     }
 
@@ -61,7 +61,7 @@ impl ConnectPrefs {
     /// target circuit needs to support.
     fn wrap_target_port(&self, port: u16) -> TargetPort {
         match self.ip_ver_pref {
-            IPVersionPreference::Ipv6Only => TargetPort::ipv6(port),
+            IpVersionPreference::Ipv6Only => TargetPort::ipv6(port),
             _ => TargetPort::ipv4(port),
         }
     }

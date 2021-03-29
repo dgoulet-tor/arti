@@ -13,7 +13,7 @@
 //!   use it for other roles, or to use it less commonly for them.
 
 use crate::params::{NetParameters, Param};
-use tor_netdoc::doc::netstatus::{MDConsensus, MDConsensusRouterStatus, NetParams, RouterWeight};
+use tor_netdoc::doc::netstatus::{MdConsensus, MdConsensusRouterStatus, NetParams, RouterWeight};
 
 /// Helper: Calculate the function we should use to find initial relay
 /// bandwidths.
@@ -169,7 +169,7 @@ const FLG_DIR: u8 = 1 << 2;
 
 impl WeightKind {
     /// Return the appropriate WeightKind for a relay.
-    fn for_rs(rs: &MDConsensusRouterStatus) -> Self {
+    fn for_rs(rs: &MdConsensusRouterStatus) -> Self {
         let mut r = 0;
         if rs.is_flagged_guard() {
             r |= FLG_GUARD;
@@ -209,7 +209,7 @@ pub(crate) struct WeightSet {
 impl WeightSet {
     /// Find the actual 64-bit weight to use for a given routerstatus when
     /// considering it for a given role.
-    pub(crate) fn weight_rs_for_role(&self, rs: &MDConsensusRouterStatus, role: WeightRole) -> u64 {
+    pub(crate) fn weight_rs_for_role(&self, rs: &MdConsensusRouterStatus, role: WeightRole) -> u64 {
         self.weight_bw_for_role(WeightKind::for_rs(&rs), rs.weight(), role)
     }
 
@@ -232,8 +232,8 @@ impl WeightSet {
         router_weight >> self.shift
     }
 
-    /// Compute the correct WeightSet for a provided MDConsensus.
-    pub(crate) fn from_consensus(consensus: &MDConsensus, params: &NetParameters) -> Self {
+    /// Compute the correct WeightSet for a provided MdConsensus.
+    pub(crate) fn from_consensus(consensus: &MdConsensus, params: &NetParameters) -> Self {
         let bandwidth_fn = pick_bandwidth_fn(consensus.routers().iter().map(|rs| rs.weight()));
         let weight_scale = params.get(Param::BwWeightScale);
         let total_bw = consensus
