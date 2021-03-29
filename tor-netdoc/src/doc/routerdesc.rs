@@ -37,6 +37,7 @@ use crate::types::version::TorVersion;
 use crate::{AllowAnnotations, Error, Result};
 
 use once_cell::sync::Lazy;
+use std::sync::Arc;
 use std::{net, time};
 use tor_checkable::{signed, timed, Timebound};
 use tor_llcrypto as ll;
@@ -130,7 +131,7 @@ pub struct RouterDesc {
     ipv4_policy: AddrPolicy,
     /// A summary of which ports this relay is willing to connect to
     /// on IPv6.
-    ipv6_policy: PortPolicy,
+    ipv6_policy: Arc<PortPolicy>,
 }
 
 /// Description of the software a relay is running.
@@ -627,7 +628,7 @@ impl RouterDesc {
             family,
             platform,
             ipv4_policy,
-            ipv6_policy,
+            ipv6_policy: ipv6_policy.intern(),
         };
 
         let time_gated = timed::TimerangeBound::new(desc, start_time..expiry);
