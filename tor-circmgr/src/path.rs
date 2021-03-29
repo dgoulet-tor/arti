@@ -54,8 +54,8 @@ impl<'a> TorPath<'a> {
     pub(crate) fn exit_policy(&self) -> Option<super::ExitPolicy> {
         if let Some(exit_relay) = self.exit_relay() {
             Some(super::ExitPolicy {
-                v4: exit_relay.ipv4_policy().clone(),
-                v6: exit_relay.ipv6_policy().clone(),
+                v4: Arc::clone(exit_relay.ipv4_policy()),
+                v6: Arc::clone(exit_relay.ipv6_policy()),
             })
         } else {
             None
