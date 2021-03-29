@@ -8,6 +8,9 @@ pub enum Error {
     /// We received a document we didn't want at all.
     #[error("unwanted object: {0}")]
     Unwanted(&'static str),
+    /// This DirMgr doesn't support downloads.
+    #[error("tried to download information on a DirMgr with no download support")]
+    NoDownloadSupport,
     /// A bad argument was provided to some configuration function.
     #[error("bad argument: {0}")]
     BadArgument(&'static str),

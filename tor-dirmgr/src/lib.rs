@@ -61,6 +61,9 @@ pub struct DirMgr {
     /// We use the RwLock so that we can give this out to a bunch of other
     /// users, and replace it once a new directory is bootstrapped.
     netdir: RwLock<Option<Arc<NetDir>>>,
+
+    /// A circuit manager, if this DirMgr supports downloading.
+    circmgr: Option<Arc<CircMgr>>,
 }
 
 impl DirMgr {
@@ -70,7 +73,7 @@ impl DirMgr {
         config: NetDirConfig,
         circmgr: Arc<CircMgr>,
     ) -> Result<Arc<Self>> {
-        let dirmgr = Arc::new(DirMgr::from_config(config)?);
+        let dirmgr = Arc::new(DirMgr::from_config(config, Some(Arc::clone(&circmgr)))?);
 
         // Try to load from the cache.
         if dirmgr
@@ -107,14 +110,23 @@ impl DirMgr {
         Ok(dirmgr)
     }
 
+    /// Get a reference to the circuit manager, if we have one.
+    fn circmgr(&self) -> Result<Arc<CircMgr>> {
+        self.circmgr
+            .as_ref()
+            .map(Arc::clone)
+            .ok_or_else(|| Error::NoDownloadSupport.into())
+    }
+
     /// Construct a DirMgr from a NetDirConfig.
-    fn from_config(config: NetDirConfig) -> Result<Self> {
+    fn from_config(config: NetDirConfig, circmgr: Option<Arc<CircMgr>>) -> Result<Self> {
         let store = Mutex::new(config.open_sqlite_store()?);
         let netdir = RwLock::new(None);
         Ok(DirMgr {
             config,
             store,
             netdir,
+            circmgr,
         })
     }
 
@@ -265,7 +277,7 @@ impl DirMgr {
     // TODO: We'll likely need to refactor this before too long.
     // TODO: This needs to exit with a failure if the consensus expires
     // partway through the process.
-    pub async fn fetch_directory(
+    async fn fetch_directory(
         &self,
         circmgr: Arc<CircMgr>,
         use_cached_consensus: bool,
