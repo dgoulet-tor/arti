@@ -29,6 +29,7 @@ simple_asn1 = "0.5.1"
 subtle = "2.4.0"
 x25519-dalek = "1.1.0"
 zeroize = "1.2.0"
+thiserror = "1.0.24"
 
 [dev-dependencies]
 hex-literal = "0.3.1"
