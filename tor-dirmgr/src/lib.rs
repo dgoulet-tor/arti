@@ -92,6 +92,22 @@ impl DirMgr {
             .ok_or_else(|| Error::DirectoryNotPresent.into())
     }
 
+    /// Return a current netdir, either loading it or bootstrapping it
+    /// as needed.
+    ///
+    /// Like load_once, but will try to bootstrap if we don't have an
+    /// up-to-date bootstrapped directory.
+    ///
+    /// In general, you shouldn't use this function in a long-running
+    /// program; it's only suitable for command-line or batch tools.
+    pub async fn load_or_bootstrap_once(
+        config: NetDirConfig,
+        circmgr: Arc<CircMgr>,
+    ) -> Result<Arc<NetDir>> {
+        let dirmgr = DirMgr::bootstrap_from_config(config, circmgr).await?;
+        Ok(dirmgr.netdir().await)
+    }
+
     /// Return a new directory manager from a given configuration,
     /// bootstrapping from the network as necessary.
     ///
