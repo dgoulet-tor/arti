@@ -2,7 +2,6 @@
 
 use crate::retry::RetryDelay;
 use crate::{DirMgr, Error, Result};
-use tor_circmgr::CircMgr;
 use tor_netdoc::doc::netstatus::Lifetime;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,20 +18,17 @@ pub struct DirectoryUpdater {
     /// A directory manager to use in picking directory caches, and which can
     /// download new directory objects.
     dir_mgr: Weak<DirMgr>,
-    /// A circuit manager to use in connecting to the network.
-    circ_mgr: Weak<CircMgr>,
     /// A flag to tell the DirectoryUpdater to exit.
     stopping: AtomicBool,
 }
 
 impl DirectoryUpdater {
     /// Make a new DirectoryUpdater.  It takes a reference to a directory
-    /// manager and circuit manager, but stores weak references to them.  It doesn't
+    /// manager, but stores a weak reference to it.  It doesn't
     /// start going till you call 'run' on it.
-    pub(crate) fn new(dir_mgr: Arc<DirMgr>, circ_mgr: Arc<CircMgr>) -> Self {
+    pub(crate) fn new(dir_mgr: Arc<DirMgr>) -> Self {
         DirectoryUpdater {
             dir_mgr: Arc::downgrade(&dir_mgr),
-            circ_mgr: Arc::downgrade(&circ_mgr),
             stopping: AtomicBool::new(false),
         }
     }
@@ -92,8 +88,8 @@ impl DirectoryUpdater {
                 return Err(Error::UpdaterShutdown.into());
             }
 
-            if let (Some(dm), Some(cm)) = (self.dir_mgr.upgrade(), self.circ_mgr.upgrade()) {
-                let result = dm.fetch_new_directory(cm).await;
+            if let Some(dm) = self.dir_mgr.upgrade() {
+                let result = dm.fetch_new_directory().await;
                 if let Err(e) = result {
                     warn!("Directory fetch failed: {}. Will retry in later.", e);
                     let delay = retry.next_delay(&mut rand::thread_rng());
@@ -115,8 +111,8 @@ impl DirectoryUpdater {
             return Err(Error::UpdaterShutdown.into());
         }
 
-        if let (Some(dm), Some(cm)) = (self.dir_mgr.upgrade(), self.circ_mgr.upgrade()) {
-            let result = dm.fetch_additional_microdescs(cm).await;
+        if let Some(dm) = self.dir_mgr.upgrade() {
+            let result = dm.fetch_additional_microdescs().await;
             match result {
                 Ok(n_missing) => Ok(n_missing != 0),
                 Err(e) => {

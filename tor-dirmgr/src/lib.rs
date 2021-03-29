@@ -69,11 +69,16 @@ pub struct DirMgr {
 impl DirMgr {
     /// Return a new directory manager from a given configuration,
     /// bootstrapping from the network as necessary.
+    ///
+    /// This function will to return until the directory is
+    /// bootstrapped enough to build circuits.  It will also launch a
+    /// background task that fetches any missing information, and that
+    /// replaces the directory when a new one is available.
     pub async fn bootstrap_from_config(
         config: NetDirConfig,
         circmgr: Arc<CircMgr>,
     ) -> Result<Arc<Self>> {
-        let dirmgr = Arc::new(DirMgr::from_config(config, Some(Arc::clone(&circmgr)))?);
+        let dirmgr = Arc::new(DirMgr::from_config(config, Some(circmgr))?);
 
         // Try to load from the cache.
         if dirmgr
@@ -90,7 +95,7 @@ impl DirMgr {
             let mut retry: RetryDelay = retry_config.schedule();
 
             for _ in retry_config.attempts() {
-                match dirmgr.bootstrap_directory(Arc::clone(&circmgr)).await {
+                match dirmgr.bootstrap_directory().await {
                     Ok(()) => break,
                     Err(e) => {
                         warn!("Can't bootstrap: {}. Will wait and try again.", e);
@@ -105,7 +110,7 @@ impl DirMgr {
 
         // Launch a task to run in the background and keep this dirmgr
         // up-to-date.
-        Arc::clone(&dirmgr).launch_updater(circmgr);
+        Arc::clone(&dirmgr).launch_updater();
 
         Ok(dirmgr)
     }
@@ -187,20 +192,21 @@ impl DirMgr {
 
     /// Run a complete bootstrapping process, using information from our
     /// cache when it is up-to-date enough.
-    async fn bootstrap_directory(&self, circmgr: Arc<CircMgr>) -> Result<()> {
-        self.fetch_directory(circmgr, true).await
+    async fn bootstrap_directory(&self) -> Result<()> {
+        self.fetch_directory(true).await
     }
 
     /// Get a new directory, starting with a fresh consensus download.
     ///
-    async fn fetch_new_directory(&self, circmgr: Arc<CircMgr>) -> Result<()> {
-        self.fetch_directory(circmgr, false).await
+    async fn fetch_new_directory(&self) -> Result<()> {
+        self.fetch_directory(false).await
     }
 
     /// Try to fetch and add a new set of microdescriptors to the
     /// current NetDir.  On success, return the number of
     /// microdescriptors that are still missing.
-    async fn fetch_additional_microdescs(&self, circmgr: Arc<CircMgr>) -> Result<usize> {
+    async fn fetch_additional_microdescs(&self) -> Result<usize> {
+        let circmgr = self.circmgr()?;
         let new_microdescs = {
             // We introduce a scope here so that we'll drop our reference
             // to the old netdir when we're done downloading.
@@ -254,10 +260,10 @@ impl DirMgr {
 
     /// Launch an updater task that periodically re-fetches the
     /// directory to keep it up-to-date.
-    fn launch_updater(self: Arc<Self>, circmgr: Arc<CircMgr>) -> Arc<DirectoryUpdater> {
+    fn launch_updater(self: Arc<Self>) -> Arc<DirectoryUpdater> {
         // TODO: XXXX: Need some way to keep two of these from running at
         // once.
-        let updater = Arc::new(updater::DirectoryUpdater::new(self, circmgr));
+        let updater = Arc::new(updater::DirectoryUpdater::new(self));
 
         let updater_ref = Arc::clone(&updater);
         tor_rtcompat::task::spawn(async move {
@@ -277,11 +283,8 @@ impl DirMgr {
     // TODO: We'll likely need to refactor this before too long.
     // TODO: This needs to exit with a failure if the consensus expires
     // partway through the process.
-    async fn fetch_directory(
-        &self,
-        circmgr: Arc<CircMgr>,
-        use_cached_consensus: bool,
-    ) -> Result<()> {
+    async fn fetch_directory(&self, use_cached_consensus: bool) -> Result<()> {
+        let circmgr = self.circmgr()?;
         let store = &self.store;
 
         // Start out by using our previous netdir (if any): We'll need it
