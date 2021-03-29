@@ -274,12 +274,12 @@ pub fn blind_pubkey(pk: &PublicKey, mut param: [u8; 32]) -> Result<PublicKey, Bl
     // Convert the public key to a point on the curve
     let pubkey_point = CompressedEdwardsY(pk.to_bytes())
         .decompress()
-        .ok_or_else(|| BlindingError::BadPubkey)?;
+        .ok_or(BlindingError::BadPubkey)?;
 
     // Do the scalar multiplication and get a point back
     let blinded_pubkey_point = (blinding_factor * pubkey_point).compress();
     // Turn the point back into bytes and return it
-    return Ok(PublicKey::from_bytes(&blinded_pubkey_point.0)?);
+    Ok(PublicKey::from_bytes(&blinded_pubkey_point.0)?)
 }
 
 #[cfg(test)]
