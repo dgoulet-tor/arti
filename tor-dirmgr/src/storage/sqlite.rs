@@ -9,7 +9,7 @@ use crate::{Error, Result};
 
 use tor_netdoc::doc::authcert::AuthCertKeyIds;
 use tor_netdoc::doc::microdesc::MdDigest;
-use tor_netdoc::doc::netstatus::Lifetime;
+use tor_netdoc::doc::netstatus::{Lifetime, RdDigest};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -158,24 +158,25 @@ impl SqliteStore {
         let db_exists = db_n_tables > 0;
 
         if !db_exists {
-            tx.execute_batch(INSTALL_SCHEMA)?;
+            tx.execute_batch(INSTALL_V0_SCHEMA)?;
+            tx.execute_batch(UPDATE_SCHEMA_V0_TO_V1)?;
             tx.commit()?;
             return Ok(());
         }
 
-        let (_version, readable_by): (u32, u32) = tx.query_row(
+        let (version, readable_by): (u32, u32) = tx.query_row(
             "SELECT version, readable_by FROM TorSchemaMeta
              WHERE name = 'TorDirStorage'",
             NO_PARAMS,
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
 
-        /* if version < SCHEMA_VERSION {
-            // Update the schema. XXXX
-            tx.commit();
-            return Ok(())
-        } else */
-        if readable_by > SCHEMA_VERSION {
+        if version < SCHEMA_VERSION {
+            // Update the schema.
+            tx.execute_batch(UPDATE_SCHEMA_V0_TO_V1)?;
+            tx.commit()?;
+            return Ok(());
+        } else if readable_by > SCHEMA_VERSION {
             return Err(Error::UnrecognizedSchema.into());
         }
 
@@ -202,6 +203,7 @@ impl SqliteStore {
         tx.execute(DROP_OLD_MICRODESCS, NO_PARAMS)?;
         tx.execute(DROP_OLD_AUTHCERTS, NO_PARAMS)?;
         tx.execute(DROP_OLD_CONSENSUSES, NO_PARAMS)?;
+        tx.execute(DROP_OLD_ROUTERDESCS, NO_PARAMS)?;
         tx.commit()?;
         for name in expired_blobs {
             let fname = self.blob_fname(name);
@@ -490,6 +492,30 @@ impl SqliteStore {
         Ok(result)
     }
 
+    /// Read all the microdescriptors listed in `input` from the cache.
+    #[allow(unused)]
+    pub fn routerdescs<'a, I>(&self, input: I) -> Result<HashMap<RdDigest, String>>
+    where
+        I: IntoIterator<Item = &'a RdDigest>,
+    {
+        let mut result = HashMap::new();
+        let mut stmt = self.conn.prepare(FIND_RD)?;
+
+        // XXXX Should I speed this up with a transaction, or does it not
+        // matter for queries?
+        for rd_digest in input.into_iter() {
+            let h_digest = hex::encode(rd_digest);
+            if let Some(contents) = stmt
+                .query_row(params![h_digest], |row| row.get::<_, String>(0))
+                .optional()?
+            {
+                result.insert(*rd_digest, contents);
+            }
+        }
+
+        Ok(result)
+    }
+
     /// Update the `last-listed` time of every microdescriptor in
     /// `input` to `when` or later.
     pub fn update_microdescs_listed<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
@@ -523,6 +549,25 @@ impl SqliteStore {
 
         for (content, md_digest) in input.into_iter() {
             let h_digest = hex::encode(md_digest);
+            stmt.execute(params![h_digest, when, content])?;
+        }
+        stmt.finalize()?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Store every router descriptors in `input` into the cache.
+    #[allow(unused)]
+    pub fn store_routerdescs<'a, I>(&mut self, input: I) -> Result<()>
+    where
+        I: IntoIterator<Item = (&'a str, SystemTime, &'a RdDigest)>,
+    {
+        let tx = self.conn.transaction()?;
+        let mut stmt = tx.prepare(INSERT_RD)?;
+
+        for (content, when, rd_digest) in input.into_iter() {
+            let when: DateTime<Utc> = when.into();
+            let h_digest = hex::encode(rd_digest);
             stmt.execute(params![h_digest, when, content])?;
         }
         stmt.finalize()?;
@@ -596,10 +641,10 @@ fn digest_from_dstr(s: &str) -> Result<[u8; 32]> {
 }
 
 /// Version number used for this version of the arti cache schema.
-const SCHEMA_VERSION: u32 = 0;
+const SCHEMA_VERSION: u32 = 1;
 
 /// Set up the tables for the arti cache schema in a sqlite database.
-const INSTALL_SCHEMA: &str = "
+const INSTALL_V0_SCHEMA: &str = "
   -- Helps us version the schema.  The schema here corresponds to a
   -- version number called 'version', and it should be readable by
   -- anybody who is compliant with versions of at least 'readable_by'.
@@ -655,6 +700,17 @@ const INSTALL_SCHEMA: &str = "
   );
   CREATE INDEX Consensuses_vu on CONSENSUSES(valid_until);
 
+";
+
+/// Update the database schema from version 0 to version 1.
+const UPDATE_SCHEMA_V0_TO_V1: &str = "
+  CREATE TABLE Routerdescs (
+    sha1_digest TEXT PRIMARY KEY NOT NULL,
+    published DATE NOT NULL,
+    contents BLOB NOT NULL
+  );
+
+  UPDATE TorSchemaMeta SET version=1 WHERE version<1;
 ";
 
 /// Query: find the latest-expiring microdesc consensus with a given
@@ -723,6 +779,14 @@ const FIND_MD: &str = "
   WHERE sha256_digest = ?
 ";
 
+/// Query: find the router descriptors with a given hex-encoded sha1 digest
+#[allow(unused)]
+const FIND_RD: &str = "
+  SELECT contents
+  FROM Routerdescs
+  WHERE sha1_digest = ?
+";
+
 /// Query: find every ExtDocs member that has expired.
 const FIND_EXPIRED_EXTDOCS: &str = "
   SELECT filename FROM Extdocs where expires < datetime('now');
@@ -754,6 +818,13 @@ const INSERT_MD: &str = "
   VALUES ( ?, ?, ? );
 ";
 
+/// Query: Add a new router descriptor
+#[allow(unused)]
+const INSERT_RD: &str = "
+  INSERT OR REPLACE INTO Routerdescs ( sha1_digest, published, contents )
+  VALUES ( ?, ?, ? );
+";
+
 /// Query: Change the time when a given microdescriptor was last listed.
 const UPDATE_MD_LISTED: &str = "
   UPDATE Microdescs
@@ -765,7 +836,12 @@ const UPDATE_MD_LISTED: &str = "
 const DROP_OLD_EXTDOCS: &str = "
   DELETE FROM ExtDocs WHERE expires < datetime('now');
 ";
-
+/// Query: Discard every router descriptor that hasn't been listed for 3
+/// months.
+// TODO: Choose a more realistic time.
+const DROP_OLD_ROUTERDESCS: &str = "
+  DELETE FROM Routerdescs WHERE published < datetime('now','-3 months');
+  ";
 /// Query: Discard every microdescriptor that hasn't been listed for 3 months.
 // TODO: Choose a more realistic time.
 const DROP_OLD_MICRODESCS: &str = "
@@ -1013,6 +1089,42 @@ mod test {
         let mds = store.microdescs(&[d2, d3, d4])?;
         assert_eq!(mds.len(), 1);
         assert_eq!(mds.get(&d2).unwrap(), "Fake micro 2");
+
+        Ok(())
+    }
+
+    #[test]
+    fn routerdescs() -> Result<()> {
+        let (_tmp_dir, mut store) = new_empty()?;
+
+        let now = Utc::now();
+        let one_day = CDuration::days(1);
+        let long_ago = now - one_day * 100;
+        let recently = now - one_day;
+
+        let d1 = [5_u8; 20];
+        let d2 = [7; 20];
+        let d3 = [42; 20];
+        let d4 = [99; 20];
+
+        store.store_routerdescs(vec![
+            ("Fake routerdesc 1", long_ago.into(), &d1),
+            ("Fake routerdesc 2", recently.into(), &d2),
+            ("Fake routerdesc 3", long_ago.into(), &d3),
+        ])?;
+
+        let rds = store.routerdescs(&[d2, d3, d4])?;
+        assert_eq!(rds.len(), 2);
+        assert_eq!(rds.get(&d1), None);
+        assert_eq!(rds.get(&d2).unwrap(), "Fake routerdesc 2");
+        assert_eq!(rds.get(&d3).unwrap(), "Fake routerdesc 3");
+        assert_eq!(rds.get(&d4), None);
+
+        // Now we'll expire.  that should drop everything but d2.
+        store.expire_all()?;
+        let rds = store.routerdescs(&[d2, d3, d4])?;
+        assert_eq!(rds.len(), 1);
+        assert_eq!(rds.get(&d2).unwrap(), "Fake routerdesc 2");
 
         Ok(())
     }
