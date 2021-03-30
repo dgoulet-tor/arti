@@ -44,6 +44,7 @@ impl Authority {
 
 /// Return a vector of the default directory authorities.
 pub(crate) fn default_authorities() -> Vec<Authority> {
+    /// Build an authority; panic if input is bad.
     fn auth(name: &str, key: &str) -> Authority {
         let name = name.to_string();
         let v3ident = hex::decode(key).expect("Built-in authority identity had bad hex!?");

@@ -27,6 +27,7 @@ pub struct NetworkConfig {
     ///
     /// (If we do have a chached directory, we use directory caches
     /// listed there instead.)
+    #[serde(default = "fallbacks::default_fallbacks")]
     fallback_cache: Vec<FallbackDir>,
 
     /// List of directory authorities which we expect to sign
@@ -43,7 +44,7 @@ pub struct NetworkConfig {
 impl Default for NetworkConfig {
     fn default() -> Self {
         NetworkConfig {
-            fallback_cache: vec![], // XXXXX
+            fallback_cache: fallbacks::default_fallbacks(),
             authority: crate::authority::default_authorities(),
             override_net_params: Default::default(),
         }
@@ -101,6 +102,18 @@ impl Default for DownloadScheduleConfig {
 ///
 /// To create a directory configuration, create one of these,
 /// configure it, then call its finalize function.
+///
+/// # Examples
+///
+/// ```
+/// # use tor_dirmgr::*;
+/// # fn x() -> anyhow::Result<()> {
+/// let mut builder = NetDirConfigBuilder::new();
+/// builder.use_default_cache_path()?;
+/// let config: NetDirConfig = builder.finalize()?;
+/// # Ok(()) }
+/// # x().unwrap()
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct NetDirConfigBuilder {
     /// The directory from which to read legacy directory information.
@@ -148,8 +161,8 @@ pub struct NetDirConfig {
 impl NetDirConfigBuilder {
     /// Construct a new NetDirConfig.
     ///
-    /// To use this, call at least one method to configure directory
-    /// authorities, then call load().
+    /// To use this, call at least one method to set a cache directory,
+    /// then call load().
     pub fn new() -> Self {
         NetDirConfigBuilder::default()
     }
@@ -182,7 +195,6 @@ impl NetDirConfigBuilder {
     ///
     /// This will be ~/.cache/arti on unix, and in other suitable
     /// locations on other platforms.
-    #[cfg(directories)]
     pub fn use_default_cache_path(&mut self) -> Result<()> {
         let pd = directories::ProjectDirs::from("org", "torproject", "Arti")
             .ok_or(Error::DirectoryNotPresent)?;
@@ -292,5 +304,31 @@ impl DownloadScheduleConfig {
     /// Number of microdescriptor fetches to attemppt in parallel
     pub fn microdesc_parallelism(&self) -> usize {
         self.microdesc_parallelism.max(1).into()
+    }
+}
+
+/// Helpers for fallbacksx
+mod fallbacks {
+    use tor_llcrypto::pk::{ed25519::Ed25519Identity, rsa::RsaIdentity};
+    use tor_netdir::fallback::FallbackDir;
+    /// Return a list of the default fallback directories shipped with
+    /// arti.
+    pub(crate) fn default_fallbacks() -> Vec<super::FallbackDir> {
+        /// Build a fallback directory; panic if input is bad.
+        fn fallback(rsa: &str, ed: &str, ports: Vec<&str>) -> FallbackDir {
+            let rsa = hex::decode(rsa).expect("Bad hex in built-in fallback list");
+            let rsa =
+                RsaIdentity::from_bytes(&rsa).expect("Wrong length in built-in fallback list");
+            let ed = base64::decode_config(ed, base64::STANDARD_NO_PAD)
+                .expect("Bad hex in built-in fallback list");
+            let ed =
+                Ed25519Identity::from_bytes(&ed).expect("Wrong length in built-in fallback list");
+            let ports = ports
+                .iter()
+                .map(|s| s.parse().expect("Bad socket address in fallbacklist"))
+                .collect();
+            FallbackDir::new(rsa, ed, ports)
+        }
+        include!("fallback_dirs.inc")
     }
 }

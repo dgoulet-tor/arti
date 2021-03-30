@@ -10,7 +10,7 @@ description = "Bootstrap and update an accurate Tor network directory"
 keywords = [ "tor", "arti", "download", "async" ]
 
 [features]
-default = [ "mmap", "directories" ]
+default = [ "mmap" ]
 legacy-store = []
 mmap = [ "memmap" ]
 
@@ -32,7 +32,7 @@ async-trait = "0.1.48"
 base64 = "0.13.0"
 chrono = "0.4.19"
 digest = "0.9.0"
-directories = { version="3.0.1", optional=true }
+directories = "3.0.1"
 event-listener = "2.5.1"
 futures = "0.3.13"
 fslock = "0.1.6"

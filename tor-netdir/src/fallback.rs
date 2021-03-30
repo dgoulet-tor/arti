@@ -4,9 +4,6 @@
 //! When a client doesn't have directory information yet, it uses a
 //! "Fallback Directory" to retreive its initial information about the
 //! network.
-//!
-//! From time to time, the Tor maintainers regenerate the list of
-//! fallbacks, and replace it in the fallback::pregen module.
 
 use tor_llcrypto::pk::ed25519::Ed25519Identity;
 use tor_llcrypto::pk::rsa::RsaIdentity;
