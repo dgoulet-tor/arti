@@ -4,6 +4,7 @@
 use tor_llcrypto::pk::rsa::RsaIdentity;
 use tor_netdoc::doc::authcert::AuthCertKeyIds;
 use tor_netdoc::doc::microdesc::MdDigest;
+use tor_netdoc::doc::netstatus::RdDigest;
 
 use crate::Result;
 
@@ -232,6 +233,65 @@ impl ClientRequest for MicrodescRequest {
         let uri = format!("/tor/micro/d/{}.z", &ids.join("-"));
         let req = http::Request::builder().method("GET").uri(uri);
 
+        let req = add_common_headers(req);
+
+        Ok(req.body(())?)
+    }
+
+    fn partial_docs_ok(&self) -> bool {
+        self.digests.len() > 1
+    }
+
+    fn max_response_len(&self) -> usize {
+        // TODO: Pick a more principled number; I just made this one up.
+        self.digests.len().saturating_mul(8 * 1024)
+    }
+}
+
+/// A request for one, many or all server descriptors. If digests is empty, all
+/// server descriptors are requested.
+#[derive(Debug, Clone)]
+pub struct ServerDescriptorRequest {
+    digests: Vec<RdDigest>,
+}
+
+impl Default for ServerDescriptorRequest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ServerDescriptorRequest {
+    /// Construct a request for all server descriptors.
+    pub fn new() -> Self {
+        ServerDescriptorRequest {
+            digests: Vec::new(),
+        }
+    }
+    /// Add `d` to the list of digests we want to request.
+    pub fn push(&mut self, d: RdDigest) {
+        self.digests.push(d)
+    }
+}
+
+impl ClientRequest for ServerDescriptorRequest {
+    fn into_request(mut self) -> Result<http::Request<()>> {
+        let mut uri = "/tor/micro/d/".to_string();
+
+        if self.digests.is_empty() {
+            uri.push_str("all");
+        } else {
+            self.digests.sort_unstable();
+            let ids: Vec<String> = self
+                .digests
+                .iter()
+                .map(|d| hex::encode(d))
+                .collect();
+            uri.push_str(&ids.join("-"));
+        }
+        uri.push_str(".z");
+
+        let req = http::Request::builder().method("GET").uri(uri);
         let req = add_common_headers(req);
 
         Ok(req.body(())?)
