@@ -167,6 +167,20 @@ impl NetDirConfigBuilder {
         self.cache_path = Some(path.to_path_buf());
     }
 
+    /// Try to use the default cache path.
+    ///
+    /// This will be ~/.cache/arti on unix, and in other suitable
+    /// locations on other platforms.
+    #[cfg(directories)]
+    pub fn use_default_cache_path(&mut self) -> Result<()> {
+        let pd = directories::ProjectDirs::from("org", "torproject", "Arti")
+            .ok_or(Error::DirectoryNotPresent)?;
+
+        self.cache_path = Some(pd.cache_dir().into());
+
+        Ok(())
+    }
+
     /// Consume this builder and return a NetDirConfig that can be used
     /// to load directories
     pub fn finalize(mut self) -> Result<NetDirConfig> {
