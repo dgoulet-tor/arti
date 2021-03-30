@@ -158,24 +158,25 @@ impl SqliteStore {
         let db_exists = db_n_tables > 0;
 
         if !db_exists {
-            tx.execute_batch(INSTALL_SCHEMA)?;
+            tx.execute_batch(INSTALL_V0_SCHEMA)?;
+            tx.execute_batch(UPDATE_SCHEMA_V0_TO_V1)?;
             tx.commit()?;
             return Ok(());
         }
 
-        let (_version, readable_by): (u32, u32) = tx.query_row(
+        let (version, readable_by): (u32, u32) = tx.query_row(
             "SELECT version, readable_by FROM TorSchemaMeta
              WHERE name = 'TorDirStorage'",
             NO_PARAMS,
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
 
-        /* if version < SCHEMA_VERSION {
-            // Update the schema. XXXX
-            tx.commit();
+        if version < SCHEMA_VERSION {
+            // Update the schema.
+            tx.execute_batch(UPDATE_SCHEMA_V0_TO_V1)?;
+            tx.commit()?;
             return Ok(())
-        } else */
-        if readable_by > SCHEMA_VERSION {
+        } else if readable_by > SCHEMA_VERSION {
             return Err(Error::UnrecognizedSchema.into());
         }
 
@@ -596,10 +597,10 @@ fn digest_from_dstr(s: &str) -> Result<[u8; 32]> {
 }
 
 /// Version number used for this version of the arti cache schema.
-const SCHEMA_VERSION: u32 = 0;
+const SCHEMA_VERSION: u32 = 1;
 
 /// Set up the tables for the arti cache schema in a sqlite database.
-const INSTALL_SCHEMA: &str = "
+const INSTALL_V0_SCHEMA: &str = "
   -- Helps us version the schema.  The schema here corresponds to a
   -- version number called 'version', and it should be readable by
   -- anybody who is compliant with versions of at least 'readable_by'.
@@ -655,6 +656,17 @@ const INSTALL_SCHEMA: &str = "
   );
   CREATE INDEX Consensuses_vu on CONSENSUSES(valid_until);
 
+";
+
+/// Update the database schema from version 0 to version 1.
+const UPDATE_SCHEMA_V0_TO_V1: &str = "
+  CREATE TABLE Routerdescs (
+    sha1_digest TEXT PRIMARY KEY NOT NULL,
+    last_listed DATE NOT NULL,
+    contents BLOB NOT NULL
+  );
+
+  UPDATE TorSchemaMeta SET version=1 WHERE version<1;
 ";
 
 /// Query: find the latest-expiring microdesc consensus with a given
