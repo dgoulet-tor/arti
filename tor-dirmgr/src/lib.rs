@@ -354,19 +354,23 @@ impl DirMgr {
         };
 
         // Now we update the netdir.
-        let new_netdir = {
+        let n_missing = {
             let mut w = self.netdir.write().await;
-            if let Some(old_netdir) = w.take() {
-                let new_netdir = Arc::new(old_netdir.extend(new_microdescs));
-                *w = Some(Arc::clone(&new_netdir));
-                new_netdir
+            if let Some(arc_netdir) = w.as_mut() {
+                // Arc::make_mut cleverly clones the underlying netdir if
+                // if somebody else has a reference to it, but not otherwise.
+                let nd = Arc::make_mut(arc_netdir);
+                for md in new_microdescs {
+                    nd.add_microdesc(md);
+                }
+                nd.missing_microdescs().count()
             } else {
                 // programming error here; warn?
-                return Ok(0);
+                0
             }
         };
 
-        Ok(new_netdir.missing_microdescs().count())
+        Ok(n_missing)
     }
 
     /// Launch an updater task that periodically re-fetches or re-loads the

@@ -334,25 +334,6 @@ impl NetDir {
             }
         })
     }
-
-    /// Add the provided microdescriptors to this netdir, doing as
-    /// little copying as possible.  May return a new netdir, or may
-    /// return the same one if there was only one references.
-    pub fn extend<I>(self: Arc<NetDir>, mds: I) -> NetDir
-    where
-        I: IntoIterator<Item = Microdesc>,
-    {
-        // Get a version of self that we have exclusive access to, either
-        // by unwrapping or cloning.
-        let mut exclusive = match Arc::try_unwrap(self) {
-            Ok(ex) => ex,
-            Err(t) => NetDir::clone(&t),
-        };
-        for md in mds.into_iter() {
-            exclusive.add_microdesc(md);
-        }
-        exclusive
-    }
 }
 
 impl MdReceiver for NetDir {
