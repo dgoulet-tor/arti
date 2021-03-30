@@ -42,3 +42,9 @@ name = "consensus"
 path = "fuzz_targets/consensus.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "nsconsensus"
+path = "fuzz_targets/nsconsensus.rs"
+test = false
+doc = false
