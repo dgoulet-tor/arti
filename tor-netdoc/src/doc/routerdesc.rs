@@ -46,8 +46,8 @@ use tor_llcrypto::pk::rsa::RsaIdentity;
 use digest::Digest;
 use signature::Signature;
 
-/// The digest of a descriptor as used in the NS consensus.
-pub type RouterDescDigest = [u8; 32];
+/// The digest of a RouterDesc document, as reported in a NS consensus.
+pub type RdDigest = [u8; 20];
 
 /// A router descriptor, with possible annotations.
 #[allow(dead_code)]

@@ -70,10 +70,6 @@ use serde::{Deserialize, Deserializer};
 pub use rs::MdConsensusRouterStatus;
 pub use rs::NsConsensusRouterStatus;
 
-/// The digest of a RouterDesc document, as reported in a NS consensus.
-// TODO: Replace this with the one that dgoulet is writing
-pub type RdDigest = [u8; 20];
-
 /// The lifetime of a networkstatus document.
 ///
 /// In a consensus, this type describes when the consensus may safely

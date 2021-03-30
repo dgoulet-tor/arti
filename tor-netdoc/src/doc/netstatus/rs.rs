@@ -3,8 +3,9 @@
 //! This is a private module; relevant pieces are re-exported by its
 //! parent.
 
-use super::{NetstatusKwd, ParseRouterStatus, RdDigest, RouterFlags, RouterStatus, RouterWeight};
+use super::{NetstatusKwd, ParseRouterStatus, RouterFlags, RouterStatus, RouterWeight};
 use crate::doc::microdesc::MdDigest;
+use crate::doc::routerdesc::RdDigest;
 use crate::types::misc::*;
 use crate::{parse::parser::Section, util::private::Sealed};
 use crate::{Error, Pos, Result};

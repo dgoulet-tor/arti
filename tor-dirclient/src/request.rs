@@ -4,7 +4,7 @@
 use tor_llcrypto::pk::rsa::RsaIdentity;
 use tor_netdoc::doc::authcert::AuthCertKeyIds;
 use tor_netdoc::doc::microdesc::MdDigest;
-use tor_netdoc::doc::netstatus::RdDigest;
+use tor_netdoc::doc::routerdesc::RdDigest;
 
 use crate::Result;
 
