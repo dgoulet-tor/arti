@@ -1450,6 +1450,9 @@ mod test {
     const CERTS: &str = include_str!("../../testdata/authcerts2.txt");
     const CONSENSUS: &str = include_str!("../../testdata/mdconsensus1.txt");
 
+    const NS_CERTS: &str = include_str!("../../testdata/authcerts3.txt");
+    const NS_CONSENSUS: &str = include_str!("../../testdata/nsconsensus1.txt");
+
     fn read_bad(fname: &str) -> String {
         use std::fs;
         use std::path::PathBuf;
@@ -1462,7 +1465,7 @@ mod test {
     }
 
     #[test]
-    fn parse_and_validate() -> Result<()> {
+    fn parse_and_validate_md() -> Result<()> {
         use std::net::SocketAddr;
         use tor_checkable::{SelfSigned, Timebound};
         let mut certs = Vec::new();
@@ -1526,6 +1529,31 @@ mod test {
         let ip6 = "[::1]:5002".parse::<SocketAddr>().unwrap();
         assert!(r0.orport_addrs().any(|a| a == &ip4));
         assert!(r0.orport_addrs().any(|a| a == &ip6));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_and_validate_ns() -> Result<()> {
+        use tor_checkable::{SelfSigned, Timebound};
+        let mut certs = Vec::new();
+        for cert in AuthCert::parse_multiple(NS_CERTS) {
+            let cert = cert?.check_signature()?.dangerously_assume_timely();
+            certs.push(cert);
+        }
+        let auth_ids: Vec<_> = certs.iter().map(|c| &c.key_ids().id_fingerprint).collect();
+        assert_eq!(certs.len(), 3);
+
+        let (_, _, consensus) = NsConsensus::parse(NS_CONSENSUS)?;
+        let consensus = consensus.dangerously_assume_timely().set_n_authorities(3);
+        // The set of authorities we know _could_ validate this cert.
+        assert!(consensus.authorities_are_correct(&auth_ids));
+        // A subset would also work.
+        assert!(consensus.authorities_are_correct(&auth_ids[0..1]));
+
+        assert!(consensus.key_is_correct(&certs).is_ok());
+        dbg!("FOO");
+        let _consensus = consensus.check_signature(&certs)?;
 
         Ok(())
     }
