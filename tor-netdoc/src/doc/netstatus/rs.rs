@@ -91,6 +91,18 @@ macro_rules! implement_accessors {
             pub fn protovers(&self) -> &Protocols {
                 &self.rs.protos
             }
+            /// Return the nickname of this routerstatus.
+            pub fn nickname(&self) -> &String {
+                &self.rs.nickname
+            }
+            /// Return the router flags of this routerstatus.
+            pub fn flags(&self) -> &RouterFlags {
+                &self.rs.flags
+            }
+            /// Return the version of this routerstatus.
+            pub fn version(&self) -> &Option<String> {
+                &self.rs.version
+            }
             /// Return true if the ed25519 identity on this relay reflects a
             /// true consensus among the authorities.
             pub fn ed25519_id_is_usable(&self) -> bool {
