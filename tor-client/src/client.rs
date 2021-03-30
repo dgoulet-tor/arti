@@ -118,4 +118,13 @@ impl TorClient {
 
         Ok(stream)
     }
+
+    /// Return a reference to this this client's directory manager.
+    ///
+    /// This function is unstable. It is only enabled if the crate was
+    /// built with the `experimental-api` feature.
+    #[cfg(feature = "experimental-api")]
+    pub fn dirmgr(&self) -> Arc<tor_dirmgr::DirMgr> {
+        Arc::clone(&self.dirmgr)
+    }
 }
