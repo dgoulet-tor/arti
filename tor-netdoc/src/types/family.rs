@@ -32,6 +32,12 @@ impl RelayFamily {
     pub fn contains(&self, rsa_id: &RsaIdentity) -> bool {
         self.0.contains(rsa_id)
     }
+
+    /// Return an iterator over the RSA identity keys listed in this
+    /// family.
+    pub fn members(&self) -> impl Iterator<Item = &RsaIdentity> {
+        self.0.iter()
+    }
 }
 
 impl Default for RelayFamily {
