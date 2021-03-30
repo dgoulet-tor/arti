@@ -202,7 +202,9 @@ pub struct Signature {
 #[derive(Debug, Clone)]
 pub struct SignatureGroup {
     /// The sha256 of the document itself
-    sha256: [u8; 32],
+    sha256: Option<[u8; 32]>,
+    /// The sha1 of the document itself
+    sha1: Option<[u8; 20]>,
     /// The signatures listed on the document.
     signatures: Vec<Signature>,
 }
@@ -1248,11 +1250,25 @@ impl<RS: ParseRouterStatus + RouterStatus> Consensus<RS> {
 
         let end_pos = first_sig.unwrap().offset_in(r.str()).unwrap() + "directory-signature ".len();
 
-        // Find the sha256 digest.
+        // Find the appropriate digest.
         let signed_str = &r.str()[start_pos..end_pos];
         let remainder = &r.str()[end_pos..];
-        let sha256 = ll::d::Sha256::digest(signed_str.as_bytes()).into();
-        let siggroup = SignatureGroup { sha256, signatures };
+        let (sha256, sha1) = if RS::flavor_name() == "ns" {
+            (
+                None,
+                Some(ll::d::Sha1::digest(signed_str.as_bytes()).into()),
+            )
+        } else {
+            (
+                Some(ll::d::Sha256::digest(signed_str.as_bytes()).into()),
+                None,
+            )
+        };
+        let siggroup = SignatureGroup {
+            sha256,
+            sha1,
+            signatures,
+        };
 
         let unval = UnvalidatedConsensus {
             consensus,
@@ -1403,13 +1419,18 @@ impl SignatureGroup {
                 continue;
             }
 
-            if &sig.digestname != "sha256" {
-                // We don't support sha1 digests here yet. Maybe we never
-                // will.
+            let d: Option<&[u8]> = match sig.digestname.as_ref() {
+                "sha256" => self.sha256.as_ref().map(|a| &a[..]),
+                "sha1" => self.sha1.as_ref().map(|a| &a[..]),
+                _ => None, // We don't know how to find this digest.
+            };
+            if d.is_none() {
+                // We don't support this kind of digest for this kind
+                // of document.
                 continue;
             }
 
-            match sig.check_signature(&self.sha256, certs) {
+            match sig.check_signature(d.as_ref().unwrap(), certs) {
                 SigCheckResult::Valid => {
                     ok.insert(*id_fingerprint);
                 }
