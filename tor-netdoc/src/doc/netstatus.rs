@@ -295,8 +295,15 @@ struct DirSource {
 }
 
 bitflags! {
-    /// A set of known flags on a single relay
-    struct RouterFlags: u16 {
+    /// A set of recognized directory flags on a single relay.
+    ///
+    /// These flags come from a consensus directory document, and are
+    /// used to describe what the authorities believe about the relay.
+    /// If the document contained any flags that we _didn't_ recognize,
+    /// they are not listed in this type.
+    ///
+    /// The bit values used to represent the flags have no meaning.
+    pub struct RouterFlags: u16 {
         /// Is this a directory authority?
         const AUTHORITY = (1<<0);
         /// Is this relay marked as a bad exit?
@@ -318,7 +325,7 @@ bitflags! {
         const HSDIR = (1<<5);
         /// If set, there is no consensus for the ed25519 key for this relay.
         const NO_ED_CONSENSUS = (1<<6);
-        /// Is this relay considerd "stable" enough for long-lived circuits.
+        /// Is this relay considerd "stable" enough for long-lived circuits?
         const STABLE = (1<<7);
         /// Set if the authorities are requesting a fresh descriptor for
         /// this relay.
@@ -332,7 +339,7 @@ bitflags! {
         /// the network.
         ///
         /// This flag can appear in votes, but in consensuses, every relay
-        /// is assumed to be valid
+        /// is assumed to be valid.
         const VALID = (1<<10);
         /// Set if this relay supports a currently recognized version of the
         /// directory protocol.
