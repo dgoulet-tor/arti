@@ -9,7 +9,7 @@ use crate::{Error, Result};
 
 use tor_netdoc::doc::authcert::AuthCertKeyIds;
 use tor_netdoc::doc::microdesc::MdDigest;
-use tor_netdoc::doc::netstatus::Lifetime;
+use tor_netdoc::doc::netstatus::{Lifetime, RdDigest};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -175,7 +175,7 @@ impl SqliteStore {
             // Update the schema.
             tx.execute_batch(UPDATE_SCHEMA_V0_TO_V1)?;
             tx.commit()?;
-            return Ok(())
+            return Ok(());
         } else if readable_by > SCHEMA_VERSION {
             return Err(Error::UnrecognizedSchema.into());
         }
@@ -203,6 +203,7 @@ impl SqliteStore {
         tx.execute(DROP_OLD_MICRODESCS, NO_PARAMS)?;
         tx.execute(DROP_OLD_AUTHCERTS, NO_PARAMS)?;
         tx.execute(DROP_OLD_CONSENSUSES, NO_PARAMS)?;
+        tx.execute(DROP_OLD_ROUTERDESCS, NO_PARAMS)?;
         tx.commit()?;
         for name in expired_blobs {
             let fname = self.blob_fname(name);
@@ -491,6 +492,29 @@ impl SqliteStore {
         Ok(result)
     }
 
+    /// Read all the microdescriptors listed in `input` from the cache.
+    pub fn routerdescs<'a, I>(&self, input: I) -> Result<HashMap<RdDigest, String>>
+    where
+        I: IntoIterator<Item = &'a RdDigest>,
+    {
+        let mut result = HashMap::new();
+        let mut stmt = self.conn.prepare(FIND_RD)?;
+
+        // XXXX Should I speed this up with a transaction, or does it not
+        // matter for queries?
+        for rd_digest in input.into_iter() {
+            let h_digest = hex::encode(rd_digest);
+            if let Some(contents) = stmt
+                .query_row(params![h_digest], |row| row.get::<_, String>(0))
+                .optional()?
+            {
+                result.insert(*rd_digest, contents);
+            }
+        }
+
+        Ok(result)
+    }
+
     /// Update the `last-listed` time of every microdescriptor in
     /// `input` to `when` or later.
     pub fn update_microdescs_listed<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
@@ -503,6 +527,26 @@ impl SqliteStore {
 
         for md_digest in input.into_iter() {
             let h_digest = hex::encode(md_digest);
+            stmt.execute(params![when, h_digest])?;
+        }
+
+        stmt.finalize()?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Update the `last-listed` time of every router descriptors in
+    /// `input` to `when` or later.
+    pub fn update_routerdescs_listed<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
+    where
+        I: IntoIterator<Item = &'a RdDigest>,
+    {
+        let tx = self.conn.transaction()?;
+        let mut stmt = tx.prepare(UPDATE_RD_LISTED)?;
+        let when: DateTime<Utc> = when.into();
+
+        for rd_digest in input.into_iter() {
+            let h_digest = hex::encode(rd_digest);
             stmt.execute(params![when, h_digest])?;
         }
 
@@ -524,6 +568,26 @@ impl SqliteStore {
 
         for (content, md_digest) in input.into_iter() {
             let h_digest = hex::encode(md_digest);
+            stmt.execute(params![h_digest, when, content])?;
+        }
+        stmt.finalize()?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Store every router descriptors in `input` into the cache, and say that
+    /// it was last listed at `when`.
+    pub fn store_routerdescs<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
+    where
+        I: IntoIterator<Item = (&'a str, &'a RdDigest)>,
+    {
+        let when: DateTime<Utc> = when.into();
+
+        let tx = self.conn.transaction()?;
+        let mut stmt = tx.prepare(INSERT_RD)?;
+
+        for (content, rd_digest) in input.into_iter() {
+            let h_digest = hex::encode(rd_digest);
             stmt.execute(params![h_digest, when, content])?;
         }
         stmt.finalize()?;
@@ -735,6 +799,13 @@ const FIND_MD: &str = "
   WHERE sha256_digest = ?
 ";
 
+/// Query: find the router descriptors with a given hex-encoded sha1 digest
+const FIND_RD: &str = "
+  SELECT contents
+  FROM Routerdescs
+  WHERE sha1_digest = ?
+";
+
 /// Query: find every ExtDocs member that has expired.
 const FIND_EXPIRED_EXTDOCS: &str = "
   SELECT filename FROM Extdocs where expires < datetime('now');
@@ -766,6 +837,12 @@ const INSERT_MD: &str = "
   VALUES ( ?, ?, ? );
 ";
 
+/// Query: Add a new router descriptor
+const INSERT_RD: &str = "
+  INSERT OR REPLACE INTO Routerdescs ( sha1_digest, last_listed, contents )
+  VALUES ( ?, ?, ? );
+";
+
 /// Query: Change the time when a given microdescriptor was last listed.
 const UPDATE_MD_LISTED: &str = "
   UPDATE Microdescs
@@ -773,11 +850,23 @@ const UPDATE_MD_LISTED: &str = "
   WHERE sha256_digest = ?;
 ";
 
+/// Query: Change the time when a given router descriptors was last listed.
+const UPDATE_RD_LISTED: &str = "
+  UPDATE Routerdescs
+  SET last_listed = max(last_listed, ?)
+  WHERE sha1_digest = ?;
+";
+
 /// Query: Discard every expired extdoc.
 const DROP_OLD_EXTDOCS: &str = "
   DELETE FROM ExtDocs WHERE expires < datetime('now');
 ";
-
+/// Query: Discard every router descriptors that hasn't been listed for 3
+/// months.
+// TODO: Choose a more realistic time.
+const DROP_OLD_ROUTERDESCS: &str = "
+  DELETE FROM Routerdescs WHERE last_listed < datetime('now','-3 months');
+  ";
 /// Query: Discard every microdescriptor that hasn't been listed for 3 months.
 // TODO: Choose a more realistic time.
 const DROP_OLD_MICRODESCS: &str = "
@@ -1025,6 +1114,45 @@ mod test {
         let mds = store.microdescs(&[d2, d3, d4])?;
         assert_eq!(mds.len(), 1);
         assert_eq!(mds.get(&d2).unwrap(), "Fake micro 2");
+
+        Ok(())
+    }
+
+    #[test]
+    fn routerdescs() -> Result<()> {
+        let (_tmp_dir, mut store) = new_empty()?;
+
+        let now = Utc::now();
+        let one_day = CDuration::days(1);
+
+        let d1 = [5_u8; 20];
+        let d2 = [7; 20];
+        let d3 = [42; 20];
+        let d4 = [99; 20];
+
+        store.store_routerdescs(
+            vec![
+                ("Fake routerdesc 1", &d1),
+                ("Fake routerdesc 2", &d2),
+                ("Fake routerdesc 3", &d3),
+            ],
+            (now - one_day * 100).into(),
+        )?;
+
+        store.update_routerdescs_listed(&[d2], now.into())?;
+
+        let rds = store.routerdescs(&[d2, d3, d4])?;
+        assert_eq!(rds.len(), 2);
+        assert_eq!(rds.get(&d1), None);
+        assert_eq!(rds.get(&d2).unwrap(), "Fake routerdesc 2");
+        assert_eq!(rds.get(&d3).unwrap(), "Fake routerdesc 3");
+        assert_eq!(rds.get(&d4), None);
+
+        // Now we'll expire.  that should drop everything but d2.
+        store.expire_all()?;
+        let rds = store.routerdescs(&[d2, d3, d4])?;
+        assert_eq!(rds.len(), 1);
+        assert_eq!(rds.get(&d2).unwrap(), "Fake routerdesc 2");
 
         Ok(())
     }
