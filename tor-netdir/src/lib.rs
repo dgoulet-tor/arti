@@ -454,6 +454,32 @@ impl<'a> Relay<'a> {
     pub fn ipv6_policy(&self) -> &Arc<PortPolicy> {
         self.md.ipv6_policy()
     }
+    /// Return a reference to this relay's "router status" entry in
+    /// the consensus.
+    ///
+    /// The router status entry contains information about the relay
+    /// that the authorities voted on directly.  For most use cases,
+    /// you shouldn't need them.
+    ///
+    /// This function is only available if the crate was built with
+    /// its `experimental-api` feature.
+    #[cfg(feature = "experimental-api")]
+    pub fn rs(&self) -> &netstatus::MdConsensusRouterStatus {
+        self.rs
+    }
+    /// Return a reference to this relay's "microdescriptor" entry in
+    /// the consensus.
+    ///
+    /// A "microdescriptor" is a synopsis of the information about a relay,
+    /// used to determine its capabilities and route traffic through it.
+    /// For most use cases, you shouldn't need it.
+    ///
+    /// This function is only available if the crate was built with
+    /// its `experimental-api` feature.
+    #[cfg(feature = "experimental-api")]
+    pub fn md(&self) -> &Microdesc {
+        self.md
+    }
 }
 
 impl<'a> tor_linkspec::ChanTarget for Relay<'a> {

@@ -9,6 +9,10 @@ homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Types to represent and use a Tor network directory"
 keywords = [ "tor", "arti" ]
 
+[features]
+default = []
+experimental-api = []
+
 [dependencies]
 caret = { path = "../caret", version= "*" }
 tor-checkable = { path="../tor-checkable", version= "*" }
