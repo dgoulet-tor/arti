@@ -248,9 +248,9 @@ impl ClientRequest for MicrodescRequest {
     }
 }
 
-/// A request for one, many or all server descriptors.
+/// A request for one, many or all router descriptors.
 #[derive(Debug, Clone)]
-pub struct ServerDescriptorRequest {
+pub struct RouterDescRequest {
     /// If this is set, we just ask for all the descriptors.
     // TODO: maybe this should be an enum, or maybe this case should
     // be a different type.
@@ -259,23 +259,23 @@ pub struct ServerDescriptorRequest {
     digests: Vec<RdDigest>,
 }
 
-impl Default for ServerDescriptorRequest {
+impl Default for RouterDescRequest {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ServerDescriptorRequest {
+impl RouterDescRequest {
     /// Construct a request for all server descriptors.
     pub fn all() -> Self {
-        ServerDescriptorRequest {
+        RouterDescRequest {
             all_descriptors: true,
             digests: Vec::new(),
         }
     }
     /// Construct a new empty request.
     pub fn new() -> Self {
-        ServerDescriptorRequest {
+        RouterDescRequest {
             all_descriptors: false,
             digests: Vec::new(),
         }
@@ -288,7 +288,7 @@ impl ServerDescriptorRequest {
     }
 }
 
-impl ClientRequest for ServerDescriptorRequest {
+impl ClientRequest for RouterDescRequest {
     fn into_request(mut self) -> Result<http::Request<()>> {
         let mut uri = "/tor/micro/d/".to_string();
 
