@@ -18,12 +18,20 @@ use std::convert::TryInto;
 /// A single relay's status, as represented in a microdesc consensus.
 #[derive(Debug, Clone)]
 pub struct MdConsensusRouterStatus {
+    /// Underlying generic routerstatus object.
+    ///
+    /// This is private because we don't want to leak that these two
+    /// types have the same implementation "under the hood".
     rs: GenericRouterStatus<MdDigest>,
 }
 
 /// A single relay's status, as represented in a "ns" consensus.
 #[derive(Debug, Clone)]
 pub struct NsConsensusRouterStatus {
+    /// Underlying generic routerstatus object.
+    ///
+    /// This is private because we don't want to leak that these two
+    /// types have the same implementation "under the hood".
     rs: GenericRouterStatus<RdDigest>,
 }
 
