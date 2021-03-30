@@ -493,6 +493,7 @@ impl SqliteStore {
     }
 
     /// Read all the microdescriptors listed in `input` from the cache.
+    #[allow(unused)]
     pub fn routerdescs<'a, I>(&self, input: I) -> Result<HashMap<RdDigest, String>>
     where
         I: IntoIterator<Item = &'a RdDigest>,
@@ -535,26 +536,6 @@ impl SqliteStore {
         Ok(())
     }
 
-    /// Update the `last-listed` time of every router descriptors in
-    /// `input` to `when` or later.
-    pub fn update_routerdescs_listed<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
-    where
-        I: IntoIterator<Item = &'a RdDigest>,
-    {
-        let tx = self.conn.transaction()?;
-        let mut stmt = tx.prepare(UPDATE_RD_LISTED)?;
-        let when: DateTime<Utc> = when.into();
-
-        for rd_digest in input.into_iter() {
-            let h_digest = hex::encode(rd_digest);
-            stmt.execute(params![when, h_digest])?;
-        }
-
-        stmt.finalize()?;
-        tx.commit()?;
-        Ok(())
-    }
-
     /// Store every microdescriptor in `input` into the cache, and say that
     /// it was last listed at `when`.
     pub fn store_microdescs<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
@@ -575,18 +556,17 @@ impl SqliteStore {
         Ok(())
     }
 
-    /// Store every router descriptors in `input` into the cache, and say that
-    /// it was last listed at `when`.
-    pub fn store_routerdescs<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
+    /// Store every router descriptors in `input` into the cache.
+    #[allow(unused)]
+    pub fn store_routerdescs<'a, I>(&mut self, input: I) -> Result<()>
     where
-        I: IntoIterator<Item = (&'a str, &'a RdDigest)>,
+        I: IntoIterator<Item = (&'a str, SystemTime, &'a RdDigest)>,
     {
-        let when: DateTime<Utc> = when.into();
-
         let tx = self.conn.transaction()?;
         let mut stmt = tx.prepare(INSERT_RD)?;
 
-        for (content, rd_digest) in input.into_iter() {
+        for (content, when, rd_digest) in input.into_iter() {
+            let when: DateTime<Utc> = when.into();
             let h_digest = hex::encode(rd_digest);
             stmt.execute(params![h_digest, when, content])?;
         }
@@ -726,7 +706,7 @@ const INSTALL_V0_SCHEMA: &str = "
 const UPDATE_SCHEMA_V0_TO_V1: &str = "
   CREATE TABLE Routerdescs (
     sha1_digest TEXT PRIMARY KEY NOT NULL,
-    last_listed DATE NOT NULL,
+    published DATE NOT NULL,
     contents BLOB NOT NULL
   );
 
@@ -800,6 +780,7 @@ const FIND_MD: &str = "
 ";
 
 /// Query: find the router descriptors with a given hex-encoded sha1 digest
+#[allow(unused)]
 const FIND_RD: &str = "
   SELECT contents
   FROM Routerdescs
@@ -838,8 +819,9 @@ const INSERT_MD: &str = "
 ";
 
 /// Query: Add a new router descriptor
+#[allow(unused)]
 const INSERT_RD: &str = "
-  INSERT OR REPLACE INTO Routerdescs ( sha1_digest, last_listed, contents )
+  INSERT OR REPLACE INTO Routerdescs ( sha1_digest, published, contents )
   VALUES ( ?, ?, ? );
 ";
 
@@ -850,22 +832,15 @@ const UPDATE_MD_LISTED: &str = "
   WHERE sha256_digest = ?;
 ";
 
-/// Query: Change the time when a given router descriptors was last listed.
-const UPDATE_RD_LISTED: &str = "
-  UPDATE Routerdescs
-  SET last_listed = max(last_listed, ?)
-  WHERE sha1_digest = ?;
-";
-
 /// Query: Discard every expired extdoc.
 const DROP_OLD_EXTDOCS: &str = "
   DELETE FROM ExtDocs WHERE expires < datetime('now');
 ";
-/// Query: Discard every router descriptors that hasn't been listed for 3
+/// Query: Discard every router descriptor that hasn't been listed for 3
 /// months.
 // TODO: Choose a more realistic time.
 const DROP_OLD_ROUTERDESCS: &str = "
-  DELETE FROM Routerdescs WHERE last_listed < datetime('now','-3 months');
+  DELETE FROM Routerdescs WHERE published < datetime('now','-3 months');
   ";
 /// Query: Discard every microdescriptor that hasn't been listed for 3 months.
 // TODO: Choose a more realistic time.
@@ -1124,22 +1099,19 @@ mod test {
 
         let now = Utc::now();
         let one_day = CDuration::days(1);
+        let long_ago = now - one_day * 100;
+        let recently = now - one_day;
 
         let d1 = [5_u8; 20];
         let d2 = [7; 20];
         let d3 = [42; 20];
         let d4 = [99; 20];
 
-        store.store_routerdescs(
-            vec![
-                ("Fake routerdesc 1", &d1),
-                ("Fake routerdesc 2", &d2),
-                ("Fake routerdesc 3", &d3),
-            ],
-            (now - one_day * 100).into(),
-        )?;
-
-        store.update_routerdescs_listed(&[d2], now.into())?;
+        store.store_routerdescs(vec![
+            ("Fake routerdesc 1", long_ago.into(), &d1),
+            ("Fake routerdesc 2", recently.into(), &d2),
+            ("Fake routerdesc 3", long_ago.into(), &d3),
+        ])?;
 
         let rds = store.routerdescs(&[d2, d3, d4])?;
         assert_eq!(rds.len(), 2);
