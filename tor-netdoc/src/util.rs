@@ -89,6 +89,15 @@ impl<'a, I: Iterator, F: FnMut(&I::Item) -> bool> Iterator for PauseAt<'a, I, F>
     }
 }
 
+/// A Private module for declaring a "sealed" trait.
+pub(crate) mod private {
+    /// A non-exported trait, used to prevent others from implementing a trait.
+    ///
+    /// For more inforamation on this pattern, see
+    /// https://rust-lang.github.io/api-guidelines/future-proofing.html#c-sealed
+    pub trait Sealed {}
+}
+
 #[cfg(test)]
 mod tests {
 

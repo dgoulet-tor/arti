@@ -29,7 +29,7 @@ mod weight;
 use ll::pk::rsa::RsaIdentity;
 use tor_llcrypto as ll;
 use tor_netdoc::doc::microdesc::{MdDigest, Microdesc};
-use tor_netdoc::doc::netstatus::{self, MdConsensus};
+use tor_netdoc::doc::netstatus::{self, MdConsensus, RouterStatus};
 use tor_netdoc::types::policy::PortPolicy;
 
 use log::warn;

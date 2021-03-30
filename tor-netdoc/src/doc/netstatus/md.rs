@@ -2,9 +2,10 @@
 //!
 //! This is a private module; relevant pieces are re-exported by its parent.
 
-use super::{NetstatusKwd, RouterFlags, RouterWeight};
-use crate::parse::parser::Section;
+use super::{NetstatusKwd, ParseRouterStatus, RouterFlags, RouterStatus, RouterWeight};
+use crate::doc::microdesc::MdDigest;
 use crate::types::misc::*;
+use crate::{parse::parser::Section, util::private::Sealed};
 use crate::{Error, Result};
 use std::{net, time};
 
@@ -37,7 +38,7 @@ pub struct MdConsensusRouterStatus {
     /// Declared directory port for this relay.
     dir_port: u16,
     /// Digest of the microdescriptor for this relay.
-    md_digest: crate::doc::microdesc::MdDigest,
+    md_digest: MdDigest,
     /// Flags applied by the authorities to this relay.
     flags: RouterFlags,
     /// Version of the software that this relay is running.
@@ -50,15 +51,11 @@ pub struct MdConsensusRouterStatus {
 }
 
 // TODO: These methods should probably become, in whole or in part,
-// methods on a RouterStatus trait.
+// methods on the RouterStatus trait.
 impl MdConsensusRouterStatus {
     /// Return the expected microdescriptor digest for this routerstatus
-    pub fn md_digest(&self) -> &crate::doc::microdesc::MdDigest {
+    pub fn md_digest(&self) -> &MdDigest {
         &self.md_digest
-    }
-    /// Return the expected microdescriptor digest for this routerstatus
-    pub fn rsa_identity(&self) -> &RsaIdentity {
-        &self.identity
     }
     /// Return an iterator of ORPort addresses for this routerstatus
     pub fn orport_addrs(&self) -> impl Iterator<Item = &net::SocketAddr> {
@@ -99,9 +96,27 @@ impl MdConsensusRouterStatus {
     }
 }
 
-impl MdConsensusRouterStatus {
-    /// Parse a single routerstatus section onto an MdConsensusRouterStatus.
-    pub(super) fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<MdConsensusRouterStatus> {
+impl Sealed for MdConsensusRouterStatus {}
+
+impl RouterStatus for MdConsensusRouterStatus {
+    type DocumentDigest = MdDigest;
+
+    /// Return the expected microdescriptor digest for this routerstatus
+    fn rsa_identity(&self) -> &RsaIdentity {
+        &self.identity
+    }
+
+    fn doc_digest(&self) -> &MdDigest {
+        self.md_digest()
+    }
+}
+
+impl ParseRouterStatus for MdConsensusRouterStatus {
+    fn flavor_name() -> &'static str {
+        "microdesc"
+    }
+
+    fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<MdConsensusRouterStatus> {
         use NetstatusKwd::*;
         // R line
         let r_item = sec.required(RS_R)?;

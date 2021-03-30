@@ -43,6 +43,8 @@
 //! As with the other tor-netdoc types, I'm deferring those till I know what
 //! they should be.
 
+#![allow(missing_docs)]
+
 mod md;
 
 use crate::doc::authcert::{AuthCert, AuthCertKeyIds};
@@ -50,6 +52,7 @@ use crate::parse::keyword::Keyword;
 use crate::parse::parser::{Section, SectionRules};
 use crate::parse::tokenize::{Item, ItemResult, NetDocReader};
 use crate::types::misc::*;
+use crate::util::private::Sealed;
 use crate::{Error, Pos, Result};
 use std::collections::{HashMap, HashSet};
 use std::{net, result, time};
@@ -380,31 +383,71 @@ struct Footer {
     weights: NetParams<i32>,
 }
 
+/// Trait to parse a single relay as listed in a consensus document.
+///
+/// XXXX: I'd rather not have this trait be public, but I haven't yet
+/// figured out how to make it private.
+pub trait ParseRouterStatus: Sized + Sealed {
+    /// Return the name of the consensus flavor that uses this kind of routerstatus objejct.
+    fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<Self>;
+
+    /// Return the networkstatus consensus flavor name in which this
+    /// routerstatus appears.
+    fn flavor_name() -> &'static str;
+}
+
+/// Represents a single relay as listed in a consensus document.
+///
+/// Not implementable outside of the `tor-netdoc` crate.
+pub trait RouterStatus: Sealed {
+    /// A digest of the document that's identified by this RouterStatus.
+    type DocumentDigest;
+
+    /// Return RSA identity for the relay described by this RouterStatus
+    fn rsa_identity(&self) -> &RsaIdentity;
+
+    /// Return the digest of the document identified by this
+    /// routerstatus.
+    fn doc_digest(&self) -> &Self::DocumentDigest;
+}
+
 /// A single microdescriptor consensus netstatus
 ///
 /// TODO: This should possibly turn into a parameterized type, to represent
 /// votes and ns consensuses.
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct MdConsensus {
+pub struct Consensus<RS> {
     /// Part of the header shared by all consensus types.
     header: ConsensusHeader,
     /// List of voters whose votes contributed to this consensus.
     voters: Vec<ConsensusVoterInfo>,
     /// A list of the relays on the network, with one entry per relay.
-    routers: Vec<MdConsensusRouterStatus>,
+    routers: Vec<RS>,
     /// Footer for the consensus object.
     footer: Footer,
 }
 
-impl MdConsensus {
+/// A consensus document that lists relays along with their
+/// microdescriptor documents.
+pub type MdConsensus = Consensus<MdConsensusRouterStatus>;
+
+/// An MdConsensus that has been parsed and checked for timeliness,
+/// but not for signatures.
+pub type UnvalidatedMdConsensus = UnvalidatedConsensus<MdConsensusRouterStatus>;
+
+/// An MdConsensus that has been parsed but not checked for signatures
+/// and timeliness.
+pub type UncheckedMdConsensus = UncheckedConsensus<MdConsensusRouterStatus>;
+
+impl<RS> Consensus<RS> {
     /// Return the Lifetime for this consensus.
     pub fn lifetime(&self) -> &Lifetime {
         &self.header.hdr.lifetime
     }
 
     /// Return a slice of all the routerstatus entries in this consensus.
-    pub fn routers(&self) -> &[MdConsensusRouterStatus] {
+    pub fn routers(&self) -> &[RS] {
         &self.routers[..]
     }
 
@@ -422,7 +465,10 @@ impl MdConsensus {
 
 decl_keyword! {
     /// Keywords that can be used in votes and consensuses.
-    NetstatusKwd {
+    // TODO: This is public because otherwise we can't use it in the
+    // ParseRouterStatus crate.  But I'd rather find a way to make it
+    // private.
+    pub NetstatusKwd {
         // Header
         "network-status-version" => NETWORK_STATUS_VERSION,
         "vote-status" => VOTE_STATUS,
@@ -565,17 +611,19 @@ static NS_ROUTERSTATUS_RULES_COMMON_: Lazy<SectionRules<NetstatusKwd>> = Lazy::n
     rules.add(UNRECOGNIZED.rule().may_repeat().obj_optional());
     rules
 });
+
+/// Rules for parsing a single routerstatus in an NS consensus
+static NS_ROUTERSTATUS_RULES_NSCON: Lazy<SectionRules<NetstatusKwd>> = Lazy::new(|| {
+    use NetstatusKwd::*;
+    let mut rules = NS_ROUTERSTATUS_RULES_COMMON_.clone();
+    rules.add(RS_R.rule().required().args(8..));
+    rules
+});
+
 /*
-    /// Rules for parsing a single routerstatus in an NS consensus
-    static NS_ROUTERSTATUS_RULES_NSCON: SectionRules<NetstatusKwd> = {
-        use NetstatusKwd::*;
-        let mut rules = NS_ROUTERSTATUS_RULES_COMMON_.clone();
-        rules.add(RS_R.rule().required().args(8..));
-        rules
-    };
-    /// Rules for parsing a single routerstatus in a vote
-    static NS_ROUTERSTATUS_RULES_VOTE: SectionRules<NetstatusKwd> = {
-        use NetstatusKwd::*;
+/// Rules for parsing a single routerstatus in a vote
+static NS_ROUTERSTATUS_RULES_VOTE: SectionRules<NetstatusKwd> = {
+    use NetstatusKwd::*;
         let mut rules = NS_ROUTERSTATUS_RULES_COMMON_.clone();
         rules.add(RS_R.rule().required().args(8..));
         rules.add(RS_M.rule().may_repeat().args(2..));
@@ -1023,13 +1071,13 @@ impl Signature {
     }
 }
 
-/// A MdConsensus object that has been parsed, but not checked for signatures
-/// and time.
-pub type UncheckedMdConsensus = TimerangeBound<UnvalidatedMdConsensus>;
+/// A Consensus object that has been parsed, but not checked for
+/// signatures and timeliness.
+pub type UncheckedConsensus<RS> = TimerangeBound<UnvalidatedConsensus<RS>>;
 
-impl MdConsensus {
+impl<RS: ParseRouterStatus + RouterStatus> Consensus<RS> {
     /// Try to parse a single networkstatus document from a string.
-    pub fn parse(s: &str) -> Result<(&str, &str, UncheckedMdConsensus)> {
+    pub fn parse(s: &str) -> Result<(&str, &str, UncheckedConsensus<RS>)> {
         let mut reader = NetDocReader::new(s);
         Self::parse_from_reader(&mut reader).map_err(|e| e.within(s))
     }
@@ -1080,9 +1128,7 @@ impl MdConsensus {
 
     /// Extract a routerstatus from the reader.  Return Ok(None) if we're
     /// out of routerstatus entries.
-    fn take_routerstatus(
-        r: &mut NetDocReader<'_, NetstatusKwd>,
-    ) -> Result<Option<(Pos, MdConsensusRouterStatus)>> {
+    fn take_routerstatus(r: &mut NetDocReader<'_, NetstatusKwd>) -> Result<Option<(Pos, RS)>> {
         use NetstatusKwd::*;
         match r.iter().peek() {
             None => return Ok(None),
@@ -1107,18 +1153,24 @@ impl MdConsensus {
             }
         });
 
-        let rs_sec = NS_ROUTERSTATUS_RULES_MDCON.parse(&mut p)?;
-        let rs = MdConsensusRouterStatus::from_section(&rs_sec)?;
+        let rules = match RS::flavor_name() {
+            "microdesc" => &NS_ROUTERSTATUS_RULES_MDCON,
+            "ns" => &NS_ROUTERSTATUS_RULES_NSCON,
+            _ => unimplemented!(),
+        };
+
+        let rs_sec = rules.parse(&mut p)?; // XXX rules
+        let rs = RS::from_section(&rs_sec)?;
         Ok(Some((pos, rs)))
     }
 
-    /// Extract an entire UncheckedMdConsensus from a reader.
+    /// Extract an entire UncheckedConsensus from a reader.
     ///
     /// Returns the signed portion of the string, the remainder of the
-    /// string, and an UncheckedMdConsensus.
+    /// string, and an UncheckedConsensus.
     fn parse_from_reader<'a>(
         r: &mut NetDocReader<'a, NetstatusKwd>,
-    ) -> Result<(&'a str, &'a str, UncheckedMdConsensus)> {
+    ) -> Result<(&'a str, &'a str, UncheckedConsensus<RS>)> {
         use NetstatusKwd::*;
         let (header, start_pos) = {
             let mut h = r.pause_at(|i| i.is_ok_with_kwd_in(&[DIR_SOURCE]));
@@ -1126,19 +1178,20 @@ impl MdConsensus {
             let pos = header_sec.first_item().unwrap().offset_in(r.str());
             (ConsensusHeader::from_section(&header_sec)?, pos.unwrap())
         };
-        match header.hdr.flavor {
-            Some(ref s) if s == "microdesc" => (),
-            _ => return Err(Error::BadDocumentType),
+        match (&header.hdr.flavor, RS::flavor_name()) {
+            (Some(ref s), s2) if s == s2 => {}
+            (None, "ns") => {}
+            (_, _) => return Err(Error::BadDocumentType),
         };
 
         let mut voters = Vec::new();
 
-        while let Some(voter) = MdConsensus::take_voterinfo(r)? {
+        while let Some(voter) = Self::take_voterinfo(r)? {
             voters.push(voter);
         }
 
-        let mut routers: Vec<MdConsensusRouterStatus> = Vec::new();
-        while let Some((pos, router)) = MdConsensus::take_routerstatus(r)? {
+        let mut routers: Vec<RS> = Vec::new();
+        while let Some((pos, router)) = Self::take_routerstatus(r)? {
             if let Some(prev) = routers.last() {
                 if prev.rsa_identity() >= router.rsa_identity() {
                     return Err(Error::WrongSortOrder(pos));
@@ -1147,9 +1200,9 @@ impl MdConsensus {
             routers.push(router);
         }
 
-        let footer = MdConsensus::take_footer(r)?;
+        let footer = Self::take_footer(r)?;
 
-        let consensus = MdConsensus {
+        let consensus = Consensus {
             header,
             voters,
             routers,
@@ -1184,7 +1237,7 @@ impl MdConsensus {
         let sha256 = ll::d::Sha256::digest(signed_str.as_bytes()).into();
         let siggroup = SignatureGroup { sha256, signatures };
 
-        let unval = UnvalidatedMdConsensus {
+        let unval = UnvalidatedConsensus {
             consensus,
             siggroup,
             n_authorities: None,
@@ -1205,10 +1258,10 @@ impl MdConsensus {
 /// have.  Make sure only to provide authority certificates representing
 /// real authorities!
 #[derive(Debug, Clone)]
-pub struct UnvalidatedMdConsensus {
+pub struct UnvalidatedConsensus<RS> {
     /// The consensus object. We don't want to expose this until it's
     /// validated.
-    consensus: MdConsensus,
+    consensus: Consensus<RS>,
     /// The signatures that need to be validated before we can call
     /// this consensus valid.
     siggroup: SignatureGroup,
@@ -1218,12 +1271,12 @@ pub struct UnvalidatedMdConsensus {
     n_authorities: Option<u16>,
 }
 
-impl UnvalidatedMdConsensus {
+impl<RS> UnvalidatedConsensus<RS> {
     /// Tell the unvalidated consensus how many authorities we believe in.
     ///
     /// Without knowing this number, we can't validate the signature.
     pub fn set_n_authorities(self, n_authorities: u16) -> Self {
-        UnvalidatedMdConsensus {
+        UnvalidatedConsensus {
             n_authorities: Some(n_authorities),
             ..self
         }
@@ -1245,7 +1298,7 @@ impl UnvalidatedMdConsensus {
     }
 }
 
-impl ExternallySigned<MdConsensus> for UnvalidatedMdConsensus {
+impl<RS> ExternallySigned<Consensus<RS>> for UnvalidatedConsensus<RS> {
     type Key = [AuthCert];
     type KeyHint = Vec<AuthCertKeyIds>;
     type Error = Error;
@@ -1267,7 +1320,7 @@ impl ExternallySigned<MdConsensus> for UnvalidatedMdConsensus {
             Err(Error::BadSignature(Pos::None))
         }
     }
-    fn dangerously_assume_wellsigned(self) -> MdConsensus {
+    fn dangerously_assume_wellsigned(self) -> Consensus<RS> {
         self.consensus
     }
 }
