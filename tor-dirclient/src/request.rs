@@ -248,10 +248,13 @@ impl ClientRequest for MicrodescRequest {
     }
 }
 
-/// A request for one, many or all server descriptors. If digests is empty, all
-/// server descriptors are requested.
+/// A request for one, many or all server descriptors.
 #[derive(Debug, Clone)]
 pub struct ServerDescriptorRequest {
+    /// If this is set, we just ask for all the descriptors.
+    // TODO: maybe this should be an enum, or maybe this case should
+    // be a different type.
+    all_descriptors: bool,
     /// A list of digests to download.
     digests: Vec<RdDigest>,
 }
@@ -264,14 +267,24 @@ impl Default for ServerDescriptorRequest {
 
 impl ServerDescriptorRequest {
     /// Construct a request for all server descriptors.
+    pub fn all() -> Self {
+        ServerDescriptorRequest {
+            all_descriptors: true,
+            digests: Vec::new(),
+        }
+    }
+    /// Construct a new empty request.
     pub fn new() -> Self {
         ServerDescriptorRequest {
+            all_descriptors: false,
             digests: Vec::new(),
         }
     }
     /// Add `d` to the list of digests we want to request.
     pub fn push(&mut self, d: RdDigest) {
-        self.digests.push(d)
+        if !self.all_descriptors {
+            self.digests.push(d)
+        }
     }
 }
 
@@ -279,9 +292,10 @@ impl ClientRequest for ServerDescriptorRequest {
     fn into_request(mut self) -> Result<http::Request<()>> {
         let mut uri = "/tor/micro/d/".to_string();
 
-        if self.digests.is_empty() {
+        if self.all_descriptors {
             uri.push_str("all");
         } else {
+            // TODO: require that self.digests is nonempty.
             self.digests.sort_unstable();
             let ids: Vec<String> = self.digests.iter().map(hex::encode).collect();
             uri.push_str(&ids.join("-"));
@@ -295,12 +309,16 @@ impl ClientRequest for ServerDescriptorRequest {
     }
 
     fn partial_docs_ok(&self) -> bool {
-        self.digests.len() > 1
+        self.digests.len() > 1 || self.all_descriptors
     }
 
     fn max_response_len(&self) -> usize {
-        // TODO: Pick a more principled number; I just made this one up.
-        self.digests.len().saturating_mul(8 * 1024)
+        // TODO: Pick a more principled number; I just made these up.
+        if self.all_descriptors {
+            64 * 1024 * 1024 // big but not impossible
+        } else {
+            self.digests.len().saturating_mul(8 * 1024)
+        }
     }
 }
 
