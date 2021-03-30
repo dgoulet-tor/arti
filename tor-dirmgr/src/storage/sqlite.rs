@@ -9,7 +9,8 @@ use crate::{Error, Result};
 
 use tor_netdoc::doc::authcert::AuthCertKeyIds;
 use tor_netdoc::doc::microdesc::MdDigest;
-use tor_netdoc::doc::netstatus::{Lifetime, RdDigest};
+use tor_netdoc::doc::netstatus::Lifetime;
+use tor_netdoc::doc::routerdesc::RdDigest;
 
 use std::collections::HashMap;
 use std::convert::TryInto;
