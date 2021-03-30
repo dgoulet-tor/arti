@@ -252,6 +252,7 @@ impl ClientRequest for MicrodescRequest {
 /// server descriptors are requested.
 #[derive(Debug, Clone)]
 pub struct ServerDescriptorRequest {
+    /// A list of digests to download.
     digests: Vec<RdDigest>,
 }
 
@@ -282,11 +283,7 @@ impl ClientRequest for ServerDescriptorRequest {
             uri.push_str("all");
         } else {
             self.digests.sort_unstable();
-            let ids: Vec<String> = self
-                .digests
-                .iter()
-                .map(|d| hex::encode(d))
-                .collect();
+            let ids: Vec<String> = self.digests.iter().map(hex::encode).collect();
             uri.push_str(&ids.join("-"));
         }
         uri.push_str(".z");
