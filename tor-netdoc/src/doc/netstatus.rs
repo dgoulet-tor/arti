@@ -45,7 +45,7 @@
 
 #![allow(missing_docs)]
 
-mod md;
+mod rs;
 
 use crate::doc::authcert::{AuthCert, AuthCertKeyIds};
 use crate::parse::keyword::Keyword;
@@ -67,7 +67,12 @@ use tor_llcrypto::pk::rsa::RsaIdentity;
 
 use serde::{Deserialize, Deserializer};
 
-pub use md::MdConsensusRouterStatus;
+pub use rs::MdConsensusRouterStatus;
+pub use rs::NsConsensusRouterStatus;
+
+/// The digest of a RouterDesc document, as reported in a NS consensus.
+// TODO: Replace this with the one that dgoulet is writing
+pub type RdDigest = [u8; 20];
 
 /// The lifetime of a networkstatus document.
 ///
@@ -439,6 +444,18 @@ pub type UnvalidatedMdConsensus = UnvalidatedConsensus<MdConsensusRouterStatus>;
 /// An MdConsensus that has been parsed but not checked for signatures
 /// and timeliness.
 pub type UncheckedMdConsensus = UncheckedConsensus<MdConsensusRouterStatus>;
+
+/// A consensus document that lists relays along with their
+/// router descriptor documents.
+pub type NsConsensus = Consensus<NsConsensusRouterStatus>;
+
+/// An NsConsensus that has been parsed and checked for timeliness,
+/// but not for signatures.
+pub type UnvalidatedNsConsensus = UnvalidatedConsensus<NsConsensusRouterStatus>;
+
+/// An NsConsensus that has been parsed but not checked for signatures
+/// and timeliness.
+pub type UncheckedNsConsensus = UncheckedConsensus<NsConsensusRouterStatus>;
 
 impl<RS> Consensus<RS> {
     /// Return the Lifetime for this consensus.
