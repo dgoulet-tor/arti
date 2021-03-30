@@ -19,7 +19,7 @@ use serde::Deserialize;
 /// Configuration information about the Tor network; used as part of
 /// Arti's configuration.
 // TODO: move this?
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkConfig {
     /// List of locations to look in when downloading directory information,
@@ -31,12 +31,23 @@ pub struct NetworkConfig {
 
     /// List of directory authorities which we expect to sign
     /// consensus documents.
+    #[serde(default = "crate::authority::default_authorities")]
     authority: Vec<Authority>,
 
     /// A map of network parameters that we're overriding from their
     /// setttings in the consensus.
     #[serde(default)]
     override_net_params: netstatus::NetParams<i32>,
+}
+
+impl Default for NetworkConfig {
+    fn default() -> Self {
+        NetworkConfig {
+            fallback_cache: vec![], // XXXXX
+            authority: crate::authority::default_authorities(),
+            override_net_params: Default::default(),
+        }
+    }
 }
 
 /// Configuration information for how exactly we download things from the

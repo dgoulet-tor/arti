@@ -41,3 +41,27 @@ impl Authority {
         self.v3ident == id.id_fingerprint
     }
 }
+
+/// Return a vector of the default directory authorities.
+pub(crate) fn default_authorities() -> Vec<Authority> {
+    fn auth(name: &str, key: &str) -> Authority {
+        let name = name.to_string();
+        let v3ident = hex::decode(key).expect("Built-in authority identity had bad hex!?");
+        let v3ident = RsaIdentity::from_bytes(&v3ident)
+            .expect("Built-in authority identity had wrong length!?");
+        Authority { name, v3ident }
+    }
+
+    // (List generated August 2020.)
+    vec![
+        auth("bastet", "27102BC123E7AF1D4741AE047E160C91ADC76B21"),
+        auth("dannenberg", "0232AF901C31A04EE9848595AF9BB7620D4C5B2E"),
+        auth("dizum", "E8A9C45EDE6D711294FADF8E7951F4DE6CA56B58"),
+        auth("Faravahar", "EFCBE720AB3A82B99F9E953CD5BF50F7EEFC7B97"),
+        auth("gabelmoo", "ED03BB616EB2F60BEC80151114BB25CEF515B226"),
+        auth("longclaw", "23D15D965BC35114467363C165C4F724B64B4F66"),
+        auth("maatuska", "49015F787433103580E3B66A1707A00E60F2D15B"),
+        auth("moria1", "D586D18309DED4CD6D57C18FDB97EFA96D330566"),
+        auth("tor26", "14C131DFC5C6F93646BE72FA1401C02A8DF2E8B4"),
+    ]
+}
