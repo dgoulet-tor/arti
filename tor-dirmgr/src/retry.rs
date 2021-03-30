@@ -135,6 +135,17 @@ impl Default for RetryConfig {
 }
 
 impl RetryConfig {
+    /// Create a new RetryConfig to control our logic for retrying
+    /// a given download.
+    ///
+    /// The resulting configuration will always make at least one
+    /// attempt, and at most `attempts`.  After a failure, it will
+    /// wait at least `initial_delay` before trying again.
+    pub fn new(attempts: u32, initial_delay: Duration) -> Self {
+        let num = attempts.try_into().unwrap_or(1.try_into().unwrap());
+        RetryConfig { num, initial_delay }
+    }
+
     /// Return an iterator to use over all the supported attempts for
     /// this configuration.
     pub fn attempts(&self) -> impl Iterator<Item = u32> {

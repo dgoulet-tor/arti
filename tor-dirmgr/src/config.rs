@@ -41,11 +41,11 @@ pub struct NetworkConfig {
 
 /// Configuration information for how exactly we download things from the
 /// Tor directory caches.
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct DownloadScheduleConfig {
     /// Top-level configuration for how to retry our initial bootstrap attempt.
-    #[serde(default)] // XXXX change default.
+    #[serde(default = "default_retry_bootstrap")]
     retry_bootstrap: RetryConfig,
 
     /// Configuration for how to retry a consensus download.
@@ -61,8 +61,29 @@ pub struct DownloadScheduleConfig {
     retry_microdescs: RetryConfig,
 
     /// Number of microdescriptor downloads to attempt in parallel
-    #[serde(default)]
+    #[serde(default = "default_microdesc_parallelism")]
     microdesc_parallelism: u8,
+}
+
+/// Default value for retry_bootstrap in DownloadScheduleConfig.
+fn default_retry_bootstrap() -> RetryConfig {
+    RetryConfig::new(128, std::time::Duration::new(1, 0))
+}
+/// Default value for microdesc_parallelism in DownloadScheduleConfig.
+fn default_microdesc_parallelism() -> u8 {
+    4
+}
+
+impl Default for DownloadScheduleConfig {
+    fn default() -> Self {
+        DownloadScheduleConfig {
+            retry_bootstrap: default_retry_bootstrap(),
+            retry_consensus: Default::default(),
+            retry_certs: Default::default(),
+            retry_microdescs: Default::default(),
+            microdesc_parallelism: default_microdesc_parallelism(),
+        }
+    }
 }
 
 /// Builder for a NetDirConfig.
