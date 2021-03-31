@@ -5,6 +5,10 @@
 # connect to fallback directories.
 #
 # (List generated August 2020.)
+#
+# NOTE: This file is redundant; the real defaults are as listed in
+# authority.rs.  Eventually we should remove this file, or
+# somehow enforce that it matches authority.rs.
 
 [[network.authority]]
 name = "moria1"

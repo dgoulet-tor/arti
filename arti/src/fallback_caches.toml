@@ -4,6 +4,10 @@
 #
 # This list is derived from Tor's list in Nov 2020, but any nodes that
 # were down at the time were removed.
+#
+# NOTE: This file is redundant; the real defaults are as listed in
+# fallback_dirs.inc.  Eventually we should remove this file, or
+# somehow enforce that it matches fallback_dirs.inc.
 
 [[network.fallback_cache]]
 rsa_identity = "0338F9F55111FE8E3570E7DE117EF3AF999CC1D7"
