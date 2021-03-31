@@ -177,6 +177,40 @@ pub struct ProtoStatus {
     required: Protocols,
 }
 
+/// A recognized 'flavor' of consensus document.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ConsensusFlavor {
+    /// A "microdesc"-flavored consensus.  This is the one that
+    /// clients and relays use today.
+    Microdesc,
+    /// A "networkstatus"-flavored consensus.  It's used for
+    /// historical and network-health purposes.  Instead of listing
+    /// microdescriptor digests, it lists digests of full relay
+    /// descriptors.
+    Ns,
+}
+
+impl ConsensusFlavor {
+    /// Return the name of this consensus flavor.
+    pub fn name(&self) -> &'static str {
+        match self {
+            ConsensusFlavor::Ns => "ns",
+            ConsensusFlavor::Microdesc => "microdesc",
+        }
+    }
+    /// Try to find the flavor whose name is `name`.
+    ///
+    /// For historical reasons, an unnamed flavor indicates an "Ns"
+    /// document.
+    pub fn from_opt_name(name: Option<&str>) -> Result<Self> {
+        match name {
+            Some("microdesc") => Ok(ConsensusFlavor::Microdesc),
+            Some("ns") | None => Ok(ConsensusFlavor::Ns),
+            _ => Err(Error::BadDocumentType),
+        }
+    }
+}
+
 /// The signature of a single directory authority on a networkstatus document.
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -228,9 +262,8 @@ struct SharedRandVal {
 #[derive(Debug, Clone)]
 struct CommonHeader {
     /// What kind of consensus document is this?  Absent in votes and
-    /// in ns-flavored consensuses. Currently "microdesc" and "ns" are
-    /// the recognized flavors.
-    flavor: Option<String>,
+    /// in ns-flavored consensuses.
+    flavor: ConsensusFlavor,
     /// Over what time is this consensus valid?  (For votes, this is
     /// the time over which the voted-upon consensus should be valid.)
     lifetime: Lifetime,
@@ -401,9 +434,9 @@ pub trait ParseRouterStatus: Sized + Sealed {
     /// Return the name of the consensus flavor that uses this kind of routerstatus objejct.
     fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<Self>;
 
-    /// Return the networkstatus consensus flavor name in which this
+    /// Return the networkstatus consensus flavor in which this
     /// routerstatus appears.
-    fn flavor_name() -> &'static str;
+    fn flavor() -> ConsensusFlavor;
 }
 
 /// Represents a single relay as listed in a consensus document.
@@ -754,7 +787,7 @@ impl CommonHeader {
         if version != 3 {
             return Err(Error::BadDocumentVersion(version));
         }
-        let flavor = ver_item.arg(1).map(str::to_string);
+        let flavor = ConsensusFlavor::from_opt_name(ver_item.arg(1))?;
 
         let valid_after = sec
             .required(VALID_AFTER)?
@@ -1175,13 +1208,12 @@ impl<RS: ParseRouterStatus + RouterStatus> Consensus<RS> {
             }
         });
 
-        let rules = match RS::flavor_name() {
-            "microdesc" => &NS_ROUTERSTATUS_RULES_MDCON,
-            "ns" => &NS_ROUTERSTATUS_RULES_NSCON,
-            _ => unimplemented!(),
+        let rules = match RS::flavor() {
+            ConsensusFlavor::Microdesc => &NS_ROUTERSTATUS_RULES_MDCON,
+            ConsensusFlavor::Ns => &NS_ROUTERSTATUS_RULES_NSCON,
         };
 
-        let rs_sec = rules.parse(&mut p)?; // XXX rules
+        let rs_sec = rules.parse(&mut p)?;
         let rs = RS::from_section(&rs_sec)?;
         Ok(Some((pos, rs)))
     }
@@ -1200,11 +1232,9 @@ impl<RS: ParseRouterStatus + RouterStatus> Consensus<RS> {
             let pos = header_sec.first_item().unwrap().offset_in(r.str());
             (ConsensusHeader::from_section(&header_sec)?, pos.unwrap())
         };
-        match (&header.hdr.flavor, RS::flavor_name()) {
-            (Some(ref s), s2) if s == s2 => {}
-            (None, "ns") => {}
-            (_, _) => return Err(Error::BadDocumentType),
-        };
+        if RS::flavor() != header.hdr.flavor {
+            return Err(Error::BadDocumentType);
+        }
 
         let mut voters = Vec::new();
 
@@ -1256,16 +1286,15 @@ impl<RS: ParseRouterStatus + RouterStatus> Consensus<RS> {
         // Find the appropriate digest.
         let signed_str = &r.str()[start_pos..end_pos];
         let remainder = &r.str()[end_pos..];
-        let (sha256, sha1) = if RS::flavor_name() == "ns" {
-            (
+        let (sha256, sha1) = match RS::flavor() {
+            ConsensusFlavor::Ns => (
                 None,
                 Some(ll::d::Sha1::digest(signed_str.as_bytes()).into()),
-            )
-        } else {
-            (
+            ),
+            ConsensusFlavor::Microdesc => (
                 Some(ll::d::Sha256::digest(signed_str.as_bytes()).into()),
                 None,
-            )
+            ),
         };
         let siggroup = SignatureGroup {
             sha256,

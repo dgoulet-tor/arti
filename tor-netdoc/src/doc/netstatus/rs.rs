@@ -3,7 +3,9 @@
 //! This is a private module; relevant pieces are re-exported by its
 //! parent.
 
-use super::{NetstatusKwd, ParseRouterStatus, RouterFlags, RouterStatus, RouterWeight};
+use super::{
+    ConsensusFlavor, NetstatusKwd, ParseRouterStatus, RouterFlags, RouterStatus, RouterWeight,
+};
 use crate::doc::microdesc::MdDigest;
 use crate::doc::routerdesc::RdDigest;
 use crate::types::misc::*;
@@ -162,8 +164,8 @@ impl RouterStatus for MdConsensusRouterStatus {
 }
 
 impl ParseRouterStatus for MdConsensusRouterStatus {
-    fn flavor_name() -> &'static str {
-        "microdesc"
+    fn flavor() -> ConsensusFlavor {
+        ConsensusFlavor::Microdesc
     }
 
     fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<MdConsensusRouterStatus> {
@@ -188,8 +190,8 @@ impl RouterStatus for NsConsensusRouterStatus {
 }
 
 impl ParseRouterStatus for NsConsensusRouterStatus {
-    fn flavor_name() -> &'static str {
-        "ns"
+    fn flavor() -> ConsensusFlavor {
+        ConsensusFlavor::Ns
     }
 
     fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<NsConsensusRouterStatus> {
