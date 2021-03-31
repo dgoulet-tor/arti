@@ -27,7 +27,7 @@ use tor_circmgr::{CircMgr, DirInfo};
 use tor_netdir::{MdReceiver, NetDir, PartialNetDir};
 use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
 use tor_netdoc::doc::microdesc::{MdDigest, Microdesc, MicrodescReader};
-use tor_netdoc::doc::netstatus::{MdConsensus, UnvalidatedMdConsensus};
+use tor_netdoc::doc::netstatus::{ConsensusFlavor, MdConsensus, UnvalidatedMdConsensus};
 use tor_netdoc::AllowAnnotations;
 use tor_retry::RetryError;
 
@@ -562,7 +562,7 @@ impl NoInformation {
     ) -> Result<NextState<Self, UnvalidatedDir>> {
         let consensus_text = {
             let store = store.lock().await;
-            match store.latest_consensus(pending_ok)? {
+            match store.latest_consensus(ConsensusFlavor::Microdesc, pending_ok)? {
                 Some(c) => c,
                 None => return Ok(NextState::SameState(self)),
             }
@@ -649,7 +649,7 @@ impl NoInformation {
 
         let meta = {
             let r = store.lock().await;
-            match r.latest_consensus_meta() {
+            match r.latest_consensus_meta(ConsensusFlavor::Microdesc) {
                 Ok(Some(meta)) => {
                     resource.set_last_consensus_date(meta.lifetime().valid_after());
                     resource.push_old_consensus_digest(*meta.sha3_256_of_signed());
@@ -704,7 +704,7 @@ impl NoInformation {
 
         {
             let mut w = store.lock().await;
-            w.store_consensus(&meta, true, &text)?;
+            w.store_consensus(&meta, ConsensusFlavor::Microdesc, true, &text)?;
         }
         let n_authorities = config.authorities().len() as u16;
         let unvalidated = unvalidated.set_n_authorities(n_authorities);

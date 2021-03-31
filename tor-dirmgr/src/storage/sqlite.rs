@@ -9,7 +9,7 @@ use crate::{Error, Result};
 
 use tor_netdoc::doc::authcert::AuthCertKeyIds;
 use tor_netdoc::doc::microdesc::MdDigest;
-use tor_netdoc::doc::netstatus::Lifetime;
+use tor_netdoc::doc::netstatus::{ConsensusFlavor, Lifetime};
 use tor_netdoc::doc::routerdesc::RdDigest;
 
 use std::collections::HashMap;
@@ -303,6 +303,7 @@ impl SqliteStore {
     pub fn store_consensus(
         &mut self,
         cmeta: &ConsensusMeta,
+        flavor: ConsensusFlavor,
         pending: bool,
         contents: &str,
     ) -> Result<()> {
@@ -317,9 +318,11 @@ impl SqliteStore {
         // anything at all, not even diffs.
         let expires = valid_until + CDuration::days(4);
 
+        let doctype = format!("con:{}", flavor.name());
+
         let h = self.save_blob_internal(
             contents.as_bytes(),
-            "mdcon",
+            &doctype,
             "sha3-256",
             &sha3_of_whole[..],
             expires,
@@ -330,7 +333,7 @@ impl SqliteStore {
                 valid_after,
                 fresh_until,
                 valid_until,
-                "microdesc",
+                flavor.name(),
                 pending,
                 hex::encode(&sha3_of_signed),
                 h.digeststr
@@ -343,9 +346,9 @@ impl SqliteStore {
 
     /// Return the information about the latest non-pending consensus,
     /// including its valid-after time and digest.
-    pub fn latest_consensus_meta(&self) -> Result<Option<ConsensusMeta>> {
+    pub fn latest_consensus_meta(&self, flavor: ConsensusFlavor) -> Result<Option<ConsensusMeta>> {
         let mut stmt = self.conn.prepare(FIND_LATEST_CONSENSUS_META)?;
-        let mut rows = stmt.query(NO_PARAMS)?;
+        let mut rows = stmt.query(params![flavor.name()])?;
         if let Some(row) = rows.next()? {
             let va: DateTime<Utc> = row.get(0)?;
             let fu: DateTime<Utc> = row.get(1)?;
@@ -367,9 +370,9 @@ impl SqliteStore {
     /// Return the valid-after time for the latest non non-pending consensus,
     #[cfg(test)]
     // We should revise the tests to use latest_consensus_meta instead.
-    fn latest_consensus_time(&self) -> Result<Option<DateTime<Utc>>> {
+    fn latest_consensus_time(&self, flavor: ConsensusFlavor) -> Result<Option<DateTime<Utc>>> {
         Ok(self
-            .latest_consensus_meta()?
+            .latest_consensus_meta(flavor)?
             .map(|m| m.lifetime().valid_after().into()))
     }
 
@@ -377,15 +380,21 @@ impl SqliteStore {
     /// will accept a consensus that hasn't got enough microdescs yet.
     /// Otherwise, we only want a consensus where we got full
     /// directory information.
-    pub fn latest_consensus(&self, pending_ok: bool) -> Result<Option<InputString>> {
+    pub fn latest_consensus(
+        &self,
+        flavor: ConsensusFlavor,
+        pending_ok: bool,
+    ) -> Result<Option<InputString>> {
         let rv: Option<(DateTime<Utc>, DateTime<Utc>, String)>;
         rv = if pending_ok {
             self.conn
-                .query_row(FIND_CONSENSUS, NO_PARAMS, |row| row.try_into())
+                .query_row(FIND_CONSENSUS, params![flavor.name()], |row| row.try_into())
                 .optional()?
         } else {
             self.conn
-                .query_row(FIND_CONSENSUS_P, params![false], |row| row.try_into())
+                .query_row(FIND_CONSENSUS_P, params![false, flavor.name()], |row| {
+                    row.try_into()
+                })
                 .optional()?
         };
 
@@ -665,7 +674,7 @@ const INSTALL_V0_SCHEMA: &str = "
     created DATE NOT NULL,
     -- After what time will this file definitely be useless?
     expires DATE NOT NULL,
-    -- What is the type of this file? Currently supported are 'mdcon'.
+    -- What is the type of this file? Currently supported are 'con:<flavor>'.
     type TEXT NOT NULL,
     -- Filename for this file within our blob directory.
     filename TEXT NOT NULL
@@ -720,7 +729,7 @@ const FIND_CONSENSUS_P: &str = "
   SELECT valid_after, valid_until, filename
   FROM Consensuses
   INNER JOIN ExtDocs ON ExtDocs.digest = Consensuses.digest
-  WHERE pending = ? AND flavor = 'microdesc'
+  WHERE pending = ? AND flavor = ?
   ORDER BY valid_until DESC
   LIMIT 1;
 ";
@@ -731,17 +740,17 @@ const FIND_CONSENSUS: &str = "
   SELECT valid_after, valid_until, filename
   FROM Consensuses
   INNER JOIN ExtDocs ON ExtDocs.digest = Consensuses.digest
-  WHERE flavor = 'microdesc'
+  WHERE flavor = ?
   ORDER BY valid_until DESC
   LIMIT 1;
 ";
 
 /// Query: Find the valid-after time for the latest-expiring
-/// non-pending microdesc consensus.
+/// non-pending consensus of a given flavor.
 const FIND_LATEST_CONSENSUS_META: &str = "
   SELECT valid_after, fresh_until, valid_until, sha3_of_signed_part, digest
   FROM Consensuses
-  WHERE pending = 0 AND flavor = 'microdesc'
+  WHERE pending = 0 AND flavor = ?
   ORDER BY valid_until DESC
   LIMIT 1;
 ";
@@ -994,7 +1003,10 @@ mod test {
         let now = Utc::now();
         let one_hour = CDuration::hours(1);
 
-        assert_eq!(store.latest_consensus_time()?, None);
+        assert_eq!(
+            store.latest_consensus_time(ConsensusFlavor::Microdesc)?,
+            None
+        );
 
         let cmeta = ConsensusMeta::new(
             netstatus::Lifetime::new(
@@ -1007,23 +1019,40 @@ mod test {
             [0xBC; 32],
         );
 
-        store.store_consensus(&cmeta, true, "Pretend this is a consensus")?;
+        store.store_consensus(
+            &cmeta,
+            ConsensusFlavor::Microdesc,
+            true,
+            "Pretend this is a consensus",
+        )?;
 
         {
-            assert_eq!(store.latest_consensus_time()?, None);
-            let consensus = store.latest_consensus(true)?.unwrap();
+            assert_eq!(
+                store.latest_consensus_time(ConsensusFlavor::Microdesc)?,
+                None
+            );
+            let consensus = store
+                .latest_consensus(ConsensusFlavor::Microdesc, true)?
+                .unwrap();
             assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
-            let consensus = store.latest_consensus(false)?;
+            let consensus = store.latest_consensus(ConsensusFlavor::Microdesc, false)?;
             assert!(consensus.is_none());
         }
 
         store.mark_consensus_usable(&cmeta)?;
 
         {
-            assert_eq!(store.latest_consensus_time()?, now.into());
-            let consensus = store.latest_consensus(true)?.unwrap();
+            assert_eq!(
+                store.latest_consensus_time(ConsensusFlavor::Microdesc)?,
+                now.into()
+            );
+            let consensus = store
+                .latest_consensus(ConsensusFlavor::Microdesc, true)?
+                .unwrap();
             assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
-            let consensus = store.latest_consensus(false)?.unwrap();
+            let consensus = store
+                .latest_consensus(ConsensusFlavor::Microdesc, false)?
+                .unwrap();
             assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
         }
         Ok(())
