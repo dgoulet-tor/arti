@@ -86,7 +86,7 @@ pub struct AuthCert {
 }
 
 /// A pair of key identities that identifies a certificate.
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct AuthCertKeyIds {
     /// Fingerprint of identity key
     pub id_fingerprint: rsa::RsaIdentity,

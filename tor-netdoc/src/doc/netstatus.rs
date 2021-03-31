@@ -178,7 +178,7 @@ pub struct ProtoStatus {
 }
 
 /// A recognized 'flavor' of consensus document.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub enum ConsensusFlavor {
     /// A "microdesc"-flavored consensus.  This is the one that
     /// clients and relays use today.
@@ -1372,7 +1372,7 @@ impl<RS> ExternallySigned<Consensus<RS>> for UnvalidatedConsensus<RS> {
         let (n_ok, missing) = self.siggroup.list_missing(k);
         match self.n_authorities {
             Some(n) if n_ok > (n / 2) as usize => Ok(()),
-            _ => Err(missing.iter().map(|cert| cert.key_ids.clone()).collect()),
+            _ => Err(missing.iter().map(|cert| cert.key_ids).collect()),
         }
     }
     fn is_well_signed(&self, k: &Self::Key) -> result::Result<(), Self::Error> {

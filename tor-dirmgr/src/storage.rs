@@ -8,12 +8,48 @@ pub(crate) mod legacy;
 pub(crate) mod sqlite;
 
 use crate::{Error, Result};
-use std::path::Path;
+use std::{path::Path, str::Utf8Error};
+
+/// A document returned by a directory manager.
+///
+/// This document may be in memory, or may be mapped from a cache.  It is
+/// not necessarily valid UTF-8.
+pub struct DocumentText {
+    /// The underlying InputString.  We only wrap this type to make it
+    /// opaque.
+    s: InputString,
+}
+
+impl From<InputString> for DocumentText {
+    fn from(s: InputString) -> DocumentText {
+        DocumentText { s }
+    }
+}
+
+impl AsRef<[u8]> for DocumentText {
+    fn as_ref(&self) -> &[u8] {
+        self.s.as_ref()
+    }
+}
+
+impl DocumentText {
+    /// Try to return a view of this document as a a string.
+    pub fn as_str(&self) -> std::result::Result<&str, Utf8Error> {
+        self.s.as_str_impl()
+    }
+
+    /// Create a new DocumentText holding the provided string.
+    pub(crate) fn from_string(s: String) -> Self {
+        DocumentText {
+            s: InputString::Utf8(s),
+        }
+    }
+}
 
 /// An abstraction over a possible string that we've loaded or mapped from
 /// a cache.
 #[derive(Debug)]
-pub enum InputString {
+pub(crate) enum InputString {
     /// A string that's been validated as UTF-8
     Utf8(String),
     /// A set of unvalidated bytes.
@@ -26,13 +62,21 @@ pub enum InputString {
 impl InputString {
     /// Return a view of this InputString as a &str, if it is valid UTF-8.
     pub fn as_str(&self) -> Result<&str> {
+        self.as_str_impl()
+            .map_err(|_| Error::CacheCorruption("Invalid UTF-8").into())
+    }
+
+    /// Helper for [`as_str()`], with unwrapped error type.
+    fn as_str_impl(&self) -> std::result::Result<&str, Utf8Error> {
+        // TODO: it is not strictly necessary to re-check the UTF8 every time
+        // this function is called; we could instead remember the result
+        // we got.
         match self {
             InputString::Utf8(s) => Ok(&s[..]),
             InputString::UncheckedBytes(v) => std::str::from_utf8(&v[..]),
             #[cfg(feature = "mmap")]
             InputString::MappedBytes(m) => std::str::from_utf8(&m[..]),
         }
-        .map_err(|_| Error::CacheCorruption("Invalid UTF-8").into())
     }
 
     /// Construct a new InputString from a file on disk, trying to
@@ -55,6 +99,17 @@ impl InputString {
         let mut result = String::new();
         f.read_to_string(&mut result)?;
         Ok(InputString::Utf8(result))
+    }
+}
+
+impl AsRef<[u8]> for InputString {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            InputString::Utf8(s) => s.as_ref(),
+            InputString::UncheckedBytes(v) => &v[..],
+            #[cfg(feature = "mmap")]
+            InputString::MappedBytes(m) => &m[..],
+        }
     }
 }
 

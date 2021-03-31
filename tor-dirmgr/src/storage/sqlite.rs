@@ -26,7 +26,7 @@ use rusqlite::{params, OpenFlags, OptionalExtension, Transaction, NO_PARAMS};
 use std::os::unix::fs::DirBuilderExt;
 
 /// Local directory cache using a Sqlite3 connection.
-pub struct SqliteStore {
+pub(crate) struct SqliteStore {
     /// Connection to the sqlite3 database.
     conn: rusqlite::Connection,
     /// Location for the sqlite3 database; used to reopen it.
@@ -376,26 +376,31 @@ impl SqliteStore {
             .map(|m| m.lifetime().valid_after().into()))
     }
 
-    /// Load the latest consensus from disk.  If `pending_ok` is true, we
-    /// will accept a consensus that hasn't got enough microdescs yet.
-    /// Otherwise, we only want a consensus where we got full
-    /// directory information.
+    /// Load the latest consensus from disk.
+    ///
+    /// If `pending_ok` is given, we will only return a consensus with
+    /// the given "pending" status.  (A pending consensus doesn't have
+    /// enough descriptors yet.)  If `pending_ok` is None, we'll
+    /// return a consensus with any pending status.
     pub fn latest_consensus(
         &self,
         flavor: ConsensusFlavor,
-        pending_ok: bool,
+        pending: Option<bool>,
     ) -> Result<Option<InputString>> {
         let rv: Option<(DateTime<Utc>, DateTime<Utc>, String)>;
-        rv = if pending_ok {
-            self.conn
+        rv = match pending {
+            None => self
+                .conn
                 .query_row(FIND_CONSENSUS, params![flavor.name()], |row| row.try_into())
-                .optional()?
-        } else {
-            self.conn
-                .query_row(FIND_CONSENSUS_P, params![false, flavor.name()], |row| {
-                    row.try_into()
-                })
-                .optional()?
+                .optional()?,
+            Some(pending_val) => self
+                .conn
+                .query_row(
+                    FIND_CONSENSUS_P,
+                    params![pending_val, flavor.name()],
+                    |row| row.try_into(),
+                )
+                .optional()?,
         };
 
         if let Some((_va, _vu, filename)) = rv {
@@ -472,7 +477,7 @@ impl SqliteStore {
                 .query_row(params![id_digest, sk_digest], |row| row.get::<_, String>(0))
                 .optional()?
             {
-                result.insert((*ids).clone(), contents);
+                result.insert(*ids, contents);
             }
         }
 
@@ -503,7 +508,6 @@ impl SqliteStore {
     }
 
     /// Read all the microdescriptors listed in `input` from the cache.
-    #[allow(unused)]
     pub fn routerdescs<'a, I>(&self, input: I) -> Result<HashMap<RdDigest, String>>
     where
         I: IntoIterator<Item = &'a RdDigest>,
@@ -790,7 +794,6 @@ const FIND_MD: &str = "
 ";
 
 /// Query: find the router descriptors with a given hex-encoded sha1 digest
-#[allow(unused)]
 const FIND_RD: &str = "
   SELECT contents
   FROM Routerdescs
@@ -1032,10 +1035,10 @@ mod test {
                 None
             );
             let consensus = store
-                .latest_consensus(ConsensusFlavor::Microdesc, true)?
+                .latest_consensus(ConsensusFlavor::Microdesc, None)?
                 .unwrap();
             assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
-            let consensus = store.latest_consensus(ConsensusFlavor::Microdesc, false)?;
+            let consensus = store.latest_consensus(ConsensusFlavor::Microdesc, Some(false))?;
             assert!(consensus.is_none());
         }
 
@@ -1047,11 +1050,11 @@ mod test {
                 now.into()
             );
             let consensus = store
-                .latest_consensus(ConsensusFlavor::Microdesc, true)?
+                .latest_consensus(ConsensusFlavor::Microdesc, None)?
                 .unwrap();
             assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
             let consensus = store
-                .latest_consensus(ConsensusFlavor::Microdesc, false)?
+                .latest_consensus(ConsensusFlavor::Microdesc, Some(false))?
                 .unwrap();
             assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
         }

@@ -13,12 +13,14 @@
 
 pub mod authority;
 mod config;
+mod docid;
 mod docmeta;
 mod err;
 mod retry;
 mod storage;
 mod updater;
 
+use crate::docid::DocQuery;
 use crate::docmeta::{AuthCertMeta, ConsensusMeta};
 use crate::retry::RetryDelay;
 use crate::storage::sqlite::SqliteStore;
@@ -37,14 +39,16 @@ use futures::lock::Mutex;
 use futures::stream::StreamExt;
 use log::{debug, info, warn};
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 pub use authority::Authority;
 pub use config::{DownloadScheduleConfig, NetDirConfig, NetDirConfigBuilder, NetworkConfig};
+pub use docid::DocId;
 pub use err::Error;
+pub use storage::DocumentText;
 pub use updater::DirectoryUpdater;
 
 /// A directory manager to download, fetch, and cache a Tor directory.
@@ -485,6 +489,78 @@ impl DirMgr {
             .await
             .expect("DirMgr was not bootstrapped!")
     }
+
+    /// Try to load the text of a signle document described by `doc` from
+    /// storage.
+    pub async fn text(&self, doc: &DocId) -> Result<Option<DocumentText>> {
+        let mut result = HashMap::new();
+        let query = doc.clone().into();
+        self.load_documents_into(&query, &mut result).await?;
+        if let Some((docid, doctext)) = result.into_iter().next() {
+            assert_eq!(&docid, doc);
+            Ok(Some(doctext))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Load the text for a collection of documents.
+    ///
+    /// If many of the documents have the same type, this can be more
+    /// efficient than calling [`text`].
+    pub async fn texts<T>(&self, docs: T) -> Result<HashMap<DocId, DocumentText>>
+    where
+        T: IntoIterator<Item = DocId>,
+    {
+        let partitioned = docid::partition_by_type(docs);
+        let mut result = HashMap::new();
+        for (_, query) in partitioned.into_iter() {
+            self.load_documents_into(&query, &mut result).await?
+        }
+        Ok(result)
+    }
+
+    /// Load all the documents for a single DocumentQuery from the store.
+    async fn load_documents_into(
+        &self,
+        query: &DocQuery,
+        result: &mut HashMap<DocId, DocumentText>,
+    ) -> Result<()> {
+        use DocQuery::*;
+        let store = self.store.lock().await;
+        match query {
+            LatestConsensus { flavor, pending } => {
+                if let Some(c) = store.latest_consensus(*flavor, *pending)? {
+                    let id = DocId::LatestConsensus {
+                        flavor: *flavor,
+                        pending: *pending,
+                    };
+                    result.insert(id, c.into());
+                }
+            }
+            AuthCert(ids) => result.extend(
+                store
+                    .authcerts(&ids)?
+                    .into_iter()
+                    .map(|(id, c)| (DocId::AuthCert(id), DocumentText::from_string(c))),
+            ),
+            Microdesc(digests) => {
+                result.extend(
+                    store
+                        .microdescs(digests)?
+                        .into_iter()
+                        .map(|(id, md)| (DocId::Microdesc(id), DocumentText::from_string(md))),
+                );
+            }
+            Routerdesc(digests) => result.extend(
+                store
+                    .routerdescs(digests)?
+                    .into_iter()
+                    .map(|(id, rd)| (DocId::Routerdesc(id), DocumentText::from_string(rd))),
+            ),
+        }
+        Ok(())
+    }
 }
 
 /// Abstraction to handle the idea of a possible state transition
@@ -560,9 +636,10 @@ impl NoInformation {
         config: &NetDirConfig,
         store: &Mutex<SqliteStore>,
     ) -> Result<NextState<Self, UnvalidatedDir>> {
+        let want_pending_status = if pending_ok { None } else { Some(false) };
         let consensus_text = {
             let store = store.lock().await;
-            match store.latest_consensus(ConsensusFlavor::Microdesc, pending_ok)? {
+            match store.latest_consensus(ConsensusFlavor::Microdesc, want_pending_status)? {
                 Some(c) => c,
                 None => return Ok(NextState::SameState(self)),
             }
@@ -814,7 +891,7 @@ impl UnvalidatedDir {
 
         let mut resource = tor_dirclient::request::AuthCertRequest::new();
         for m in missing.iter() {
-            resource.push(m.clone());
+            resource.push(*m);
         }
 
         let response = tor_dirclient::get_resource(resource, info, circmgr).await?;
