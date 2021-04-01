@@ -45,7 +45,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// This is the only function in this crate that knows about CircMgr and
 /// DirInfo.  Perhaps this function should move up a level into DirMgr?
 pub async fn get_resource<CR>(
-    req: CR,
+    req: &CR,
     dirinfo: DirInfo<'_>,
     circ_mgr: Arc<CircMgr>,
 ) -> anyhow::Result<DirResponse>
@@ -91,7 +91,7 @@ where
 /// It's kind of bogus to have a 'source' field here at all; we may
 /// eventually want to remove it.
 pub async fn download<R, S>(
-    req: R,
+    req: &R,
     stream: &mut S,
     source: Option<SourceInfo>,
 ) -> Result<DirResponse>
@@ -101,7 +101,7 @@ where
 {
     let partial_ok = req.partial_docs_ok();
     let maxlen = req.max_response_len();
-    let req = req.into_request()?;
+    let req = req.make_request()?;
     let encoded = util::encode_request(req);
 
     // Write the request.

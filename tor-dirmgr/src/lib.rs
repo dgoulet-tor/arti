@@ -739,7 +739,7 @@ impl NoInformation {
                 }
             }
         };
-        let response = tor_dirclient::get_resource(resource, info, circmgr).await?;
+        let response = tor_dirclient::get_resource(&resource, info, circmgr).await?;
         let text = response.output();
 
         let expanded_diff = if meta.is_some() && tor_consdiff::looks_like_diff(&text) {
@@ -894,7 +894,7 @@ impl UnvalidatedDir {
             resource.push(*m);
         }
 
-        let response = tor_dirclient::get_resource(resource, info, circmgr).await?;
+        let response = tor_dirclient::get_resource(&resource, info, circmgr).await?;
         let text = response.output();
         // XXXX-A1 In some of the below error cases we should retire the circuit
         // to the cache that gave us this stuff.
@@ -1132,7 +1132,7 @@ async fn download_mds(
                 }
                 let want: HashSet<_> = chunk.iter().collect();
 
-                let res = tor_dirclient::get_resource(resource, info, cm).await;
+                let res = tor_dirclient::get_resource(&resource, info, cm).await;
 
                 // Handle fetch errors here
                 if let Err(err) = &res {

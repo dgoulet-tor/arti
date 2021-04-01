@@ -12,9 +12,9 @@ use std::time::SystemTime;
 
 /// A request for an object that can be served over the Tor directory system.
 pub trait Requestable {
-    /// Consume this Requestable and return an [`http::Request`] if
+    /// Build an [`http::Request`] from this Requestable, if
     /// it is well-formed.
-    fn into_request(self) -> Result<http::Request<()>>;
+    fn make_request(&self) -> Result<http::Request<()>>;
 
     /// Return true if partial downloads are potentially useful.  This
     /// is true for request types where we're going to be downloading
@@ -67,7 +67,7 @@ impl ConsensusRequest {
     }
 
     /// Add `d` to the list of consensus digests this request should
-    /// say we already haev.
+    /// say we already have.
     pub fn push_old_consensus_digest(&mut self, d: [u8; 32]) {
         self.last_consensus_sha3_256.push(d);
     }
@@ -76,6 +76,23 @@ impl ConsensusRequest {
     /// consensus to `when`.
     pub fn set_last_consensus_date(&mut self, when: SystemTime) {
         self.last_consensus_published = Some(when);
+    }
+
+    /// Return a slice of the consensus digests that we're saying we
+    /// already have.
+    pub fn old_consensus_digests(&self) -> impl Iterator<Item = &[u8; 32]> {
+        self.last_consensus_sha3_256.iter()
+    }
+
+    /// Return an iterator of the authority identities that this request
+    /// is saying we believe in.
+    pub fn authority_ids(&self) -> impl Iterator<Item = &RsaIdentity> {
+        self.authority_ids.iter()
+    }
+
+    /// Return the date we're reporting for our most recent consensus.
+    pub fn last_consensus_date(&self) -> Option<SystemTime> {
+        self.last_consensus_published
     }
 }
 
@@ -86,7 +103,7 @@ impl Default for ConsensusRequest {
 }
 
 impl Requestable for ConsensusRequest {
-    fn into_request(mut self) -> Result<http::Request<()>> {
+    fn make_request(&self) -> Result<http::Request<()>> {
         // Build the URL.
         let mut uri = "/tor/status-vote/current/consensus".to_string();
         if self.flavor != "ns" {
@@ -94,13 +111,10 @@ impl Requestable for ConsensusRequest {
             uri.push_str(&self.flavor);
         }
         if !self.authority_ids.is_empty() {
-            self.authority_ids.sort_unstable();
+            let mut ids = self.authority_ids.clone();
+            ids.sort_unstable();
             uri.push('/');
-            let ids: Vec<String> = self
-                .authority_ids
-                .iter()
-                .map(|id| hex::encode(id.as_bytes()))
-                .collect();
+            let ids: Vec<String> = ids.iter().map(|id| hex::encode(id.as_bytes())).collect();
             uri.push_str(&ids.join("+"));
         }
         uri.push_str(".z");
@@ -118,12 +132,9 @@ impl Requestable for ConsensusRequest {
 
         // Possibly, add an X-Or-Diff-From-Consensus header.
         if !self.last_consensus_sha3_256.is_empty() {
-            self.last_consensus_sha3_256.sort_unstable();
-            let digests: Vec<String> = self
-                .last_consensus_sha3_256
-                .iter()
-                .map(hex::encode)
-                .collect();
+            let mut digests = self.last_consensus_sha3_256.clone();
+            digests.sort_unstable();
+            let digests: Vec<String> = digests.iter().map(hex::encode).collect();
             req = req.header("X-Or-Diff-From-Consensus", &digests.join(", "));
         }
 
@@ -152,6 +163,11 @@ impl AuthCertRequest {
     pub fn push(&mut self, ids: AuthCertKeyIds) {
         self.ids.push(ids);
     }
+
+    /// Return a list of the keys that we're asking for.
+    pub fn keys(&self) -> impl Iterator<Item = &AuthCertKeyIds> {
+        self.ids.iter()
+    }
 }
 
 impl Default for AuthCertRequest {
@@ -161,11 +177,11 @@ impl Default for AuthCertRequest {
 }
 
 impl Requestable for AuthCertRequest {
-    fn into_request(mut self) -> Result<http::Request<()>> {
-        self.ids.sort_unstable();
+    fn make_request(&self) -> Result<http::Request<()>> {
+        let mut ids = self.ids.clone();
+        ids.sort_unstable();
 
-        let ids: Vec<String> = self
-            .ids
+        let ids: Vec<String> = ids
             .iter()
             .map(|id| {
                 format!(
@@ -212,6 +228,11 @@ impl MicrodescRequest {
     pub fn push(&mut self, d: MdDigest) {
         self.digests.push(d)
     }
+
+    /// Return a list of the microdescriptor digests that we're asking for.
+    pub fn digests(&self) -> impl Iterator<Item = &MdDigest> {
+        self.digests.iter()
+    }
 }
 
 impl Default for MicrodescRequest {
@@ -221,12 +242,12 @@ impl Default for MicrodescRequest {
 }
 
 impl Requestable for MicrodescRequest {
-    fn into_request(mut self) -> Result<http::Request<()>> {
+    fn make_request(&self) -> Result<http::Request<()>> {
         // TODO: require that self.digests is nonempty.
-        self.digests.sort_unstable();
+        let mut digests = self.digests.clone();
+        digests.sort_unstable();
 
-        let ids: Vec<String> = self
-            .digests
+        let ids: Vec<String> = digests
             .iter()
             .map(|d| base64::encode_config(d, base64::STANDARD_NO_PAD))
             .collect();
@@ -286,19 +307,26 @@ impl RouterDescRequest {
             self.digests.push(d)
         }
     }
+
+    /// Return an iterator over the descriptor digests that we're asking for.
+    pub fn digests(&self) -> impl Iterator<Item = &RdDigest> {
+        self.digests.iter()
+    }
 }
 
 impl Requestable for RouterDescRequest {
-    fn into_request(mut self) -> Result<http::Request<()>> {
-        let mut uri = "/tor/micro/d/".to_string();
+    fn make_request(&self) -> Result<http::Request<()>> {
+        let mut uri = "/tor/server/".to_string();
 
         if self.all_descriptors {
             uri.push_str("all");
         } else {
+            uri.push_str("d/");
             // TODO: require that self.digests is nonempty.
-            self.digests.sort_unstable();
-            let ids: Vec<String> = self.digests.iter().map(hex::encode).collect();
-            uri.push_str(&ids.join("-"));
+            let mut digests = self.digests.clone();
+            digests.sort_unstable();
+            let ids: Vec<String> = digests.iter().map(hex::encode).collect();
+            uri.push_str(&ids.join("+"));
         }
         uri.push_str(".z");
 
@@ -350,7 +378,7 @@ mod test {
         assert!(req.partial_docs_ok());
         assert_eq!(req.max_response_len(), 16 << 10);
 
-        let req = crate::util::encode_request(req.into_request()?);
+        let req = crate::util::encode_request(req.make_request()?);
 
         assert_eq!(req,
                    "GET /tor/micro/d/J3QgYWN0dWFsbHkgU0hBLTI1Ni4uLi4uLi4uLi4uLi4-VGhpcyBpcyBhIHRlc3RpbmcgZGlnZXN0LiBpdCBpc24.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma, x-zstd\r\n\r\n");
@@ -379,7 +407,7 @@ mod test {
         assert!(req.partial_docs_ok());
         assert_eq!(req.max_response_len(), 32 << 10);
 
-        let req = crate::util::encode_request(req.into_request()?);
+        let req = crate::util::encode_request(req.make_request()?);
 
         assert_eq!(req,
                    "GET /tor/keys/fp-sk/5468697320697320612074657374696e6720646e-27742061637475616c6c79205348412d3235362e+626c616820626c616820626c6168203120322033-49206c696b652070697a7a612066726f6d204e61.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma, x-zstd\r\n\r\n");
@@ -406,7 +434,7 @@ mod test {
         assert!(!req.partial_docs_ok());
         assert_eq!(req.max_response_len(), (16 << 20) - 1);
 
-        let req = crate::util::encode_request(req.into_request()?);
+        let req = crate::util::encode_request(req.make_request()?);
 
         assert_eq!(req,
                    format!("GET /tor/status-vote/current/consensus-microdesc/03479e93ebf3ff2c58c1c9dbf2de9de9c2801b3e.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma, x-zstd\r\nif-modified-since: {}\r\nx-or-diff-from-consensus: 626c616820626c616820626c616820313220626c616820626c616820626c6168\r\n\r\n", when));
