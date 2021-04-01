@@ -4,6 +4,7 @@
 use tor_llcrypto::pk::rsa::RsaIdentity;
 use tor_netdoc::doc::authcert::AuthCertKeyIds;
 use tor_netdoc::doc::microdesc::MdDigest;
+use tor_netdoc::doc::netstatus::ConsensusFlavor;
 use tor_netdoc::doc::routerdesc::RdDigest;
 
 use crate::Result;
@@ -31,9 +32,9 @@ pub trait Requestable {
 /// A Request for a consensus directory.
 #[derive(Debug, Clone)]
 pub struct ConsensusRequest {
-    /// What flavor of consensus are we asking for?  Right now, only "microdesc"
-    /// is supported.
-    flavor: String,
+    /// What flavor of consensus are we asking for?  Right now, only
+    /// "microdesc" and "ns" are supported.
+    flavor: ConsensusFlavor,
     /// A list of the authority identities that we believe in.  We tell the
     /// directory cache only to give us a consensus if it is signed by enough
     /// of these authorities.
@@ -51,9 +52,9 @@ pub struct ConsensusRequest {
 
 impl ConsensusRequest {
     /// Create a new request for a consensus directory document.
-    pub fn new() -> Self {
+    pub fn new(flavor: ConsensusFlavor) -> Self {
         ConsensusRequest {
-            flavor: "microdesc".to_string(),
+            flavor,
             authority_ids: Vec::new(),
             last_consensus_published: None,
             last_consensus_sha3_256: Vec::new(),
@@ -98,7 +99,7 @@ impl ConsensusRequest {
 
 impl Default for ConsensusRequest {
     fn default() -> Self {
-        Self::new()
+        Self::new(ConsensusFlavor::Microdesc)
     }
 }
 
@@ -106,9 +107,12 @@ impl Requestable for ConsensusRequest {
     fn make_request(&self) -> Result<http::Request<()>> {
         // Build the URL.
         let mut uri = "/tor/status-vote/current/consensus".to_string();
-        if self.flavor != "ns" {
-            uri.push('-');
-            uri.push_str(&self.flavor);
+        match self.flavor {
+            ConsensusFlavor::Ns => {}
+            flav => {
+                uri.push('-');
+                uri.push_str(flav.name());
+            }
         }
         if !self.authority_ids.is_empty() {
             let mut ids = self.authority_ids.clone();

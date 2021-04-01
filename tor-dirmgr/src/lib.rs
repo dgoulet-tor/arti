@@ -720,7 +720,8 @@ impl NoInformation {
         info: DirInfo<'_>,
         circmgr: Arc<CircMgr>,
     ) -> Result<UnvalidatedDir> {
-        let mut resource = tor_dirclient::request::ConsensusRequest::new();
+        let mut resource =
+            tor_dirclient::request::ConsensusRequest::new(ConsensusFlavor::Microdesc);
         // XXXX-A1 In some of the below error cases we should retire the circuit
         // to the cache that gave us this stuff.
 
