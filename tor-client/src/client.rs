@@ -127,4 +127,13 @@ impl TorClient {
     pub fn dirmgr(&self) -> Arc<tor_dirmgr::DirMgr> {
         Arc::clone(&self.dirmgr)
     }
+
+    /// Return a reference to this this client's circuit manager.
+    ///
+    /// This function is unstable. It is only enabled if the crate was
+    /// built with the `experimental-api` feature.
+    #[cfg(feature = "experimental-api")]
+    pub fn circmgr(&self) -> Arc<tor_circmgr::CircMgr> {
+        Arc::clone(&self.circmgr)
+    }
 }
