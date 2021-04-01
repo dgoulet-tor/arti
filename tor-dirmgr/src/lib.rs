@@ -21,7 +21,7 @@ mod shared_ref;
 mod storage;
 mod updater;
 
-use crate::docid::DocQuery;
+use crate::docid::{ClientRequest, DocQuery};
 use crate::docmeta::{AuthCertMeta, ConsensusMeta};
 use crate::retry::RetryDelay;
 use crate::shared_ref::SharedMutArc;
@@ -543,6 +543,84 @@ impl DirMgr {
             ),
         }
         Ok(())
+    }
+
+    /// Convert a DocQuery into a set of ClientRequests, suitable for sending
+    /// to a directory cache.
+    ///
+    /// This conversion has to be a function of the dirmgr, since it may
+    /// require knowledge about our current state.
+    async fn query_into_requests(self, q: DocQuery) -> Result<Vec<ClientRequest>> {
+        let mut res = Vec::new();
+        for q in q.split_for_download() {
+            match q {
+                DocQuery::LatestConsensus { flavor, .. } => {
+                    res.push(self.make_consensus_request(flavor).await?);
+                }
+                DocQuery::AuthCert(ids) => {
+                    res.push(ClientRequest::AuthCert(ids.into_iter().collect()));
+                }
+                DocQuery::Microdesc(ids) => {
+                    res.push(ClientRequest::Microdescs(ids.into_iter().collect()));
+                }
+                DocQuery::Routerdesc(ids) => {
+                    res.push(ClientRequest::Routerdescs(ids.into_iter().collect()));
+                }
+            }
+        }
+        Ok(res)
+    }
+
+    /// Construct an appropriate ClientRequest to download a consensus
+    /// of the given flavor.
+    async fn make_consensus_request(&self, flavor: ConsensusFlavor) -> Result<ClientRequest> {
+        let mut request = tor_dirclient::request::ConsensusRequest::new(flavor);
+
+        let r = self.store.lock().await;
+        match r.latest_consensus_meta(flavor) {
+            Ok(Some(meta)) => {
+                request.set_last_consensus_date(meta.lifetime().valid_after());
+                request.push_old_consensus_digest(*meta.sha3_256_of_signed());
+            }
+            Ok(None) => {}
+            Err(e) => {
+                warn!("Error loading directory metadata: {}", e);
+            }
+        }
+
+        Ok(ClientRequest::Consensus(request))
+    }
+
+    /// Given a request we sent and the response we got from a
+    /// directory server, see whether we should expand that response
+    /// into "something larger".
+    ///
+    /// Currently, this handles expanding consensus diffs, and nothing
+    /// else.  We do it at this stage of our downloading operation
+    /// because it requires access to the store.
+    async fn expand_response_text(&self, req: &ClientRequest, text: String) -> Result<String> {
+        if let ClientRequest::Consensus(req) = req {
+            if tor_consdiff::looks_like_diff(&text) {
+                if let Some(old_d) = req.old_consensus_digests().next() {
+                    let db_val = {
+                        let s = self.store.lock().await;
+                        s.consensus_by_sha3_digest(old_d)?
+                    };
+                    if let Some((old_consensus, meta)) = db_val {
+                        info!("Applying a consensus diff");
+                        let new_consensus = tor_consdiff::apply_diff(
+                            old_consensus.as_str()?,
+                            &text,
+                            Some(*meta.sha3_256_of_signed()),
+                        )?;
+                        new_consensus.check_digest()?;
+                        return Ok(new_consensus.to_string());
+                    }
+                }
+                return Err(Error::Unwanted("Received an unaskedfor diff").into());
+            }
+        }
+        return Ok(text);
     }
 }
 

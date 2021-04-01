@@ -3,6 +3,7 @@
 
 use std::{borrow::Borrow, collections::HashMap};
 
+use tor_dirclient::request;
 use tor_netdoc::doc::{
     authcert::AuthCertKeyIds, microdesc::MdDigest, netstatus::ConsensusFlavor, routerdesc::RdDigest,
 };
@@ -58,6 +59,15 @@ impl DocId {
     }
 }
 
+#[derive(Clone, Debug)]
+#[allow(clippy::missing_docs_in_private_items)]
+pub(crate) enum ClientRequest {
+    Consensus(request::ConsensusRequest),
+    AuthCert(request::AuthCertRequest),
+    Microdescs(request::MicrodescRequest),
+    Routerdescs(request::RouterDescRequest),
+}
+
 /// A group of DocIds that can be downloaded or loaded from the database
 /// together.
 #[derive(Clone, Debug)]
@@ -94,24 +104,9 @@ impl DocQuery {
         }
     }
 
-    /*
-        /// How many documents of this type may be downloaded with a single
-        /// download request?
-        #[allow(unused)]
-        pub fn max_per_request(self) -> usize {
-            use DocQuery::*;
-            match self {
-                Consensus(_) => 1,
-                AuthCert => 256, // somewhat arbitrary.
-                Microdesc => 500,
-                Routerdesc => 500,
-            }
-        }
-    */
     /// If this query contains too many documents to download with a single
     /// request, divide it up.
-    #[allow(unused)]
-    pub fn split_for_download(self) -> Vec<Self> {
+    pub(crate) fn split_for_download(self) -> Vec<Self> {
         use DocQuery::*;
         /// How many objects can be put in a single HTTP GET line?
         const N: usize = 500;
@@ -120,7 +115,6 @@ impl DocQuery {
             AuthCert(v) => v[..].chunks(N).map(|s| AuthCert(s.to_vec())).collect(),
             Microdesc(v) => v[..].chunks(N).map(|s| Microdesc(s.to_vec())).collect(),
             Routerdesc(v) => v[..].chunks(N).map(|s| Routerdesc(s.to_vec())).collect(),
-            _ => Vec::new(),
         }
     }
 }

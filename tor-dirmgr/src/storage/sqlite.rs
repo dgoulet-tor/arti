@@ -350,18 +350,7 @@ impl SqliteStore {
         let mut stmt = self.conn.prepare(FIND_LATEST_CONSENSUS_META)?;
         let mut rows = stmt.query(params![flavor.name()])?;
         if let Some(row) = rows.next()? {
-            let va: DateTime<Utc> = row.get(0)?;
-            let fu: DateTime<Utc> = row.get(1)?;
-            let vu: DateTime<Utc> = row.get(2)?;
-            let d_signed: String = row.get(3)?;
-            let d_all: String = row.get(4)?;
-            let lifetime = Lifetime::new(va.into(), fu.into(), vu.into())?;
-            let meta = ConsensusMeta::new(
-                lifetime,
-                digest_from_hex(&d_signed)?,
-                digest_from_dstr(&d_all)?,
-            );
-            Ok(Some(meta))
+            Ok(Some(cmeta_from_row(&row)?))
         } else {
             Ok(None)
         }
@@ -412,13 +401,31 @@ impl SqliteStore {
 
     /// Try to read the consensus corresponding to the provided metadata object.
     pub fn consensus_by_meta(&self, cmeta: &ConsensusMeta) -> Result<InputString> {
-        let d = hex::encode(cmeta.sha3_256_of_whole());
-        let digest = format!("sha3-256-{}", d);
+        if let Some((text, _)) = self.consensus_by_sha3_digest(cmeta.sha3_256_of_whole())? {
+            Ok(text)
+        } else {
+            Err(Error::CacheCorruption("couldn't find a consensus we thought we had.").into())
+        }
+    }
 
-        let fname: String =
-            self.conn
-                .query_row(FIND_CONSENSUS_BY_DIGEST, params![digest], |row| row.get(0))?;
-        self.read_blob(&fname)
+    /// Try to read the consensus whose SHA3-256 digests is the provided
+    /// valid, and its metadata.
+    pub fn consensus_by_sha3_digest(
+        &self,
+        d: &[u8; 32],
+    ) -> Result<Option<(InputString, ConsensusMeta)>> {
+        let d = hex::encode(d);
+        let digest = format!("sha3-256-{}", d);
+        let mut stmt = self.conn.prepare(FIND_CONSENSUS_AND_META_BY_DIGEST)?;
+        let mut rows = stmt.query(params![digest])?;
+        if let Some(row) = rows.next()? {
+            let meta = cmeta_from_row(&row)?;
+            let fname: String = row.get(5)?;
+            let text = self.read_blob(&fname)?;
+            Ok(Some((text, meta)))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Mark the consensus generated from `cmeta` as no longer pending.
@@ -654,6 +661,22 @@ fn digest_from_dstr(s: &str) -> Result<[u8; 32]> {
     }
 }
 
+/// Create a ConsensusMeta from a `Row` returned by one of
+/// `FIND_LATEST_CONSENSUS_META` or `FIND_CONSENSUS_AND_META_BY_DIGEST`.
+fn cmeta_from_row(row: &rusqlite::Row<'_>) -> Result<ConsensusMeta> {
+    let va: DateTime<Utc> = row.get(0)?;
+    let fu: DateTime<Utc> = row.get(1)?;
+    let vu: DateTime<Utc> = row.get(2)?;
+    let d_signed: String = row.get(3)?;
+    let d_all: String = row.get(4)?;
+    let lifetime = Lifetime::new(va.into(), fu.into(), vu.into())?;
+    Ok(ConsensusMeta::new(
+        lifetime,
+        digest_from_hex(&d_signed)?,
+        digest_from_dstr(&d_all)?,
+    ))
+}
+
 /// Version number used for this version of the arti cache schema.
 const SCHEMA_VERSION: u32 = 1;
 
@@ -760,10 +783,11 @@ const FIND_LATEST_CONSENSUS_META: &str = "
 ";
 
 /// Look up a consensus by its digest string.
-const FIND_CONSENSUS_BY_DIGEST: &str = "
-  SELECT filename
-  FROM ExtDocs
-  WHERE digest = ?
+const FIND_CONSENSUS_AND_META_BY_DIGEST: &str = "
+  SELECT valid_after, fresh_until, valid_until, sha3_of_signed_part, Consensuses.digest, filename
+  FROM Consensuses
+  INNER JOIN ExtDocs on ExtDocs.digest = Consensuses.digest
+  WHERE Consensuses.digest = ?
   LIMIT 1;
 ";
 
