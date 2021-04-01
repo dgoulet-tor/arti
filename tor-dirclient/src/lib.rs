@@ -50,7 +50,7 @@ pub async fn get_resource<CR>(
     circ_mgr: Arc<CircMgr>,
 ) -> anyhow::Result<DirResponse>
 where
-    CR: request::ClientRequest,
+    CR: request::Requestable,
 {
     use tor_rtcompat::timer::timeout;
 
@@ -96,7 +96,7 @@ pub async fn download<R, S>(
     source: Option<SourceInfo>,
 ) -> Result<DirResponse>
 where
-    R: request::ClientRequest,
+    R: request::Requestable,
     S: AsyncRead + AsyncWrite + Unpin,
 {
     let partial_ok = req.partial_docs_ok();

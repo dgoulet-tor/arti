@@ -11,8 +11,8 @@ use crate::Result;
 use std::time::SystemTime;
 
 /// A request for an object that can be served over the Tor directory system.
-pub trait ClientRequest {
-    /// Consume this ClientRequest and return an [`http::Request`] if
+pub trait Requestable {
+    /// Consume this Requestable and return an [`http::Request`] if
     /// it is well-formed.
     fn into_request(self) -> Result<http::Request<()>>;
 
@@ -85,7 +85,7 @@ impl Default for ConsensusRequest {
     }
 }
 
-impl ClientRequest for ConsensusRequest {
+impl Requestable for ConsensusRequest {
     fn into_request(mut self) -> Result<http::Request<()>> {
         // Build the URL.
         let mut uri = "/tor/status-vote/current/consensus".to_string();
@@ -160,7 +160,7 @@ impl Default for AuthCertRequest {
     }
 }
 
-impl ClientRequest for AuthCertRequest {
+impl Requestable for AuthCertRequest {
     fn into_request(mut self) -> Result<http::Request<()>> {
         self.ids.sort_unstable();
 
@@ -220,7 +220,7 @@ impl Default for MicrodescRequest {
     }
 }
 
-impl ClientRequest for MicrodescRequest {
+impl Requestable for MicrodescRequest {
     fn into_request(mut self) -> Result<http::Request<()>> {
         // TODO: require that self.digests is nonempty.
         self.digests.sort_unstable();
@@ -288,7 +288,7 @@ impl RouterDescRequest {
     }
 }
 
-impl ClientRequest for RouterDescRequest {
+impl Requestable for RouterDescRequest {
     fn into_request(mut self) -> Result<http::Request<()>> {
         let mut uri = "/tor/micro/d/".to_string();
 
