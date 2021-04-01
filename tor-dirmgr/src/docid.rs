@@ -8,20 +8,17 @@ use tor_netdoc::doc::{
     authcert::AuthCertKeyIds, microdesc::MdDigest, netstatus::ConsensusFlavor, routerdesc::RdDigest,
 };
 
-/// The identity of a single document, in enough detail to load it from
-/// storage.
+/// The identity of a single document, in enough detail to load it
+/// from storage.
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum DocId {
     /// A request for the most recent consensus document.
     LatestConsensus {
-        /// The flavor of consensus to request
+        /// The flavor of consensus to request.
         flavor: ConsensusFlavor,
-        /// If present, a specific pending status to request.
-        ///
-        /// (A "pending" consensus is one where we don't have all the
-        /// certificates and/or descriptors yet.)
-        pending: Option<bool>,
+        /// Rules for loading this consensus from the cache.
+        cache_usage: CacheUsage,
     },
     /// A request for an authority certificate, by the SHA1 digests of
     /// its identity key and signing key.
@@ -34,14 +31,18 @@ pub enum DocId {
 
 /// The underlying type of a DocId.
 ///
-/// Documents with the same type can be grouped into the same query.
+/// Documents with the same type can be grouped into the same query; others
+/// cannot.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 #[non_exhaustive]
-#[allow(clippy::missing_docs_in_private_items)]
 pub(crate) enum DocType {
+    /// A consensus document
     Consensus(ConsensusFlavor),
+    /// An authority certificate
     AuthCert,
+    /// A microdescriptor
     Microdesc,
+    /// A router descriptor.
     Routerdesc,
 }
 
@@ -59,26 +60,78 @@ impl DocId {
     }
 }
 
+/// A request for a specific kind of directory resource that a DirMgr can
+/// request.
 #[derive(Clone, Debug)]
-#[allow(clippy::missing_docs_in_private_items)]
 pub(crate) enum ClientRequest {
+    /// Request for a consensus
     Consensus(request::ConsensusRequest),
+    /// Request for one or more authority certificates
     AuthCert(request::AuthCertRequest),
+    /// Request for one or more microdescriptors
     Microdescs(request::MicrodescRequest),
+    /// Request for one or more router descriptors
     Routerdescs(request::RouterDescRequest),
+}
+
+impl ClientRequest {
+    /// Turn a ClientRequest into a Requestable.
+    pub(crate) fn as_requestable(&self) -> &(dyn request::Requestable + Send + Sync) {
+        use ClientRequest::*;
+        match self {
+            Consensus(a) => a,
+            AuthCert(a) => a,
+            Microdescs(a) => a,
+            Routerdescs(a) => a,
+        }
+    }
+}
+
+/// Description of how to start out a given bootstrap attempt.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum CacheUsage {
+    /// The bootstrap attempt will only use the cache.  Therefore, don't
+    /// load a pending consensus from the cache, since we won't be able
+    /// to find enough information to make it usable.
+    CacheOnly,
+    /// The bootstrap attempt is willing to download information or to
+    /// use the cache.  Therefore, we want the latest cached
+    /// consensus, whether it is pending or not.
+    CacheOkay,
+    /// The bootstrap attempt is trying to fetch a new consensus. Therefore,
+    /// we don't want a consensus from the cache.
+    MustDownload,
+}
+
+impl CacheUsage {
+    /// Turn this CacheUsage into a pending_ok field for use with
+    /// SqliteStorage.
+    pub(crate) fn pending_ok(&self) -> Option<bool> {
+        match self {
+            CacheUsage::CacheOnly => Some(true),
+            _ => None,
+        }
+    }
 }
 
 /// A group of DocIds that can be downloaded or loaded from the database
 /// together.
+///
+/// TODO: Perhaps this should be the same as ClientRequest?
 #[derive(Clone, Debug)]
-#[allow(clippy::missing_docs_in_private_items)]
 pub(crate) enum DocQuery {
+    /// A request for the lastet consensus
     LatestConsensus {
+        /// A desired flavor of consenus
         flavor: ConsensusFlavor,
-        pending: Option<bool>,
+        /// Whether we can or must use the cache
+        cache_usage: CacheUsage,
     },
+    /// A request for authority certificates
     AuthCert(Vec<AuthCertKeyIds>),
+    /// A request for microdescriptors
     Microdesc(Vec<MdDigest>),
+    /// A request for router descriptors
     Routerdesc(Vec<RdDigest>),
 }
 
@@ -86,7 +139,13 @@ impl DocQuery {
     /// Construct an "empty" docquery from the given DocId
     pub fn empty_from_docid(id: &DocId) -> Self {
         match *id {
-            DocId::LatestConsensus { flavor, pending } => Self::LatestConsensus { flavor, pending },
+            DocId::LatestConsensus {
+                flavor,
+                cache_usage,
+            } => Self::LatestConsensus {
+                flavor,
+                cache_usage,
+            },
             DocId::AuthCert(_) => Self::AuthCert(Vec::new()),
             DocId::Microdesc(_) => Self::Microdesc(Vec::new()),
             DocId::Routerdesc(_) => Self::Routerdesc(Vec::new()),
@@ -152,5 +211,3 @@ where
     }
     result
 }
-
-// TODO: code to read one of these from storage.

@@ -4,6 +4,7 @@ use thiserror::Error;
 
 /// An error originated by the directory manager code
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// We received a document we didn't want at all.
     #[error("unwanted object: {0}")]
@@ -37,4 +38,14 @@ pub enum Error {
     /// Another process has locked the store for writing.
     #[error("couldn't get write lock on directory cache")]
     CacheIsLocked,
+    /// A consensus document is signed by an unrecognized authority set.
+    #[error("authorities on consensus do not match what we expect.")]
+    UnrecognizedAuthorities,
+    /// A directory manager has been dropped; background tasks can exit too.
+    #[error("dirmgr has been dropped; background tasks exiting")]
+    ManagerDropped,
+    /// We made a bunch of attempts, but weren't unable to advance the
+    /// state of a download.
+    #[error("unable to finish bootstrapping a directory")]
+    CantAdvanceState,
 }

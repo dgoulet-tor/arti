@@ -400,8 +400,11 @@ impl SqliteStore {
     }
 
     /// Try to read the consensus corresponding to the provided metadata object.
+    #[allow(unused)]
     pub fn consensus_by_meta(&self, cmeta: &ConsensusMeta) -> Result<InputString> {
-        if let Some((text, _)) = self.consensus_by_sha3_digest(cmeta.sha3_256_of_whole())? {
+        if let Some((text, _)) =
+            self.consensus_by_sha3_digest_of_signed_part(cmeta.sha3_256_of_signed())?
+        {
             Ok(text)
         } else {
             Err(Error::CacheCorruption("couldn't find a consensus we thought we had.").into())
@@ -409,14 +412,15 @@ impl SqliteStore {
     }
 
     /// Try to read the consensus whose SHA3-256 digests is the provided
-    /// valid, and its metadata.
-    pub fn consensus_by_sha3_digest(
+    /// value, and its metadata.
+    pub fn consensus_by_sha3_digest_of_signed_part(
         &self,
         d: &[u8; 32],
     ) -> Result<Option<(InputString, ConsensusMeta)>> {
-        let d = hex::encode(d);
-        let digest = format!("sha3-256-{}", d);
-        let mut stmt = self.conn.prepare(FIND_CONSENSUS_AND_META_BY_DIGEST)?;
+        let digest = hex::encode(d);
+        let mut stmt = self
+            .conn
+            .prepare(FIND_CONSENSUS_AND_META_BY_DIGEST_OF_SIGNED)?;
         let mut rows = stmt.query(params![digest])?;
         if let Some(row) = rows.next()? {
             let meta = cmeta_from_row(&row)?;
@@ -441,6 +445,7 @@ impl SqliteStore {
     }
 
     /// Remove the consensus generated from `cmeta`.
+    #[allow(unused)]
     pub fn delete_consensus(&mut self, cmeta: &ConsensusMeta) -> Result<()> {
         let d = hex::encode(cmeta.sha3_256_of_whole());
         let digest = format!("sha3-256-{}", d);
@@ -782,12 +787,12 @@ const FIND_LATEST_CONSENSUS_META: &str = "
   LIMIT 1;
 ";
 
-/// Look up a consensus by its digest string.
-const FIND_CONSENSUS_AND_META_BY_DIGEST: &str = "
+/// Look up a consensus by its digest-of-signed-part string.
+const FIND_CONSENSUS_AND_META_BY_DIGEST_OF_SIGNED: &str = "
   SELECT valid_after, fresh_until, valid_until, sha3_of_signed_part, Consensuses.digest, filename
   FROM Consensuses
   INNER JOIN ExtDocs on ExtDocs.digest = Consensuses.digest
-  WHERE Consensuses.digest = ?
+  WHERE Consensuses.sha3_of_signed_part = ?
   LIMIT 1;
 ";
 
