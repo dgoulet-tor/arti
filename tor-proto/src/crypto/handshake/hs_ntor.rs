@@ -9,6 +9,13 @@
 //! opportunistic encryption property is used by clients in the onion service
 //! protocol to encrypt introduction data in the INTRODUCE1 cell, and by
 //! services to encrypt data in the RENDEZVOUS1 cell.
+//!
+//! # Status
+//!
+//! This module is a work in progress, and is not actually used anywhere yet
+//! or tested: please expect the API to change.
+//!
+//! This module is available only when the `hs` feature is enabled.
 
 // We want to use the exact variable names from the rend-spec-v3.txt proposal.
 // This means that we allow variables to be named x (privkey) and X (pubkey).

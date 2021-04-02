@@ -11,6 +11,7 @@
 //! Currently, this module implements only the "ntor" handshake used
 //! for circuits on today's Tor.
 pub mod fast;
+#[cfg(feature = "hs")]
 pub mod hs_ntor;
 pub mod ntor;
 

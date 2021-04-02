@@ -10,6 +10,10 @@ description = "Asynchronous client-side implementation of the central Tor networ
 keywords = [ "tor", "arti", "networking", "anonymity" ]
 categories = [ "network-programming", "cryptography" ]
 
+[features]
+default = []
+hs = []
+
 [dependencies]
 tor-llcrypto = { path="../tor-llcrypto" }
 tor-bytes = { path="../tor-bytes" }
