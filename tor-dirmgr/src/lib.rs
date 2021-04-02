@@ -111,7 +111,6 @@ impl DirMgr {
 
         dirmgr
             .opt_netdir()
-            .await
             .ok_or_else(|| Error::DirectoryNotPresent.into())
     }
 
@@ -129,7 +128,7 @@ impl DirMgr {
         circmgr: Arc<CircMgr>,
     ) -> Result<Arc<NetDir>> {
         let dirmgr = DirMgr::bootstrap_from_config(config, circmgr).await?;
-        Ok(dirmgr.netdir().await)
+        Ok(dirmgr.netdir())
     }
 
     /// Return a new directory manager from a given configuration,
@@ -286,7 +285,7 @@ impl DirMgr {
         };
 
         // Load microdescs, make sure there are enough.
-        partial.load(store, self.opt_netdir().await).await?;
+        partial.load(store, self.opt_netdir()).await?;
         let nd = match partial.advance() {
             NextState::NewState(nd) => nd,
             NextState::SameState(_) => {
@@ -323,7 +322,7 @@ impl DirMgr {
         let new_microdescs = {
             // We introduce a scope here so that we'll drop our reference
             // to the old netdir when we're done downloading.
-            let netdir = match self.opt_netdir().await {
+            let netdir = match self.opt_netdir() {
                 Some(nd) => nd,
                 None => return Ok(0),
             };
@@ -391,7 +390,7 @@ impl DirMgr {
 
         // Start out by using our previous netdir (if any): We'll need it
         // to decide where we ar downloading things from.
-        let current_netdir = self.opt_netdir().await;
+        let current_netdir = self.opt_netdir();
         let dirinfo = match current_netdir {
             Some(ref nd) => nd.as_ref().into(),
             None => self.config.fallbacks().into(),
@@ -431,7 +430,7 @@ impl DirMgr {
         };
 
         // Finally, get microdescs from the cache...
-        partial.load(store, self.opt_netdir().await).await?;
+        partial.load(store, self.opt_netdir()).await?;
         // .. and fetch whatever we're missing.
         partial
             .fetch_mds(&self.config, store, dirinfo, Arc::clone(&circmgr))
@@ -464,16 +463,14 @@ impl DirMgr {
     /// This is a private method, since by the time anybody else has a
     /// handle to a DirMgr, the NetDir should definitely be
     /// bootstrapped.
-    async fn opt_netdir(&self) -> Option<Arc<NetDir>> {
+    fn opt_netdir(&self) -> Option<Arc<NetDir>> {
         self.netdir.get()
     }
 
     /// Return an Arc handle to our latest directory, if we have one.
     // TODO: Add variants of this that make sure that it's up-to-date?
-    pub async fn netdir(&self) -> Arc<NetDir> {
-        self.opt_netdir()
-            .await
-            .expect("DirMgr was not bootstrapped!")
+    pub fn netdir(&self) -> Arc<NetDir> {
+        self.opt_netdir().expect("DirMgr was not bootstrapped!")
     }
 
     /// Try to load the text of a signle document described by `doc` from

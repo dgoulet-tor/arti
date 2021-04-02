@@ -173,7 +173,7 @@ impl DirectoryUpdater {
     /// directory we already have.
     async fn pick_download_time(&self) -> Option<SystemTime> {
         if let Some(dm) = self.dir_mgr.upgrade() {
-            let netdir = dm.netdir().await;
+            let netdir = dm.netdir();
             let lt = netdir.lifetime();
             let (lowbound, uncertainty) = client_download_range(&lt);
             let zero = Duration::new(0, 0);

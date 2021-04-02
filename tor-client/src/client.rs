@@ -101,7 +101,7 @@ impl TorClient {
 
         let flags = flags.unwrap_or_default();
         let exit_ports = [flags.wrap_target_port(port)];
-        let dir = self.dirmgr.netdir().await;
+        let dir = self.dirmgr.netdir();
         let circ = self
             .circmgr
             .get_or_launch_exit(dir.as_ref().into(), &exit_ports)
