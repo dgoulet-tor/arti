@@ -523,7 +523,7 @@ pub(crate) mod test {
         struct ChanT {
             ed_id: Ed25519Identity,
             rsa_id: RsaIdentity,
-        };
+        }
         impl ChanTarget for ChanT {
             fn ed_identity(&self) -> &Ed25519Identity {
                 &self.ed_id
