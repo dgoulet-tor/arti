@@ -17,12 +17,14 @@ mod docid;
 mod docmeta;
 mod err;
 mod retry;
+mod shared_ref;
 mod storage;
 mod updater;
 
 use crate::docid::DocQuery;
 use crate::docmeta::{AuthCertMeta, ConsensusMeta};
 use crate::retry::RetryDelay;
+use crate::shared_ref::SharedMutArc;
 use crate::storage::sqlite::SqliteStore;
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
 use tor_circmgr::{CircMgr, DirInfo};
@@ -34,7 +36,6 @@ use tor_netdoc::AllowAnnotations;
 use tor_retry::RetryError;
 
 use anyhow::{anyhow, Context, Result};
-use async_rwlock::RwLock;
 use futures::lock::Mutex;
 use futures::stream::StreamExt;
 use log::{debug, info, warn};
@@ -86,7 +87,7 @@ pub struct DirMgr {
     ///
     /// We use the RwLock so that we can give this out to a bunch of other
     /// users, and replace it once a new directory is bootstrapped.
-    netdir: RwLock<Option<Arc<NetDir>>>,
+    netdir: SharedMutArc<NetDir>,
 
     /// A circuit manager, if this DirMgr supports downloading.
     circmgr: Option<Arc<CircMgr>>,
@@ -241,7 +242,7 @@ impl DirMgr {
     fn from_config(config: NetDirConfig, circmgr: Option<Arc<CircMgr>>) -> Result<Self> {
         let readonly = circmgr.is_none();
         let store = Mutex::new(config.open_sqlite_store(readonly)?);
-        let netdir = RwLock::new(None);
+        let netdir = SharedMutArc::new();
         Ok(DirMgr {
             config,
             store,
@@ -297,10 +298,7 @@ impl DirMgr {
         };
 
         // This is now a good directory.  Put it in self.netdir.
-        {
-            let mut w = self.netdir.write().await;
-            *w = Some(Arc::new(nd));
-        }
+        self.netdir.replace(nd);
 
         Ok(true)
     }
@@ -358,21 +356,12 @@ impl DirMgr {
         };
 
         // Now we update the netdir.
-        let n_missing = {
-            let mut w = self.netdir.write().await;
-            if let Some(arc_netdir) = w.as_mut() {
-                // Arc::make_mut cleverly clones the underlying netdir if
-                // if somebody else has a reference to it, but not otherwise.
-                let nd = Arc::make_mut(arc_netdir);
-                for md in new_microdescs {
-                    nd.add_microdesc(md);
-                }
-                nd.missing_microdescs().count()
-            } else {
-                // programming error here; warn?
-                0
+        let n_missing = self.netdir.mutate(|nd| {
+            for md in new_microdescs {
+                nd.add_microdesc(md);
             }
-        };
+            Ok(nd.missing_microdescs().count())
+        })?;
 
         Ok(n_missing)
     }
@@ -453,10 +442,7 @@ impl DirMgr {
             NextState::SameState(_) => return Err(anyhow!("Didn't get enough mds")),
         };
 
-        {
-            let mut w = self.netdir.write().await;
-            *w = Some(Arc::new(nd));
-        }
+        self.netdir.replace(nd);
 
         Ok(())
     }
@@ -464,7 +450,7 @@ impl DirMgr {
     /// Return true if we have a netdir, and it will be valid at least
     /// till 'when'.
     async fn current_netdir_lasts_past(&self, when: SystemTime) -> bool {
-        let r = self.netdir.read().await;
+        let r = self.netdir.get();
         if let Some(current_netdir) = r.as_ref() {
             let current_vu = current_netdir.lifetime().valid_until();
             current_vu >= when
@@ -479,7 +465,7 @@ impl DirMgr {
     /// handle to a DirMgr, the NetDir should definitely be
     /// bootstrapped.
     async fn opt_netdir(&self) -> Option<Arc<NetDir>> {
-        self.netdir.read().await.as_ref().map(Arc::clone)
+        self.netdir.get()
     }
 
     /// Return an Arc handle to our latest directory, if we have one.
