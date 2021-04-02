@@ -110,11 +110,20 @@ impl DocQuery {
         use DocQuery::*;
         /// How many objects can be put in a single HTTP GET line?
         const N: usize = 500;
-        match &self {
+        match self {
             LatestConsensus { .. } => vec![self],
-            AuthCert(v) => v[..].chunks(N).map(|s| AuthCert(s.to_vec())).collect(),
-            Microdesc(v) => v[..].chunks(N).map(|s| Microdesc(s.to_vec())).collect(),
-            Routerdesc(v) => v[..].chunks(N).map(|s| Routerdesc(s.to_vec())).collect(),
+            AuthCert(mut v) => {
+                v.sort_unstable();
+                v[..].chunks(N).map(|s| AuthCert(s.to_vec())).collect()
+            }
+            Microdesc(mut v) => {
+                v.sort_unstable();
+                v[..].chunks(N).map(|s| Microdesc(s.to_vec())).collect()
+            }
+            Routerdesc(mut v) => {
+                v.sort_unstable();
+                v[..].chunks(N).map(|s| Routerdesc(s.to_vec())).collect()
+            }
         }
     }
 }
