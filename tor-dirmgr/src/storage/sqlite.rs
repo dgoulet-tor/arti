@@ -20,7 +20,7 @@ use std::time::SystemTime;
 use anyhow::Context;
 use chrono::prelude::*;
 use chrono::Duration as CDuration;
-use rusqlite::{params, OpenFlags, OptionalExtension, Transaction, NO_PARAMS};
+use rusqlite::{params, OpenFlags, OptionalExtension, Transaction};
 
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::DirBuilderExt;
@@ -153,7 +153,7 @@ impl SqliteStore {
             "SELECT COUNT(name) FROM sqlite_master
              WHERE type='table'
              AND name NOT LIKE 'sqlite_%'",
-            NO_PARAMS,
+            [],
             |row| row.get(0),
         )?;
         let db_exists = db_n_tables > 0;
@@ -168,7 +168,7 @@ impl SqliteStore {
         let (version, readable_by): (u32, u32) = tx.query_row(
             "SELECT version, readable_by FROM TorSchemaMeta
              WHERE name = 'TorDirStorage'",
-            NO_PARAMS,
+            [],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
 
@@ -194,17 +194,17 @@ impl SqliteStore {
         let expired_blobs: Vec<String> = {
             let mut stmt = tx.prepare(FIND_EXPIRED_EXTDOCS)?;
             let names = stmt
-                .query_map(NO_PARAMS, |row| row.get::<_, String>(0))?
+                .query_map([], |row| row.get::<_, String>(0))?
                 .filter_map(std::result::Result::ok)
                 .collect();
             names
         };
 
-        tx.execute(DROP_OLD_EXTDOCS, NO_PARAMS)?;
-        tx.execute(DROP_OLD_MICRODESCS, NO_PARAMS)?;
-        tx.execute(DROP_OLD_AUTHCERTS, NO_PARAMS)?;
-        tx.execute(DROP_OLD_CONSENSUSES, NO_PARAMS)?;
-        tx.execute(DROP_OLD_ROUTERDESCS, NO_PARAMS)?;
+        tx.execute(DROP_OLD_EXTDOCS, [])?;
+        tx.execute(DROP_OLD_MICRODESCS, [])?;
+        tx.execute(DROP_OLD_AUTHCERTS, [])?;
+        tx.execute(DROP_OLD_CONSENSUSES, [])?;
+        tx.execute(DROP_OLD_ROUTERDESCS, [])?;
         tx.commit()?;
         for name in expired_blobs {
             let fname = self.blob_fname(name);
@@ -969,12 +969,9 @@ mod test {
             b"Goodbye, dear friends"
         );
 
-        let n: u32 =
-            store
-                .conn
-                .query_row("SELECT COUNT(filename) FROM ExtDocs", NO_PARAMS, |row| {
-                    row.get(0)
-                })?;
+        let n: u32 = store
+            .conn
+            .query_row("SELECT COUNT(filename) FROM ExtDocs", [], |row| row.get(0))?;
         assert_eq!(n, 2);
 
         let blob = store.read_blob(&fname2)?;
@@ -987,12 +984,9 @@ mod test {
             b"Hello world"
         );
         assert!(std::fs::read(store.blob_fname(&fname2)?).is_err());
-        let n: u32 =
-            store
-                .conn
-                .query_row("SELECT COUNT(filename) FROM ExtDocs", NO_PARAMS, |row| {
-                    row.get(0)
-                })?;
+        let n: u32 = store
+            .conn
+            .query_row("SELECT COUNT(filename) FROM ExtDocs", [], |row| row.get(0))?;
         assert_eq!(n, 1);
 
         Ok(())
