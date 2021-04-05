@@ -17,7 +17,6 @@ toml = "0.5.8"
 once_cell = "1.7.2"
 shellexpand = "2.1.0"
 regex = { version = "1.4.3", default-features=false, features=["std"] }
-log = "0.4.14"
 thiserror = "1.0.24"
 
 [dev-dependencies]

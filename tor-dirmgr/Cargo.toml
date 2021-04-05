@@ -27,7 +27,6 @@ tor-retry = { path="../tor-retry", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
 
 anyhow = "1.0.38"
-async-rwlock = "1.3.0"
 async-trait = "0.1.48"
 base64 = "0.13.0"
 chrono = "0.4.19"
