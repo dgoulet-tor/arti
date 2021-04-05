@@ -13,4 +13,4 @@ keywords = [ "tor", "arti", "compression" ]
 miniz_oxide = "0.4.4"
 thiserror = "1.0.24"
 xz2 = "0.1.6"
-zstd = "0.6.1"
+zstd = "0.7.0"
