@@ -9,6 +9,9 @@ homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Manage a set of anonymous circuits over the Tor network"
 keywords = [ "tor", "arti", "async" ]
 
+[features]
+experimental-api = []
+
 [dependencies]
 tor-chanmgr = { path="../tor-chanmgr", version= "*", default-features=false }
 tor-netdir = { path="../tor-netdir", version= "*" }
