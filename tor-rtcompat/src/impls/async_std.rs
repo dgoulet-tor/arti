@@ -19,16 +19,26 @@ pub mod net {
     }
 
     /// Return a stream that yields incoming sockets from `lis`
-    pub fn listener_to_stream<'a>(
-        lis: &'a TcpListener,
-    ) -> impl futures::stream::Stream<Item = Result<TcpStream, std::io::Error>> + 'a {
+    pub fn listener_to_stream(
+        lis: &TcpListener,
+    ) -> impl futures::stream::Stream<Item = Result<TcpStream, std::io::Error>> + '_ {
         lis.incoming()
     }
 }
 
 /// Functions for launching and managing tasks (async_std implementation)
 pub mod task {
-    pub use async_std_crate::task::{block_on, sleep, spawn};
+    pub use async_std_crate::task::{block_on, sleep, spawn, JoinHandle};
+
+    //pub use async_std_crate::task::JoinHandle;
+
+    /// Stop the task `handle` from running.
+    ///
+    /// If you drop `handle` without calling this function, it will just
+    /// run to completion.
+    pub async fn cancel_task<T>(handle: JoinHandle<T>) {
+        handle.cancel().await;
+    }
 }
 
 /// Functions and types for manipulating timers (async_std implementation)
@@ -58,6 +68,7 @@ pub mod tls {
 
     /// A connection factory for use with async_std.
     pub struct TlsConnector {
+        /// The internal connector that we're wrapping with a new API
         connector: async_native_tls::TlsConnector,
     }
 

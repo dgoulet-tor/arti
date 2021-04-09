@@ -138,7 +138,16 @@ pub mod task {
     }
 
     pub use tokio_crate::spawn;
+    pub use tokio_crate::task::JoinHandle;
     pub use tokio_crate::time::sleep;
+
+    /// Stop the task `handle` from running.
+    ///
+    /// If you drop `handle` without calling this function, it will just
+    /// run to completion.
+    pub async fn cancel_task<T>(handle: JoinHandle<T>) {
+        handle.abort()
+    }
 }
 
 /// Functions and types for manipulating timers (tokio implementation)
