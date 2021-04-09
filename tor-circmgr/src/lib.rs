@@ -28,6 +28,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "experimental-api")]
+use rand::CryptoRng;
+
 mod err;
 pub mod path;
 
@@ -561,7 +564,7 @@ impl CircMgr {
     /// This function is unstable. It is only enabled if the crate was
     /// built with the `experimental-api` feature.
     #[cfg(feature = "experimental-api")]
-    pub async fn build_path<R: Rng>(
+    pub async fn build_path<R: Rng + CryptoRng>(
         &self,
         rng: &mut R,
         netdir: DirInfo<'_>,
