@@ -32,7 +32,6 @@ struct Args {
 /// Default options to use for our configuration.
 const ARTI_DEFAULTS: &str = concat!(
     include_str!("./arti_defaults.toml"),
-    include_str!("./fallback_caches.toml"),
     include_str!("./authorities.toml"),
 );
 
