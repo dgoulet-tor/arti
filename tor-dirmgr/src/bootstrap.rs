@@ -252,7 +252,7 @@ pub(crate) async fn download(
                         state = state.reset()?;
                         continue 'next_state;
                     }
-                    _ = tor_rtcompat::timer::sleep(delay).fuse() => {}
+                    _ = FutureExt::fuse(tor_rtcompat::timer::sleep(delay)) => {}
                 };
             }
         }
