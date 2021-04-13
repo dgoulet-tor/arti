@@ -1347,6 +1347,16 @@ impl<RS> UnvalidatedConsensus<RS> {
         }
     }
 
+    /// Return an iterator of all the certificate IDs that we might use
+    /// to validate this consensus.
+    pub fn signing_cert_ids(&self) -> impl Iterator<Item = AuthCertKeyIds> {
+        match self.key_is_correct(&[]) {
+            Ok(()) => Vec::new(),
+            Err(missing) => missing,
+        }
+        .into_iter()
+    }
+
     /// Return the lifetime of this unvalidated consensus
     pub fn peek_lifetime(&self) -> &Lifetime {
         self.consensus.lifetime()
@@ -1441,6 +1451,9 @@ impl SignatureGroup {
     /// authorities we believe in, and that every cert in `certs` belongs
     /// to a real authority.
     fn validate(&self, n_authorities: u16, certs: &[AuthCert]) -> bool {
+        // A set of the authorities (by identity) who have have signed
+        // this document.  We use a set here in case `certs` has more
+        // than one certificate for a single authority.
         let mut ok: HashSet<RsaIdentity> = HashSet::new();
 
         for sig in self.signatures.iter() {

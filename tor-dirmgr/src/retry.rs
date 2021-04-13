@@ -111,7 +111,7 @@ impl Default for RetryDelay {
     }
 }
 
-/// Configuration for how many times to retry a download, and with what
+/// Configuration for how many times to retry a download, with what
 /// frequency.
 #[derive(Debug, Copy, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -152,6 +152,12 @@ impl RetryConfig {
     /// this configuration.
     pub fn attempts(&self) -> impl Iterator<Item = u32> {
         0..(self.num.into())
+    }
+
+    /// Return the number of times that we're supposed to retry, according
+    /// to this RetryConfig.
+    pub fn n_attempts(&self) -> u32 {
+        self.num.into()
     }
 
     /// Return a RetryDelay object for this configuration.

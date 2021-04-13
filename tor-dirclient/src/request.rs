@@ -9,6 +9,7 @@ use tor_netdoc::doc::routerdesc::RdDigest;
 
 use crate::Result;
 
+use std::iter::FromIterator;
 use std::time::SystemTime;
 
 /// A request for an object that can be served over the Tor directory system.
@@ -214,6 +215,16 @@ impl Requestable for AuthCertRequest {
     }
 }
 
+impl FromIterator<AuthCertKeyIds> for AuthCertRequest {
+    fn from_iter<I: IntoIterator<Item = AuthCertKeyIds>>(iter: I) -> Self {
+        let mut req = Self::new();
+        for i in iter {
+            req.push(i);
+        }
+        req
+    }
+}
+
 /// A request for one or more microdescriptors
 #[derive(Debug, Clone)]
 pub struct MicrodescRequest {
@@ -270,6 +281,16 @@ impl Requestable for MicrodescRequest {
     fn max_response_len(&self) -> usize {
         // TODO: Pick a more principled number; I just made this one up.
         self.digests.len().saturating_mul(8 * 1024)
+    }
+}
+
+impl FromIterator<MdDigest> for MicrodescRequest {
+    fn from_iter<I: IntoIterator<Item = MdDigest>>(iter: I) -> Self {
+        let mut req = Self::new();
+        for i in iter {
+            req.push(i);
+        }
+        req
     }
 }
 
@@ -351,6 +372,16 @@ impl Requestable for RouterDescRequest {
         } else {
             self.digests.len().saturating_mul(8 * 1024)
         }
+    }
+}
+
+impl FromIterator<RdDigest> for RouterDescRequest {
+    fn from_iter<I: IntoIterator<Item = RdDigest>>(iter: I) -> Self {
+        let mut req = Self::new();
+        for i in iter {
+            req.push(i);
+        }
+        req
     }
 }
 
