@@ -20,9 +20,12 @@ mod util;
 use tor_circmgr::{CircMgr, DirInfo};
 use tor_decompress::{Decompressor, StatusKind};
 
-use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use futures::io::{
+    AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader,
+};
 use futures::FutureExt;
 use log::info;
+use memchr::memchr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -108,21 +111,21 @@ where
     stream.write_all(encoded.as_bytes()).await?;
     stream.flush().await?;
 
+    let mut buffered = BufReader::new(stream);
+
     // Handle the response
-    let header = read_headers(stream).await?;
+    let header = read_headers(&mut buffered).await?;
     if header.status != Some(200) {
         return Err(Error::HttpStatus(header.status));
     }
 
     let encoding = header.encoding;
-    let buf = header.pending;
-    let n_in_buf = header.n_pending;
 
     let decompressor = tor_decompress::from_content_encoding(encoding.as_deref())?;
 
     let mut result = vec![0_u8; 2048];
 
-    let ok = read_and_decompress(stream, maxlen, decompressor, buf, n_in_buf, &mut result).await;
+    let ok = read_and_decompress(&mut buffered, maxlen, decompressor, &mut result).await;
 
     let ok = match (partial_ok, ok, result.len()) {
         (true, Err(e), n) if n > 0 => {
@@ -143,30 +146,29 @@ where
 /// Read and parse HTTP/1 headers from `stream`.
 async fn read_headers<S>(stream: &mut S) -> Result<HeaderStatus>
 where
-    S: AsyncRead + AsyncWrite + Unpin,
+    S: AsyncBufRead + Unpin,
 {
-    let mut buf = vec![0; 1024];
-    let mut n_in_buf = 0;
+    let mut buf = Vec::with_capacity(1024);
 
     loop {
-        let n = stream.read(&mut buf[n_in_buf..]).await?;
-        n_in_buf += n;
+        let n = read_until_limited(stream, b'\n', 2048, &mut buf).await?;
 
         // XXXX Better maximum and/or let this expand.
         let mut headers = [httparse::EMPTY_HEADER; 32];
         let mut response = httparse::Response::new(&mut headers);
 
-        match response.parse(&buf[..n_in_buf])? {
+        match response.parse(&buf[..])? {
             httparse::Status::Partial => {
                 // We didn't get a whole response; we may need to try again.
 
+                if n == 0 {
+                    // We hit an EOF; no more progress can be made.
+                    return Err(Error::TruncatedHeaders);
+                }
+
                 // XXXX Pick a better maximum
-                if n_in_buf >= buf.len() - 500 {
-                    // We should resize the buffer; it's nearly empty.
-                    if buf.len() >= 16384 {
-                        return Err(httparse::Error::TooManyHeaders.into());
-                    }
-                    buf.resize(buf.len() * 2, 0u8);
+                if buf.len() >= 16384 {
+                    return Err(httparse::Error::TooManyHeaders.into());
                 }
             }
             httparse::Status::Complete(n_parsed) => {
@@ -174,8 +176,6 @@ where
                     return Ok(HeaderStatus {
                         status: response.code,
                         encoding: None,
-                        pending: Vec::new(),
-                        n_pending: 0,
                     });
                 }
                 let encoding = if let Some(enc) = response
@@ -193,13 +193,10 @@ where
                     length = Some(clen.parse()?);
                 }
                  */
-                n_in_buf -= n_parsed;
-                buf.copy_within(n_parsed.., 0);
+                assert!(n_parsed == buf.len());
                 return Ok(HeaderStatus {
                     status: Some(200),
                     encoding,
-                    pending: buf,
-                    n_pending: n_in_buf,
                 });
             }
         }
@@ -215,10 +212,6 @@ struct HeaderStatus {
     status: Option<u16>,
     /// The Content-Encoding header, if any.
     encoding: Option<String>,
-    /// A buffer containing leftover data beyond what was in the header.
-    pending: Vec<u8>,
-    /// The number of usable bytes in `pending`.
-    n_pending: usize,
 }
 
 /// Helper: download directory information from `stream` and
@@ -234,13 +227,14 @@ async fn read_and_decompress<S>(
     mut stream: S,
     maxlen: usize,
     mut decompressor: Box<dyn Decompressor + Send>,
-    mut buf: Vec<u8>,
-    mut n_in_buf: usize,
     result: &mut Vec<u8>,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
+    let mut buf = vec![0_u8; 2048];
+    let mut n_in_buf = 0;
+
     let mut read_total = n_in_buf;
     let mut written_total = 0;
 
@@ -320,4 +314,43 @@ where
         &id, &error
     );
     circ_mgr.retire_circ(&id).await;
+}
+
+/// As AsyncBufReadExt::read_until, but stops after reading `max` bytes.
+///
+/// Note that this function might not actually read any byte of value
+/// `byte`, since EOF might occur, or we might fill the buffer.
+///
+/// A return value of 0 indicates an end-of-file.
+async fn read_until_limited<S>(
+    stream: &mut S,
+    byte: u8,
+    max: usize,
+    buf: &mut Vec<u8>,
+) -> std::io::Result<usize>
+where
+    S: AsyncBufRead + Unpin,
+{
+    let mut n_added = 0;
+    loop {
+        let data = stream.fill_buf().await?;
+        if data.is_empty() {
+            // End-of-file has been reached.
+            return Ok(n_added);
+        }
+        debug_assert!(n_added < max);
+        let remaining_space = max - n_added;
+        let (available, found_byte) = match memchr(byte, data) {
+            Some(idx) => (idx + 1, true),
+            None => (data.len(), false),
+        };
+        debug_assert!(available >= 1);
+        let n_to_copy = std::cmp::min(remaining_space, available);
+        buf.extend(&data[..n_to_copy]);
+        stream.consume_unpin(n_to_copy);
+        n_added += n_to_copy;
+        if found_byte || n_added == max {
+            return Ok(n_added);
+        }
+    }
 }
