@@ -7,8 +7,6 @@
 //!
 //! Multi-hop tunnels are not supported.
 
-// XXXX THIS CODE IS HORRIBLE AND NEEDS REFACTORING.
-
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
@@ -18,8 +16,8 @@ mod response;
 mod util;
 
 use tor_circmgr::{CircMgr, DirInfo};
-use tor_decompress::{Decompressor, StatusKind};
 
+use async_compression::futures::bufread::{XzDecoder, ZlibDecoder, ZstdDecoder};
 use futures::io::{
     AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader,
 };
@@ -100,7 +98,7 @@ pub async fn download<R, S>(
 ) -> Result<DirResponse>
 where
     R: request::Requestable + ?Sized,
-    S: AsyncRead + AsyncWrite + Unpin,
+    S: AsyncRead + AsyncWrite + Send + Unpin,
 {
     let partial_ok = req.partial_docs_ok();
     let maxlen = req.max_response_len();
@@ -119,13 +117,10 @@ where
         return Err(Error::HttpStatus(header.status));
     }
 
-    let encoding = header.encoding;
+    let mut decoder = get_decoder(buffered, header.encoding)?;
 
-    let decompressor = tor_decompress::from_content_encoding(encoding.as_deref())?;
-
-    let mut result = vec![0_u8; 2048];
-
-    let ok = read_and_decompress(&mut buffered, maxlen, decompressor, &mut result).await;
+    let mut result = Vec::new();
+    let ok = read_and_decompress(&mut decoder, maxlen, &mut result).await;
 
     let ok = match (partial_ok, ok, result.len()) {
         (true, Err(e), n) if n > 0 => {
@@ -151,6 +146,9 @@ where
     let mut buf = Vec::with_capacity(1024);
 
     loop {
+        // TODO: it's inefficient to do this a line at a time; it would
+        // probably be better to read until the CRLF CRLF ending of the
+        // response.  But this should be fast enough.
         let n = read_until_limited(stream, b'\n', 2048, &mut buf).await?;
 
         // XXXX Better maximum and/or let this expand.
@@ -223,22 +221,12 @@ struct HeaderStatus {
 /// Returns the status of our download attempt, stores any data that
 /// we were able to download into `result`.  Existing contents of
 /// `result` are overwritten.
-async fn read_and_decompress<S>(
-    mut stream: S,
-    maxlen: usize,
-    mut decompressor: Box<dyn Decompressor + Send>,
-    result: &mut Vec<u8>,
-) -> Result<()>
+async fn read_and_decompress<S>(mut stream: S, maxlen: usize, result: &mut Vec<u8>) -> Result<()>
 where
-    S: AsyncRead + AsyncWrite + Unpin,
+    S: AsyncRead + Unpin,
 {
-    let mut buf = vec![0_u8; 2048];
-    let mut n_in_buf = 0;
-
-    let mut read_total = n_in_buf;
-    let mut written_total = 0;
-
-    let mut done_reading = false;
+    let mut buf = [0_u8; 1024];
+    let mut written_total: usize = 0;
 
     // XXXX should be an option and is maybe too long.  Though for some
     // users this may be too short?
@@ -248,59 +236,33 @@ where
 
     loop {
         let status = futures::select! {
-            status = stream.read(&mut buf[n_in_buf..]).fuse() => status,
+            status = stream.read(&mut buf[..]).fuse() => status,
             _ = timer => {
-                result.resize(written_total, 0);
                 return Err(Error::DirTimeout);
             }
         };
         let n = match status {
             Ok(n) => n,
             Err(other) => {
-                result.resize(written_total, 0);
                 return Err(other.into());
             }
         };
         if n == 0 {
-            done_reading = true;
+            return Ok(());
         }
-        read_total += n;
-        n_in_buf += n;
+        result.extend(&buf[..n]);
+        written_total += n;
 
-        if result.len() == written_total {
-            result.resize(result.len() * 2, 0);
-        }
-
-        let st = decompressor.process(&buf[..n_in_buf], &mut result[written_total..], done_reading);
-        let st = match st {
-            Ok(st) => st,
-            Err(e) => {
-                result.resize(written_total, 0);
-                return Err(e.into());
-            }
-        };
-        n_in_buf -= st.consumed;
-        buf.copy_within(st.consumed.., 0);
-        written_total += st.written;
-
-        if written_total > 2048 && written_total > read_total * 20 {
-            result.resize(written_total, 0);
-            return Err(Error::CompressionBomb);
-        }
+        // TODO: It would be good to detect compression bombs, but
+        // that would require access to the internal stream, which
+        // would in turn require some tricky programming.  For now, we
+        // use the maximum length here to prevent an attacker from
+        // filling our RAM.
         if written_total > maxlen {
             result.resize(maxlen, 0);
             return Err(Error::ResponseTooLong(written_total));
         }
-
-        match st.status {
-            StatusKind::Done => break,
-            StatusKind::Written => (),
-            StatusKind::OutOfSpace => result.resize(result.len() * 2, 0),
-        }
     }
-    result.resize(written_total, 0);
-
-    Ok(())
 }
 
 /// Retire a directory circuit because of an error we've encountered on it.
@@ -352,5 +314,28 @@ where
         if found_byte || n_added == max {
             return Ok(n_added);
         }
+    }
+}
+
+macro_rules! decoder {
+    ($dec:ident, $s:expr) => {{
+        let mut decoder = $dec::new($s);
+        decoder.multiple_members(true);
+        Ok(Box::new(decoder))
+    }};
+}
+
+/// Wrap `stream` in an appropriate type to undo the content encoding
+/// as described in `encoding`.
+fn get_decoder<'a, S: AsyncBufRead + Unpin + Send + 'a>(
+    stream: S,
+    encoding: Option<String>,
+) -> Result<Box<dyn AsyncRead + Unpin + Send + 'a>> {
+    match encoding.as_deref() {
+        None | Some("identity") => Ok(Box::new(stream)),
+        Some("deflate") => decoder!(ZlibDecoder, stream),
+        Some("x-tor-lzma") => decoder!(XzDecoder, stream),
+        Some("x-zstd") => decoder!(ZstdDecoder, stream),
+        Some(other) => Err(Error::ContentEncoding(other.into())),
     }
 }

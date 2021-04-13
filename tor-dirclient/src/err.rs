@@ -42,9 +42,9 @@ pub enum Error {
     #[error("Couldn't create HTTP request")]
     HttpError(#[from] http::Error),
 
-    /// Unable to decompress data
-    #[error("Error while decompressing data")]
-    DecompressError(#[from] tor_decompress::Error),
+    /// Unrecognized content-encoding
+    #[error("Unrecognized content encoding: {0:?}")]
+    ContentEncoding(String),
 }
 
 impl From<TimeoutError> for Error {

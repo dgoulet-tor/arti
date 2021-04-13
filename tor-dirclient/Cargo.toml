@@ -12,13 +12,14 @@ keywords = [ "tor", "arti", "download", "async" ]
 [dependencies]
 tor-circmgr = { path="../tor-circmgr", version= "*" }
 tor-chanmgr = { path="../tor-chanmgr", version= "*", default-features=false }
-tor-decompress = { path="../tor-decompress", version= "*", default-features=false }
+# tor-decompress = { path="../tor-decompress", version= "*", default-features=false }
 tor-llcrypto = { path="../tor-llcrypto", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-netdir = { path="../tor-netdir", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
 
+async-compression = { version = "0.3.7", features=["futures-io", "xz", "zlib", "zstd"] }
 anyhow = "1.0.38"
 base64 = "0.13.0"
 futures = "0.3.13"

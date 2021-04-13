@@ -13,7 +13,6 @@ members = [
     "tor-cert",
     "tor-linkspec",
     "tor-cell",
-    "tor-decompress",
     "tor-proto",
     "tor-retry",
     "tor-netdoc",
