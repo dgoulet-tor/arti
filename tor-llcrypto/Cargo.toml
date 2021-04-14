@@ -13,7 +13,7 @@ keywords = [ "tor", "arti", "cryptography" ]
 aes-ctr = "0.6.0"
 arrayref = "0.3.6"
 base64 = "0.13.0"
-curve25519-dalek = "3.0.2"
+curve25519-dalek = "3.1.0"
 digest = "0.9.0"
 ed25519-dalek = { version = "1.0.1", features = ["batch"] }
 hex = "0.4.3"
@@ -27,7 +27,7 @@ serde = "1.0.124"
 signature = "1.3.0"
 simple_asn1 = "0.5.1"
 subtle = "2.4.0"
-x25519-dalek = "1.1.0"
+x25519-dalek = "1.1.1"
 zeroize = "1.2.0"
 thiserror = "1.0.24"
 
