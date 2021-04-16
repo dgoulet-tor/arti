@@ -8,22 +8,6 @@
 /// Types used for networking (async_std implementation)
 pub mod net {
     pub use async_std_crate::net::{TcpListener, TcpStream};
-
-    /// Split a read/write stream into its read and write halves.
-    pub fn split_io<T>(stream: T) -> (futures::io::ReadHalf<T>, futures::io::WriteHalf<T>)
-    where
-        T: futures::io::AsyncRead + futures::io::AsyncWrite,
-    {
-        use futures::io::AsyncReadExt;
-        stream.split()
-    }
-
-    /// Return a stream that yields incoming sockets from `lis`
-    pub fn listener_to_stream(
-        lis: &TcpListener,
-    ) -> impl futures::stream::Stream<Item = Result<TcpStream, std::io::Error>> + '_ {
-        lis.incoming()
-    }
 }
 
 /// Functions for launching and managing tasks (async_std implementation)

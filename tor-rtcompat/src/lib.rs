@@ -30,6 +30,10 @@ pub(crate) mod impls;
 
 mod traits;
 
+pub mod prelude {
+    pub use crate::traits::*;
+}
+
 // TODO: This is not an ideal situation, and it's arguably an abuse of
 // the features feature.  But I can't currently find a reasonable way
 // to have the code use the right version of things like "sleep" or
@@ -59,7 +63,43 @@ pub fn runtime() -> impl traits::Runtime {
 
 /// Types used for networking (async_std implementation)
 pub mod net {
-    pub use crate::imp::net::*;
+    use crate::traits::TcpListener;
+    use futures::stream::Stream;
+    use std::future::Future;
+    use std::net::SocketAddr;
+    use std::{
+        io::Result as IoResult,
+        pin::Pin,
+        task::{Context, Poll},
+    };
+
+    pub fn listener_to_stream<S>(lis: S) -> impl Stream<Item = IoResult<(S::Stream, SocketAddr)>>
+    where
+        S: TcpListener,
+    {
+        IncomingTcp { inner: lis }
+    }
+
+    pub struct IncomingTcp<S>
+    where
+        S: TcpListener,
+    {
+        inner: S,
+    }
+
+    impl<S> Stream for IncomingTcp<S>
+    where
+        S: TcpListener,
+    {
+        type Item = IoResult<(S::Stream, SocketAddr)>;
+
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            let future = self.inner.accept();
+            futures::pin_mut!(future);
+            let result = futures::ready!(future.poll(cx));
+            Poll::Ready(Some(result))
+        }
+    }
 }
 
 /// Functions for launching and managing tasks.

@@ -6,11 +6,14 @@ use log::{error, info, warn};
 use std::io::Result as IoResult;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
+/*
 #[allow(unused)]
 use tor_rtcompat::impl_traits::*;
+ */
 
 use tor_client::{ConnectPrefs, TorClient};
 use tor_proto::circuit::IpVersionPreference;
+use tor_rtcompat::prelude::*;
 use tor_rtcompat::timer::TimeoutError;
 use tor_socksproto::{SocksCmd, SocksRequest};
 
@@ -36,10 +39,10 @@ fn ip_preference(req: &SocksRequest, addr: &str) -> IpVersionPreference {
 
 /// Given a just-received TCP connection on a SOCKS port, handle the
 /// SOCKS handshake and relay the connection over the Tor network.
-async fn handle_socks_conn(
-    client: Arc<TorClient>,
-    stream: tor_rtcompat::net::TcpStream,
-) -> Result<()> {
+async fn handle_socks_conn<S>(client: Arc<TorClient>, stream: S) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
+{
     let mut handshake = tor_socksproto::SocksHandshake::new();
 
     let (mut r, mut w) = stream.split();
@@ -188,13 +191,13 @@ where
 /// Launch a SOCKS proxy to listen on a given localhost port, and run until
 /// indefinitely.
 pub async fn run_socks_proxy(client: Arc<TorClient>, socks_port: u16) -> Result<()> {
-    use tor_rtcompat::net::TcpListener;
     let mut listeners = Vec::new();
+    let runtime = tor_rtcompat::runtime();
 
     let localhosts: [IpAddr; 2] = [Ipv4Addr::LOCALHOST.into(), Ipv6Addr::LOCALHOST.into()];
     for localhost in &localhosts {
         let addr: SocketAddr = (*localhost, socks_port).into();
-        match TcpListener::bind(addr).await {
+        match runtime.listen(&addr).await {
             Ok(listener) => {
                 info!("Listening on {:?}.", addr);
                 listeners.push(listener);
@@ -206,12 +209,15 @@ pub async fn run_socks_proxy(client: Arc<TorClient>, socks_port: u16) -> Result<
         error!("Couldn't open any listeners.");
         return Ok(()); // XXXX should return an error.
     }
-    let streams_iter = listeners.iter();
 
-    let mut incoming = futures::stream::select_all(streams_iter.map(TcpListener::incoming));
+    let mut incoming = futures::stream::select_all(
+        listeners
+            .into_iter()
+            .map(tor_rtcompat::net::listener_to_stream),
+    );
 
     while let Some(stream) = incoming.next().await {
-        let stream = stream.context("Failed to receive incoming stream on SOCKS port")?;
+        let (stream, _addr) = stream.context("Failed to receive incoming stream on SOCKS port")?;
         let client_ref = Arc::clone(&client);
         tor_rtcompat::task::spawn(async move {
             let res = handle_socks_conn(client_ref, stream).await;
