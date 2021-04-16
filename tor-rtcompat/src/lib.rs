@@ -89,9 +89,64 @@ pub mod task {
 
 /// Functions and types for manipulating timers.
 pub mod timer {
-    use std::time::{Duration, SystemTime};
+    use futures::Future;
+    use pin_project::pin_project;
+    use std::{
+        pin::Pin,
+        task::{Context, Poll},
+        time::{Duration, SystemTime},
+    };
 
-    pub use crate::imp::timer::*;
+    pub use crate::task::sleep; // XXXX redundant.
+
+    #[derive(Copy, Clone, Debug)]
+    pub struct TimeoutError;
+    impl std::error::Error for TimeoutError {}
+    impl std::fmt::Display for TimeoutError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Timeout expired")
+        }
+    }
+
+    #[pin_project]
+    pub struct Timeout<T, S> {
+        #[pin]
+        future: T,
+        #[pin]
+        sleep_future: S,
+    }
+
+    pub fn timeout<F: Future>(
+        duration: Duration,
+        future: F,
+    ) -> impl Future<Output = Result<F::Output, TimeoutError>> {
+        let sleep_future = crate::task::sleep(duration);
+
+        Timeout {
+            future,
+            sleep_future,
+        }
+    }
+
+    impl<T, S> Future for Timeout<T, S>
+    where
+        T: Future,
+        S: Future<Output = ()>,
+    {
+        type Output = Result<T::Output, TimeoutError>;
+
+        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+            let this = self.project();
+            if let Poll::Ready(x) = this.future.poll(cx) {
+                return Poll::Ready(Ok(x));
+            }
+
+            match this.sleep_future.poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(()) => Poll::Ready(Err(TimeoutError)),
+            }
+        }
+    }
 
     /// Pause until the wall-clock is at `when` or later, trying to
     /// recover from clock jumps.

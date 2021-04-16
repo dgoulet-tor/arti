@@ -130,9 +130,7 @@ pub mod net {
 pub mod task {}
 
 /// Functions and types for manipulating timers (tokio implementation)
-pub mod timer {
-    pub use tokio_crate::time::{error::Elapsed as TimeoutError, sleep, timeout};
-}
+pub mod timer {}
 
 /// Implement a set of TLS wrappers for use with tokio.
 ///

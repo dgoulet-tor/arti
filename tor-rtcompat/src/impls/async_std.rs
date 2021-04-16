@@ -27,32 +27,10 @@ pub mod net {
 }
 
 /// Functions for launching and managing tasks (async_std implementation)
-pub mod task {
-    pub use async_std_crate::task::{block_on, sleep, spawn, JoinHandle};
-
-    //pub use async_std_crate::task::JoinHandle;
-
-    /// Stop the task `handle` from running.
-    ///
-    /// If you drop `handle` without calling this function, it will just
-    /// run to completion.
-    #[allow(unused)]
-    pub async fn cancel_task<T>(handle: JoinHandle<T>) {
-        handle.cancel().await;
-    }
-}
+pub mod task {}
 
 /// Functions and types for manipulating timers (async_std implementation)
-pub mod timer {
-    use std::time::Duration;
-
-    /// Return a future that will be ready after `duration` has passed.
-    pub fn sleep(duration: Duration) -> async_io::Timer {
-        async_io::Timer::after(duration)
-    }
-
-    pub use async_std_crate::future::{timeout, TimeoutError};
-}
+pub mod timer {}
 
 /// Implement TLS using async_std and async_native_tls.
 pub mod tls {
