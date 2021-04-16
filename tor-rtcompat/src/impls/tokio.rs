@@ -102,6 +102,10 @@ pub mod net {
         pub fn incoming(&self) -> Incoming<'_> {
             Incoming { lis: &self.lis }
         }
+
+        pub(crate) fn incoming2(self) -> IncomingTcpStreams {
+            IncomingTcpStreams { lis: self.lis }
+        }
     }
 
     /// Asynchronous stream that yields incoming connections from a
@@ -122,6 +126,28 @@ pub mod net {
             let (stream, _addr) = futures::ready!(p.lis.poll_accept(cx))?;
 
             Poll::Ready(Some(Ok(stream.into())))
+        }
+    }
+
+    /// Asynchronous stream that yields incoming connections from a
+    /// TcpListener.
+    ///
+    /// This is analogous to async_std::net::Incoming.
+    pub struct IncomingTcpStreams {
+        /// Reference to the underlying listener.
+        lis: TokioTcpListener,
+    }
+
+    impl futures::stream::Stream for IncomingTcpStreams {
+        type Item = IoResult<(TcpStream, SocketAddr)>;
+
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+            // let p = self.project();
+            match self.lis.poll_accept(cx) {
+                Poll::Ready(Ok((s, a))) => Poll::Ready(Some(Ok((s.into(), a)))),
+                Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
+                Poll::Pending => Poll::Pending,
+            }
         }
     }
 }
@@ -270,8 +296,12 @@ impl SleepProvider for async_executors::TokioTp {
 #[async_trait]
 impl TcpListener for net::TcpListener {
     type Stream = net::TcpStream;
+    type Incoming = net::IncomingTcpStreams;
     async fn accept(&self) -> IoResult<(Self::Stream, SocketAddr)> {
         net::TcpListener::accept(self).await
+    }
+    fn incoming(self) -> Self::Incoming {
+        self.incoming2()
     }
 }
 

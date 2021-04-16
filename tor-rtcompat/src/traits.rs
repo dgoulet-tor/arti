@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use futures::stream;
 use futures::{AsyncRead, AsyncWrite, Future};
 use std::io::Result as IoResult;
 use std::net::SocketAddr;
@@ -38,5 +39,7 @@ pub trait TcpProvider {
 #[async_trait]
 pub trait TcpListener {
     type Stream: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static;
+    type Incoming: stream::Stream<Item = IoResult<(Self::Stream, SocketAddr)>> + Unpin;
     async fn accept(&self) -> IoResult<(Self::Stream, SocketAddr)>;
+    fn incoming(self) -> Self::Incoming;
 }

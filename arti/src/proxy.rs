@@ -210,11 +210,8 @@ pub async fn run_socks_proxy(client: Arc<TorClient>, socks_port: u16) -> Result<
         return Ok(()); // XXXX should return an error.
     }
 
-    let mut incoming = futures::stream::select_all(
-        listeners
-            .into_iter()
-            .map(tor_rtcompat::net::listener_to_stream),
-    );
+    let mut incoming =
+        futures::stream::select_all(listeners.into_iter().map(TcpListener::incoming));
 
     while let Some(stream) = incoming.next().await {
         let (stream, _addr) = stream.context("Failed to receive incoming stream on SOCKS port")?;

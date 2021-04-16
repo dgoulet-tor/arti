@@ -8,6 +8,58 @@
 /// Types used for networking (async_std implementation)
 pub mod net {
     pub use async_std_crate::net::{TcpListener, TcpStream};
+    use futures::future::Future;
+    use futures::stream::Stream;
+    use pin_project::pin_project;
+    use std::io::Result as IoResult;
+    use std::net::SocketAddr;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
+    // XXXX I hate using this trick.
+    #[pin_project]
+    pub struct IncomingStreams {
+        state: Option<IncomingStreamsState>,
+    }
+    type FResult = (IoResult<(TcpStream, SocketAddr)>, TcpListener);
+    async fn take_and_poll(lis: TcpListener) -> FResult {
+        let result = lis.accept().await;
+        (result, lis)
+    }
+    enum IncomingStreamsState {
+        Ready(TcpListener),
+        Accepting(Pin<Box<dyn Future<Output = FResult>>>),
+    }
+    impl IncomingStreams {
+        pub fn from_listener(lis: TcpListener) -> IncomingStreams {
+            IncomingStreams {
+                state: Some(IncomingStreamsState::Ready(lis)),
+            }
+        }
+    }
+    impl Stream for IncomingStreams {
+        type Item = IoResult<(TcpStream, SocketAddr)>;
+
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+            use IncomingStreamsState as St;
+            let this = self.project();
+            let state = this.state.take().expect("No valid state!");
+            let mut future = match state {
+                St::Ready(lis) => Box::pin(take_and_poll(lis)),
+                St::Accepting(fut) => fut,
+            };
+            match future.as_mut().poll(cx) {
+                Poll::Ready((val, lis)) => {
+                    *this.state = Some(St::Ready(lis));
+                    Poll::Ready(Some(val))
+                }
+                Poll::Pending => {
+                    *this.state = Some(St::Accepting(future));
+                    Poll::Pending
+                }
+            }
+        }
+    }
 }
 
 /// Functions for launching and managing tasks (async_std implementation)
@@ -109,8 +161,12 @@ impl SleepProvider for async_executors::AsyncStd {
 #[async_trait]
 impl TcpListener for net::TcpListener {
     type Stream = net::TcpStream;
+    type Incoming = net::IncomingStreams;
     async fn accept(&self) -> IoResult<(Self::Stream, SocketAddr)> {
         net::TcpListener::accept(self).await
+    }
+    fn incoming(self) -> net::IncomingStreams {
+        net::IncomingStreams::from_listener(self)
     }
 }
 
