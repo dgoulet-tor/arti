@@ -36,12 +36,14 @@ use std::time::Duration;
 
 pub use err::Error;
 
+use tor_rtcompat::traits::Runtime;
+
 /// A Type that remembers a set of live channels, and launches new
 /// ones on request.
 ///
 /// Use the [ChanMgr::get_or_launch] function to craete a new channel, or
 /// get one if it exists.
-pub struct ChanMgr {
+pub struct ChanMgr<R: Runtime> {
     /// Map from Ed25519 identity to channel state.
     ///
     /// Note that eventually we might want to have this be only
@@ -56,6 +58,9 @@ pub struct ChanMgr {
 
     /// Object used to create TLS connections to relays.
     connector: Box<dyn Connector + Sync + Send + 'static>,
+
+    /// DOCDOC
+    runtime: R,
 }
 
 /// Possible states for a managed channel
@@ -68,10 +73,10 @@ enum ChannelState {
     Building(Arc<event_listener::Event>),
 }
 
-impl ChanMgr {
+impl<R: Runtime> ChanMgr<R> {
     /// Construct a new channel manager.  It will use `transport` to construct
     /// TLS streams, and `spawn` to launch reactor tasks.
-    pub fn new<TR>(transport: TR) -> Self
+    pub fn new<TR>(runtime: R, transport: TR) -> Self
     where
         TR: Transport + Send + Sync + 'static,
     {
@@ -79,6 +84,7 @@ impl ChanMgr {
         ChanMgr {
             channels: Mutex::new(HashMap::new()),
             connector,
+            runtime,
         }
     }
 
@@ -164,7 +170,12 @@ impl ChanMgr {
         // XXXX make this a parameter.
         let timeout = Duration::new(5, 0);
 
-        let result = tor_rtcompat::timer::timeout(timeout, self.build_channel_once(target)).await;
+        let result = tor_rtcompat::timer::timeout_rt(
+            &self.runtime,
+            timeout,
+            self.build_channel_once(target),
+        )
+        .await;
 
         match result {
             Ok(Ok(chan)) => Ok(chan),
@@ -206,6 +217,8 @@ mod test {
     use std::net::SocketAddr;
     use std::pin::Pin;
     use std::task::Poll;
+
+    use tor_rtcompat::runtime;
 
     struct FakeTransport;
     struct FakeConnection;
@@ -282,7 +295,7 @@ mod test {
     #[test]
     fn connect_one_ok() {
         tor_rtcompat::task::block_on(async {
-            let mgr = ChanMgr::new(FakeTransport);
+            let mgr = ChanMgr::new(runtime(), FakeTransport);
             let target = Target {
                 addr: ["127.0.0.1:443".parse().unwrap()],
                 ed_id: [3; 32].into(),
@@ -310,7 +323,7 @@ mod test {
     #[test]
     fn connect_one_fail() {
         tor_rtcompat::task::block_on(async {
-            let mgr = ChanMgr::new(FakeTransport);
+            let mgr = ChanMgr::new(runtime(), FakeTransport);
             // port 1337 is set up to always fail in FakeTransport.
             let target = Target {
                 addr: ["127.0.0.1:1337".parse().unwrap()],
@@ -342,7 +355,7 @@ mod test {
     #[test]
     fn test_concurrent() {
         tor_rtcompat::task::block_on(async {
-            let mgr = ChanMgr::new(FakeTransport);
+            let mgr = ChanMgr::new(runtime(), FakeTransport);
             let target3 = Target {
                 addr: ["127.0.0.1:99".parse().unwrap()],
                 ed_id: [3; 32].into(),
@@ -391,7 +404,7 @@ mod test {
         tor_rtcompat::task::block_on(async {
             use futures::FutureExt;
 
-            let mgr = ChanMgr::new(FakeTransport);
+            let mgr = ChanMgr::new(runtime(), FakeTransport);
             let target = Target {
                 addr: ["127.0.0.1:99".parse().unwrap()],
                 ed_id: [12; 32].into(),
@@ -414,7 +427,7 @@ mod test {
     #[test]
     fn connect_two_closing() {
         tor_rtcompat::task::block_on(async {
-            let mgr = ChanMgr::new(FakeTransport);
+            let mgr = ChanMgr::new(runtime(), FakeTransport);
             let target = Target {
                 addr: ["127.0.0.1:443".parse().unwrap()],
                 ed_id: [3; 32].into(),

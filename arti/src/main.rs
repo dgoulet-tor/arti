@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tor_client::TorClient;
 use tor_config::CfgPath;
 use tor_dirmgr::{DownloadScheduleConfig, NetDirConfig, NetworkConfig};
+use tor_rtcompat::traits::SpawnBlocking;
 
 use anyhow::Result;
 use argh::FromArgs;
@@ -112,8 +113,10 @@ fn main() -> Result<()> {
         }
     };
 
-    tor_rtcompat::task::block_on(async {
-        let client = Arc::new(TorClient::bootstrap(dircfg).await?);
+    let runtime = tor_rtcompat::runtime();
+    let rt_copy = runtime.clone();
+    rt_copy.block_on(async {
+        let client = Arc::new(TorClient::bootstrap(runtime, dircfg).await?);
         proxy::run_socks_proxy(client, socks_port).await
     })
 }

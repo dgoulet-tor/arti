@@ -12,12 +12,20 @@ pub use futures::task::Spawn;
 ///
 /// DOCDOC
 pub trait Runtime:
-    Send + Spawn + SpawnBlocking + Clone + SleepProvider + TcpProvider + TlsProvider
+    Sync + Send + Spawn + SpawnBlocking + Clone + SleepProvider + TcpProvider + TlsProvider + 'static
 {
 }
 
 impl<T> Runtime for T where
-    T: Send + Spawn + SpawnBlocking + Clone + SleepProvider + TcpProvider + TlsProvider
+    T: Sync
+        + Send
+        + Spawn
+        + SpawnBlocking
+        + Clone
+        + SleepProvider
+        + TcpProvider
+        + TlsProvider
+        + 'static
 {
 }
 

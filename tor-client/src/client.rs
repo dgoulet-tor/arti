@@ -8,7 +8,7 @@ use tor_circmgr::TargetPort;
 use tor_dirmgr::NetDirConfig;
 use tor_proto::circuit::IpVersionPreference;
 use tor_proto::stream::DataStream;
-use tor_rtcompat::traits::TlsProvider;
+use tor_rtcompat::traits::Runtime;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,12 +24,12 @@ use log::info;
 /// Cloning this object makes a new reference to the same underlying
 /// handles.
 #[derive(Clone)]
-pub struct TorClient {
+pub struct TorClient<R: Runtime> {
     /// Circuit manager for keeping our circuits up to date and building
     /// them on-demand.
-    circmgr: Arc<tor_circmgr::CircMgr>,
+    circmgr: Arc<tor_circmgr::CircMgr<R>>,
     /// Directory manager for keeping our directory material up to date.
-    dirmgr: Arc<tor_dirmgr::DirMgr>,
+    dirmgr: Arc<tor_dirmgr::DirMgr<R>>,
 }
 
 /// Preferences for how to route a stream over the Tor network.
@@ -70,18 +70,17 @@ impl ConnectPrefs {
     // TODO: Add some way to be IPFlexible, and require exit to suppport both.
 }
 
-impl TorClient {
+impl<R: Runtime> TorClient<R> {
     /// Bootstrap a network connection configured by `dircfg`.
     ///
     /// Return a client once there is enough directory material to
     /// connect safely over the Tor network.
-    pub async fn bootstrap(dircfg: NetDirConfig) -> Result<TorClient> {
-        let runtime = tor_rtcompat::runtime();
+    pub async fn bootstrap(runtime: R, dircfg: NetDirConfig) -> Result<TorClient<R>> {
         let transport = {
             let connector = runtime.tls_connector();
             NativeTlsTransport::new(connector)?
         };
-        let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(transport));
+        let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(runtime, transport));
         let circmgr = Arc::new(tor_circmgr::CircMgr::new(Arc::clone(&chanmgr)));
         let dirmgr =
             tor_dirmgr::DirMgr::bootstrap_from_config(dircfg, Arc::clone(&circmgr)).await?;

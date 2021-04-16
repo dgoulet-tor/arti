@@ -16,6 +16,7 @@ mod response;
 mod util;
 
 use tor_circmgr::{CircMgr, DirInfo};
+use tor_rtcompat::traits::Runtime;
 
 use async_compression::futures::bufread::{XzDecoder, ZlibDecoder, ZstdDecoder};
 use futures::io::{
@@ -45,13 +46,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 /// This is the only function in this crate that knows about CircMgr and
 /// DirInfo.  Perhaps this function should move up a level into DirMgr?
-pub async fn get_resource<CR>(
+pub async fn get_resource<CR, R>(
     req: &CR,
     dirinfo: DirInfo<'_>,
-    circ_mgr: Arc<CircMgr>,
+    circ_mgr: Arc<CircMgr<R>>,
 ) -> anyhow::Result<DirResponse>
 where
     CR: request::Requestable + ?Sized,
+    R: Runtime,
 {
     use tor_rtcompat::timer::timeout;
 
@@ -266,8 +268,9 @@ where
 }
 
 /// Retire a directory circuit because of an error we've encountered on it.
-async fn retire_circ<E>(circ_mgr: Arc<CircMgr>, source_info: &SourceInfo, error: &E)
+async fn retire_circ<R, E>(circ_mgr: Arc<CircMgr<R>>, source_info: &SourceInfo, error: &E)
 where
+    R: Runtime,
     E: std::fmt::Display + ?Sized,
 {
     let id = source_info.unique_circ_id();

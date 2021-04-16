@@ -35,6 +35,7 @@ use async_trait::async_trait;
 use futures::{channel::oneshot, lock::Mutex};
 use log::{info, warn};
 use tor_rtcompat::timer::sleep_until_wallclock;
+use tor_rtcompat::traits::Runtime;
 
 use std::sync::Arc;
 use std::{collections::HashMap, sync::Weak};
@@ -65,7 +66,7 @@ pub use storage::DocumentText;
 /// Because of portability issues in [`fslock::LockFile`], you might
 /// get weird results if you run two of these in the same process with
 /// the same underlying cache.
-pub struct DirMgr {
+pub struct DirMgr<R: Runtime> {
     /// Configuration information: where to find directories, how to
     /// validate them, and so on.
     config: NetDirConfig,
@@ -84,10 +85,10 @@ pub struct DirMgr {
     netdir: SharedMutArc<NetDir>,
 
     /// A circuit manager, if this DirMgr supports downloading.
-    circmgr: Option<Arc<CircMgr>>,
+    circmgr: Option<Arc<CircMgr<R>>>,
 }
 
-impl DirMgr {
+impl<R: Runtime> DirMgr<R> {
     /// Try to load the directory from disk, without launching any
     /// kind of update process.
     ///
@@ -98,7 +99,7 @@ impl DirMgr {
     /// program; it's only suitable for command-line or batch tools.
     // TODO: I wish this function didn't have to be async.
     pub async fn load_once(config: NetDirConfig) -> Result<Arc<NetDir>> {
-        let dirmgr = Arc::new(DirMgr::from_config(config, None)?);
+        let dirmgr = Arc::new(Self::from_config(config, None)?);
 
         // TODO: add some way to return a directory that isn't up-to-date
         let _success = dirmgr.load_directory().await?;
@@ -119,7 +120,7 @@ impl DirMgr {
     /// program; it's only suitable for command-line or batch tools.
     pub async fn load_or_bootstrap_once(
         config: NetDirConfig,
-        circmgr: Arc<CircMgr>,
+        circmgr: Arc<CircMgr<R>>,
     ) -> Result<Arc<NetDir>> {
         let dirmgr = DirMgr::bootstrap_from_config(config, circmgr).await?;
         Ok(dirmgr.netdir())
@@ -134,7 +135,7 @@ impl DirMgr {
     /// replaces the directory when a new one is available.
     pub async fn bootstrap_from_config(
         config: NetDirConfig,
-        circmgr: Arc<CircMgr>,
+        circmgr: Arc<CircMgr<R>>,
     ) -> Result<Arc<Self>> {
         let dirmgr = Arc::new(DirMgr::from_config(config, Some(circmgr))?);
 
@@ -293,7 +294,7 @@ impl DirMgr {
     }
 
     /// Get a reference to the circuit manager, if we have one.
-    fn circmgr(&self) -> Result<Arc<CircMgr>> {
+    fn circmgr(&self) -> Result<Arc<CircMgr<R>>> {
         self.circmgr
             .as_ref()
             .map(Arc::clone)
@@ -311,7 +312,7 @@ impl DirMgr {
     }
 
     /// Construct a DirMgr from a NetDirConfig.
-    fn from_config(config: NetDirConfig, circmgr: Option<Arc<CircMgr>>) -> Result<Self> {
+    fn from_config(config: NetDirConfig, circmgr: Option<Arc<CircMgr<R>>>) -> Result<Self> {
         let readonly = circmgr.is_none();
         let store = Mutex::new(config.open_sqlite_store(readonly)?);
         let netdir = SharedMutArc::new();

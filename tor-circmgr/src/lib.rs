@@ -17,6 +17,7 @@ use tor_netdir::{fallback::FallbackDir, NetDir};
 use tor_netdoc::types::policy::PortPolicy;
 use tor_proto::circuit::{CircParameters, ClientCirc, UniqId};
 use tor_retry::RetryError;
+use tor_rtcompat::traits::Runtime;
 
 use anyhow::Result;
 use futures::lock::Mutex;
@@ -51,10 +52,10 @@ const MAX_CIRC_DIRTINESS: Duration = Duration::from_secs(60 * 15);
 /// believes in two kinds of circuits: Exit circuits, and directory
 /// circuits.  Exit circuits are ones that were created to connect to
 /// a set of ports; directory circuits were made to talk to directory caches.
-pub struct CircMgr {
+pub struct CircMgr<R: Runtime> {
     /// Reference to a channel manager that this circuit manager can
     /// use to make channels.
-    chanmgr: Arc<ChanMgr>,
+    chanmgr: Arc<ChanMgr<R>>,
 
     /// The circuits and pending circuit creation attempts managed
     /// by this CircMgr.
@@ -336,9 +337,9 @@ impl CircUsage {
     }
 }
 
-impl CircMgr {
+impl<R: Runtime> CircMgr<R> {
     /// Construct a new circuit manager.
-    pub fn new(chanmgr: Arc<ChanMgr>) -> Self {
+    pub fn new(chanmgr: Arc<ChanMgr<R>>) -> Self {
         let circuits = Mutex::new(CircSet {
             circuits: HashMap::new(),
         });

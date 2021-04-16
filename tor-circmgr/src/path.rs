@@ -10,6 +10,7 @@ use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackDir, Relay};
 use tor_proto::channel::Channel;
 use tor_proto::circuit::{CircParameters, ClientCirc};
+use tor_rtcompat::traits::Runtime;
 
 use rand::{CryptoRng, Rng};
 use std::sync::Arc;
@@ -63,21 +64,22 @@ impl<'a> TorPath<'a> {
     }
 
     /// Internal: get or create a channel for the first hop of a path.
-    async fn get_channel(&self, chanmgr: &ChanMgr) -> Result<Arc<Channel>> {
+    async fn get_channel<R: Runtime>(&self, chanmgr: &ChanMgr<R>) -> Result<Arc<Channel>> {
         let first_hop = self.first_hop()?;
         let channel = chanmgr.get_or_launch(first_hop).await?;
         Ok(channel)
     }
 
     /// Try to build a circuit corresponding to this path.
-    pub async fn build_circuit<R>(
+    pub async fn build_circuit<RNG, RT>(
         &self,
-        rng: &mut R,
-        chanmgr: &ChanMgr,
+        rng: &mut RNG,
+        chanmgr: &ChanMgr<RT>,
         params: &CircParameters,
     ) -> Result<Arc<ClientCirc>>
     where
-        R: Rng + CryptoRng,
+        RNG: Rng + CryptoRng,
+        RT: Runtime,
     {
         use TorPath::*;
         let chan = self.get_channel(chanmgr).await?;

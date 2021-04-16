@@ -82,6 +82,7 @@ pub mod task {
 
 /// Functions and types for manipulating timers.
 pub mod timer {
+    use crate::traits::SleepProvider;
     use futures::Future;
     use pin_project::pin_project;
     use std::{
@@ -91,7 +92,6 @@ pub mod timer {
     };
 
     pub fn sleep(dur: Duration) -> impl Future<Output = ()> + Send {
-        use crate::traits::SleepProvider;
         crate::runtime_ref().sleep(dur)
     }
 
@@ -116,7 +116,15 @@ pub mod timer {
         duration: Duration,
         future: F,
     ) -> impl Future<Output = Result<F::Output, TimeoutError>> {
-        let sleep_future = sleep(duration);
+        timeout_rt(crate::runtime_ref(), duration, future)
+    }
+
+    pub fn timeout_rt<R: SleepProvider, F: Future>(
+        runtime: &R,
+        duration: Duration,
+        future: F,
+    ) -> impl Future<Output = Result<F::Output, TimeoutError>> {
+        let sleep_future = runtime.sleep(duration);
 
         Timeout {
             future,

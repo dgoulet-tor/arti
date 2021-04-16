@@ -35,8 +35,9 @@ fn ip_preference(req: &SocksRequest, addr: &str) -> IpVersionPreference {
 
 /// Given a just-received TCP connection on a SOCKS port, handle the
 /// SOCKS handshake and relay the connection over the Tor network.
-async fn handle_socks_conn<S>(client: Arc<TorClient>, stream: S) -> Result<()>
+async fn handle_socks_conn<R, S>(client: Arc<TorClient<R>>, stream: S) -> Result<()>
 where
+    R: Runtime,
     S: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
 {
     let mut handshake = tor_socksproto::SocksHandshake::new();
@@ -186,7 +187,7 @@ where
 
 /// Launch a SOCKS proxy to listen on a given localhost port, and run until
 /// indefinitely.
-pub async fn run_socks_proxy(client: Arc<TorClient>, socks_port: u16) -> Result<()> {
+pub async fn run_socks_proxy<R: Runtime>(client: Arc<TorClient<R>>, socks_port: u16) -> Result<()> {
     let mut listeners = Vec::new();
     let runtime = tor_rtcompat::runtime();
 

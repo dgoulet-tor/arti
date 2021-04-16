@@ -44,6 +44,7 @@ use tor_netdoc::{
     },
     AllowAnnotations,
 };
+use tor_rtcompat::traits::Runtime;
 
 /// An object where we can put a usable netdir.
 ///
@@ -60,7 +61,7 @@ pub(crate) trait WriteNetDir: 'static + Sync + Send {
     fn netdir(&self) -> &SharedMutArc<NetDir>;
 }
 
-impl WriteNetDir for crate::DirMgr {
+impl<R: Runtime> WriteNetDir for crate::DirMgr<R> {
     fn config(&self) -> &NetDirConfig {
         &self.config
     }

@@ -18,9 +18,13 @@ use futures::StreamExt;
 use log::{info, warn};
 use tor_dirclient::DirResponse;
 use tor_rtcompat::timer::sleep_until_wallclock;
+use tor_rtcompat::traits::Runtime;
 
 /// Try to read a set of documents from `dirmgr` by ID.
-async fn load_all(dirmgr: &DirMgr, missing: Vec<DocId>) -> Result<HashMap<DocId, DocumentText>> {
+async fn load_all<R: Runtime>(
+    dirmgr: &DirMgr<R>,
+    missing: Vec<DocId>,
+) -> Result<HashMap<DocId, DocumentText>> {
     let mut loaded = HashMap::new();
     for query in docid::partition_by_type(missing.into_iter()).values() {
         dirmgr.load_documents_into(query, &mut loaded).await?;
@@ -29,8 +33,8 @@ async fn load_all(dirmgr: &DirMgr, missing: Vec<DocId>) -> Result<HashMap<DocId,
 }
 
 /// Launch a single client request and get an associated response.
-async fn fetch_single(
-    dirmgr: Arc<DirMgr>,
+async fn fetch_single<R: Runtime>(
+    dirmgr: Arc<DirMgr<R>>,
     request: ClientRequest,
 ) -> Result<(ClientRequest, DirResponse)> {
     let circmgr = dirmgr.circmgr()?;
@@ -48,8 +52,8 @@ async fn fetch_single(
 /// `missing`, and return each request along with the response it received.
 ///
 /// Don't launch more than `parallelism` requests at once.
-async fn fetch_multiple(
-    dirmgr: Arc<DirMgr>,
+async fn fetch_multiple<R: Runtime>(
+    dirmgr: Arc<DirMgr<R>>,
     missing: Vec<DocId>,
     parallelism: usize,
 ) -> Result<Vec<(ClientRequest, DirResponse)>> {
@@ -80,7 +84,10 @@ async fn fetch_multiple(
 
 /// Try tp update `state` by loading cached information from `dirmgr`.
 /// Return true if anything changed.
-async fn load_once(dirmgr: &Arc<DirMgr>, state: &mut Box<dyn DirState>) -> Result<bool> {
+async fn load_once<R: Runtime>(
+    dirmgr: &Arc<DirMgr<R>>,
+    state: &mut Box<dyn DirState>,
+) -> Result<bool> {
     let missing = state.missing_docs();
     if missing.is_empty() {
         Ok(false)
@@ -94,8 +101,8 @@ async fn load_once(dirmgr: &Arc<DirMgr>, state: &mut Box<dyn DirState>) -> Resul
 /// cache in `dirmgr`, advancing the state to the extent possible.
 ///
 /// No downloads are performed; the provided state will not be reset.
-pub(crate) async fn load(
-    dirmgr: Arc<DirMgr>,
+pub(crate) async fn load<R: Runtime>(
+    dirmgr: Arc<DirMgr<R>>,
     mut state: Box<dyn DirState>,
 ) -> Result<Box<dyn DirState>> {
     let mut safety_counter = 0_usize;
@@ -126,8 +133,8 @@ pub(crate) async fn load(
 /// than `parallelism` requests at a time.
 ///
 /// Return true if the state reports that it changed.
-async fn download_attempt(
-    dirmgr: &Arc<DirMgr>,
+async fn download_attempt<R: Runtime>(
+    dirmgr: &Arc<DirMgr<R>>,
     state: &mut Box<dyn DirState>,
     parallelism: usize,
 ) -> Result<bool> {
@@ -171,8 +178,8 @@ async fn download_attempt(
 /// Return Err only on a non-recoverable error.  On an error that
 /// merits another bootstrap attempt with the same state, return the
 /// state and an Error object in an option.
-pub(crate) async fn download(
-    dirmgr: Weak<DirMgr>,
+pub(crate) async fn download<R: Runtime>(
+    dirmgr: Weak<DirMgr<R>>,
     mut state: Box<dyn DirState>,
     mut on_usable: Option<oneshot::Sender<()>>,
 ) -> Result<(Box<dyn DirState>, Option<Error>)> {
