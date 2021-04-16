@@ -3,6 +3,8 @@
 //! This crate helps define a slim API around our async runtime so that we
 //! can easily swap it out.
 
+use std::convert::TryInto;
+
 /// Types used for networking (tokio implementation)
 pub mod net {
     pub use tokio_crate::io::split as split_io;
@@ -198,10 +200,14 @@ pub mod tls {
     }
 
     #[async_trait]
-    impl crate::tls::TlsConnector for TlsConnector {
+    impl crate::traits::TlsConnector for TlsConnector {
         type Conn = TlsStream;
 
-        async fn connect(&self, addr: &SocketAddr, hostname: &str) -> IoResult<Self::Conn> {
+        async fn connect_unvalidated(
+            &self,
+            addr: &SocketAddr,
+            hostname: &str,
+        ) -> IoResult<Self::Conn> {
             let stream = tokio_crate::net::TcpStream::connect(addr).await?;
 
             let conn = self
@@ -244,7 +250,7 @@ pub mod tls {
         }
     }
 
-    impl crate::tls::CertifiedConn for TlsStream {
+    impl crate::traits::CertifiedConn for TlsStream {
         fn peer_certificate(&self) -> IoResult<Option<Vec<u8>>> {
             let cert = self.s.get_ref().get_ref().peer_certificate();
             match cert {
@@ -321,5 +327,21 @@ impl TcpProvider for async_executors::TokioTp {
 impl SpawnBlocking for async_executors::TokioTp {
     fn block_on<F: Future>(&self, f: F) -> F::Output {
         async_executors::TokioTp::block_on(self, f)
+    }
+}
+
+impl TlsProvider for async_executors::TokioTp {
+    type TlsStream = tls::TlsStream;
+    type Connector = tls::TlsConnector;
+
+    fn tls_connector(&self) -> tls::TlsConnector {
+        let mut builder = native_tls::TlsConnector::builder();
+        // These function names are scary, but they just mean that
+        // we're skipping web pki, and using our own PKI functions.
+        builder
+            .danger_accept_invalid_certs(true)
+            .danger_accept_invalid_hostnames(true);
+
+        builder.try_into().expect("Couldn't build a TLS connector!")
     }
 }

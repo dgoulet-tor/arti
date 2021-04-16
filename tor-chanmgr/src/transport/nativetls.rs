@@ -10,12 +10,11 @@
 use super::Transport;
 use crate::{Error, Result};
 use tor_linkspec::ChanTarget;
-use tor_rtcompat::tls::TlsConnector;
+use tor_rtcompat::traits::TlsConnector;
 
 use async_trait::async_trait;
 
 use log::info;
-use std::convert::{TryFrom, TryInto};
 
 /// A Transport that uses a connector based on native_tls.
 pub struct NativeTlsTransport<C: TlsConnector> {
@@ -23,24 +22,9 @@ pub struct NativeTlsTransport<C: TlsConnector> {
     connector: C,
 }
 
-impl<C: TlsConnector> NativeTlsTransport<C>
-where
-    C: TryFrom<native_tls::TlsConnectorBuilder>,
-{
+impl<C: TlsConnector> NativeTlsTransport<C> {
     /// Construct a new NativeTlsTransport.
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Result<Self> {
-        // These function names are scary, but they just mean that
-        // we're skipping web pki, and using our own PKI functions.
-        let mut builder = native_tls::TlsConnector::builder();
-        builder
-            .danger_accept_invalid_certs(true)
-            .danger_accept_invalid_hostnames(true);
-
-        let connector = builder
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("Can't make TlsConnector."))?;
-
+    pub fn new(connector: C) -> Result<Self> {
         Ok(NativeTlsTransport { connector })
     }
 }
@@ -64,7 +48,7 @@ impl<C: TlsConnector + Send + Sync + Unpin> Transport for NativeTlsTransport<C> 
         info!("Negotiating TLS with {}", addr);
 
         // TODO: add a random hostname here if it will be used for SNI?
-        let connection = self.connector.connect(addr, "ignored").await?;
+        let connection = self.connector.connect_unvalidated(addr, "ignored").await?;
         Ok((*addr, connection))
     }
 }

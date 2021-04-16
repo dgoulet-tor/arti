@@ -11,9 +11,15 @@ pub use futures::task::Spawn;
 /// A runtime that we can use to run Tor as a client.
 ///
 /// DOCDOC
-pub trait Runtime: Send + Spawn + SpawnBlocking + Clone + SleepProvider + TcpProvider {}
+pub trait Runtime:
+    Send + Spawn + SpawnBlocking + Clone + SleepProvider + TcpProvider + TlsProvider
+{
+}
 
-impl<T> Runtime for T where T: Send + Spawn + SpawnBlocking + Clone + SleepProvider + TcpProvider {}
+impl<T> Runtime for T where
+    T: Send + Spawn + SpawnBlocking + Clone + SleepProvider + TcpProvider + TlsProvider
+{
+}
 
 pub trait SleepProvider {
     type SleepFuture: Future<Output = ()> + Send + 'static;
@@ -42,4 +48,36 @@ pub trait TcpListener {
     type Incoming: stream::Stream<Item = IoResult<(Self::Stream, SocketAddr)>> + Unpin;
     async fn accept(&self) -> IoResult<(Self::Stream, SocketAddr)>;
     fn incoming(self) -> Self::Incoming;
+}
+
+/// An object with a peer certificate.
+pub trait CertifiedConn {
+    /// Try to return the (der-encoded) peer certificate for this
+    /// connection, if any.
+    fn peer_certificate(&self) -> IoResult<Option<Vec<u8>>>;
+}
+
+/// An object that knows how to make a TLS-over-TCP connection we
+/// can use in Tor.
+///
+/// DOCDOC Not for general use.
+#[async_trait]
+pub trait TlsConnector {
+    /// The type of connection returned by this connector
+    type Conn: AsyncRead + AsyncWrite + CertifiedConn + Unpin + Send + 'static;
+
+    /// Launch a TLS-over-TCP connection to a given address.
+    /// TODO: document args
+    async fn connect_unvalidated(
+        &self,
+        addr: &SocketAddr,
+        sni_hostname: &str,
+    ) -> IoResult<Self::Conn>;
+}
+
+pub trait TlsProvider {
+    type Connector: TlsConnector<Conn = Self::TlsStream> + Send + Sync + Unpin;
+    type TlsStream: AsyncRead + AsyncWrite + CertifiedConn + Unpin + Send + 'static;
+
+    fn tls_connector(&self) -> Self::Connector;
 }

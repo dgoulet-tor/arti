@@ -8,6 +8,7 @@ use tor_circmgr::TargetPort;
 use tor_dirmgr::NetDirConfig;
 use tor_proto::circuit::IpVersionPreference;
 use tor_proto::stream::DataStream;
+use tor_rtcompat::traits::TlsProvider;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -75,7 +76,11 @@ impl TorClient {
     /// Return a client once there is enough directory material to
     /// connect safely over the Tor network.
     pub async fn bootstrap(dircfg: NetDirConfig) -> Result<TorClient> {
-        let transport = NativeTlsTransport::<tor_rtcompat::tls::TlsConnectorImp>::new()?;
+        let runtime = tor_rtcompat::runtime();
+        let transport = {
+            let connector = runtime.tls_connector();
+            NativeTlsTransport::new(connector)?
+        };
         let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(transport));
         let circmgr = Arc::new(tor_circmgr::CircMgr::new(Arc::clone(&chanmgr)));
         let dirmgr =

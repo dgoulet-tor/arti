@@ -5,6 +5,8 @@
 //!
 //! We'll probably want to support tokio as well in the future.
 
+use std::convert::TryInto;
+
 /// Types used for networking (async_std implementation)
 pub mod net {
     pub use async_std_crate::net::{TcpListener, TcpStream};
@@ -96,10 +98,14 @@ pub mod tls {
     }
 
     #[async_trait]
-    impl crate::tls::TlsConnector for TlsConnector {
+    impl crate::traits::TlsConnector for TlsConnector {
         type Conn = TlsStream;
 
-        async fn connect(&self, addr: &SocketAddr, hostname: &str) -> IoResult<Self::Conn> {
+        async fn connect_unvalidated(
+            &self,
+            addr: &SocketAddr,
+            hostname: &str,
+        ) -> IoResult<Self::Conn> {
             let stream = TcpStream::connect(addr).await?;
 
             let conn = self
@@ -111,7 +117,7 @@ pub mod tls {
         }
     }
 
-    impl<S> crate::tls::CertifiedConn for async_native_tls::TlsStream<S>
+    impl<S> crate::traits::CertifiedConn for async_native_tls::TlsStream<S>
     where
         S: AsyncRead + AsyncWrite + Unpin,
     {
@@ -145,6 +151,7 @@ use std::time::Duration;
 
 use crate::traits::*;
 
+#[allow(clippy::unnecessary_wraps)]
 pub(crate) fn create_runtime() -> IoResult<AsyncRuntime> {
     Ok(async_executors::AsyncStd::new())
 }
@@ -185,5 +192,21 @@ impl TcpProvider for async_executors::AsyncStd {
 impl SpawnBlocking for async_executors::AsyncStd {
     fn block_on<F: Future>(&self, f: F) -> F::Output {
         async_executors::AsyncStd::block_on(f)
+    }
+}
+
+impl TlsProvider for async_executors::AsyncStd {
+    type TlsStream = tls::TlsStream;
+    type Connector = tls::TlsConnector;
+
+    fn tls_connector(&self) -> tls::TlsConnector {
+        let mut builder = native_tls::TlsConnector::builder();
+        // These function names are scary, but they just mean that
+        // we're skipping web pki, and using our own PKI functions.
+        builder
+            .danger_accept_invalid_certs(true)
+            .danger_accept_invalid_hostnames(true);
+
+        builder.try_into().expect("Couldn't build a TLS connector!")
     }
 }

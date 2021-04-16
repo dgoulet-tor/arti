@@ -28,11 +28,7 @@ use once_cell::sync::OnceCell;
 
 pub(crate) mod impls;
 
-mod traits;
-
-pub mod prelude {
-    pub use crate::traits::*;
-}
+pub mod traits;
 
 // TODO: This is not an ideal situation, and it's arguably an abuse of
 // the features feature.  But I can't currently find a reasonable way
@@ -197,37 +193,7 @@ pub mod timer {
 }
 
 /// Support for launching TLS connections.
-pub mod tls {
-    use async_trait::async_trait;
-    use futures::io::{AsyncRead, AsyncWrite};
-    use std::io::Result as IoResult;
-    use std::net::SocketAddr;
-
-    /// An object with a peer certificate.
-    pub trait CertifiedConn {
-        /// Try to return the (der-encoded) peer certificate for this
-        /// connection, if any.
-        fn peer_certificate(&self) -> IoResult<Option<Vec<u8>>>;
-    }
-
-    /// An object that knows how to make a TLS-over-TCP connection we
-    /// can use in Tor.
-    #[async_trait]
-    pub trait TlsConnector {
-        /// The type of connection returned by this connector
-        type Conn: AsyncRead + AsyncWrite + CertifiedConn + Unpin + Send + 'static;
-
-        /// Launch a TLS-over-TCP connection to a given address.
-        /// TODO: document args
-        async fn connect(&self, addr: &SocketAddr, sni_hostname: &str) -> IoResult<Self::Conn>;
-    }
-
-    pub use crate::imp::tls::*;
-
-    pub use crate::imp::tls::TlsConnector as TlsConnectorImp;
-}
+pub mod tls {}
 
 /// Traits specific to the runtime in use.
-pub mod impl_traits {
-    pub use crate::imp::traits::*;
-}
+pub mod impl_traits {}

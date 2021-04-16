@@ -226,7 +226,7 @@ mod test {
         }
     }
 
-    impl tor_rtcompat::tls::CertifiedConn for FakeConnection {
+    impl tor_rtcompat::traits::CertifiedConn for FakeConnection {
         fn peer_certificate(&self) -> IoResult<Option<Vec<u8>>> {
             Ok(Some(vec![]))
         }

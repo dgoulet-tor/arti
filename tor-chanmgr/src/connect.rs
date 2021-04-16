@@ -32,7 +32,7 @@ pub(crate) trait Connector {
 #[async_trait]
 impl<TR: Transport + Send + Sync> Connector for TR {
     async fn build_channel(&self, target: &TargetInfo) -> Result<Arc<Channel>> {
-        use tor_rtcompat::tls::CertifiedConn;
+        use tor_rtcompat::traits::CertifiedConn;
         let (addr, tls) = self
             .connect(target)
             .await
