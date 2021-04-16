@@ -36,6 +36,7 @@ pub mod task {
     ///
     /// If you drop `handle` without calling this function, it will just
     /// run to completion.
+    #[allow(unused)]
     pub async fn cancel_task<T>(handle: JoinHandle<T>) {
         handle.cancel().await;
     }
@@ -118,3 +119,53 @@ pub mod tls {
 
 /// Traits specific to async_std
 pub mod traits {}
+
+// ==============================
+
+use async_trait::async_trait;
+use futures::{Future, FutureExt};
+use std::io::Result as IoResult;
+use std::net::SocketAddr;
+use std::pin::Pin;
+use std::time::Duration;
+
+use crate::traits::*;
+
+pub(crate) fn create_runtime() -> IoResult<AsyncRuntime> {
+    Ok(async_executors::AsyncStd::new())
+}
+
+pub(crate) type AsyncRuntime = async_executors::AsyncStd;
+
+impl SleepProvider for async_executors::AsyncStd {
+    type SleepFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
+    fn sleep(&self, duration: Duration) -> Self::SleepFuture {
+        Box::pin(async_io::Timer::after(duration).map(|_| ()))
+    }
+}
+
+#[async_trait]
+impl TcpListener for net::TcpListener {
+    type Stream = net::TcpStream;
+    async fn accept(&self) -> IoResult<(Self::Stream, SocketAddr)> {
+        net::TcpListener::accept(self).await
+    }
+}
+
+#[async_trait]
+impl TcpProvider for async_executors::AsyncStd {
+    type TcpStream = net::TcpStream;
+    type TcpListener = net::TcpListener;
+    async fn connect(&self, addr: &SocketAddr) -> IoResult<Self::TcpStream> {
+        net::TcpStream::connect(addr).await
+    }
+    async fn listen(&self, addr: &SocketAddr) -> IoResult<Self::TcpListener> {
+        net::TcpListener::bind(*addr).await
+    }
+}
+
+impl SpawnBlocking for async_executors::AsyncStd {
+    fn block_on<F: Future>(&self, f: F) -> F::Output {
+        async_executors::AsyncStd::block_on(f)
+    }
+}

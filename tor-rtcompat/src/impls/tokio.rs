@@ -127,28 +127,7 @@ pub mod net {
 }
 
 /// Functions for launching and managing tasks (tokio implementation)
-pub mod task {
-    use std::future::Future;
-    use tokio_crate::runtime::Runtime;
-
-    /// Create a runtime and run `future` to completion
-    pub fn block_on<F: Future>(future: F) -> F::Output {
-        let rt = Runtime::new().unwrap(); // XXXX Not good: This could panic.
-        rt.block_on(future)
-    }
-
-    pub use tokio_crate::spawn;
-    pub use tokio_crate::task::JoinHandle;
-    pub use tokio_crate::time::sleep;
-
-    /// Stop the task `handle` from running.
-    ///
-    /// If you drop `handle` without calling this function, it will just
-    /// run to completion.
-    pub async fn cancel_task<T>(handle: JoinHandle<T>) {
-        handle.abort()
-    }
-}
+pub mod task {}
 
 /// Functions and types for manipulating timers (tokio implementation)
 pub mod timer {
@@ -264,4 +243,55 @@ pub mod traits {
         AsyncRead as TokioAsyncRead, AsyncReadExt as TokioAsyncReadExt,
         AsyncWrite as TokioAsyncWrite, AsyncWriteExt as TokioAsyncWriteExt,
     };
+}
+
+// ==============================
+
+use crate::traits::*;
+use async_trait::async_trait;
+use futures::Future;
+use std::io::Result as IoResult;
+use std::net::SocketAddr;
+use std::time::Duration;
+
+pub(crate) fn create_runtime() -> IoResult<AsyncRuntime> {
+    let mut builder = async_executors::TokioTpBuilder::new();
+    builder.tokio_builder().enable_all();
+    builder.build()
+}
+
+pub(crate) type AsyncRuntime = async_executors::TokioTp;
+
+impl SleepProvider for async_executors::TokioTp {
+    type SleepFuture = tokio_crate::time::Sleep;
+    fn sleep(&self, duration: Duration) -> Self::SleepFuture {
+        tokio_crate::time::sleep(duration)
+    }
+}
+
+#[async_trait]
+impl TcpListener for net::TcpListener {
+    type Stream = net::TcpStream;
+    async fn accept(&self) -> IoResult<(Self::Stream, SocketAddr)> {
+        net::TcpListener::accept(self).await
+    }
+}
+
+#[async_trait]
+impl TcpProvider for async_executors::TokioTp {
+    type TcpStream = net::TcpStream;
+    type TcpListener = net::TcpListener;
+
+    async fn connect(&self, addr: &SocketAddr) -> IoResult<Self::TcpStream> {
+        net::TcpStream::connect(addr).await
+    }
+    async fn listen(&self, addr: &SocketAddr) -> IoResult<Self::TcpListener> {
+        net::TcpListener::bind(*addr).await
+    }
+}
+
+impl SpawnBlocking for async_executors::TokioTp {
+    fn block_on<F: Future>(&self, f: F) -> F::Output {
+        async_executors::TokioTp::block_on(self, f)
+    }
 }

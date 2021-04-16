@@ -21,10 +21,14 @@
 //! Workarounds for all of the above are possible, and in the future
 //! we should probably look into them.
 
-#![deny(missing_docs)]
-#![deny(clippy::missing_docs_in_private_items)]
+use once_cell::sync::OnceCell;
+
+//#![deny(missing_docs)]
+//#![deny(clippy::missing_docs_in_private_items)]
 
 pub(crate) mod impls;
+
+mod traits;
 
 // TODO: This is not an ideal situation, and it's arguably an abuse of
 // the features feature.  But I can't currently find a reasonable way
@@ -42,6 +46,17 @@ use impls::async_std as imp;
 #[cfg(all(feature = "tokio", not(feature = "async-std")))]
 use impls::tokio as imp;
 
+use imp::AsyncRuntime;
+
+static GLOBAL_RUNTIME: OnceCell<AsyncRuntime> = OnceCell::new();
+
+fn runtime_ref() -> &'static impl traits::Runtime {
+    GLOBAL_RUNTIME.get_or_init(|| imp::create_runtime().unwrap())
+}
+pub fn runtime() -> impl traits::Runtime {
+    runtime_ref().clone()
+}
+
 /// Types used for networking (async_std implementation)
 pub mod net {
     pub use crate::imp::net::*;
@@ -49,7 +64,27 @@ pub mod net {
 
 /// Functions for launching and managing tasks.
 pub mod task {
-    pub use crate::imp::task::*;
+    use crate::traits::{SleepProvider, SpawnBlocking};
+    use futures::Future;
+    use std::time::Duration;
+
+    pub fn sleep(dur: Duration) -> impl Future<Output = ()> + Send {
+        crate::runtime_ref().sleep(dur)
+    }
+
+    pub fn spawn<T>(task: T)
+    where
+        T: Future + Send + 'static,
+    {
+        //use async_executors::SpawnHandleExt;
+        use futures::task::SpawnExt;
+        use futures::FutureExt;
+        crate::runtime_ref().spawn(task.map(|_| ())).unwrap();
+    }
+
+    pub fn block_on<T: Future>(task: T) -> T::Output {
+        crate::runtime_ref().block_on(task)
+    }
 }
 
 /// Functions and types for manipulating timers.
