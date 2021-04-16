@@ -138,6 +138,6 @@ pub mod tls {
 }
 
 /// Traits specific to the runtime in use.
-pub mod traits {
+pub mod impl_traits {
     pub use crate::imp::traits::*;
 }

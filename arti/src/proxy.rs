@@ -7,7 +7,7 @@ use std::io::Result as IoResult;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 #[allow(unused)]
-use tor_rtcompat::traits::*;
+use tor_rtcompat::impl_traits::*;
 
 use tor_client::{ConnectPrefs, TorClient};
 use tor_proto::circuit::IpVersionPreference;
