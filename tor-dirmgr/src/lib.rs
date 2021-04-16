@@ -32,9 +32,9 @@ use tor_netdoc::doc::netstatus::ConsensusFlavor;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use futures::{channel::oneshot, lock::Mutex};
+use futures::{channel::oneshot, lock::Mutex, task::SpawnExt};
 use log::{info, warn};
-use tor_rtcompat::timer::sleep_until_wallclock;
+use tor_rtcompat::timer::sleep_until_wallclock_rt;
 use tor_rtcompat::traits::Runtime;
 
 use std::sync::Arc;
@@ -86,6 +86,9 @@ pub struct DirMgr<R: Runtime> {
 
     /// A circuit manager, if this DirMgr supports downloading.
     circmgr: Option<Arc<CircMgr<R>>>,
+
+    /// Our asynchronous runtime.
+    runtime: R,
 }
 
 impl<R: Runtime> DirMgr<R> {
@@ -97,9 +100,9 @@ impl<R: Runtime> DirMgr<R> {
     ///
     /// In general, you shouldn't use this function in a long-running
     /// program; it's only suitable for command-line or batch tools.
-    // TODO: I wish this function didn't have to be async.
-    pub async fn load_once(config: NetDirConfig) -> Result<Arc<NetDir>> {
-        let dirmgr = Arc::new(Self::from_config(config, None)?);
+    // TODO: I wish this function didn't have to be async or take a runtime.
+    pub async fn load_once(runtime: R, config: NetDirConfig) -> Result<Arc<NetDir>> {
+        let dirmgr = Arc::new(Self::from_config(config, runtime, None)?);
 
         // TODO: add some way to return a directory that isn't up-to-date
         let _success = dirmgr.load_directory().await?;
@@ -120,9 +123,10 @@ impl<R: Runtime> DirMgr<R> {
     /// program; it's only suitable for command-line or batch tools.
     pub async fn load_or_bootstrap_once(
         config: NetDirConfig,
+        runtime: R,
         circmgr: Arc<CircMgr<R>>,
     ) -> Result<Arc<NetDir>> {
-        let dirmgr = DirMgr::bootstrap_from_config(config, circmgr).await?;
+        let dirmgr = DirMgr::bootstrap_from_config(config, runtime, circmgr).await?;
         Ok(dirmgr.netdir())
     }
 
@@ -135,9 +139,10 @@ impl<R: Runtime> DirMgr<R> {
     /// replaces the directory when a new one is available.
     pub async fn bootstrap_from_config(
         config: NetDirConfig,
+        runtime: R,
         circmgr: Arc<CircMgr<R>>,
     ) -> Result<Arc<Self>> {
-        let dirmgr = Arc::new(DirMgr::from_config(config, Some(circmgr))?);
+        let dirmgr = Arc::new(DirMgr::from_config(config, runtime.clone(), Some(circmgr))?);
 
         // Try to load from the cache.
         let have_directory = dirmgr
@@ -156,14 +161,14 @@ impl<R: Runtime> DirMgr<R> {
 
         // Whether we loaded or not, we now start downloading.
         let dirmgr_weak = Arc::downgrade(&dirmgr);
-        tor_rtcompat::task::spawn(async move {
+        runtime.spawn(async move {
             // TODO: don't warn when these are Error::ManagerDropped.
             if let Err(e) = Self::reload_until_owner(&dirmgr_weak, &mut sender).await {
                 warn!("Unrecoverd error while waiting for bootstrap: {}", e);
             } else if let Err(e) = Self::download_forever(dirmgr_weak, sender).await {
                 warn!("Unrecovered error while downloading: {}", e);
             }
-        });
+        })?;
 
         if let Some(receiver) = receiver {
             let _ = receiver.await;
@@ -187,6 +192,8 @@ impl<R: Runtime> DirMgr<R> {
     ) -> Result<()> {
         let mut logged = false;
         let mut bootstrapped = false;
+        let runtime = upgrade_weak_ref(weak)?.runtime.clone();
+
         loop {
             {
                 let dirmgr = upgrade_weak_ref(weak)?;
@@ -210,7 +217,7 @@ impl<R: Runtime> DirMgr<R> {
             } else {
                 std::time::Duration::new(5, 0)
             };
-            tor_rtcompat::timer::sleep(pause).await;
+            runtime.sleep(pause).await;
             // TODO: instead of loading the whole thing we should have a
             // database entry that says when the last update was, or use
             // our state functions.
@@ -240,9 +247,12 @@ impl<R: Runtime> DirMgr<R> {
             CacheUsage::CacheOkay,
         )?);
 
-        let retry_config = {
+        let (retry_config, runtime) = {
             let dirmgr = upgrade_weak_ref(&weak)?;
-            *dirmgr.config.timing().retry_bootstrap()
+            (
+                *dirmgr.config.timing().retry_bootstrap(),
+                dirmgr.runtime.clone(),
+            )
         };
 
         loop {
@@ -266,7 +276,7 @@ impl<R: Runtime> DirMgr<R> {
                         "Unable to download a usable directory: {}.  We will restart in {:?}.",
                         err, delay
                     );
-                    tor_rtcompat::timer::sleep(delay).await;
+                    runtime.sleep(delay).await;
                     state = state.reset()?;
                 } else {
                     info!("Directory is complete.");
@@ -286,7 +296,7 @@ impl<R: Runtime> DirMgr<R> {
 
             let reset_at = state.reset_time();
             match reset_at {
-                Some(t) => sleep_until_wallclock(t).await,
+                Some(t) => sleep_until_wallclock_rt(&runtime, t).await,
                 None => return Ok(()),
             }
             state = state.reset()?;
@@ -312,7 +322,11 @@ impl<R: Runtime> DirMgr<R> {
     }
 
     /// Construct a DirMgr from a NetDirConfig.
-    fn from_config(config: NetDirConfig, circmgr: Option<Arc<CircMgr<R>>>) -> Result<Self> {
+    fn from_config(
+        config: NetDirConfig,
+        runtime: R,
+        circmgr: Option<Arc<CircMgr<R>>>,
+    ) -> Result<Self> {
         let readonly = circmgr.is_none();
         let store = Mutex::new(config.open_sqlite_store(readonly)?);
         let netdir = SharedMutArc::new();
@@ -321,6 +335,7 @@ impl<R: Runtime> DirMgr<R> {
             store,
             netdir,
             circmgr,
+            runtime,
         })
     }
 

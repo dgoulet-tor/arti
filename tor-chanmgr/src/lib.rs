@@ -188,7 +188,7 @@ impl<R: Runtime> ChanMgr<R> {
     /// and not timing out.
     async fn build_channel_once<T: ChanTarget + ?Sized>(&self, target: &T) -> Result<Arc<Channel>> {
         let target = TargetInfo::from_chan_target(target);
-        self.connector.build_channel(&target).await
+        self.connector.build_channel(&self.runtime, &target).await
     }
 
     /// Helper: Get the Channel with the given Ed25519 identity, if there

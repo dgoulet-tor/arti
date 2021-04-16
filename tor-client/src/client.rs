@@ -25,6 +25,8 @@ use log::info;
 /// handles.
 #[derive(Clone)]
 pub struct TorClient<R: Runtime> {
+    /// Asynchronous runtime object.
+    runtime: R,
     /// Circuit manager for keeping our circuits up to date and building
     /// them on-demand.
     circmgr: Arc<tor_circmgr::CircMgr<R>>,
@@ -80,12 +82,23 @@ impl<R: Runtime> TorClient<R> {
             let connector = runtime.tls_connector();
             NativeTlsTransport::new(connector)?
         };
-        let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(runtime, transport));
-        let circmgr = Arc::new(tor_circmgr::CircMgr::new(Arc::clone(&chanmgr)));
-        let dirmgr =
-            tor_dirmgr::DirMgr::bootstrap_from_config(dircfg, Arc::clone(&circmgr)).await?;
+        let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(runtime.clone(), transport));
+        let circmgr = Arc::new(tor_circmgr::CircMgr::new(
+            runtime.clone(),
+            Arc::clone(&chanmgr),
+        ));
+        let dirmgr = tor_dirmgr::DirMgr::bootstrap_from_config(
+            dircfg,
+            runtime.clone(),
+            Arc::clone(&circmgr),
+        )
+        .await?;
 
-        Ok(TorClient { circmgr, dirmgr })
+        Ok(TorClient {
+            runtime,
+            circmgr,
+            dirmgr,
+        })
     }
 
     /// Launch a connection to the provided address and port over the Tor
@@ -118,7 +131,8 @@ impl<R: Runtime> TorClient<R> {
         let stream_timeout = Duration::new(10, 0);
 
         let stream_future = circ.begin_stream(&addr, port, Some(flags.begin_flags()));
-        let stream = tor_rtcompat::timer::timeout(stream_timeout, stream_future).await??;
+        let stream =
+            tor_rtcompat::timer::timeout_rt(&self.runtime, stream_timeout, stream_future).await??;
 
         Ok(stream)
     }

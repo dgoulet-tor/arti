@@ -12,6 +12,7 @@ use tor_proto::channel::Channel;
 use tor_proto::circuit::{CircParameters, ClientCirc};
 use tor_rtcompat::traits::Runtime;
 
+use futures::task::SpawnExt;
 use rand::{CryptoRng, Rng};
 use std::sync::Arc;
 
@@ -74,6 +75,7 @@ impl<'a> TorPath<'a> {
     pub async fn build_circuit<RNG, RT>(
         &self,
         rng: &mut RNG,
+        runtime: &RT,
         chanmgr: &ChanMgr<RT>,
         params: &CircParameters,
     ) -> Result<Arc<ClientCirc>>
@@ -85,9 +87,9 @@ impl<'a> TorPath<'a> {
         let chan = self.get_channel(chanmgr).await?;
         let (pcirc, reactor) = chan.new_circ(rng).await?;
 
-        tor_rtcompat::task::spawn(async {
+        runtime.spawn(async {
             let _ = reactor.run().await;
-        });
+        })?;
 
         match self {
             OneHop(_) | FallbackOneHop(_) => {

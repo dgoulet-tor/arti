@@ -16,7 +16,7 @@ mod response;
 mod util;
 
 use tor_circmgr::{CircMgr, DirInfo};
-use tor_rtcompat::traits::Runtime;
+use tor_rtcompat::traits::{Runtime, SleepProvider};
 
 use async_compression::futures::bufread::{XzDecoder, ZlibDecoder, ZstdDecoder};
 use futures::io::{
@@ -46,16 +46,18 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 /// This is the only function in this crate that knows about CircMgr and
 /// DirInfo.  Perhaps this function should move up a level into DirMgr?
-pub async fn get_resource<CR, R>(
+pub async fn get_resource<CR, R, SP>(
     req: &CR,
     dirinfo: DirInfo<'_>,
+    runtime: &SP,
     circ_mgr: Arc<CircMgr<R>>,
 ) -> anyhow::Result<DirResponse>
 where
     CR: request::Requestable + ?Sized,
     R: Runtime,
+    SP: SleepProvider,
 {
-    use tor_rtcompat::timer::timeout;
+    use tor_rtcompat::timer::timeout_rt;
 
     let circuit = circ_mgr.get_or_launch_dir(dirinfo).await?;
 
@@ -64,11 +66,11 @@ where
     let source = SourceInfo::new(circuit.unique_id());
 
     // Launch the stream.
-    let mut stream = timeout(begin_timeout, circuit.begin_dir_stream()).await??; // XXXX handle fatalities here too
+    let mut stream = timeout_rt(runtime, begin_timeout, circuit.begin_dir_stream()).await??; // XXXX handle fatalities here too
 
     // TODO: Perhaps we want separate timeouts for each phase of this.
     // For now, we just use higher-level timeouts in `dirmgr`.
-    let r = download(req, &mut stream, Some(source.clone())).await;
+    let r = download(runtime, req, &mut stream, Some(source.clone())).await;
 
     let retire = match &r {
         Err(e) => e.should_retire_circ(),
@@ -93,7 +95,8 @@ where
 ///
 /// It's kind of bogus to have a 'source' field here at all; we may
 /// eventually want to remove it.
-pub async fn download<R, S>(
+pub async fn download<R, S, SP>(
+    runtime: &SP,
     req: &R,
     stream: &mut S,
     source: Option<SourceInfo>,
@@ -101,6 +104,7 @@ pub async fn download<R, S>(
 where
     R: request::Requestable + ?Sized,
     S: AsyncRead + AsyncWrite + Send + Unpin,
+    SP: SleepProvider,
 {
     let partial_ok = req.partial_docs_ok();
     let maxlen = req.max_response_len();
@@ -122,7 +126,7 @@ where
     let mut decoder = get_decoder(buffered, header.encoding)?;
 
     let mut result = Vec::new();
-    let ok = read_and_decompress(&mut decoder, maxlen, &mut result).await;
+    let ok = read_and_decompress(runtime, &mut decoder, maxlen, &mut result).await;
 
     let ok = match (partial_ok, ok, result.len()) {
         (true, Err(e), n) if n > 0 => {
@@ -223,9 +227,15 @@ struct HeaderStatus {
 /// Returns the status of our download attempt, stores any data that
 /// we were able to download into `result`.  Existing contents of
 /// `result` are overwritten.
-async fn read_and_decompress<S>(mut stream: S, maxlen: usize, result: &mut Vec<u8>) -> Result<()>
+async fn read_and_decompress<S, SP>(
+    runtime: &SP,
+    mut stream: S,
+    maxlen: usize,
+    result: &mut Vec<u8>,
+) -> Result<()>
 where
     S: AsyncRead + Unpin,
+    SP: SleepProvider,
 {
     let mut buf = [0_u8; 1024];
     let mut written_total: usize = 0;
@@ -233,7 +243,7 @@ where
     // XXXX should be an option and is maybe too long.  Though for some
     // users this may be too short?
     let read_timeout = Duration::from_secs(10);
-    let timer = tor_rtcompat::timer::sleep(read_timeout).fuse();
+    let timer = runtime.sleep(read_timeout).fuse();
     futures::pin_mut!(timer);
 
     loop {

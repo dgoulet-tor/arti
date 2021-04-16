@@ -57,23 +57,10 @@ pub fn runtime() -> impl traits::Runtime {
     runtime_ref().clone()
 }
 
-/// Types used for networking (async_std implementation)
-pub mod net {}
-
 /// Functions for launching and managing tasks.
 pub mod task {
     use crate::traits::SpawnBlocking;
     use futures::Future;
-
-    pub fn spawn<T>(task: T)
-    where
-        T: Future + Send + 'static,
-    {
-        //use async_executors::SpawnHandleExt;
-        use futures::task::SpawnExt;
-        use futures::FutureExt;
-        crate::runtime_ref().spawn(task.map(|_| ())).unwrap();
-    }
 
     pub fn block_on<T: Future>(task: T) -> T::Output {
         crate::runtime_ref().block_on(task)
@@ -91,10 +78,6 @@ pub mod timer {
         time::{Duration, SystemTime},
     };
 
-    pub fn sleep(dur: Duration) -> impl Future<Output = ()> + Send {
-        crate::runtime_ref().sleep(dur)
-    }
-
     #[derive(Copy, Clone, Debug)]
     pub struct TimeoutError;
     impl std::error::Error for TimeoutError {}
@@ -110,13 +93,6 @@ pub mod timer {
         future: T,
         #[pin]
         sleep_future: S,
-    }
-
-    pub fn timeout<F: Future>(
-        duration: Duration,
-        future: F,
-    ) -> impl Future<Output = Result<F::Output, TimeoutError>> {
-        timeout_rt(crate::runtime_ref(), duration, future)
     }
 
     pub fn timeout_rt<R: SleepProvider, F: Future>(
@@ -154,14 +130,17 @@ pub mod timer {
 
     /// Pause until the wall-clock is at `when` or later, trying to
     /// recover from clock jumps.
-    pub async fn sleep_until_wallclock(when: SystemTime) {
+    pub async fn sleep_until_wallclock_rt<R>(runtime: &R, when: SystemTime)
+    where
+        R: SleepProvider,
+    {
         loop {
             let now = SystemTime::now();
             if now >= when {
                 return;
             }
             let delay = calc_next_delay(now, when);
-            sleep(delay).await;
+            runtime.sleep(delay).await;
         }
     }
 
@@ -199,9 +178,3 @@ pub mod timer {
         }
     }
 }
-
-/// Support for launching TLS connections.
-pub mod tls {}
-
-/// Traits specific to the runtime in use.
-pub mod impl_traits {}

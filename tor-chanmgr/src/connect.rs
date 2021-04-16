@@ -17,6 +17,7 @@ use tor_proto::channel::{Channel, ChannelBuilder};
 
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
+use futures::task::{Spawn, SpawnExt};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -25,13 +26,21 @@ use std::sync::Arc;
 #[async_trait]
 pub(crate) trait Connector {
     /// Create a new channel to `target`, trying exactly once, not timing out.
-    async fn build_channel(&self, target: &TargetInfo) -> Result<Arc<Channel>>;
+    async fn build_channel(
+        &self,
+        runtime: &(dyn Spawn + Sync),
+        target: &TargetInfo,
+    ) -> Result<Arc<Channel>>;
 }
 
 // Every Transport is automatically a Connector.
 #[async_trait]
 impl<TR: Transport + Send + Sync> Connector for TR {
-    async fn build_channel(&self, target: &TargetInfo) -> Result<Arc<Channel>> {
+    async fn build_channel(
+        &self,
+        runtime: &(dyn Spawn + Sync),
+        target: &TargetInfo,
+    ) -> Result<Arc<Channel>> {
         use tor_rtcompat::traits::CertifiedConn;
         let (addr, tls) = self
             .connect(target)
@@ -48,9 +57,9 @@ impl<TR: Transport + Send + Sync> Connector for TR {
         let chan = chan.check(target, &peer_cert)?;
         let (chan, reactor) = chan.finish().await?;
 
-        tor_rtcompat::task::spawn(async {
+        runtime.spawn(async {
             let _ = reactor.run().await;
-        });
+        })?;
         Ok(chan)
     }
 }

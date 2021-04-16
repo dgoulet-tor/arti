@@ -60,6 +60,9 @@ pub struct CircMgr<R: Runtime> {
     /// The circuits and pending circuit creation attempts managed
     /// by this CircMgr.
     circuits: Mutex<CircSet>,
+
+    /// Asynchronous runtime for this circuit manager.
+    runtime: R,
 }
 
 /// A group of pending and open circuits managed by a circuit manager.
@@ -339,12 +342,16 @@ impl CircUsage {
 
 impl<R: Runtime> CircMgr<R> {
     /// Construct a new circuit manager.
-    pub fn new(chanmgr: Arc<ChanMgr<R>>) -> Self {
+    pub fn new(runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self {
         let circuits = Mutex::new(CircSet {
             circuits: HashMap::new(),
         });
 
-        CircMgr { chanmgr, circuits }
+        CircMgr {
+            chanmgr,
+            circuits,
+            runtime,
+        }
     }
 
     /// Return a circuit suitable for sending one-hop BEGINDIR streams,
@@ -513,7 +520,8 @@ impl<R: Runtime> CircMgr<R> {
         let mut error = RetryError::while_doing("build a circuit");
 
         for _ in 0..n_tries {
-            let result = tor_rtcompat::timer::timeout(
+            let result = tor_rtcompat::timer::timeout_rt(
+                &self.runtime,
                 timeout,
                 self.build_once_by_usage(rng, netdir, target_usage),
             )
@@ -545,7 +553,9 @@ impl<R: Runtime> CircMgr<R> {
     ) -> Result<(Arc<ClientCirc>, CircUsage)> {
         let params = netdir.circ_params();
         let (path, usage) = target_usage.build_path(rng, netdir)?;
-        let circ = path.build_circuit(rng, &self.chanmgr, &params).await?;
+        let circ = path
+            .build_circuit(rng, &self.runtime, &self.chanmgr, &params)
+            .await?;
         Ok((circ, usage))
     }
 

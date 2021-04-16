@@ -17,7 +17,7 @@ use futures::FutureExt;
 use futures::StreamExt;
 use log::{info, warn};
 use tor_dirclient::DirResponse;
-use tor_rtcompat::timer::sleep_until_wallclock;
+use tor_rtcompat::timer::sleep_until_wallclock_rt;
 use tor_rtcompat::traits::Runtime;
 
 /// Try to read a set of documents from `dirmgr` by ID.
@@ -43,7 +43,9 @@ async fn fetch_single<R: Runtime>(
         Some(ref nd) => nd.as_ref().into(),
         None => dirmgr.config.fallbacks().into(),
     };
-    let resource = tor_dirclient::get_resource(request.as_requestable(), dirinfo, circmgr).await?;
+    let resource =
+        tor_dirclient::get_resource(request.as_requestable(), dirinfo, &dirmgr.runtime, circmgr)
+            .await?;
 
     Ok((request, resource))
 }
@@ -183,6 +185,8 @@ pub(crate) async fn download<R: Runtime>(
     mut state: Box<dyn DirState>,
     mut on_usable: Option<oneshot::Sender<()>>,
 ) -> Result<(Box<dyn DirState>, Option<Error>)> {
+    let runtime = upgrade_weak_ref(&dirmgr)?.runtime.clone();
+
     'next_state: loop {
         let (parallelism, retry_config) = state.dl_config()?;
 
@@ -224,7 +228,7 @@ pub(crate) async fn download<R: Runtime>(
                             Ok(changed) => changed
                         }
                     }
-                    _ = sleep_until_wallclock(reset_time).fuse() => {
+                    _ = sleep_until_wallclock_rt(&runtime, reset_time).fuse() => {
                         // We need to reset. This can happen if (for
                         // example) we're downloading the last few
                         // microdescriptors on a consensus that now
@@ -255,11 +259,11 @@ pub(crate) async fn download<R: Runtime>(
                 let reset_time = no_more_than_a_week(state.reset_time());
                 let delay = retry.next_delay(&mut rand::thread_rng());
                 futures::select_biased! {
-                    _ = sleep_until_wallclock(reset_time).fuse() => {
+                    _ = sleep_until_wallclock_rt(&runtime, reset_time).fuse() => {
                         state = state.reset()?;
                         continue 'next_state;
                     }
-                    _ = FutureExt::fuse(tor_rtcompat::timer::sleep(delay)) => {}
+                    _ = FutureExt::fuse(runtime.sleep(delay)) => {}
                 };
             }
         }

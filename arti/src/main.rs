@@ -116,8 +116,8 @@ fn main() -> Result<()> {
     let runtime = tor_rtcompat::runtime();
     let rt_copy = runtime.clone();
     rt_copy.block_on(async {
-        let client = Arc::new(TorClient::bootstrap(runtime, dircfg).await?);
-        proxy::run_socks_proxy(client, socks_port).await
+        let client = Arc::new(TorClient::bootstrap(runtime.clone(), dircfg).await?);
+        proxy::run_socks_proxy(runtime, client, socks_port).await
     })
 }
 

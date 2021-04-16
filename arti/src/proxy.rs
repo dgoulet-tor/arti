@@ -1,7 +1,9 @@
 //! Implement a simple SOCKS proxy that relays connections over Tor.
 
+use futures::future::FutureExt;
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use futures::stream::StreamExt;
+use futures::task::SpawnExt;
 use log::{error, info, warn};
 use std::io::Result as IoResult;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -35,7 +37,7 @@ fn ip_preference(req: &SocksRequest, addr: &str) -> IpVersionPreference {
 
 /// Given a just-received TCP connection on a SOCKS port, handle the
 /// SOCKS handshake and relay the connection over the Tor network.
-async fn handle_socks_conn<R, S>(client: Arc<TorClient<R>>, stream: S) -> Result<()>
+async fn handle_socks_conn<R, S>(runtime: R, client: Arc<TorClient<R>>, stream: S) -> Result<()>
 where
     R: Runtime,
     S: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
@@ -120,8 +122,8 @@ where
 
     let (rstream, wstream) = stream.split();
 
-    let _t1 = tor_rtcompat::task::spawn(copy_interactive(r, wstream));
-    let _t2 = tor_rtcompat::task::spawn(copy_interactive(rstream, w));
+    runtime.spawn(copy_interactive(r, wstream).map(|_| ()))?;
+    runtime.spawn(copy_interactive(rstream, w).map(|_| ()))?;
 
     // TODO: XXXX-A1 we should close the TCP stream if either task fails. Do we?
     // TODO: XXXX-A1 should report the errors.
@@ -187,9 +189,12 @@ where
 
 /// Launch a SOCKS proxy to listen on a given localhost port, and run until
 /// indefinitely.
-pub async fn run_socks_proxy<R: Runtime>(client: Arc<TorClient<R>>, socks_port: u16) -> Result<()> {
+pub async fn run_socks_proxy<R: Runtime>(
+    runtime: R,
+    client: Arc<TorClient<R>>,
+    socks_port: u16,
+) -> Result<()> {
     let mut listeners = Vec::new();
-    let runtime = tor_rtcompat::runtime();
 
     let localhosts: [IpAddr; 2] = [Ipv4Addr::LOCALHOST.into(), Ipv6Addr::LOCALHOST.into()];
     for localhost in &localhosts {
@@ -213,12 +218,13 @@ pub async fn run_socks_proxy<R: Runtime>(client: Arc<TorClient<R>>, socks_port: 
     while let Some(stream) = incoming.next().await {
         let (stream, _addr) = stream.context("Failed to receive incoming stream on SOCKS port")?;
         let client_ref = Arc::clone(&client);
-        tor_rtcompat::task::spawn(async move {
-            let res = handle_socks_conn(client_ref, stream).await;
+        let runtime_copy = runtime.clone();
+        runtime.spawn(async move {
+            let res = handle_socks_conn(runtime_copy, client_ref, stream).await;
             if let Err(e) = res {
                 warn!("connection exited with error: {}", e);
             }
-        });
+        })?;
     }
 
     Ok(())
