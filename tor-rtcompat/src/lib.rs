@@ -66,13 +66,8 @@ pub mod net {}
 
 /// Functions for launching and managing tasks.
 pub mod task {
-    use crate::traits::{SleepProvider, SpawnBlocking};
+    use crate::traits::SpawnBlocking;
     use futures::Future;
-    use std::time::Duration;
-
-    pub fn sleep(dur: Duration) -> impl Future<Output = ()> + Send {
-        crate::runtime_ref().sleep(dur)
-    }
 
     pub fn spawn<T>(task: T)
     where
@@ -99,7 +94,10 @@ pub mod timer {
         time::{Duration, SystemTime},
     };
 
-    pub use crate::task::sleep; // XXXX redundant.
+    pub fn sleep(dur: Duration) -> impl Future<Output = ()> + Send {
+        use crate::traits::SleepProvider;
+        crate::runtime_ref().sleep(dur)
+    }
 
     #[derive(Copy, Clone, Debug)]
     pub struct TimeoutError;
@@ -122,7 +120,7 @@ pub mod timer {
         duration: Duration,
         future: F,
     ) -> impl Future<Output = Result<F::Output, TimeoutError>> {
-        let sleep_future = crate::task::sleep(duration);
+        let sleep_future = sleep(duration);
 
         Timeout {
             future,
@@ -159,7 +157,7 @@ pub mod timer {
                 return;
             }
             let delay = calc_next_delay(now, when);
-            crate::task::sleep(delay).await;
+            sleep(delay).await;
         }
     }
 

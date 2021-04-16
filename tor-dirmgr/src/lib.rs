@@ -209,7 +209,7 @@ impl DirMgr {
             } else {
                 std::time::Duration::new(5, 0)
             };
-            tor_rtcompat::task::sleep(pause).await;
+            tor_rtcompat::timer::sleep(pause).await;
             // TODO: instead of loading the whole thing we should have a
             // database entry that says when the last update was, or use
             // our state functions.
@@ -265,7 +265,7 @@ impl DirMgr {
                         "Unable to download a usable directory: {}.  We will restart in {:?}.",
                         err, delay
                     );
-                    tor_rtcompat::task::sleep(delay).await;
+                    tor_rtcompat::timer::sleep(delay).await;
                     state = state.reset()?;
                 } else {
                     info!("Directory is complete.");
