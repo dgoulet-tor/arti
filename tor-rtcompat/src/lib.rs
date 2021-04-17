@@ -7,24 +7,11 @@
 //! Right now this crate supports async_std and tokio; tokio is the
 //! default.  You can control this with the `async-std` or `tokio`
 //! features on this crate.
-//!
-//! Our implementation is trickier than needed, for a bunch of
-//!  reasons:
-//!  * Neither backend's executor supports the Executor or
-//!    Spawn traits.
-//!  * Tokio has its own AsyncRead and AsyncWrite traits.
-//!  * The Rust features system is not really well-suited to
-//!    mutually exclusive features, but as implemented the two features
-//!    above are mutually exclusive.
-//!  * Sleeping is not standardized.
-//!
-//! Workarounds for all of the above are possible, and in the future
-//! we should probably look into them.
-
-use once_cell::sync::OnceCell;
 
 //#![deny(missing_docs)]
 //#![deny(clippy::missing_docs_in_private_items)]
+
+use std::io::Result as IoResult;
 
 pub(crate) mod impls;
 mod timer;
@@ -40,39 +27,43 @@ pub mod tls {
     pub use crate::traits::{CertifiedConn, TlsConnector};
 }
 
-// TODO: This is not an ideal situation, and it's arguably an abuse of
-// the features feature.  But I can't currently find a reasonable way
-// to have the code use the right version of things like "sleep" or
-// "spawn" otherwise.
-#[cfg(all(feature = "async-std", feature = "tokio"))]
-compile_error!("Sorry: At most one of the async-std and tokio features can be used at a time.");
-
-#[cfg(not(any(feature = "async-std", feature = "tokio")))]
-compile_error!("Sorry: Exactly one one of the tor-rtcompat/async-std and tor-rtcompat/tokio features must be specified.");
-
 #[cfg(feature = "async-std")]
-use impls::async_std as imp;
+pub use impls::async_std::create_runtime as create_async_std_runtime;
+#[cfg(feature = "tokio")]
+pub use impls::tokio::create_runtime as create_tokio_runtime;
 
-#[cfg(all(feature = "tokio", not(feature = "async-std")))]
-use impls::tokio as imp;
+#[cfg(feature = "tokio")]
+pub type DefaultRuntime = async_executors::TokioTp;
 
-use imp::AsyncRuntime;
+#[cfg(all(feature = "async-std", not(feature = "tokio")))]
+pub type DefaultRuntime = async_executors::AsyncStd;
 
-static GLOBAL_RUNTIME: OnceCell<AsyncRuntime> = OnceCell::new();
-
-fn runtime_ref() -> &'static impl traits::Runtime {
-    GLOBAL_RUNTIME.get_or_init(|| imp::create_runtime().unwrap())
-}
-pub fn runtime() -> impl traits::Runtime {
-    runtime_ref().clone()
+pub fn create_runtime() -> IoResult<impl Runtime> {
+    create_default_runtime()
 }
 
-/// Functions for launching and managing tasks.
-pub mod task {
-    use crate::traits::SpawnBlocking;
-    use futures::Future;
-
-    pub fn block_on<T: Future>(task: T) -> T::Output {
-        crate::runtime_ref().block_on(task)
+#[allow(clippy::unnecessary_wraps)]
+fn create_default_runtime() -> IoResult<DefaultRuntime> {
+    #[cfg(feature = "tokio")]
+    {
+        create_tokio_runtime()
     }
+    #[cfg(all(feature = "async-std", not(feature = "tokio")))]
+    {
+        Ok(create_async_std_runtime())
+    }
+    #[cfg(not(any(feature = "async-std", feature = "tokio")))]
+    {
+        panic!("tor-rtcompat was built with no supported runtimes.")
+    }
+}
+
+#[allow(clippy::clone_on_copy)]
+pub fn test_with_runtime<P, F, O>(func: P) -> O
+where
+    P: FnOnce(DefaultRuntime) -> F,
+    F: futures::Future<Output = O>,
+{
+    let runtime = create_default_runtime().unwrap();
+    runtime.block_on(func(runtime.clone()))
 }

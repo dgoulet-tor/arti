@@ -142,12 +142,9 @@ use std::time::Duration;
 
 use crate::traits::*;
 
-#[allow(clippy::unnecessary_wraps)]
-pub(crate) fn create_runtime() -> IoResult<AsyncRuntime> {
-    Ok(async_executors::AsyncStd::new())
+pub fn create_runtime() -> async_executors::AsyncStd {
+    async_executors::AsyncStd::new()
 }
-
-pub(crate) type AsyncRuntime = async_executors::AsyncStd;
 
 impl SleepProvider for async_executors::AsyncStd {
     type SleepFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;

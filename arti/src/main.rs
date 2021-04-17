@@ -113,7 +113,7 @@ fn main() -> Result<()> {
         }
     };
 
-    let runtime = tor_rtcompat::runtime();
+    let runtime = tor_rtcompat::create_runtime()?;
     let rt_copy = runtime.clone();
     rt_copy.block_on(async {
         let client = Arc::new(TorClient::bootstrap(runtime.clone(), dircfg).await?);

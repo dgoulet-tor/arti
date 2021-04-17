@@ -270,13 +270,11 @@ use std::io::Result as IoResult;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-pub(crate) fn create_runtime() -> IoResult<AsyncRuntime> {
+pub fn create_runtime() -> IoResult<async_executors::TokioTp> {
     let mut builder = async_executors::TokioTpBuilder::new();
     builder.tokio_builder().enable_all();
     builder.build()
 }
-
-pub(crate) type AsyncRuntime = async_executors::TokioTp;
 
 impl SleepProvider for async_executors::TokioTp {
     type SleepFuture = tokio_crate::time::Sleep;

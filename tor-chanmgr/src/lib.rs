@@ -216,7 +216,7 @@ mod test {
     use std::pin::Pin;
     use std::task::Poll;
 
-    use tor_rtcompat::runtime;
+    use tor_rtcompat::test_with_runtime;
 
     struct FakeTransport;
     struct FakeConnection;
@@ -292,8 +292,8 @@ mod test {
 
     #[test]
     fn connect_one_ok() {
-        tor_rtcompat::task::block_on(async {
-            let mgr = ChanMgr::new(runtime(), FakeTransport);
+        test_with_runtime(|runtime| async {
+            let mgr = ChanMgr::new(runtime, FakeTransport);
             let target = Target {
                 addr: ["127.0.0.1:443".parse().unwrap()],
                 ed_id: [3; 32].into(),
@@ -315,13 +315,13 @@ mod test {
 
             let chan3 = mgr.get_nowait_by_ed_id(&[3; 32].into()).await;
             assert!(chan3.unwrap().same_channel(&chan1));
-        })
+        });
     }
 
     #[test]
     fn connect_one_fail() {
-        tor_rtcompat::task::block_on(async {
-            let mgr = ChanMgr::new(runtime(), FakeTransport);
+        test_with_runtime(|runtime| async {
+            let mgr = ChanMgr::new(runtime, FakeTransport);
             // port 1337 is set up to always fail in FakeTransport.
             let target = Target {
                 addr: ["127.0.0.1:1337".parse().unwrap()],
@@ -347,13 +347,13 @@ mod test {
 
             let chan3 = mgr.get_nowait_by_ed_id(&[4; 32].into()).await;
             assert!(chan3.is_none());
-        })
+        });
     }
 
     #[test]
     fn test_concurrent() {
-        tor_rtcompat::task::block_on(async {
-            let mgr = ChanMgr::new(runtime(), FakeTransport);
+        test_with_runtime(|runtime| async {
+            let mgr = ChanMgr::new(runtime, FakeTransport);
             let target3 = Target {
                 addr: ["127.0.0.1:99".parse().unwrap()],
                 ed_id: [3; 32].into(),
@@ -394,15 +394,15 @@ mod test {
 
             assert!(err_a.is::<tor_proto::Error>());
             assert!(err_b.is::<tor_proto::Error>());
-        })
+        });
     }
 
     #[test]
     fn test_stall() {
-        tor_rtcompat::task::block_on(async {
+        test_with_runtime(|runtime| async {
             use futures::FutureExt;
 
-            let mgr = ChanMgr::new(runtime(), FakeTransport);
+            let mgr = ChanMgr::new(runtime, FakeTransport);
             let target = Target {
                 addr: ["127.0.0.1:99".parse().unwrap()],
                 ed_id: [12; 32].into(),
@@ -419,13 +419,13 @@ mod test {
             let h = mgr.get_or_launch(&target);
 
             assert!(h.now_or_never().is_none());
-        })
+        });
     }
 
     #[test]
     fn connect_two_closing() {
-        tor_rtcompat::task::block_on(async {
-            let mgr = ChanMgr::new(runtime(), FakeTransport);
+        test_with_runtime(|runtime| async {
+            let mgr = ChanMgr::new(runtime, FakeTransport);
             let target = Target {
                 addr: ["127.0.0.1:443".parse().unwrap()],
                 ed_id: [3; 32].into(),
@@ -436,6 +436,6 @@ mod test {
             let chan2 = mgr.get_or_launch(&target).await.unwrap();
 
             assert!(!chan1.same_channel(&chan2));
-        })
+        });
     }
 }
