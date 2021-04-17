@@ -95,39 +95,14 @@ mod net {
         }
 
         /// Try to accept a socket on this listener.
-        pub async fn accept(&self) -> IoResult<(TcpStream, SocketAddr)> {
+        pub(crate) async fn accept(&self) -> IoResult<(TcpStream, SocketAddr)> {
             let (stream, addr) = self.lis.accept().await?;
             Ok((stream.into(), addr))
         }
 
-        /// Return a stream that yields incoming
-        pub fn incoming(&self) -> Incoming<'_> {
-            Incoming { lis: &self.lis }
-        }
-
-        pub(crate) fn incoming2(self) -> IncomingTcpStreams {
+        /// Wrap this listener up as a Stream.
+        pub(crate) fn incoming_streams(self) -> IncomingTcpStreams {
             IncomingTcpStreams { lis: self.lis }
-        }
-    }
-
-    /// Asynchronous stream that yields incoming connections from a
-    /// TcpListener.
-    ///
-    /// This is analogous to async_std::net::Incoming.
-    #[pin_project]
-    pub struct Incoming<'a> {
-        /// Reference to the underlying listener.
-        lis: &'a TokioTcpListener,
-    }
-
-    impl<'a> futures::stream::Stream for Incoming<'a> {
-        type Item = IoResult<TcpStream>;
-
-        fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-            let p = self.project();
-            let (stream, _addr) = futures::ready!(p.lis.poll_accept(cx))?;
-
-            Poll::Ready(Some(Ok(stream.into())))
         }
     }
 
@@ -270,6 +245,7 @@ use std::io::Result as IoResult;
 use std::net::SocketAddr;
 use std::time::Duration;
 
+/// Create and return a new Tokio multithreaded runtime.
 pub fn create_runtime() -> IoResult<async_executors::TokioTp> {
     let mut builder = async_executors::TokioTpBuilder::new();
     builder.tokio_builder().enable_all();
@@ -285,13 +261,13 @@ impl SleepProvider for async_executors::TokioTp {
 
 #[async_trait]
 impl TcpListener for net::TcpListener {
-    type Stream = net::TcpStream;
+    type TcpStream = net::TcpStream;
     type Incoming = net::IncomingTcpStreams;
-    async fn accept(&self) -> IoResult<(Self::Stream, SocketAddr)> {
+    async fn accept(&self) -> IoResult<(Self::TcpStream, SocketAddr)> {
         net::TcpListener::accept(self).await
     }
     fn incoming(self) -> Self::Incoming {
-        self.incoming2()
+        self.incoming_streams()
     }
 }
 

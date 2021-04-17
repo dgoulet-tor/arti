@@ -142,6 +142,7 @@ use std::time::Duration;
 
 use crate::traits::*;
 
+/// Create and return a new `async_std` runtime.
 pub fn create_runtime() -> async_executors::AsyncStd {
     async_executors::AsyncStd::new()
 }
@@ -155,9 +156,9 @@ impl SleepProvider for async_executors::AsyncStd {
 
 #[async_trait]
 impl TcpListener for net::TcpListener {
-    type Stream = net::TcpStream;
+    type TcpStream = net::TcpStream;
     type Incoming = net::IncomingStreams;
-    async fn accept(&self) -> IoResult<(Self::Stream, SocketAddr)> {
+    async fn accept(&self) -> IoResult<(Self::TcpStream, SocketAddr)> {
         net::TcpListener::accept(self).await
     }
     fn incoming(self) -> net::IncomingStreams {

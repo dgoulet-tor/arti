@@ -1,3 +1,5 @@
+//! Definitions for [`SleepProviderExt`] and related types.
+
 use crate::traits::SleepProvider;
 use futures::{Future, FutureExt};
 use pin_project::pin_project;
@@ -7,7 +9,12 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-#[derive(Copy, Clone, Debug)]
+/// An error value given when a function times out.
+///
+/// This value is generated when the timeout from
+/// [`SleepProviderExt::timeout`] expires before the provided future
+/// is ready.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TimeoutError;
 impl std::error::Error for TimeoutError {}
 impl std::fmt::Display for TimeoutError {
@@ -16,7 +23,18 @@ impl std::fmt::Display for TimeoutError {
     }
 }
 
+/// An extension trait on [`SleepProvider`] for timeouts and clock delays.
 pub trait SleepProviderExt: SleepProvider {
+    /// Wrap a [`Future`] with a timeout.
+    ///
+    /// The output of the new future will be the returned value of
+    /// `future` if it completes within `duration`.  Otherwise, it
+    /// will be `Err(TimeoutError)`.
+    ///
+    /// # Limitations
+    ///
+    /// This uses [`SleepProvider::sleep`] for its timer, and is
+    /// subject to the same limitations.
     fn timeout<F: Future>(&self, duration: Duration, future: F) -> Timeout<F, Self::SleepFuture> {
         let sleep_future = self.sleep(duration);
 
@@ -28,6 +46,22 @@ pub trait SleepProviderExt: SleepProvider {
 
     /// Pause until the wall-clock is at `when` or later, trying to
     /// recover from clock jumps.
+    ///
+    /// Unlike [`SleepProvider::sleep()`], the future returned by this function will
+    /// wake up periodically to check the current time, and see if
+    /// it is at or past the target.
+    ///
+    /// # Limitations
+    ///
+    /// The ability of this function to detect clock jumps is limited
+    /// to its granularity; it may finish a while after the declared
+    /// wallclock time if the system clock jumps forward.
+    ///
+    /// This function does not detect backward clock jumps; arguably,
+    /// we should have another function to do that.
+    ///
+    /// This uses [`SleepProvider::sleep`] for its timer, and is
+    /// subject to the same limitations.
     fn sleep_until_wallclock(&self, when: SystemTime) -> SleepUntilWallclock<'_, Self> {
         SleepUntilWallclock {
             provider: self,
@@ -39,10 +73,13 @@ pub trait SleepProviderExt: SleepProvider {
 
 impl<T: SleepProvider> SleepProviderExt for T {}
 
+/// A timeout returned by [`SleepProviderExt::timeout`].
 #[pin_project]
 pub struct Timeout<T, S> {
+    /// The future we want to execute.
     #[pin]
     future: T,
+    /// The future implementing the timeout.
     #[pin]
     sleep_future: S,
 }
@@ -67,10 +104,14 @@ where
     }
 }
 
+/// A future implementing [`SleepProviderExt::sleep_until_wallclock`].
 #[pin_project]
 pub struct SleepUntilWallclock<'a, SP: SleepProvider + ?Sized> {
+    /// Reference to the provider that we use to make new SleepFutures.
     provider: &'a SP,
+    /// The time that we are waiting for.
     target: SystemTime,
+    /// The future representing our current delay.
     sleep_future: Option<Pin<Box<SP::SleepFuture>>>,
 }
 
@@ -81,39 +122,65 @@ where
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-        let now = SystemTime::now();
-        if now >= self.target {
-            return Poll::Ready(());
-        }
-
-        let delay = calc_next_delay(now, self.target);
-
+        // Strategy: we implement sleep_until_wallclock by
+        // waiting in increments of up to MAX_SLEEP, checking the
+        // wall clock before and after each increment.  This makes
+        // us wake up a bit more frequently, but enables us to detect it
+        // if the system clock jumps forward.
+        let target = self.target;
         let this = self.project();
-        // DOCDOC: why do we store but not poll sleep_future?
-        this.sleep_future.take();
-
-        let mut sleep_future = Box::pin(this.provider.sleep(delay));
-        match sleep_future.poll_unpin(cx) {
-            Poll::Pending => {
-                *this.sleep_future = Some(sleep_future);
-                Poll::Pending
+        loop {
+            let now = SystemTime::now();
+            if now >= target {
+                return Poll::Ready(());
             }
-            Poll::Ready(()) => Poll::Ready(()),
+
+            let (last_delay, delay) = calc_next_delay(now, target);
+
+            // Note that we store this future to keep it from being
+            // cancelled, even though we don't ever poll it more than
+            // once.
+            //
+            // TODO: I'm not sure that it's actually necessary to keep
+            // this future around.
+            this.sleep_future.take();
+
+            let mut sleep_future = Box::pin(this.provider.sleep(delay));
+            match sleep_future.poll_unpin(cx) {
+                Poll::Pending => {
+                    *this.sleep_future = Some(sleep_future);
+                    return Poll::Pending;
+                }
+                Poll::Ready(()) => {
+                    if last_delay {
+                        return Poll::Ready(());
+                    }
+                }
+            }
         }
     }
 }
 
 /// Return the amount of time we should wait next, when running
-/// sleep_until_wallclock().
+/// sleep_until_wallclock().  Also return a boolean indicating whether we
+/// expect this to be the final delay.
 ///
 /// (This is a separate function for testing.)
-fn calc_next_delay(now: SystemTime, when: SystemTime) -> Duration {
-    /// We never sleep more than this much, in case our system clock jumps
+fn calc_next_delay(now: SystemTime, when: SystemTime) -> (bool, Duration) {
+    /// We never sleep more than this much, in case our system clock jumps.
+    ///
+    /// Note that there's a tradeoff here: Making this duration
+    /// shorter helps our accuracy, but makes us wake up more
+    /// frequently and consume more CPU.
     const MAX_SLEEP: Duration = Duration::from_secs(600);
     let remainder = when
         .duration_since(now)
         .unwrap_or_else(|_| Duration::from_secs(0));
-    std::cmp::min(MAX_SLEEP, remainder)
+    if remainder > MAX_SLEEP {
+        (false, MAX_SLEEP)
+    } else {
+        (true, remainder)
+    }
 }
 
 #[cfg(test)]
@@ -121,7 +188,9 @@ mod test {
     use super::*;
     #[test]
     fn sleep_delay() {
-        use calc_next_delay as calc;
+        fn calc(now: SystemTime, when: SystemTime) -> Duration {
+            calc_next_delay(now, when).1
+        }
         let minute = Duration::from_secs(60);
         let second = Duration::from_secs(1);
         let start = SystemTime::now();
