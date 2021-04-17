@@ -8,7 +8,7 @@ pub mod nativetls;
 use crate::Result;
 
 use tor_linkspec::ChanTarget;
-use tor_rtcompat::traits::CertifiedConn;
+use tor_rtcompat::tls::CertifiedConn;
 
 use async_trait::async_trait;
 use futures::io::{AsyncRead, AsyncWrite};

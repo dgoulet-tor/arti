@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tor_client::{ConnectPrefs, TorClient};
 use tor_proto::circuit::IpVersionPreference;
 use tor_rtcompat::timer::TimeoutError;
-use tor_rtcompat::traits::*;
+use tor_rtcompat::{Runtime, TcpListener};
 use tor_socksproto::{SocksCmd, SocksRequest};
 
 use anyhow::{Context, Result};

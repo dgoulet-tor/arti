@@ -8,7 +8,7 @@ use tor_circmgr::TargetPort;
 use tor_dirmgr::NetDirConfig;
 use tor_proto::circuit::IpVersionPreference;
 use tor_proto::stream::DataStream;
-use tor_rtcompat::traits::Runtime;
+use tor_rtcompat::Runtime;
 
 use std::sync::Arc;
 use std::time::Duration;

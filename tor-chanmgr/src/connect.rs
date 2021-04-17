@@ -41,7 +41,7 @@ impl<TR: Transport + Send + Sync> Connector for TR {
         runtime: &(dyn Spawn + Sync),
         target: &TargetInfo,
     ) -> Result<Arc<Channel>> {
-        use tor_rtcompat::traits::CertifiedConn;
+        use tor_rtcompat::tls::CertifiedConn;
         let (addr, tls) = self
             .connect(target)
             .await

@@ -44,7 +44,7 @@ use tor_netdoc::{
     },
     AllowAnnotations,
 };
-use tor_rtcompat::traits::Runtime;
+use tor_rtcompat::Runtime;
 
 /// An object where we can put a usable netdir.
 ///

@@ -17,7 +17,7 @@ use tor_netdir::{fallback::FallbackDir, NetDir};
 use tor_netdoc::types::policy::PortPolicy;
 use tor_proto::circuit::{CircParameters, ClientCirc, UniqId};
 use tor_retry::RetryError;
-use tor_rtcompat::traits::Runtime;
+use tor_rtcompat::Runtime;
 
 use anyhow::Result;
 use futures::lock::Mutex;

@@ -10,7 +10,7 @@ use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackDir, Relay};
 use tor_proto::channel::Channel;
 use tor_proto::circuit::{CircParameters, ClientCirc};
-use tor_rtcompat::traits::Runtime;
+use tor_rtcompat::Runtime;
 
 use futures::task::SpawnExt;
 use rand::{CryptoRng, Rng};

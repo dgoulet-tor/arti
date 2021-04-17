@@ -27,8 +27,15 @@ use once_cell::sync::OnceCell;
 //#![deny(clippy::missing_docs_in_private_items)]
 
 pub(crate) mod impls;
+mod traits;
 
-pub mod traits;
+pub use traits::{
+    CertifiedConn, Runtime, SleepProvider, SpawnBlocking, TcpListener, TcpProvider, TlsProvider,
+};
+
+pub mod tls {
+    pub use crate::traits::{CertifiedConn, TlsConnector};
+}
 
 // TODO: This is not an ideal situation, and it's arguably an abuse of
 // the features feature.  But I can't currently find a reasonable way

@@ -16,7 +16,7 @@ mod response;
 mod util;
 
 use tor_circmgr::{CircMgr, DirInfo};
-use tor_rtcompat::traits::{Runtime, SleepProvider};
+use tor_rtcompat::{Runtime, SleepProvider};
 
 use async_compression::futures::bufread::{XzDecoder, ZlibDecoder, ZstdDecoder};
 use futures::io::{

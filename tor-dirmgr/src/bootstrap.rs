@@ -18,7 +18,7 @@ use futures::StreamExt;
 use log::{info, warn};
 use tor_dirclient::DirResponse;
 use tor_rtcompat::timer::sleep_until_wallclock_rt;
-use tor_rtcompat::traits::Runtime;
+use tor_rtcompat::Runtime;
 
 /// Try to read a set of documents from `dirmgr` by ID.
 async fn load_all<R: Runtime>(

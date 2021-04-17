@@ -35,7 +35,7 @@ use async_trait::async_trait;
 use futures::{channel::oneshot, lock::Mutex, task::SpawnExt};
 use log::{info, warn};
 use tor_rtcompat::timer::sleep_until_wallclock_rt;
-use tor_rtcompat::traits::Runtime;
+use tor_rtcompat::Runtime;
 
 use std::sync::Arc;
 use std::{collections::HashMap, sync::Weak};

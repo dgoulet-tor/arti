@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tor_client::TorClient;
 use tor_config::CfgPath;
 use tor_dirmgr::{DownloadScheduleConfig, NetDirConfig, NetworkConfig};
-use tor_rtcompat::traits::SpawnBlocking;
+use tor_rtcompat::SpawnBlocking;
 
 use anyhow::Result;
 use argh::FromArgs;

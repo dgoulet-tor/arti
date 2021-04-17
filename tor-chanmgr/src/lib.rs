@@ -36,7 +36,7 @@ use std::time::Duration;
 
 pub use err::Error;
 
-use tor_rtcompat::traits::Runtime;
+use tor_rtcompat::Runtime;
 
 /// A Type that remembers a set of live channels, and launches new
 /// ones on request.
@@ -239,7 +239,7 @@ mod test {
         }
     }
 
-    impl tor_rtcompat::traits::CertifiedConn for FakeConnection {
+    impl tor_rtcompat::tls::CertifiedConn for FakeConnection {
         fn peer_certificate(&self) -> IoResult<Option<Vec<u8>>> {
             Ok(Some(vec![]))
         }

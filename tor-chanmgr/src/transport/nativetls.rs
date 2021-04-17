@@ -10,7 +10,7 @@
 use super::Transport;
 use crate::{Error, Result};
 use tor_linkspec::ChanTarget;
-use tor_rtcompat::traits::TlsConnector;
+use tor_rtcompat::tls::TlsConnector;
 
 use async_trait::async_trait;
 
