@@ -6,7 +6,7 @@
 use std::convert::TryInto;
 
 /// Types used for networking (tokio implementation)
-pub mod net {
+mod net {
     pub use tokio_crate::io::split as split_io;
     use tokio_crate::net::{TcpListener as TokioTcpListener, TcpStream as TokioTcpStream};
     // use tokio_crate::io::{AsyncRead as _, AsyncWrite as _};
@@ -154,16 +154,10 @@ pub mod net {
     }
 }
 
-/// Functions for launching and managing tasks (tokio implementation)
-pub mod task {}
-
-/// Functions and types for manipulating timers (tokio implementation)
-pub mod timer {}
-
 /// Implement a set of TLS wrappers for use with tokio.
 ///
 /// Right now only tokio_native_tls is supported.
-pub mod tls {
+mod tls {
     use async_trait::async_trait;
     use tokio_util::compat::{Compat, TokioAsyncReadCompatExt as _};
 
@@ -265,14 +259,6 @@ pub mod tls {
             }
         }
     }
-}
-
-/// Traits specific to the runtime.
-pub mod traits {
-    pub use tokio_crate::io::{
-        AsyncRead as TokioAsyncRead, AsyncReadExt as TokioAsyncReadExt,
-        AsyncWrite as TokioAsyncWrite, AsyncWriteExt as TokioAsyncWriteExt,
-    };
 }
 
 // ==============================

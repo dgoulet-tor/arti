@@ -8,7 +8,7 @@
 use std::convert::TryInto;
 
 /// Types used for networking (async_std implementation)
-pub mod net {
+mod net {
     pub use async_std_crate::net::{TcpListener, TcpStream};
     use futures::future::Future;
     use futures::stream::Stream;
@@ -64,14 +64,8 @@ pub mod net {
     }
 }
 
-/// Functions for launching and managing tasks (async_std implementation)
-pub mod task {}
-
-/// Functions and types for manipulating timers (async_std implementation)
-pub mod timer {}
-
 /// Implement TLS using async_std and async_native_tls.
-pub mod tls {
+mod tls {
     use async_std_crate::net::TcpStream;
     use async_trait::async_trait;
     use futures::io::{AsyncRead, AsyncWrite};
@@ -136,9 +130,6 @@ pub mod tls {
         }
     }
 }
-
-/// Traits specific to async_std
-pub mod traits {}
 
 // ==============================
 
