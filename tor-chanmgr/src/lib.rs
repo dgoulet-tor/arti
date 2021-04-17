@@ -36,7 +36,7 @@ use std::time::Duration;
 
 pub use err::Error;
 
-use tor_rtcompat::Runtime;
+use tor_rtcompat::{Runtime, SleepProviderExt};
 
 /// A Type that remembers a set of live channels, and launches new
 /// ones on request.
@@ -170,12 +170,10 @@ impl<R: Runtime> ChanMgr<R> {
         // XXXX make this a parameter.
         let timeout = Duration::new(5, 0);
 
-        let result = tor_rtcompat::timer::timeout_rt(
-            &self.runtime,
-            timeout,
-            self.build_channel_once(target),
-        )
-        .await;
+        let result = self
+            .runtime
+            .timeout(timeout, self.build_channel_once(target))
+            .await;
 
         match result {
             Ok(Ok(chan)) => Ok(chan),

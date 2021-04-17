@@ -17,7 +17,7 @@ use tor_netdir::{fallback::FallbackDir, NetDir};
 use tor_netdoc::types::policy::PortPolicy;
 use tor_proto::circuit::{CircParameters, ClientCirc, UniqId};
 use tor_retry::RetryError;
-use tor_rtcompat::Runtime;
+use tor_rtcompat::{Runtime, SleepProviderExt};
 
 use anyhow::Result;
 use futures::lock::Mutex;
@@ -520,12 +520,10 @@ impl<R: Runtime> CircMgr<R> {
         let mut error = RetryError::while_doing("build a circuit");
 
         for _ in 0..n_tries {
-            let result = tor_rtcompat::timer::timeout_rt(
-                &self.runtime,
-                timeout,
-                self.build_once_by_usage(rng, netdir, target_usage),
-            )
-            .await;
+            let result = self
+                .runtime
+                .timeout(timeout, self.build_once_by_usage(rng, netdir, target_usage))
+                .await;
 
             match result {
                 Ok(Ok((circ, usage))) => {

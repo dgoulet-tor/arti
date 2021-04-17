@@ -16,7 +16,7 @@ mod response;
 mod util;
 
 use tor_circmgr::{CircMgr, DirInfo};
-use tor_rtcompat::{Runtime, SleepProvider};
+use tor_rtcompat::{Runtime, SleepProvider, SleepProviderExt};
 
 use async_compression::futures::bufread::{XzDecoder, ZlibDecoder, ZstdDecoder};
 use futures::io::{
@@ -57,8 +57,6 @@ where
     R: Runtime,
     SP: SleepProvider,
 {
-    use tor_rtcompat::timer::timeout_rt;
-
     let circuit = circ_mgr.get_or_launch_dir(dirinfo).await?;
 
     // XXXX should be an option, and is too long.
@@ -66,7 +64,9 @@ where
     let source = SourceInfo::new(circuit.unique_id());
 
     // Launch the stream.
-    let mut stream = timeout_rt(runtime, begin_timeout, circuit.begin_dir_stream()).await??; // XXXX handle fatalities here too
+    let mut stream = runtime
+        .timeout(begin_timeout, circuit.begin_dir_stream())
+        .await??; // XXXX handle fatalities here too
 
     // TODO: Perhaps we want separate timeouts for each phase of this.
     // For now, we just use higher-level timeouts in `dirmgr`.

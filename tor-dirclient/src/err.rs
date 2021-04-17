@@ -1,7 +1,7 @@
 //! Declare dirclient-specific errors.
 
 use thiserror::Error;
-use tor_rtcompat::timer::TimeoutError;
+use tor_rtcompat::TimeoutError;
 
 /// An error originating from the tor-dirclient crate.
 #[derive(Error, Debug)]

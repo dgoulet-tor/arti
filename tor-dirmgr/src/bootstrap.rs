@@ -17,8 +17,7 @@ use futures::FutureExt;
 use futures::StreamExt;
 use log::{info, warn};
 use tor_dirclient::DirResponse;
-use tor_rtcompat::timer::sleep_until_wallclock_rt;
-use tor_rtcompat::Runtime;
+use tor_rtcompat::{Runtime, SleepProviderExt};
 
 /// Try to read a set of documents from `dirmgr` by ID.
 async fn load_all<R: Runtime>(
@@ -228,7 +227,7 @@ pub(crate) async fn download<R: Runtime>(
                             Ok(changed) => changed
                         }
                     }
-                    _ = sleep_until_wallclock_rt(&runtime, reset_time).fuse() => {
+                    _ = runtime.sleep_until_wallclock(reset_time).fuse() => {
                         // We need to reset. This can happen if (for
                         // example) we're downloading the last few
                         // microdescriptors on a consensus that now
@@ -259,7 +258,7 @@ pub(crate) async fn download<R: Runtime>(
                 let reset_time = no_more_than_a_week(state.reset_time());
                 let delay = retry.next_delay(&mut rand::thread_rng());
                 futures::select_biased! {
-                    _ = sleep_until_wallclock_rt(&runtime, reset_time).fuse() => {
+                    _ = runtime.sleep_until_wallclock(reset_time).fuse() => {
                         state = state.reset()?;
                         continue 'next_state;
                     }

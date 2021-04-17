@@ -34,8 +34,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::{channel::oneshot, lock::Mutex, task::SpawnExt};
 use log::{info, warn};
-use tor_rtcompat::timer::sleep_until_wallclock_rt;
-use tor_rtcompat::Runtime;
+use tor_rtcompat::{Runtime, SleepProviderExt};
 
 use std::sync::Arc;
 use std::{collections::HashMap, sync::Weak};
@@ -296,7 +295,7 @@ impl<R: Runtime> DirMgr<R> {
 
             let reset_at = state.reset_time();
             match reset_at {
-                Some(t) => sleep_until_wallclock_rt(&runtime, t).await,
+                Some(t) => runtime.sleep_until_wallclock(t).await,
                 None => return Ok(()),
             }
             state = state.reset()?;

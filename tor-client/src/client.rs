@@ -8,7 +8,7 @@ use tor_circmgr::TargetPort;
 use tor_dirmgr::NetDirConfig;
 use tor_proto::circuit::IpVersionPreference;
 use tor_proto::stream::DataStream;
-use tor_rtcompat::Runtime;
+use tor_rtcompat::{Runtime, SleepProviderExt};
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -131,8 +131,10 @@ impl<R: Runtime> TorClient<R> {
         let stream_timeout = Duration::new(10, 0);
 
         let stream_future = circ.begin_stream(&addr, port, Some(flags.begin_flags()));
-        let stream =
-            tor_rtcompat::timer::timeout_rt(&self.runtime, stream_timeout, stream_future).await??;
+        let stream = self
+            .runtime
+            .timeout(stream_timeout, stream_future)
+            .await??;
 
         Ok(stream)
     }
