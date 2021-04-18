@@ -164,6 +164,9 @@ impl TcpListener for net::TcpListener {
     fn incoming(self) -> net::IncomingStreams {
         net::IncomingStreams::from_listener(self)
     }
+    fn local_addr(&self) -> IoResult<SocketAddr> {
+        net::TcpListener::local_addr(self)
+    }
 }
 
 #[async_trait]

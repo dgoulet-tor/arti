@@ -81,9 +81,11 @@ mod net {
     pub struct TcpListener {
         /// The underlying listener.
         #[pin]
-        lis: TokioTcpListener,
+        // TODO: make this less visible.
+        pub(super) lis: TokioTcpListener,
     }
 
+    // TODO: move these implementations into the trait impl
     impl TcpListener {
         /// Create a new TcpListener listening on a given socket address.
         pub async fn bind<A>(addr: A) -> IoResult<Self>
@@ -268,6 +270,9 @@ impl TcpListener for net::TcpListener {
     }
     fn incoming(self) -> Self::Incoming {
         self.incoming_streams()
+    }
+    fn local_addr(&self) -> IoResult<SocketAddr> {
+        self.lis.local_addr()
     }
 }
 

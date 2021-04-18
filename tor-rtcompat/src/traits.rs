@@ -110,6 +110,9 @@ pub trait TcpListener {
     /// Wrap this listener into a new [`stream::Stream`] that yields
     /// TCP streams and addresses.
     fn incoming(self) -> Self::Incoming;
+
+    /// Return the local address that this listener is bound to.
+    fn local_addr(&self) -> IoResult<SocketAddr>;
 }
 
 /// An object with a peer certificate: typically a TLS connection.
