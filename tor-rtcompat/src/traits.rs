@@ -80,7 +80,7 @@ pub trait TcpProvider {
 
     /// Launch a TCP connection to a given socket address.
     ///
-    /// Note that unlike [`std::net:TcpStream::connect`], we do not accept
+    /// Note that unlike `std::net:TcpStream::connect`, we do not accept
     /// any types other than a single [`SocketAddr`].  We do this because,
     /// as a Tor implementation, we most be absolutely sure not to perform
     /// unnecessary DNS lookups.

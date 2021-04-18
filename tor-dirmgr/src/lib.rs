@@ -383,7 +383,7 @@ impl<R: Runtime> DirMgr<R> {
     /// Load the text for a collection of documents.
     ///
     /// If many of the documents have the same type, this can be more
-    /// efficient than calling [`text`].
+    /// efficient than calling [`text`](Self::text).
     pub async fn texts<T>(&self, docs: T) -> Result<HashMap<DocId, DocumentText>>
     where
         T: IntoIterator<Item = DocId>,

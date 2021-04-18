@@ -6,9 +6,9 @@
 //! microdescriptors ([`GetMicrodescsState`]).
 //!
 //! These states have no contact with the network, and are purely
-//! reactive to other code that drives them.  See the [`bootstrap`]
-//! module for functions that actually load or download directory
-//! information.
+//! reactive to other code that drives them.  See the
+//! [`bootstrap`](crate::bootstrap) module for functions that actually
+//! load or download directory information.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
