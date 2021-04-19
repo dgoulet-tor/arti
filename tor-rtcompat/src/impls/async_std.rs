@@ -9,7 +9,10 @@ use std::convert::TryInto;
 
 /// Types used for networking (async_std implementation)
 mod net {
-    pub use async_std_crate::net::{TcpListener, TcpStream};
+    use crate::traits;
+
+    use async_std_crate::net::{TcpListener, TcpStream};
+    use async_trait::async_trait;
     use futures::future::Future;
     use futures::stream::Stream;
     use pin_project::pin_project;
@@ -60,6 +63,32 @@ mod net {
                     Poll::Pending
                 }
             }
+        }
+    }
+    #[async_trait]
+    impl traits::TcpListener for TcpListener {
+        type TcpStream = TcpStream;
+        type Incoming = IncomingStreams;
+        async fn accept(&self) -> IoResult<(Self::TcpStream, SocketAddr)> {
+            TcpListener::accept(self).await
+        }
+        fn incoming(self) -> IncomingStreams {
+            IncomingStreams::from_listener(self)
+        }
+        fn local_addr(&self) -> IoResult<SocketAddr> {
+            TcpListener::local_addr(self)
+        }
+    }
+
+    #[async_trait]
+    impl traits::TcpProvider for async_executors::AsyncStd {
+        type TcpStream = TcpStream;
+        type TcpListener = TcpListener;
+        async fn connect(&self, addr: &SocketAddr) -> IoResult<Self::TcpStream> {
+            TcpStream::connect(addr).await
+        }
+        async fn listen(&self, addr: &SocketAddr) -> IoResult<Self::TcpListener> {
+            TcpListener::bind(*addr).await
         }
     }
 }
@@ -133,10 +162,7 @@ mod tls {
 
 // ==============================
 
-use async_trait::async_trait;
 use futures::{Future, FutureExt};
-use std::io::Result as IoResult;
-use std::net::SocketAddr;
 use std::pin::Pin;
 use std::time::Duration;
 
@@ -151,33 +177,6 @@ impl SleepProvider for async_executors::AsyncStd {
     type SleepFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
     fn sleep(&self, duration: Duration) -> Self::SleepFuture {
         Box::pin(async_io::Timer::after(duration).map(|_| ()))
-    }
-}
-
-#[async_trait]
-impl TcpListener for net::TcpListener {
-    type TcpStream = net::TcpStream;
-    type Incoming = net::IncomingStreams;
-    async fn accept(&self) -> IoResult<(Self::TcpStream, SocketAddr)> {
-        net::TcpListener::accept(self).await
-    }
-    fn incoming(self) -> net::IncomingStreams {
-        net::IncomingStreams::from_listener(self)
-    }
-    fn local_addr(&self) -> IoResult<SocketAddr> {
-        net::TcpListener::local_addr(self)
-    }
-}
-
-#[async_trait]
-impl TcpProvider for async_executors::AsyncStd {
-    type TcpStream = net::TcpStream;
-    type TcpListener = net::TcpListener;
-    async fn connect(&self, addr: &SocketAddr) -> IoResult<Self::TcpStream> {
-        net::TcpStream::connect(addr).await
-    }
-    async fn listen(&self, addr: &SocketAddr) -> IoResult<Self::TcpListener> {
-        net::TcpListener::bind(*addr).await
     }
 }
 
