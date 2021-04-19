@@ -36,11 +36,6 @@ mod net {
             TcpStream { s }
         }
     }
-    impl From<TcpStream> for TokioTcpStream {
-        fn from(s: TcpStream) -> TokioTcpStream {
-            s.s.into_inner()
-        }
-    }
     impl AsyncRead for TcpStream {
         fn poll_read(
             self: Pin<&mut Self>,
