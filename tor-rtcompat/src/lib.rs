@@ -33,6 +33,9 @@ pub(crate) mod impls;
 mod timer;
 mod traits;
 
+#[cfg(test)]
+mod test;
+
 #[cfg(not(any(feature = "async-std", feature = "tokio")))]
 compile_error!("Sorry: At least one of the tor-rtcompat/async-std and tor-rtcompat/tokio features must be specified.");
 
