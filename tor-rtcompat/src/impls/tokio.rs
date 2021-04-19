@@ -7,9 +7,11 @@ use std::convert::TryInto;
 
 /// Types used for networking (tokio implementation)
 mod net {
+    use crate::traits;
+    use async_trait::async_trait;
+
     pub use tokio_crate::io::split as split_io;
     use tokio_crate::net::{TcpListener as TokioTcpListener, TcpStream as TokioTcpStream};
-    // use tokio_crate::io::{AsyncRead as _, AsyncWrite as _};
 
     use futures::io::{AsyncRead, AsyncWrite};
     use pin_project::pin_project;
@@ -68,44 +70,12 @@ mod net {
         }
     }
 
-    impl TcpStream {
-        /// Launch a TCP connection to a given address.
-        pub async fn connect(addr: &SocketAddr) -> IoResult<Self> {
-            let s = TokioTcpStream::connect(addr).await?;
-            Ok(s.into())
-        }
-    }
-
     /// Wrap a Tokio TcpListener to behave as a futures::io::TcpListener.
     #[pin_project]
     pub struct TcpListener {
         /// The underlying listener.
         #[pin]
-        // TODO: make this less visible.
-        pub(super) lis: TokioTcpListener,
-    }
-
-    // TODO: move these implementations into the trait impl
-    impl TcpListener {
-        /// Create a new TcpListener listening on a given socket address.
-        pub async fn bind<A>(addr: A) -> IoResult<Self>
-        where
-            A: Into<SocketAddr>,
-        {
-            let lis = TokioTcpListener::bind(addr.into()).await?;
-            Ok(TcpListener { lis })
-        }
-
-        /// Try to accept a socket on this listener.
-        pub(crate) async fn accept(&self) -> IoResult<(TcpStream, SocketAddr)> {
-            let (stream, addr) = self.lis.accept().await?;
-            Ok((stream.into(), addr))
-        }
-
-        /// Wrap this listener up as a Stream.
-        pub(crate) fn incoming_streams(self) -> IncomingTcpStreams {
-            IncomingTcpStreams { lis: self.lis }
-        }
+        lis: TokioTcpListener,
     }
 
     /// Asynchronous stream that yields incoming connections from a
@@ -127,6 +97,37 @@ mod net {
                 Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
                 Poll::Pending => Poll::Pending,
             }
+        }
+    }
+
+    #[async_trait]
+    impl traits::TcpListener for TcpListener {
+        type TcpStream = TcpStream;
+        type Incoming = IncomingTcpStreams;
+        async fn accept(&self) -> IoResult<(Self::TcpStream, SocketAddr)> {
+            let (stream, addr) = self.lis.accept().await?;
+            Ok((stream.into(), addr))
+        }
+        fn incoming(self) -> Self::Incoming {
+            IncomingTcpStreams { lis: self.lis }
+        }
+        fn local_addr(&self) -> IoResult<SocketAddr> {
+            self.lis.local_addr()
+        }
+    }
+
+    #[async_trait]
+    impl traits::TcpProvider for async_executors::TokioTp {
+        type TcpStream = TcpStream;
+        type TcpListener = TcpListener;
+
+        async fn connect(&self, addr: &SocketAddr) -> IoResult<Self::TcpStream> {
+            let s = TokioTcpStream::connect(addr).await?;
+            Ok(s.into())
+        }
+        async fn listen(&self, addr: &SocketAddr) -> IoResult<Self::TcpListener> {
+            let lis = TokioTcpListener::bind(*addr).await?;
+            Ok(TcpListener { lis })
         }
     }
 }
@@ -241,10 +242,8 @@ mod tls {
 // ==============================
 
 use crate::traits::*;
-use async_trait::async_trait;
 use futures::Future;
 use std::io::Result as IoResult;
-use std::net::SocketAddr;
 use std::time::Duration;
 
 /// Create and return a new Tokio multithreaded runtime.
@@ -258,34 +257,6 @@ impl SleepProvider for async_executors::TokioTp {
     type SleepFuture = tokio_crate::time::Sleep;
     fn sleep(&self, duration: Duration) -> Self::SleepFuture {
         tokio_crate::time::sleep(duration)
-    }
-}
-
-#[async_trait]
-impl TcpListener for net::TcpListener {
-    type TcpStream = net::TcpStream;
-    type Incoming = net::IncomingTcpStreams;
-    async fn accept(&self) -> IoResult<(Self::TcpStream, SocketAddr)> {
-        net::TcpListener::accept(self).await
-    }
-    fn incoming(self) -> Self::Incoming {
-        self.incoming_streams()
-    }
-    fn local_addr(&self) -> IoResult<SocketAddr> {
-        self.lis.local_addr()
-    }
-}
-
-#[async_trait]
-impl TcpProvider for async_executors::TokioTp {
-    type TcpStream = net::TcpStream;
-    type TcpListener = net::TcpListener;
-
-    async fn connect(&self, addr: &SocketAddr) -> IoResult<Self::TcpStream> {
-        net::TcpStream::connect(addr).await
-    }
-    async fn listen(&self, addr: &SocketAddr) -> IoResult<Self::TcpListener> {
-        net::TcpListener::bind(*addr).await
     }
 }
 
