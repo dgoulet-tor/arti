@@ -35,6 +35,7 @@ pub trait SleepProviderExt: SleepProvider {
     ///
     /// This uses [`SleepProvider::sleep`] for its timer, and is
     /// subject to the same limitations.
+    #[must_use = "timeout() returns a future, which does nothing unless used"]
     fn timeout<F: Future>(&self, duration: Duration, future: F) -> Timeout<F, Self::SleepFuture> {
         let sleep_future = self.sleep(duration);
 
@@ -62,6 +63,7 @@ pub trait SleepProviderExt: SleepProvider {
     ///
     /// This uses [`SleepProvider::sleep`] for its timer, and is
     /// subject to the same limitations.
+    #[must_use = "sleep_until_wallclock() returns a future, which does nothing unless used"]
     fn sleep_until_wallclock(&self, when: SystemTime) -> SleepUntilWallclock<'_, Self> {
         SleepUntilWallclock {
             provider: self,

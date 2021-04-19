@@ -54,6 +54,7 @@ pub trait SleepProvider {
     type SleepFuture: Future<Output = ()> + Send + 'static;
     /// Return a future that will be ready after `duration` has
     /// elapsed.
+    #[must_use = "sleep() returns a future, which does nothing unless used"]
     fn sleep(&self, duration: Duration) -> Self::SleepFuture;
 }
 
