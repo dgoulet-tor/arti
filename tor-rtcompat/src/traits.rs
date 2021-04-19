@@ -127,7 +127,8 @@ pub trait CertifiedConn {
 ///
 /// (Note that because of Tor's peculiarities, this is not a
 /// general-purpose TLS type.  Unlike typical users, Tor does not want
-/// its TLS library to validate TLS or check for hostnames.)
+/// its TLS library to check whether the certificates are signed
+/// within the web PKI hierarchy, or what their hostnames are.
 #[async_trait]
 pub trait TlsConnector {
     /// The type of connection returned by this connector
@@ -136,8 +137,8 @@ pub trait TlsConnector {
     /// Launch a TLS-over-TCP connection to a given address.
     ///
     /// Declare `sni_hostname` as the desired hostname, but don't
-    /// actually validate the certificate or check that it matches the
-    /// intended address.
+    /// actually check whether the hostname in the certificate matches
+    /// it.
     async fn connect_unvalidated(
         &self,
         addr: &SocketAddr,

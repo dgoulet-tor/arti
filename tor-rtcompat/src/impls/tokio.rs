@@ -272,8 +272,10 @@ impl TlsProvider for async_executors::TokioTp {
 
     fn tls_connector(&self) -> tls::TlsConnector {
         let mut builder = native_tls::TlsConnector::builder();
-        // These function names are scary, but they just mean that
-        // we're skipping web pki, and using our own PKI functions.
+        // These function names are scary, but they just mean that we
+        // aren't checking whether the signer of this cert
+        // participates in the web PKI, and we aren't checking the
+        // hostname in the cert.
         builder
             .danger_accept_invalid_certs(true)
             .danger_accept_invalid_hostnames(true);
