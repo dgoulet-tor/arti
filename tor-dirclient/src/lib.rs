@@ -118,6 +118,7 @@ where
     let mut buffered = BufReader::new(stream);
 
     // Handle the response
+    // TODO: should there be a separate timeout here?
     let header = read_headers(&mut buffered).await?;
     if header.status != Some(200) {
         return Err(Error::HttpStatus(header.status));
@@ -211,6 +212,7 @@ where
 }
 
 /// Return value from read_headers
+#[derive(Debug, Clone)]
 struct HeaderStatus {
     /// HTTP status code.
     status: Option<u16>,
@@ -467,6 +469,43 @@ mod test {
         s?;
         assert_eq!(r, b"One fish Two fish Red fish Blue fish\n");
 
+        Ok(())
+    }
+
+    #[async_test]
+    async fn headers_ok() -> Result<()> {
+        let text = b"HTTP/1.0 200 OK\r\nDate: ignored\r\nContent-Encoding: Waffles\r\n\r\n";
+
+        let mut s = &text[..];
+        let h = read_headers(&mut s).await?;
+
+        assert_eq!(h.status, Some(200));
+        assert_eq!(h.encoding.as_deref(), Some("Waffles"));
+
+        // now try truncated
+        let mut s = &text[..15];
+        let h = read_headers(&mut s).await;
+        assert!(matches!(h, Err(Error::TruncatedHeaders)));
+
+        // now try with no encoding.
+        let text = b"HTTP/1.0 404 Not found\r\n\r\n";
+        let mut s = &text[..];
+        let h = read_headers(&mut s).await?;
+
+        assert_eq!(h.status, Some(404));
+        assert!(h.encoding.is_none());
+
+        Ok(())
+    }
+
+    #[async_test]
+    async fn headers_bogus() -> Result<()> {
+        let text = b"HTTP/999.0 WHAT EVEN\r\n\r\n";
+        let mut s = &text[..];
+        let h = read_headers(&mut s).await;
+
+        assert!(h.is_err());
+        assert!(matches!(h, Err(Error::HttparseError(_))));
         Ok(())
     }
 }
