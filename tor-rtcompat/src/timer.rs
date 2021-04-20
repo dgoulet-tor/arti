@@ -132,7 +132,7 @@ where
         let target = self.target;
         let this = self.project();
         loop {
-            let now = SystemTime::now();
+            let now = this.provider.wallclock();
             if now >= target {
                 return Poll::Ready(());
             }

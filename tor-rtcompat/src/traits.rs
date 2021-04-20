@@ -4,7 +4,7 @@ use futures::stream;
 use futures::{AsyncRead, AsyncWrite, Future};
 use std::io::Result as IoResult;
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, Instant, SystemTime};
 
 pub use async_executors::SpawnHandle;
 pub use futures::task::Spawn;
@@ -56,6 +56,20 @@ pub trait SleepProvider {
     /// elapsed.
     #[must_use = "sleep() returns a future, which does nothing unless used"]
     fn sleep(&self, duration: Duration) -> Self::SleepFuture;
+
+    /// Return the SleepProvider's view of the current instant.
+    ///
+    /// (This is the same as `Instant::now`, if not running in test mode.)
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+
+    /// Return the SleepProvider's view of the current wall-clock time.
+    ///
+    /// (This is the same as `SystemTime::now`, if not running in test mode.)
+    fn wallclock(&self) -> SystemTime {
+        SystemTime::now()
+    }
 }
 
 /// Trait for a runtime that can block on a future.
