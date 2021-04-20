@@ -352,3 +352,38 @@ fn get_decoder<'a, S: AsyncBufRead + Unpin + Send + 'a>(
         Some(other) => Err(Error::ContentEncoding(other.into())),
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use futures_await_test::async_test;
+
+    #[async_test]
+    async fn test_read_until_limited() -> Result<()> {
+        let mut out = Vec::new();
+        let bytes = b"This line eventually ends\nthen comes another\n";
+
+        // Case 1: find a whole line.
+        let mut s = &bytes[..];
+        let res = read_until_limited(&mut s, b'\n', 100, &mut out).await;
+        assert_eq!(res?, 26);
+        assert_eq!(&out[..], b"This line eventually ends\n");
+
+        // Case 2: reach the limit.
+        let mut s = &bytes[..];
+        out.clear();
+        let res = read_until_limited(&mut s, b'\n', 10, &mut out).await;
+        assert_eq!(res?, 10);
+        assert_eq!(&out[..], b"This line ");
+
+        // Case 3: reach EOF.
+        let mut s = &bytes[..];
+        out.clear();
+        let res = read_until_limited(&mut s, b'Z', 100, &mut out).await;
+        assert_eq!(res?, 45);
+        assert_eq!(&out[..], &bytes[..]);
+
+        Ok(())
+    }
+}
