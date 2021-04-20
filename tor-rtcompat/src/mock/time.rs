@@ -127,6 +127,14 @@ impl SleepProvider for MockSleepProvider {
             provider: Arc::downgrade(&self.state),
         }
     }
+
+    fn now(&self) -> Instant {
+        self.state.lock().unwrap().instant
+    }
+
+    fn wallclock(&self) -> SystemTime {
+        self.state.lock().unwrap().wallclock
+    }
 }
 
 impl PartialEq for SleepEntry {
@@ -172,6 +180,23 @@ impl Future for Sleeping {
 mod test {
     use super::*;
     use crate::test_with_runtime;
+
+    #[test]
+    fn basics_of_time_travel() {
+        let w1 = SystemTime::now();
+        let sp = MockSleepProvider::new(w1);
+        let i1 = sp.now();
+        assert_eq!(sp.wallclock(), w1);
+
+        let interval = Duration::new(4 * 3600 + 13 * 60, 0);
+        sp.advance(interval);
+        assert_eq!(sp.now(), i1 + interval);
+        assert_eq!(sp.wallclock(), w1 + interval);
+
+        sp.jump_to(w1 + interval * 3);
+        assert_eq!(sp.now(), i1 + interval);
+        assert_eq!(sp.wallclock(), w1 + interval * 3);
+    }
 
     #[test]
     fn time_moves_on() {
