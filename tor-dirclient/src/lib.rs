@@ -123,7 +123,7 @@ where
         return Err(Error::HttpStatus(header.status));
     }
 
-    let mut decoder = get_decoder(buffered, header.encoding)?;
+    let mut decoder = get_decoder(buffered, header.encoding.as_deref())?;
 
     let mut result = Vec::new();
     let ok = read_and_decompress(runtime, &mut decoder, maxlen, &mut result).await;
@@ -342,9 +342,9 @@ macro_rules! decoder {
 /// as described in `encoding`.
 fn get_decoder<'a, S: AsyncBufRead + Unpin + Send + 'a>(
     stream: S,
-    encoding: Option<String>,
+    encoding: Option<&str>,
 ) -> Result<Box<dyn AsyncRead + Unpin + Send + 'a>> {
-    match encoding.as_deref() {
+    match encoding {
         None | Some("identity") => Ok(Box::new(stream)),
         Some("deflate") => decoder!(ZlibDecoder, stream),
         Some("x-tor-lzma") => decoder!(XzDecoder, stream),
@@ -356,6 +356,7 @@ fn get_decoder<'a, S: AsyncBufRead + Unpin + Send + 'a>(
 #[cfg(test)]
 mod test {
     use super::*;
+    use tor_rtcompat::mock::time::MockSleepProvider;
 
     use futures_await_test::async_test;
 
@@ -383,6 +384,88 @@ mod test {
         let res = read_until_limited(&mut s, b'Z', 100, &mut out).await;
         assert_eq!(res?, 45);
         assert_eq!(&out[..], &bytes[..]);
+
+        Ok(())
+    }
+
+    // Basic decompression wrapper.
+    async fn decomp_basic(
+        encoding: Option<&str>,
+        data: &[u8],
+        maxlen: usize,
+    ) -> (Result<()>, Vec<u8>) {
+        // We don't need to do anything fancy here, since we aren't simulating
+        // a timeout.
+        let mock_time = MockSleepProvider::new(std::time::SystemTime::now());
+
+        let mut output = Vec::new();
+        let mut stream = match get_decoder(data, encoding) {
+            Ok(s) => s,
+            Err(e) => return (Err(e), output),
+        };
+
+        let r = read_and_decompress(&mock_time, &mut stream, maxlen, &mut output).await;
+
+        (r, output)
+    }
+
+    #[async_test]
+    async fn decomp_identity() -> Result<()> {
+        let mut text = Vec::new();
+        for _ in 0..1000 {
+            text.extend(b"This is a string with a nontrivial length that we'll use to make sure that the loop is executed more than once.");
+        }
+
+        let limit = 10 << 20;
+        let (s, r) = decomp_basic(None, &text[..], limit).await;
+        s?;
+        assert_eq!(r, text);
+
+        let (s, r) = decomp_basic(Some("identity"), &text[..], limit).await;
+        s?;
+        assert_eq!(r, text);
+
+        // Try truncated result
+        let limit = 100;
+        let (s, r) = decomp_basic(Some("identity"), &text[..], limit).await;
+        assert!(s.is_err());
+        assert_eq!(r, &text[..100]);
+
+        Ok(())
+    }
+
+    #[async_test]
+    async fn decomp_zlib() -> Result<()> {
+        let compressed =
+            hex::decode("789cf3cf4b5548cb2cce500829cf8730825253200ca79c52881c00e5970c88").unwrap();
+
+        let limit = 10 << 20;
+        let (s, r) = decomp_basic(Some("deflate"), &compressed, limit).await;
+        s?;
+        assert_eq!(r, b"One fish Two fish Red fish Blue fish");
+
+        Ok(())
+    }
+
+    #[async_test]
+    async fn decomp_zstd() -> Result<()> {
+        let compressed = hex::decode("28b52ffd24250d0100c84f6e6520666973682054776f526564426c756520666973680a0200600c0e2509478352cb").unwrap();
+        let limit = 10 << 20;
+        let (s, r) = decomp_basic(Some("x-zstd"), &compressed, limit).await;
+        s?;
+        assert_eq!(r, b"One fish Two fish Red fish Blue fish\n");
+
+        Ok(())
+    }
+
+    #[async_test]
+    async fn decomp_xz2() -> Result<()> {
+        // Not so good at tiny files...
+        let compressed = hex::decode("fd377a585a000004e6d6b446020021011c00000010cf58cce00024001d5d00279b88a202ca8612cfb3c19c87c34248a570451e4851d3323d34ab8000000000000901af64854c91f600013925d6ec06651fb6f37d010000000004595a").unwrap();
+        let limit = 10 << 20;
+        let (s, r) = decomp_basic(Some("x-tor-lzma"), &compressed, limit).await;
+        s?;
+        assert_eq!(r, b"One fish Two fish Red fish Blue fish\n");
 
         Ok(())
     }
