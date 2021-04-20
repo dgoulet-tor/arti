@@ -128,7 +128,7 @@ impl Requestable for ConsensusRequest {
         req = add_common_headers(req);
 
         // Possibly, add an if-modified-since header.
-        if let Some(when) = self.last_consensus_published {
+        if let Some(when) = self.last_consensus_date() {
             req = req.header(
                 http::header::IF_MODIFIED_SINCE,
                 httpdate::fmt_http_date(when),
@@ -389,7 +389,7 @@ impl FromIterator<RdDigest> for RouterDescRequest {
 ///
 /// (Right now, this is only Accept-Encoding.)
 fn add_common_headers(req: http::request::Builder) -> http::request::Builder {
-    // TODO: gzip, zstd, brotli
+    // TODO: gzip, brotli
     req.header(
         http::header::ACCEPT_ENCODING,
         "deflate, identity, x-tor-lzma, x-zstd",
@@ -418,6 +418,13 @@ mod test {
         assert_eq!(req,
                    "GET /tor/micro/d/J3QgYWN0dWFsbHkgU0hBLTI1Ni4uLi4uLi4uLi4uLi4-VGhpcyBpcyBhIHRlc3RpbmcgZGlnZXN0LiBpdCBpc24.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma, x-zstd\r\n\r\n");
 
+        // Try it with FromIterator, and use some accessors.
+        let req2: MicrodescRequest = vec![*d1, *d2].into_iter().collect();
+        let ds: Vec<_> = req2.digests().collect();
+        assert_eq!(ds, vec![d1, d2]);
+        let req2 = crate::util::encode_request(req2.make_request()?);
+        assert_eq!(req, req2);
+
         Ok(())
     }
 
@@ -425,27 +432,36 @@ mod test {
     fn test_cert_request() -> Result<()> {
         let d1 = b"This is a testing dn";
         let d2 = b"'t actually SHA-256.";
+        let key1 = AuthCertKeyIds {
+            id_fingerprint: (*d1).into(),
+            sk_fingerprint: (*d2).into(),
+        };
 
         let d3 = b"blah blah blah 1 2 3";
         let d4 = b"I like pizza from Na";
-
-        let mut req = AuthCertRequest::default();
-        req.push(AuthCertKeyIds {
-            id_fingerprint: (*d1).into(),
-            sk_fingerprint: (*d2).into(),
-        });
-        assert!(!req.partial_docs_ok());
-        req.push(AuthCertKeyIds {
+        let key2 = AuthCertKeyIds {
             id_fingerprint: (*d3).into(),
             sk_fingerprint: (*d4).into(),
-        });
+        };
+
+        let mut req = AuthCertRequest::default();
+        req.push(key1);
+        assert!(!req.partial_docs_ok());
+        req.push(key2);
         assert!(req.partial_docs_ok());
         assert_eq!(req.max_response_len(), 32 << 10);
+
+        let keys: Vec<_> = req.keys().collect();
+        assert_eq!(keys, vec![&key1, &key2]);
 
         let req = crate::util::encode_request(req.make_request()?);
 
         assert_eq!(req,
                    "GET /tor/keys/fp-sk/5468697320697320612074657374696e6720646e-27742061637475616c6c79205348412d3235362e+626c616820626c616820626c6168203120322033-49206c696b652070697a7a612066726f6d204e61.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma, x-zstd\r\n\r\n");
+
+        let req2: AuthCertRequest = vec![key1, key2].into_iter().collect();
+        let req2 = crate::util::encode_request(req2.make_request()?);
+        assert_eq!(req, req2);
 
         Ok(())
     }
@@ -468,12 +484,55 @@ mod test {
         req.set_last_consensus_date(d3);
         assert!(!req.partial_docs_ok());
         assert_eq!(req.max_response_len(), (16 << 20) - 1);
+        assert_eq!(req.old_consensus_digests().next(), Some(d2));
+        assert_eq!(req.authority_ids().next(), Some(&d1));
+        assert_eq!(req.last_consensus_date(), Some(d3));
 
         let req = crate::util::encode_request(req.make_request()?);
 
         assert_eq!(req,
                    format!("GET /tor/status-vote/current/consensus-microdesc/03479e93ebf3ff2c58c1c9dbf2de9de9c2801b3e.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma, x-zstd\r\nif-modified-since: {}\r\nx-or-diff-from-consensus: 626c616820626c616820626c616820313220626c616820626c616820626c6168\r\n\r\n", when));
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_rd_request_all() -> Result<()> {
+        let req = RouterDescRequest::all();
+        assert!(req.partial_docs_ok());
+        assert_eq!(req.max_response_len(), 1 << 26);
+
+        let req = crate::util::encode_request(req.make_request()?);
+
+        assert_eq!(req,
+                   "GET /tor/server/all.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma, x-zstd\r\n\r\n");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_rd_request() -> Result<()> {
+        let d1 = b"at some point I got ";
+        let d2 = b"of writing in hex...";
+
+        let mut req = RouterDescRequest::default();
+        req.push(*d1);
+        assert!(!req.partial_docs_ok());
+        req.push(*d2);
+        assert!(req.partial_docs_ok());
+        assert_eq!(req.max_response_len(), 16 << 10);
+
+        let req = crate::util::encode_request(req.make_request()?);
+
+        assert_eq!(req,
+                   "GET /tor/server/d/617420736f6d6520706f696e74204920676f7420+6f662077726974696e6720696e206865782e2e2e.z HTTP/1.0\r\naccept-encoding: deflate, identity, x-tor-lzma, x-zstd\r\n\r\n");
+
+        // Try it with FromIterator, and use some accessors.
+        let req2: RouterDescRequest = vec![*d1, *d2].into_iter().collect();
+        let ds: Vec<_> = req2.digests().collect();
+        assert_eq!(ds, vec![d1, d2]);
+        let req2 = crate::util::encode_request(req2.make_request()?);
+        assert_eq!(req, req2);
         Ok(())
     }
 }
