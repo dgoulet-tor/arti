@@ -101,6 +101,9 @@ where
 ///
 /// It's kind of bogus to have a 'source' field here at all; we may
 /// eventually want to remove it.
+///
+/// This function doesn't close the stream; you may want to do that
+/// yourself.
 pub async fn download<R, S, SP>(
     runtime: &SP,
     req: &R,
@@ -366,6 +369,7 @@ fn get_decoder<'a, S: AsyncBufRead + Unpin + Send + 'a>(
 #[cfg(test)]
 mod test {
     use super::*;
+    use tor_rtcompat::mock::io::stream_pair;
     use tor_rtcompat::mock::time::MockSleepProvider;
 
     use futures_await_test::async_test;
@@ -518,4 +522,50 @@ mod test {
         assert!(matches!(h, Err(Error::HttparseError(_))));
         Ok(())
     }
+
+    #[async_test]
+    async fn test_download() -> Result<()> {
+        let (mut s1, s2) = stream_pair();
+        let (mut s2_r, mut s2_w) = s2.split();
+        let mock_time = MockSleepProvider::new(std::time::SystemTime::now());
+
+        let req = request::RouterDescRequest::all();
+
+        let (v1, v2, v3): (Result<DirResponse>, Result<Vec<u8>>, Result<()>) = futures::join!(
+            async {
+                let r = download(&mock_time, &req, &mut s1, None).await?;
+                s1.close().await?;
+                Ok(r)
+            },
+            async {
+                let mut v = Vec::new();
+                s2_r.read_to_end(&mut v).await?;
+                Ok(v)
+            },
+            async {
+                s2_w.write_all(b"HTTP/1.0 200 OK\r\n\r\n").await?;
+                s2_w.write_all(b"This is where the descs would go.").await?;
+                s2_w.close().await?;
+                Ok(())
+            }
+        );
+
+        let response = v1?;
+        v3?;
+        let request = v2?;
+
+        assert!(request[..].starts_with(b"GET /tor/server/all.z HTTP/1.0\r\n"));
+        assert_eq!(response.status_code(), 200);
+        assert_eq!(response.is_partial(), false);
+        assert!(response.error().is_none());
+        assert!(response.source().is_none());
+        let out = response.into_output();
+        assert_eq!(&out, "This is where the descs would go.");
+
+        Ok(())
+    }
+
+    // TODO: test for a partial download with and without partial_ok
+
+    // TODO: test with bad utf-8
 }
