@@ -70,3 +70,76 @@ where
 pub fn default_config_file() -> Option<PathBuf> {
     CfgPath::new("${APP_CONFIG}/arti.toml".into()).path().ok()
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use tempdir::TempDir;
+
+    static EX_TOML: &'static str = "
+[hello]
+world = \"stuff\"
+friends = 4242
+";
+
+    #[test]
+    fn load_default() {
+        let td = TempDir::new("arti-cfg").unwrap();
+        let dflt = td.path().join("a_file");
+        let mut c = config::Config::new();
+        let v: Vec<&'static str> = Vec::new();
+        std::fs::write(&dflt, EX_TOML).unwrap();
+        load(&mut c, Some(dflt), &v, &v).unwrap();
+
+        assert_eq!(c.get_str("hello.friends").unwrap(), "4242".to_string());
+        assert_eq!(c.get_str("hello.world").unwrap(), "stuff".to_string());
+    }
+
+    static EX2_TOML: &'static str = "
+[hello]
+world = \"nonsense\"
+";
+
+    #[test]
+    fn load_one_file() {
+        let td = TempDir::new("arti-cfg").unwrap();
+        let dflt = td.path().join("a_file");
+        let cf = td.path().join("other_file");
+        let mut c = config::Config::new();
+        std::fs::write(&dflt, EX_TOML).unwrap();
+        std::fs::write(&cf, EX2_TOML).unwrap();
+        let v = vec![cf];
+        let v2: Vec<&'static str> = Vec::new();
+        load(&mut c, Some(dflt), &v, &v2).unwrap();
+
+        assert!(c.get_str("hello.friends").is_err());
+        assert_eq!(c.get_str("hello.world").unwrap(), "nonsense".to_string());
+    }
+
+    #[test]
+    fn load_two_files_with_cmdline() {
+        let td = TempDir::new("arti-cfg").unwrap();
+        let cf1 = td.path().join("a_file");
+        let cf2 = td.path().join("other_file");
+        let mut c = config::Config::new();
+        std::fs::write(&cf1, EX_TOML).unwrap();
+        std::fs::write(&cf2, EX2_TOML).unwrap();
+        let v = vec![cf1, cf2];
+        let v2 = vec!["other.var=present"];
+        let d: Option<String> = None;
+        load(&mut c, d, &v, &v2).unwrap();
+
+        assert_eq!(c.get_str("hello.friends").unwrap(), "4242".to_string());
+        assert_eq!(c.get_str("hello.world").unwrap(), "nonsense".to_string());
+        assert_eq!(c.get_str("other.var").unwrap(), "present".to_string());
+    }
+
+    #[test]
+    fn check_default() {
+        // We don't want to second-guess the directories crate too much
+        // here, so we'll just make sure it does _something_ plausible.
+
+        let dflt = default_config_file().unwrap();
+        assert!(dflt.ends_with("arti.toml"));
+    }
+}

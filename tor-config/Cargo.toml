@@ -21,3 +21,4 @@ thiserror = "1.0.24"
 
 [dev-dependencies]
 dirs = "3.0.1"
+tempdir = "0.3.7"
