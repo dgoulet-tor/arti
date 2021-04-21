@@ -18,7 +18,13 @@ mod util;
 use tor_circmgr::{CircMgr, DirInfo};
 use tor_rtcompat::{Runtime, SleepProvider, SleepProviderExt};
 
-use async_compression::futures::bufread::{XzDecoder, ZlibDecoder, ZstdDecoder};
+// Zlib is required; the others are optional.
+#[cfg(feature = "xz")]
+use async_compression::futures::bufread::XzDecoder;
+use async_compression::futures::bufread::ZlibDecoder;
+#[cfg(feature = "zstd")]
+use async_compression::futures::bufread::ZstdDecoder;
+
 use futures::io::{
     AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader,
 };
@@ -349,7 +355,9 @@ fn get_decoder<'a, S: AsyncBufRead + Unpin + Send + 'a>(
     match encoding {
         None | Some("identity") => Ok(Box::new(stream)),
         Some("deflate") => decoder!(ZlibDecoder, stream),
+        #[cfg(feature = "xz")]
         Some("x-tor-lzma") => decoder!(XzDecoder, stream),
+        #[cfg(feature = "zstd")]
         Some("x-zstd") => decoder!(ZstdDecoder, stream),
         Some(other) => Err(Error::ContentEncoding(other.into())),
     }
@@ -449,6 +457,7 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "zstd")]
     #[async_test]
     async fn decomp_zstd() -> Result<()> {
         let compressed = hex::decode("28b52ffd24250d0100c84f6e6520666973682054776f526564426c756520666973680a0200600c0e2509478352cb").unwrap();
@@ -460,6 +469,7 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "xz")]
     #[async_test]
     async fn decomp_xz2() -> Result<()> {
         // Not so good at tiny files...
