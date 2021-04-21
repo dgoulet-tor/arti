@@ -77,8 +77,20 @@ impl MockSleepProvider {
 
     /// Advance the simulated timeline forward by `dur`.
     ///
-    /// Calling this function will wake any pending futures as appropriate.
-    pub fn advance(&self, dur: Duration) {
+    /// Calling this function will wake any pending futures as
+    /// appropriate, and yield to the scheduler so they get a chance
+    /// to run.
+    pub async fn advance(&self, dur: Duration) {
+        self.advance_noyield(dur);
+        crate::task::yield_now().await;
+    }
+
+    /// Advance the simulated timeline forward by `dur`.
+    ///
+    /// Calling this function will wake any pending futures as
+    /// appropriate, but not yield to the scheduler.  Mostly you
+    /// should call [`advance`](Self::advance) instead.
+    pub fn advance_noyield(&self, dur: Duration) {
         // It's not so great to unwrap here in general, but since this is
         // only testing code we don't really care.
         let mut state = self.state.lock().unwrap();
@@ -189,7 +201,7 @@ mod test {
         assert_eq!(sp.wallclock(), w1);
 
         let interval = Duration::new(4 * 3600 + 13 * 60, 0);
-        sp.advance(interval);
+        sp.advance_noyield(interval);
         assert_eq!(sp.now(), i1 + interval);
         assert_eq!(sp.wallclock(), w1 + interval);
 
@@ -235,19 +247,19 @@ mod test {
                     s3.send(()).unwrap();
                 },
                 async {
-                    sp.advance(one_hour * 2);
+                    sp.advance(one_hour * 2).await;
                     r1.await.unwrap();
                     assert_eq!(true, b1.load(Ordering::SeqCst));
                     assert_eq!(false, b2.load(Ordering::SeqCst));
                     assert_eq!(false, b3.load(Ordering::SeqCst));
 
-                    sp.advance(one_hour * 2);
+                    sp.advance(one_hour * 2).await;
                     r2.await.unwrap();
                     assert_eq!(true, b1.load(Ordering::SeqCst));
                     assert_eq!(true, b2.load(Ordering::SeqCst));
                     assert_eq!(false, b3.load(Ordering::SeqCst));
 
-                    sp.advance(one_hour * 2);
+                    sp.advance(one_hour * 2).await;
                     r3.await.unwrap();
                     assert_eq!(true, b1.load(Ordering::SeqCst));
                     assert_eq!(true, b2.load(Ordering::SeqCst));

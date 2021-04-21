@@ -232,7 +232,7 @@ mod test {
         // The timeout occurs.
         test_with_runtime(|_| async {
             let (mock_sp, _send, timeout_future) = setup();
-            mock_sp.advance(Duration::new(3600, 0));
+            mock_sp.advance(Duration::new(3600, 0)).await;
             assert_eq!(timeout_future.await, Err(TimeoutError));
         });
         // The data is ready immediately.
@@ -244,7 +244,7 @@ mod test {
         // The data is ready after a little while
         test_with_runtime(|_| async {
             let (mock_sp, send, timeout_future) = setup();
-            mock_sp.advance(Duration::new(10, 0));
+            mock_sp.advance(Duration::new(10, 0)).await;
             send.send(()).unwrap();
             assert_eq!(timeout_future.await, Ok(Ok(())));
         });
@@ -252,13 +252,13 @@ mod test {
         test_with_runtime(|_| async {
             let (mock_sp, send, timeout_future) = setup();
             send.send(()).unwrap();
-            mock_sp.advance(Duration::new(3600, 0));
+            mock_sp.advance(Duration::new(3600, 0)).await;
             assert_eq!(timeout_future.await, Ok(Ok(())));
         });
         // Make sure that nothing happens too early.
         test_with_runtime(|_| async {
             let (mock_sp, _send, timeout_future) = setup();
-            mock_sp.advance(Duration::new(300, 0));
+            mock_sp.advance(Duration::new(300, 0)).await;
             assert_eq!(timeout_future.now_or_never(), None);
         });
     }
@@ -283,8 +283,7 @@ mod test {
                 async {
                     while mock_sp.wallclock() < start() + ONE_DAY {
                         assert_eq!(false, b.load(Ordering::SeqCst));
-                        mock_sp.advance(Duration::new(413, 0));
-                        // XXXX maybe I should yield here?
+                        mock_sp.advance(Duration::new(413, 0)).await;
                     }
                 }
             );
@@ -310,7 +309,7 @@ mod test {
                 async {
                     while mock_sp.wallclock() < start() + (ONE_DAY / 2) {
                         assert_eq!(false, b.load(Ordering::SeqCst));
-                        mock_sp.advance(Duration::new(413, 0));
+                        mock_sp.advance(Duration::new(413, 0)).await;
                     }
                     send.send(()).unwrap();
                 }
@@ -333,7 +332,7 @@ mod test {
                 },
                 async {
                     mock_sp.jump_to(start() + ONE_DAY);
-                    mock_sp.advance(MAX_SLEEP); // have to rest some.
+                    mock_sp.advance(MAX_SLEEP).await; // have to rest some.
                 }
             );
             assert_eq!(true, b.load(Ordering::SeqCst));
@@ -363,7 +362,7 @@ mod test {
                     let mut elapsed = Duration::new(0, 0);
                     while elapsed < (3 * ONE_DAY) / 2 {
                         assert_eq!(false, b.load(Ordering::SeqCst));
-                        mock_sp.advance(Duration::new(413, 0));
+                        mock_sp.advance(Duration::new(413, 0)).await;
                         elapsed += Duration::new(413, 0);
                     }
                     send.send(()).unwrap();
