@@ -1,8 +1,6 @@
 use super::{AbstractChannel, Pending};
 use crate::Result;
 
-use tor_llcrypto::pk::ed25519::Ed25519Identity;
-
 use std::collections::{hash_map, HashMap};
 use std::sync::Arc;
 
@@ -27,12 +25,20 @@ pub(crate) enum ChannelState<C> {
 }
 
 impl<C> ChannelState<C> {
-    pub(super) fn clone_ref(&self) -> Self {
+    fn clone_ref(&self) -> Self {
         use ChannelState::*;
         match self {
             Open(chan) => Open(Arc::clone(chan)),
             Building(pending) => Building(pending.clone()),
             Poisoned(_) => panic!(),
+        }
+    }
+
+    #[cfg(test)]
+    fn unwrap_open(&self) -> Arc<C> {
+        match self {
+            ChannelState::Open(chan) => Arc::clone(chan),
+            _ => panic!("Not an oppen channel"),
         }
     }
 }
@@ -91,7 +97,7 @@ impl<C: AbstractChannel> ChannelMap<C> {
     {
         use hash_map::Entry::*;
         let mut map = self.channels.lock()?;
-        let mut entry = map.entry(ident.clone());
+        let entry = map.entry(ident.clone());
         match entry {
             Occupied(mut occupied) => {
                 // DOCDOC explain what's up here.
@@ -118,5 +124,125 @@ impl<C: AbstractChannel> ChannelMap<C> {
                 Ok(output)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[derive(Eq, PartialEq, Debug)]
+    struct FakeChannel {
+        ident: &'static str,
+        usable: bool,
+    }
+    impl AbstractChannel for FakeChannel {
+        type Ident = u8;
+        fn ident(&self) -> &Self::Ident {
+            &self.ident.as_bytes()[0]
+        }
+        fn is_usable(&self) -> bool {
+            self.usable
+        }
+    }
+    fn ch(ident: &'static str) -> ChannelState<FakeChannel> {
+        ChannelState::Open(Arc::new(FakeChannel {
+            ident,
+            usable: true,
+        }))
+    }
+    fn closed(ident: &'static str) -> ChannelState<FakeChannel> {
+        ChannelState::Open(Arc::new(FakeChannel {
+            ident,
+            usable: false,
+        }))
+    }
+
+    #[test]
+    fn simple_ops() {
+        let map = ChannelMap::new();
+        use ChannelState::Open;
+
+        assert!(map.replace(b'h', ch("hello")).unwrap().is_none());
+        assert!(map.replace(b'w', ch("wello")).unwrap().is_none());
+
+        match map.get(&b'h') {
+            Ok(Some(Open(chan))) if chan.ident == "hello" => {}
+            _ => panic!(),
+        }
+
+        assert!(map.get(&b'W').unwrap().is_none());
+
+        match map.replace(b'h', ch("hebbo")) {
+            Ok(Some(Open(chan))) if chan.ident == "hello" => {}
+            _ => panic!(),
+        }
+
+        assert!(map.remove(&b'Z').unwrap().is_none());
+        match map.remove(&b'h') {
+            Ok(Some(Open(chan))) if chan.ident == "hebbo" => {}
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn rmv_unusable() {
+        let map = ChannelMap::new();
+
+        map.replace(b'm', closed("machen")).unwrap();
+        map.replace(b'f', ch("feinen")).unwrap();
+        map.replace(b'w', closed("wir")).unwrap();
+        map.replace(b'F', ch("Fug")).unwrap();
+
+        map.remove_unusable().unwrap();
+
+        assert!(map.get(&b'm').unwrap().is_none());
+        assert!(map.get(&b'w').unwrap().is_none());
+        assert!(map.get(&b'f').unwrap().is_some());
+        assert!(map.get(&b'F').unwrap().is_some());
+    }
+
+    #[test]
+    fn change() {
+        let map = ChannelMap::new();
+
+        map.replace(b'w', ch("wir")).unwrap();
+        map.replace(b'm', ch("machen")).unwrap();
+        map.replace(b'f', ch("feinen")).unwrap();
+        map.replace(b'F', ch("Fug")).unwrap();
+
+        //  Replace Some with Some.
+        let (old, v) = map
+            .change_state(&b'F', |state| (Some(ch("FUG")), (state, 99_u8)))
+            .unwrap();
+        assert_eq!(old.unwrap().unwrap_open().ident, "Fug");
+        assert_eq!(v, 99);
+        assert_eq!(map.get(&b'F').unwrap().unwrap().unwrap_open().ident, "FUG");
+
+        // Replace Some with None.
+        let (old, v) = map
+            .change_state(&b'f', |state| (None, (state, 123_u8)))
+            .unwrap();
+        assert_eq!(old.unwrap().unwrap_open().ident, "feinen");
+        assert_eq!(v, 123);
+        assert!(map.get(&b'f').unwrap().is_none());
+
+        // Replace None with Some.
+        let (old, v) = map
+            .change_state(&b'G', |state| (Some(ch("Geheimnisse")), (state, "Hi")))
+            .unwrap();
+        assert!(old.is_none());
+        assert_eq!(v, "Hi");
+        assert_eq!(
+            map.get(&b'G').unwrap().unwrap().unwrap_open().ident,
+            "Geheimnisse"
+        );
+
+        // Replace None with None
+        let (old, v) = map
+            .change_state(&b'Q', |state| (None, (state, "---")))
+            .unwrap();
+        assert!(old.is_none());
+        assert_eq!(v, "---");
+        assert!(map.get(&b'Q').unwrap().is_none());
     }
 }

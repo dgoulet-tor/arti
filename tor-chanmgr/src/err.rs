@@ -17,10 +17,6 @@ pub enum Error {
     #[error("Channel timed out")]
     ChanTimeout,
 
-    /// An internal error or assumption violation in the TLS implementation.
-    #[error("Invalid TLS connection")]
-    InvalidTls,
-
     /// A protocol error while making a channel
     #[error("Protocol error while opening a channel: {0}")]
     Proto(#[from] tor_proto::Error),
@@ -59,8 +55,8 @@ impl std::fmt::Display for PendingChanError {
         write!(f, "{}", self.0)
     }
 }
-impl From<Error> for PendingChanError {
-    fn from(e: Error) -> PendingChanError {
+impl From<&Error> for PendingChanError {
+    fn from(e: &Error) -> PendingChanError {
         PendingChanError(e.to_string())
     }
 }
