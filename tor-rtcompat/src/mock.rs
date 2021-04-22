@@ -7,3 +7,6 @@
 
 pub mod io;
 pub mod time;
+
+mod sleep_runtime;
+pub use sleep_runtime::MockSleepRuntime;

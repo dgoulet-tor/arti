@@ -27,6 +27,7 @@ use crate::SleepProvider;
 /// jumps in the system clock by calling `jump()`.
 ///
 /// This is *not* for production use.
+#[derive(Clone)]
 pub struct MockSleepProvider {
     /// The shared backend for this MockSleepProvider and its futures.
     state: Arc<Mutex<SleepSchedule>>,
