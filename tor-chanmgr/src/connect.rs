@@ -5,7 +5,7 @@
 //! Instead, it can hold a boxed Connector.
 
 use crate::transport::Transport;
-use crate::Result;
+use crate::{Error, Result};
 
 use tor_linkspec::ChanTarget;
 use tor_llcrypto::pk;
@@ -15,7 +15,6 @@ use crate::testing::{FakeChannel as Channel, FakeChannelBuilder as ChannelBuilde
 #[cfg(not(test))]
 use tor_proto::channel::{Channel, ChannelBuilder};
 
-use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use futures::task::{Spawn, SpawnExt};
 use std::net::SocketAddr;
@@ -42,14 +41,11 @@ impl<TR: Transport + Send + Sync> Connector for TR {
         target: &TargetInfo,
     ) -> Result<Arc<Channel>> {
         use tor_rtcompat::tls::CertifiedConn;
-        let (addr, tls) = self
-            .connect(target)
-            .await
-            .context("Can't negotiate TLS with channel target")?;
+        let (addr, tls) = self.connect(target).await?;
 
         let peer_cert = tls
             .peer_certificate()?
-            .ok_or_else(|| anyhow!("Somehow got a TLS connection without a certificate"))?;
+            .ok_or(Error::Internal("TLS connection with no peer certificate"))?;
 
         let mut builder = ChannelBuilder::new();
         builder.set_declared_addr(addr);

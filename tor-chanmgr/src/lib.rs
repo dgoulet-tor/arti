@@ -28,7 +28,6 @@ use testing::FakeChannel as Channel;
 #[cfg(not(test))]
 use tor_proto::channel::Channel;
 
-use anyhow::Result;
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -37,6 +36,9 @@ use std::time::Duration;
 pub use err::Error;
 
 use tor_rtcompat::{Runtime, SleepProviderExt};
+
+/// A Result as returned by this crate.
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// A Type that remembers a set of live channels, and launches new
 /// ones on request.
@@ -178,7 +180,7 @@ impl<R: Runtime> ChanMgr<R> {
         match result {
             Ok(Ok(chan)) => Ok(chan),
             Ok(Err(e)) => Err(e),
-            Err(_) => Err(Error::ChanTimeout.into()),
+            Err(_) => Err(Error::ChanTimeout),
         }
     }
 
@@ -330,10 +332,7 @@ mod test {
             };
 
             let res1 = mgr.get_or_launch(&target).await;
-            assert!(matches!(
-                res1.unwrap_err().downcast(),
-                Ok(Error::UnusableTarget(_))
-            ));
+            assert!(matches!(res1.unwrap_err(), Error::UnusableTarget(_)));
 
             // port 8686 is set up to always fail in FakeTransport.
             let target = Target {
@@ -343,7 +342,7 @@ mod test {
             };
 
             let res1 = mgr.get_or_launch(&target).await;
-            assert!(res1.unwrap_err().is::<tor_proto::Error>());
+            assert!(matches!(res1.unwrap_err(), Error::Proto(_)));
 
             let chan3 = mgr.get_nowait_by_ed_id(&[4; 32].into()).await;
             assert!(chan3.is_none());
@@ -392,8 +391,8 @@ mod test {
             assert!(ch44a.same_channel(&ch44b));
             assert!(!ch3a.same_channel(&ch44b));
 
-            assert!(err_a.is::<tor_proto::Error>());
-            assert!(err_b.is::<tor_proto::Error>());
+            assert!(matches!(err_a, Error::Proto(_)));
+            assert!(matches!(err_b, Error::Proto(_)));
         });
     }
 
