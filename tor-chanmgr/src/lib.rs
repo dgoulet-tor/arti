@@ -13,6 +13,7 @@
 
 mod connect;
 mod err;
+mod mgr;
 #[cfg(test)]
 pub(crate) mod testing;
 pub mod transport;
