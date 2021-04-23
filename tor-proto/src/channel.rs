@@ -236,6 +236,11 @@ impl Channel {
         self.unique_id
     }
 
+    /// Return the Ed25519 identity for the peer of this channel.
+    pub fn peer_ed25519_id(&self) -> &Ed25519Identity {
+        &self.ed25519_id
+    }
+
     /// Return an error if this channel is somehow mismatched with the
     /// given target.
     pub fn check_match<T: ChanTarget + ?Sized>(&self, target: &T) -> Result<()> {

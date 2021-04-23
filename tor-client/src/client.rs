@@ -3,7 +3,6 @@
 //! To construct a client, run the `TorClient::bootstrap()` method.
 //! Once the client is bootstrapped, you can make connections over the Tor
 //! network using `TorClient::connect()`.
-use tor_chanmgr::transport::nativetls::NativeTlsTransport;
 use tor_circmgr::TargetPort;
 use tor_dirmgr::NetDirConfig;
 use tor_proto::circuit::IpVersionPreference;
@@ -78,11 +77,7 @@ impl<R: Runtime> TorClient<R> {
     /// Return a client once there is enough directory material to
     /// connect safely over the Tor network.
     pub async fn bootstrap(runtime: R, dircfg: NetDirConfig) -> Result<TorClient<R>> {
-        let transport = {
-            let connector = runtime.tls_connector();
-            NativeTlsTransport::new(connector)?
-        };
-        let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(runtime.clone(), transport));
+        let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(runtime.clone()));
         let circmgr = Arc::new(tor_circmgr::CircMgr::new(
             runtime.clone(),
             Arc::clone(&chanmgr),
