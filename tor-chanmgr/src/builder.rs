@@ -146,3 +146,22 @@ impl TargetInfo {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn targetinfo() {
+        let ti = TargetInfo {
+            addrs: vec!["127.0.0.1:11".parse().unwrap()],
+            ed_identity: [42; 32].into(),
+            rsa_identity: [45; 20].into(),
+        };
+
+        let ti2 = TargetInfo::from_chan_target(&ti);
+        assert_eq!(ti.addrs, ti2.addrs);
+        assert_eq!(ti.ed_identity, ti2.ed_identity);
+        assert_eq!(ti.rsa_identity, ti2.rsa_identity);
+    }
+}
