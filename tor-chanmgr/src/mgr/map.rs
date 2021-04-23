@@ -1,9 +1,17 @@
+//! Simple implementaiton for the internal map state of a ChanMgr.
+
 use super::{AbstractChannel, Pending};
-use crate::Result;
+use crate::{Error, Result};
 
 use std::collections::{hash_map, HashMap};
 use std::sync::Arc;
 
+/// A map from channel id to channel state.
+///
+/// We make this a separate type instead of just using
+/// `Mutex<HashMap<...>>` to limit the amount of code that can see and
+/// lock the Mutex here.  (We're using a blocking mutex close to async
+/// code, so we need to be careful.)
 pub(crate) struct ChannelMap<C: AbstractChannel> {
     /// A map from identity to channel, or to pending channel status.
     ///
@@ -12,19 +20,32 @@ pub(crate) struct ChannelMap<C: AbstractChannel> {
     channels: std::sync::Mutex<HashMap<C::Ident, ChannelState<C>>>,
 }
 
-// used to ensure that only this module can construct a ChannelState::Poisoned.
-pub struct Priv {
+/// Structure that can only be constructed from within this module.
+/// Used to make sure that only we can construct ChannelState::Poisoned.
+pub(crate) struct Priv {
+    /// (This field is private)
     _unused: (),
 }
 
+/// The state of a channel (or channel build attempt) within a map.
 pub(crate) enum ChannelState<C> {
+    /// An open channel.
+    ///
+    /// This channel might not be usable: it might be closing or
+    /// broken.  We need to check its is_usable() method before
+    /// yielding it to the user.
     Open(Arc<C>),
+    /// A channel that's getting built.
     Building(Pending<C>),
-    // XXXX explain what this is for.
+    /// A temporary invalid state.
+    ///
+    /// We insert this into the map temporarily as a placeholder in
+    /// `change_state()`.
     Poisoned(Priv),
 }
 
 impl<C> ChannelState<C> {
+    /// Create a new shallow copy of this ChannelState.
     fn clone_ref(&self) -> Self {
         use ChannelState::*;
         match self {
@@ -34,53 +55,68 @@ impl<C> ChannelState<C> {
         }
     }
 
+    /// For testing: either give the Open channnel inside this state,
+    /// or panic if there is none.
     #[cfg(test)]
     fn unwrap_open(&self) -> Arc<C> {
         match self {
             ChannelState::Open(chan) => Arc::clone(chan),
-            _ => panic!("Not an oppen channel"),
+            _ => panic!("Not an open channel"),
         }
     }
 }
 
 impl<C: AbstractChannel> ChannelState<C> {
-    /// DOCDOC returns true if identity COULD BE `ident`
-    fn check_ident(&self, ident: &C::Ident) -> bool {
+    /// Return an error if `ident`is definitely not a matching
+    /// matching identity for this state.
+    fn check_ident(&self, ident: &C::Ident) -> Result<()> {
         match self {
-            ChannelState::Open(chan) => chan.ident() == ident,
-            ChannelState::Poisoned(_) => false,
-            ChannelState::Building(_) => true,
+            ChannelState::Open(chan) => {
+                if chan.ident() == ident {
+                    Ok(())
+                } else {
+                    Err(Error::Internal("Identity mismatch"))
+                }
+            }
+            ChannelState::Poisoned(_) => Err(Error::Internal("Poisoned state in channel map")),
+            ChannelState::Building(_) => Ok(()),
         }
     }
 }
 
 impl<C: AbstractChannel> ChannelMap<C> {
+    /// Create a new empty ChannelMap.
     pub(crate) fn new() -> Self {
         ChannelMap {
             channels: std::sync::Mutex::new(HashMap::new()),
         }
     }
 
+    /// Return the channel state for the given identity, if any.
     pub(crate) fn get(&self, ident: &C::Ident) -> Result<Option<ChannelState<C>>> {
         let map = self.channels.lock()?;
         Ok(map.get(ident).map(ChannelState::clone_ref))
     }
 
+    /// Replace the channel state for `ident` with `newval`, and return the
+    /// previous value if any.
     pub(crate) fn replace(
         &self,
         ident: C::Ident,
         newval: ChannelState<C>,
     ) -> Result<Option<ChannelState<C>>> {
-        assert!(newval.check_ident(&ident));
+        newval.check_ident(&ident)?;
         let mut map = self.channels.lock()?;
         Ok(map.insert(ident, newval))
     }
 
+    /// Remove and return the state for `ident`, if any.
     pub(crate) fn remove(&self, ident: &C::Ident) -> Result<Option<ChannelState<C>>> {
         let mut map = self.channels.lock()?;
         Ok(map.remove(ident))
     }
 
+    /// Remove every unusable state from the map.
     pub(crate) fn remove_unusable(&self) -> Result<()> {
         let mut map = self.channels.lock()?;
         map.retain(|_, state| match state {
@@ -91,6 +127,19 @@ impl<C: AbstractChannel> ChannelMap<C> {
         Ok(())
     }
 
+    /// Replace the state whose identity is `ident` with a new state.
+    ///
+    /// The provided function `func` is invoked on the old state (if
+    /// any), and must return a tuple containing an optional new
+    /// state, and an arbitrary return value for this function.
+    ///
+    /// Because `func` is run while holding the lock on this object,
+    /// it should be fast and nonblocking.  In return, you can be sure
+    /// that it's running atomically with respect to other accessesors
+    /// of this map.
+    ///
+    /// If `func` panics, this map will become unusable and future
+    /// accesses will fail.
     pub(crate) fn change_state<F, V>(&self, ident: &C::Ident, func: F) -> Result<V>
     where
         F: FnOnce(Option<ChannelState<C>>) -> (Option<ChannelState<C>>, V),
@@ -106,7 +155,7 @@ impl<C: AbstractChannel> ChannelMap<C> {
                 let (newval, output) = func(Some(oldent));
                 match newval {
                     Some(mut newent) => {
-                        assert!(newent.check_ident(ident));
+                        newent.check_ident(ident)?; // XXX leaves it poisoned
                         std::mem::swap(occupied.get_mut(), &mut newent);
                     }
                     None => {
@@ -118,7 +167,7 @@ impl<C: AbstractChannel> ChannelMap<C> {
             Vacant(vacant) => {
                 let (newval, output) = func(None);
                 if let Some(newent) = newval {
-                    assert!(newent.check_ident(ident));
+                    newent.check_ident(ident)?;
                     vacant.insert(newent);
                 }
                 Ok(output)

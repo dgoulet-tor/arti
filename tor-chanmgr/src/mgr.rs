@@ -1,3 +1,5 @@
+//! Abstract implementation of a channel maanger
+
 #![allow(dead_code)]
 use crate::err::PendingChanError;
 use crate::{Error, Result};
@@ -10,21 +12,49 @@ use std::sync::Arc;
 
 mod map;
 
+/// Trait to describe as much of a
+/// [`Channel`](tor_proto::channel::Channel) as `AbstractChanMgr`
+/// needs to use.
 pub(crate) trait AbstractChannel {
+    /// Identity type for the other side of the channel.
     type Ident: Hash + Eq + Clone;
+    /// Return this channel's identity.
     fn ident(&self) -> &Self::Ident;
+    /// Return true if this channel is usable.
+    ///
+    /// A channel might be unusable because it is closed, because it has
+    /// hit a bug, or for some other reason.  We don't return unusable
+    /// channels back to the user.
     fn is_usable(&self) -> bool;
 }
 
+/// Trait to describe how channels are created.
 #[async_trait]
 pub(crate) trait ChannelFactory {
+    /// The type of channel that this factory can build.
     type Channel: AbstractChannel;
+    /// Type that explains how to build a channel.
     type BuildSpec;
 
+    /// Construct a new channel to the destination described at `target`.
+    ///
+    /// This function must take care of all timeouts, error detection,
+    /// and so on.
+    ///
+    /// It should not retry; that is handled at a higher level.
     async fn build_channel(&self, target: &Self::BuildSpec) -> Result<Arc<Self::Channel>>;
 }
 
-pub(crate) struct AbstractChannelMgr<CF: ChannelFactory> {
+/// A type- and network-agnostic implementation for
+/// [`ChanMgr`](crate::ChanMgr).
+///
+/// This type does the work of keeping track of open channels and
+/// pending channel requests, launching requests as needed, waiting
+/// for pending requests, and so forth.
+///
+/// The actual job of launching conenctions is deferred to a ChannelFactory
+/// type.
+pub(crate) struct AbstractChanMgr<CF: ChannelFactory> {
     /// A 'connector' object that we use to create channels.
     connector: CF,
 
@@ -32,40 +62,70 @@ pub(crate) struct AbstractChannelMgr<CF: ChannelFactory> {
     channels: map::ChannelMap<CF::Channel>,
 }
 
+/// A Result whose error is a [`PendingChanError`].
+///
+/// We need a separate type here because [`Error`] doesn't implement `Clone`.
 type PendResult<T> = std::result::Result<T, PendingChanError>;
 
+/// Type alias for a future that we wait on to see when a pending
+/// channel is done or failed.
 type Pending<C> = Shared<oneshot::Receiver<PendResult<Arc<C>>>>;
+
+/// Type alias for the sender we notify when we complete a channel (or
+/// fail to complete it).
 type Sending<C> = oneshot::Sender<PendResult<Arc<C>>>;
 
-impl<CF: ChannelFactory> AbstractChannelMgr<CF> {
+impl<CF: ChannelFactory> AbstractChanMgr<CF> {
+    /// Make a new empty channel manager.
     pub(crate) fn new(connector: CF) -> Self {
-        AbstractChannelMgr {
+        AbstractChanMgr {
             connector,
             channels: map::ChannelMap::new(),
         }
     }
 
+    /// Remove every unusable entry from this channel manager.
     pub fn remove_unusable_entries(&self) -> Result<()> {
         self.channels.remove_unusable()
     }
 
+    /// Helper: return the objects used to inform pending tasks
+    /// about a newly open or failed channel.
     fn setup_launch<C>(&self) -> (map::ChannelState<C>, Sending<C>) {
         let (snd, rcv) = oneshot::channel();
         let shared = rcv.shared();
         (map::ChannelState::Building(shared), snd)
     }
 
+    /// Get a channel whose identity is `ident`.
+    ///
+    /// If a usable channel exists with that identity, return it.
+    ///
+    /// If no such channel exists already, and none is in progress,
+    /// launch a new request using `target`, which must match `ident`.
+    ///
+    /// If no such channel exists already, but we have one that's in
+    /// progress, wait for it to succeed or fail.
     pub async fn get_or_launch(
         &self,
         ident: <<CF as ChannelFactory>::Channel as AbstractChannel>::Ident,
         target: CF::BuildSpec,
     ) -> Result<Arc<CF::Channel>> {
         use map::ChannelState::*;
+
+        /// Possible actions that we'll decide to take based on the
+        /// channel's initial state.
         enum Action<C> {
+            /// We found no channel.  We're going to launch a new one,
+            /// then tell everybody about it.
             Launch(Sending<C>),
+            /// We found an in-progress attempt at making a channel.
+            /// We're going to wait for it to finish.
             Wait(Pending<C>),
-            Return(Arc<C>),
+            /// We found a usable channel.  We're going to return it.
+            Return(Result<Arc<C>>),
         }
+        /// How many times do we try?
         const N_ATTEMPTS: usize = 2;
 
         // XXXX It would be neat to use tor_retry instead, but it's
@@ -73,14 +133,19 @@ impl<CF: ChannelFactory> AbstractChannelMgr<CF> {
         let mut last_err = Err(Error::Internal("Error was never set!?"));
 
         for _ in 0..N_ATTEMPTS {
+            // First, see what state we're in, and what we should do
+            // about it.
             let action = self
                 .channels
                 .change_state(&ident, |oldstate| match oldstate {
                     Some(Open(ref ch)) => {
                         if ch.is_usable() {
-                            let action = Action::Return(Arc::clone(ch));
+                            // Good channel. Return it.
+                            let action = Action::Return(Ok(Arc::clone(ch)));
                             (oldstate, action)
                         } else {
+                            // Unusable channel.  Move to the Building
+                            // state and launch a new channel.
                             let (newstate, send) = self.setup_launch();
                             let action = Action::Launch(send);
                             (Some(newstate), action)
@@ -90,18 +155,30 @@ impl<CF: ChannelFactory> AbstractChannelMgr<CF> {
                         let action = Action::Wait(pending.clone());
                         (oldstate, action)
                     }
-                    Some(Poisoned(_)) => panic!(),
+                    Some(Poisoned(_)) => {
+                        // We should never be able to see this state; this
+                        // is a bug.
+                        (
+                            None,
+                            Action::Return(Err(Error::Internal("Found a poisoned entry"))),
+                        )
+                    }
                     None => {
+                        // No channel.  Move to the Building
+                        // state and launch a new channel.
                         let (newstate, send) = self.setup_launch();
                         let action = Action::Launch(send);
                         (Some(newstate), action)
                     }
                 })?;
 
+            // Now we act based on the channel.
             match action {
+                // Easy case: we have an error or a channel to return.
                 Action::Return(v) => {
-                    return Ok(v);
+                    return v;
                 }
+                // There's an in-progress channel.  Wait for it.
                 Action::Wait(pend) => match pend.await {
                     Ok(Ok(chan)) => return Ok(chan),
                     Ok(Err(e)) => {
@@ -111,8 +188,11 @@ impl<CF: ChannelFactory> AbstractChannelMgr<CF> {
                         last_err = Err(Error::Internal("channel build task disappeared"));
                     }
                 },
+                // We need to launch a channel.
                 Action::Launch(send) => match self.connector.build_channel(&target).await {
                     Ok(chan) => {
+                        // The channel got built: remember it, tell the
+                        // others, and return it.
                         self.channels
                             .replace(ident.clone(), Open(Arc::clone(&chan)))?;
                         // It's okay if all the receivers went away:
@@ -121,6 +201,8 @@ impl<CF: ChannelFactory> AbstractChannelMgr<CF> {
                         return Ok(chan);
                     }
                     Err(e) => {
+                        // The channel failed. Make it non-pending, tell the
+                        // others, and set the error.
                         self.channels.remove(&ident)?;
                         // (As above)
                         let _ignore_err = send.send(Err((&e).into()));
@@ -133,6 +215,8 @@ impl<CF: ChannelFactory> AbstractChannelMgr<CF> {
         last_err
     }
 
+    /// Test only: return the current open usable channel with a given
+    /// `ident`, if any.
     #[cfg(test)]
     pub fn get_nowait(
         &self,
@@ -219,7 +303,7 @@ mod test {
     fn connect_one_ok() {
         test_with_runtime(|runtime| async {
             let cf = FakeChannelFactory::new(runtime);
-            let mgr = AbstractChannelMgr::new(cf);
+            let mgr = AbstractChanMgr::new(cf);
             let target = (413, '!');
             let chan1 = mgr.get_or_launch(413, target.clone()).await.unwrap();
             let chan2 = mgr.get_or_launch(413, target.clone()).await.unwrap();
@@ -235,7 +319,7 @@ mod test {
     fn connect_one_fail() {
         test_with_runtime(|runtime| async {
             let cf = FakeChannelFactory::new(runtime);
-            let mgr = AbstractChannelMgr::new(cf);
+            let mgr = AbstractChanMgr::new(cf);
 
             // This is set up to always fail.
             let target = (999, '❌');
@@ -252,7 +336,7 @@ mod test {
     fn test_concurrent() {
         test_with_runtime(|runtime| async {
             let cf = FakeChannelFactory::new(runtime);
-            let mgr = AbstractChannelMgr::new(cf);
+            let mgr = AbstractChanMgr::new(cf);
 
             // TODO XXXX: figure out how to make these actually run
             // concurrently. Right now it seems that they don't actually
@@ -291,7 +375,7 @@ mod test {
     fn unusable_entries() {
         test_with_runtime(|runtime| async {
             let cf = FakeChannelFactory::new(runtime);
-            let mgr = AbstractChannelMgr::new(cf);
+            let mgr = AbstractChanMgr::new(cf);
 
             let (ch3, ch4, ch5) = join!(
                 mgr.get_or_launch(3, (3, 'a')),
