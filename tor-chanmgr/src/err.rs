@@ -40,6 +40,12 @@ impl From<futures::task::SpawnError> for Error {
     }
 }
 
+impl From<tor_rtcompat::TimeoutError> for Error {
+    fn from(_: tor_rtcompat::TimeoutError) -> Error {
+        Error::ChanTimeout
+    }
+}
+
 impl<T> From<std::sync::PoisonError<T>> for Error {
     fn from(_: std::sync::PoisonError<T>) -> Error {
         Error::Internal("Thread failed while holding lock")
