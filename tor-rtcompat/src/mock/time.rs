@@ -53,7 +53,7 @@ struct SleepEntry {
     waker: Waker,
 }
 
-/// A future returned by [`MockSystemTime::sleep()`].
+/// A future returned by [`MockSleepProvider::sleep()`].
 pub struct Sleeping {
     /// The instant when we should become ready.
     when: Instant,
