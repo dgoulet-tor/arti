@@ -95,13 +95,13 @@ impl AsyncRead for DataStream {
 }
 
 impl AsyncWrite for DataStream {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<IoResult<usize>> {
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<IoResult<usize>> {
         self.project().w.poll_write(cx, buf)
     }
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<IoResult<()>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
         self.project().w.poll_flush(cx)
     }
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<IoResult<()>> {
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
         self.project().w.poll_close(cx)
     }
 }
@@ -140,7 +140,7 @@ impl DataWriter {
     /// closes the stream if should_close is true.
     fn poll_flush_impl(
         self: Pin<&mut Self>,
-        cx: &mut Context,
+        cx: &mut Context<'_>,
         should_close: bool,
     ) -> Poll<IoResult<()>> {
         let this = self.project();
@@ -188,7 +188,7 @@ impl DataWriter {
 }
 
 impl AsyncWrite for DataWriter {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<IoResult<usize>> {
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<IoResult<usize>> {
         if buf.is_empty() {
             return Poll::Ready(Ok(0));
         }
@@ -233,11 +233,11 @@ impl AsyncWrite for DataWriter {
         }
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<IoResult<()>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
         self.poll_flush_impl(cx, false)
     }
 
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<IoResult<()>> {
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
         self.poll_flush_impl(cx, true)
     }
 }

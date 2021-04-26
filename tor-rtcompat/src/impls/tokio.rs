@@ -85,7 +85,7 @@ mod net {
     impl futures::stream::Stream for IncomingTcpStreams {
         type Item = IoResult<(TcpStream, SocketAddr)>;
 
-        fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
             // let p = self.project();
             match self.lis.poll_accept(cx) {
                 Poll::Ready(Ok((s, a))) => Poll::Ready(Some(Ok((s.into(), a)))),

@@ -31,7 +31,7 @@ impl<T> InternCache<T> {
 
 impl<T: Eq + Hash> InternCache<T> {
     /// Helper: initialize the cache if needed, then lock it.
-    fn cache(&self) -> MutexGuard<WeakHashSet<Weak<T>>> {
+    fn cache(&self) -> MutexGuard<'_, WeakHashSet<Weak<T>>> {
         let cache = self.cache.get_or_init(|| Mutex::new(WeakHashSet::new()));
         cache.lock().unwrap()
     }

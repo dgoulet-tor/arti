@@ -57,7 +57,7 @@ impl<T> From<std::sync::PoisonError<T>> for Error {
 pub struct PendingChanError(String);
 impl std::error::Error for PendingChanError {}
 impl std::fmt::Display for PendingChanError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
