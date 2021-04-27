@@ -6,6 +6,9 @@
 
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![deny(clippy::await_holding_lock)]
+#![deny(clippy::exhaustive_enums)]
+#![deny(clippy::exhaustive_structs)]
 
 /// A macro to implement string and int conversions for c-like enums.
 ///
@@ -220,6 +223,7 @@ macro_rules! caret_enum {
 /// An error produced from type derived from type.  These errors can
 /// only occur when trying to convert to a type made with caret_enum!
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Error {
     /// Tried to convert to an enumeration type from an integer that
     /// didn't represent a member of that enumeration.

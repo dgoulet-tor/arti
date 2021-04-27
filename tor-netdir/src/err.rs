@@ -4,6 +4,7 @@ use thiserror::Error;
 
 /// An error returned by the network directory code
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Problem reading a document from disk.
     #[error("io error: {0:?}")]

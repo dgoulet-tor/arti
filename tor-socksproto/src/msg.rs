@@ -31,6 +31,7 @@ pub struct SocksRequest {
 
 /// An address sent or received as part of a SOCKS handshake
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::exhaustive_enums)]
 pub enum SocksAddr {
     /// A regular DNS hostname.
     Hostname(SocksHostname),
@@ -46,6 +47,7 @@ pub struct SocksHostname(String);
 
 /// Provided authentication from a SOCKS handshake
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum SocksAuth {
     /// No authentication was provided
     NoAuth,

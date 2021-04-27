@@ -4,6 +4,7 @@ use thiserror::Error;
 
 /// An error returned while looking up or building a circuit
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// No suitable relays for a request
     #[error("no relays for circuit: {0}")]

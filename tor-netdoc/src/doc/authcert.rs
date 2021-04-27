@@ -87,6 +87,7 @@ pub struct AuthCert {
 
 /// A pair of key identities that identifies a certificate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[allow(clippy::exhaustive_structs)]
 pub struct AuthCertKeyIds {
     /// Fingerprint of identity key
     pub id_fingerprint: rsa::RsaIdentity,

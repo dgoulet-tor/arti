@@ -50,6 +50,7 @@ enum State {
 
 /// An action to take in response to a SOCKS handshake message.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Action {
     /// If nonzero, this many bytes should be drained from the
     /// client's inputs.

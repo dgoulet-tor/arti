@@ -72,6 +72,7 @@ impl BandwidthFn {
             (IncludeUnmeasured, Measured(m)) => *m,
             (MeasuredOnly, Unmeasured(_)) => 0,
             (MeasuredOnly, Measured(m)) => *m,
+            (_, _) => 0,
         }
     }
 }
@@ -83,6 +84,7 @@ impl BandwidthFn {
 /// example, if Exit bandwidth is rare, then Exits should be
 /// less likely to get chosen for the middle hop of a path.
 #[derive(Clone, Debug, Copy)]
+#[non_exhaustive]
 pub enum WeightRole {
     /// Selecting a node to use as a guard
     Guard,

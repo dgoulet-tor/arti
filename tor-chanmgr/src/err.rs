@@ -4,6 +4,7 @@ use thiserror::Error;
 
 /// An error returned by a channel manager.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum Error {
     /// A ChanTarget was given for which no channel could be built.
     #[error("Target was unusable: {0}")]

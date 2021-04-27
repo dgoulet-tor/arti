@@ -159,6 +159,7 @@ impl ChanMsg {
 ///
 /// The correct response to a padding cell is to drop it and do nothing.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Padding {}
 impl Padding {
     /// Create a new fixed-length padding cell

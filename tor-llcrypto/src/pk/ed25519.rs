@@ -244,6 +244,7 @@ pub fn validate_batch(sigs: &[&ValidatableEd25519Signature]) -> bool {
 
 /// An error during our blinding operation
 #[derive(Error, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BlindingError {
     /// A bad public key was provided for blinding
     #[error("Bad pubkey provided")]

@@ -3,6 +3,7 @@ use thiserror::Error;
 
 /// An error that occurs while negotiating a SOCKS handshake.
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Tried to handle a message what wasn't complete: try again.
     #[error("Message truncated; need to wait for more")]

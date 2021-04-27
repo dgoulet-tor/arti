@@ -17,6 +17,7 @@ use bitflags::bitflags;
 
 /// A single parsed relay message, sent or received along a circuit
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum RelayMsg {
     /// Create a stream
     Begin(Begin),
@@ -162,6 +163,7 @@ impl From<u32> for BeginFlags {
 /// A preference for IPv4 vs IPv6 addresses; usable as a nicer frontend for
 /// BeginFlags.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum IpVersionPreference {
     /// Only IPv4 is allowed.
     Ipv4Only,
@@ -904,6 +906,7 @@ impl Body for Resolve {
 
 /// Possible response to a DNS lookup
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum ResolvedVal {
     /// We found an IP address
     Ip(IpAddr),

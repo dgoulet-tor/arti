@@ -35,6 +35,9 @@
 
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![deny(clippy::await_holding_lock)]
+#![deny(clippy::exhaustive_enums)]
+#![deny(clippy::exhaustive_structs)]
 
 #[macro_use]
 pub(crate) mod parse;
@@ -51,6 +54,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Indicates whether we should parse an annotated list of objects or a
 /// non-annotated list.
 #[derive(PartialEq, Debug)]
+#[allow(clippy::exhaustive_enums)]
 pub enum AllowAnnotations {
     /// Parsing a document where items might be annotated.
     ///

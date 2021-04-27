@@ -32,6 +32,9 @@
 
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![deny(clippy::await_holding_lock)]
+#![deny(clippy::exhaustive_enums)]
+#![deny(clippy::exhaustive_structs)]
 
 pub mod rsa;
 
@@ -137,6 +140,7 @@ pub struct Ed25519Cert {
 }
 
 /// One of the data types that can be certified by an Ed25519Cert.
+#[non_exhaustive]
 pub enum CertifiedKey {
     /// An Ed25519 public key, signed directly.
     Ed25519(ed25519::PublicKey),

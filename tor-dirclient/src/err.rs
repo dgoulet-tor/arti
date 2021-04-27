@@ -5,6 +5,7 @@ use tor_rtcompat::TimeoutError;
 
 /// An error originating from the tor-dirclient crate.
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// We received an object with a suspiciously good compression ratio
     #[error("possible compression bomb")]

@@ -14,6 +14,9 @@
 
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![deny(clippy::await_holding_lock)]
+#![deny(clippy::exhaustive_enums)]
+#![deny(clippy::exhaustive_structs)]
 
 use caret::caret_enum;
 use thiserror::Error;
@@ -228,6 +231,7 @@ impl Default for Protocols {
 
 /// An error representing a failure to parse a set of protocol versions.
 #[derive(Error, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ParseError {
     /// A protovol version was not in the range 0..=63.
     #[error("protocol version out of range")]

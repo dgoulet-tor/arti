@@ -15,6 +15,7 @@ use std::{
 /// [`SleepProviderExt::timeout`] expires before the provided future
 /// is ready.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct TimeoutError;
 impl std::error::Error for TimeoutError {}
 impl std::fmt::Display for TimeoutError {

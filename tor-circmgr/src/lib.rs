@@ -11,6 +11,9 @@
 
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![deny(clippy::await_holding_lock)]
+#![deny(clippy::exhaustive_enums)]
+#![deny(clippy::exhaustive_structs)]
 
 use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackDir, NetDir};
@@ -87,6 +90,7 @@ static NEXT_PENDING_ID: AtomicUsize = AtomicUsize::new(0);
 /// if you try to build a path with an inadequate DirInfo, you'll get a
 /// NeedConsensus error.
 #[derive(Debug, Copy, Clone)]
+#[non_exhaustive]
 pub enum DirInfo<'a> {
     /// A list of fallbacks, for use when we don't know a network directory.
     Fallbacks(&'a [FallbackDir]),

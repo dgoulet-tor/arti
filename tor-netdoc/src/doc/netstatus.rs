@@ -179,6 +179,7 @@ pub struct ProtoStatus {
 
 /// A recognized 'flavor' of consensus document.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[non_exhaustive]
 pub enum ConsensusFlavor {
     /// A "microdesc"-flavored consensus.  This is the one that
     /// clients and relays use today.
@@ -377,8 +378,8 @@ bitflags! {
 }
 
 /// Recognized weight fields on a single relay in a consensus
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum RouterWeight {
     // TODO SPEC: Document that these are u32 in dir-spec.txt
     /// An unmeasured weight for a router.
@@ -523,6 +524,7 @@ decl_keyword! {
     // TODO: This is public because otherwise we can't use it in the
     // ParseRouterStatus crate.  But I'd rather find a way to make it
     // private.
+    #[non_exhaustive]
     pub NetstatusKwd {
         // Header
         "network-status-version" => NETWORK_STATUS_VERSION,

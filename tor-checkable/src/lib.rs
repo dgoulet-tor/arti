@@ -14,6 +14,9 @@
 
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![deny(clippy::await_holding_lock)]
+#![deny(clippy::exhaustive_enums)]
+#![deny(clippy::exhaustive_structs)]
 
 use std::time;
 use thiserror::Error;
@@ -24,6 +27,7 @@ pub mod timed;
 /// An error that can occur when checking whether a Timebound object is
 /// currently valid.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TimeValidityError {
     /// The object is not yet valid
     #[error("will not be valid for {0:?}")]

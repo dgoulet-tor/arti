@@ -45,6 +45,7 @@ pub struct AddrPolicy {
 /// A kind of policy rule: either accepts or rejects addresses
 /// matching a pattern.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::exhaustive_enums)]
 pub enum RuleKind {
     /// A rule that accepts matching address:port combinations.
     Accept,

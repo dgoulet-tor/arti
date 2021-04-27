@@ -6,6 +6,7 @@ use std::num::ParseIntError;
 
 /// An error type from the tor-consdiff crate.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum Error {
     /// We got a consensus diff that we couldn't parse, or which we found
     /// to be somehow invalid.

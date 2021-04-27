@@ -7,6 +7,7 @@ use std::fmt;
 /// A position within a directory object. Used to tell where an error
 /// occurred.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[non_exhaustive]
 pub enum Pos {
     /// The error did not occur at any particular position.
     ///
