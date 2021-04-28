@@ -6,6 +6,7 @@
 //! stream pairs.
 
 pub mod io;
+pub mod net;
 pub mod time;
 
 mod sleep_runtime;
