@@ -108,7 +108,6 @@ where
 }
 
 /// A future implementing [`SleepProviderExt::sleep_until_wallclock`].
-#[pin_project]
 pub struct SleepUntilWallclock<'a, SP: SleepProvider + ?Sized> {
     /// Reference to the provider that we use to make new SleepFutures.
     provider: &'a SP,
@@ -124,16 +123,15 @@ where
 {
     type Output = ();
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         // Strategy: we implement sleep_until_wallclock by
         // waiting in increments of up to MAX_SLEEP, checking the
         // wall clock before and after each increment.  This makes
         // us wake up a bit more frequently, but enables us to detect it
         // if the system clock jumps forward.
         let target = self.target;
-        let this = self.project();
         loop {
-            let now = this.provider.wallclock();
+            let now = self.provider.wallclock();
             if now >= target {
                 return Poll::Ready(());
             }
@@ -146,12 +144,12 @@ where
             //
             // TODO: I'm not sure that it's actually necessary to keep
             // this future around.
-            this.sleep_future.take();
+            self.sleep_future.take();
 
-            let mut sleep_future = Box::pin(this.provider.sleep(delay));
+            let mut sleep_future = Box::pin(self.provider.sleep(delay));
             match sleep_future.poll_unpin(cx) {
                 Poll::Pending => {
-                    *this.sleep_future = Some(sleep_future);
+                    self.sleep_future = Some(sleep_future);
                     return Poll::Pending;
                 }
                 Poll::Ready(()) => {

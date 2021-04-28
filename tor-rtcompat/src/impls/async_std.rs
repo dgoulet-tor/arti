@@ -15,14 +15,12 @@ mod net {
     use async_trait::async_trait;
     use futures::future::Future;
     use futures::stream::Stream;
-    use pin_project::pin_project;
     use std::io::Result as IoResult;
     use std::net::SocketAddr;
     use std::pin::Pin;
     use std::task::{Context, Poll};
 
     // XXXX I hate using this trick.
-    #[pin_project]
     pub struct IncomingStreams {
         state: Option<IncomingStreamsState>,
     }
@@ -45,21 +43,20 @@ mod net {
     impl Stream for IncomingStreams {
         type Item = IoResult<(TcpStream, SocketAddr)>;
 
-        fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
             use IncomingStreamsState as St;
-            let this = self.project();
-            let state = this.state.take().expect("No valid state!");
+            let state = self.state.take().expect("No valid state!");
             let mut future = match state {
                 St::Ready(lis) => Box::pin(take_and_poll(lis)),
                 St::Accepting(fut) => fut,
             };
             match future.as_mut().poll(cx) {
                 Poll::Ready((val, lis)) => {
-                    *this.state = Some(St::Ready(lis));
+                    self.state = Some(St::Ready(lis));
                     Poll::Ready(Some(val))
                 }
                 Poll::Pending => {
-                    *this.state = Some(St::Accepting(future));
+                    self.state = Some(St::Accepting(future));
                     Poll::Pending
                 }
             }

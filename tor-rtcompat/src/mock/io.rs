@@ -7,7 +7,6 @@ use futures::channel::mpsc;
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::sink::{Sink, SinkExt};
 use futures::stream::Stream;
-use pin_project::pin_project;
 use std::io::{Error as IoError, ErrorKind, Result as IoResult};
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -53,19 +52,16 @@ pub fn stream_pair() -> (LocalStream, LocalStream) {
 // channels.  There's one channel for sending bytes in each direction.
 // Bytes are sent as IoResult<Vec<u8>>: sending an error causes an error
 // to occur on the other side.
-#[pin_project]
 pub struct LocalStream {
     /// The writing side of the channel that we use to implement this
     /// stream.
     ///
     /// The reading side is held by the other linked stream.
-    #[pin]
     w: mpsc::Sender<IoResult<Vec<u8>>>,
     /// The reading side of the channel that we use to implement this
     /// stream.
     ///
     /// The writing side is held by the other linked stream.
-    #[pin]
     r: mpsc::Receiver<IoResult<Vec<u8>>>,
     /// Bytes that we have read from `r` but not yet delivered.
     pending_bytes: Vec<u8>,
@@ -92,12 +88,12 @@ impl AsyncRead for LocalStream {
         if !self.pending_bytes.is_empty() {
             return Poll::Ready(Ok(drain_helper(buf, &mut self.pending_bytes)));
         }
-        let mut this = self.project();
-        match futures::ready!(this.r.poll_next(cx)) {
+
+        match futures::ready!(Pin::new(&mut self.r).poll_next(cx)) {
             Some(Err(e)) => Poll::Ready(Err(e)),
             Some(Ok(bytes)) => {
-                *this.pending_bytes = bytes;
-                let n = drain_helper(buf, &mut this.pending_bytes);
+                self.pending_bytes = bytes;
+                let n = drain_helper(buf, &mut self.pending_bytes);
                 Poll::Ready(Ok(n))
             }
             None => Poll::Ready(Ok(0)), // This is an EOF
@@ -106,9 +102,12 @@ impl AsyncRead for LocalStream {
 }
 
 impl AsyncWrite for LocalStream {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<IoResult<usize>> {
-        let this = self.get_mut(); // TODO: Understand why this works.
-        match futures::ready!(this.w.poll_ready(cx)) {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<IoResult<usize>> {
+        match futures::ready!(Pin::new(&mut self.w).poll_ready(cx)) {
             Ok(()) => (),
             Err(e) => return Poll::Ready(Err(IoError::new(ErrorKind::BrokenPipe, e))),
         }
@@ -119,20 +118,18 @@ impl AsyncWrite for LocalStream {
             buf
         };
         let len = buf.len();
-        match this.w.start_send(Ok(buf.to_vec())) {
+        match Pin::new(&mut self.w).start_send(Ok(buf.to_vec())) {
             Ok(()) => Poll::Ready(Ok(len)),
             Err(e) => Poll::Ready(Err(IoError::new(ErrorKind::BrokenPipe, e))),
         }
     }
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
-        let this = self.project();
-        this.w
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+        Pin::new(&mut self.w)
             .poll_flush(cx)
             .map_err(|e| IoError::new(ErrorKind::BrokenPipe, e))
     }
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
-        let this = self.project();
-        this.w
+    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+        Pin::new(&mut self.w)
             .poll_close(cx)
             .map_err(|e| IoError::new(ErrorKind::Other, e))
     }
