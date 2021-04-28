@@ -81,6 +81,12 @@ impl MockSleepProvider {
     /// Calling this function will wake any pending futures as
     /// appropriate, and yield to the scheduler so they get a chance
     /// to run.
+    ///
+    /// # Limitations
+    ///
+    /// This function advances time in one big step.  We might instead
+    /// want to advance in small steps and make sure that each step's
+    /// futures can get run before the ones scheduled to run after it.
     pub async fn advance(&self, dur: Duration) {
         self.advance_noyield(dur);
         crate::task::yield_now().await;
@@ -91,7 +97,7 @@ impl MockSleepProvider {
     /// Calling this function will wake any pending futures as
     /// appropriate, but not yield to the scheduler.  Mostly you
     /// should call [`advance`](Self::advance) instead.
-    pub fn advance_noyield(&self, dur: Duration) {
+    fn advance_noyield(&self, dur: Duration) {
         // It's not so great to unwrap here in general, but since this is
         // only testing code we don't really care.
         let mut state = self.state.lock().unwrap();

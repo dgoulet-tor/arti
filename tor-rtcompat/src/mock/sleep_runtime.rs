@@ -42,10 +42,6 @@ impl<R: Runtime> MockSleepRuntime<R> {
     pub async fn advance(&self, dur: Duration) {
         self.sleep.advance(dur).await;
     }
-    /// See [`MockSleepProvider::advance_noyield()`]
-    pub fn advance_noyield(&self, dur: Duration) {
-        self.sleep.advance_noyield(dur);
-    }
     /// See [`MockSleepProvider::jump_to()`]
     pub fn jump_to(&self, new_wallclock: SystemTime) {
         self.sleep.jump_to(new_wallclock);
