@@ -10,6 +10,7 @@ use crate::traits::*;
 
 use async_trait::async_trait;
 use futures::channel::mpsc;
+use futures::io::{AsyncRead, AsyncWrite};
 use futures::lock::Mutex as AsyncMutex;
 use futures::sink::SinkExt;
 use futures::stream::{Stream, StreamExt};
@@ -36,9 +37,20 @@ type ConnReceiver = mpsc::Receiver<(LocalStream, SocketAddr)>;
 /// shared by a large set of MockNetworkProviders, each of which has
 /// its own view of its address(es) on the network.
 pub struct MockNetwork {
-    /// A map from address to the  senders that need to be informed
-    /// about connection attempts there.
-    listening: Mutex<HashMap<SocketAddr, ConnSender>>,
+    /// A map from address to the entries about listeners there.
+    listening: Mutex<HashMap<SocketAddr, ListenerEntry>>,
+}
+
+/// The `MockNetwork`'s view of a listener.
+#[derive(Clone)]
+struct ListenerEntry {
+    /// A sender that need to be informed about connection attempts
+    /// there.
+    send: ConnSender,
+
+    /// A notional TLS certificate for this listener.  If absent, the
+    /// listener isn't a TLS listener.
+    tls_cert: Option<Vec<u8>>,
 }
 
 /// A view of a single host's access to a MockNetwork.
@@ -65,6 +77,10 @@ pub struct MockNetwork {
 /// ports from colliding with specified ports, other than declare that
 /// you can't have two listeners on the same addr:port at the same
 /// time.
+///
+/// We pretend to provide TLS, but there's no actual encryption or
+/// authentication.
+#[derive(Clone)]
 pub struct MockNetProvider {
     /// Actual implementation of this host's view of the network.
     ///
@@ -141,20 +157,29 @@ impl MockNetwork {
     /// Tell the listener at `target_addr` (if any) about an incoming
     /// connection from `source_addr` at `peer_stream`.
     ///
+    /// If this is a tls listener, only succeed when want_tls is true,
+    /// and return the certificate.
+    ///
     /// Returns an error if there isn't any such listener.
     async fn send_connection(
         &self,
         source_addr: SocketAddr,
         target_addr: SocketAddr,
         peer_stream: LocalStream,
-    ) -> IoResult<()> {
-        let sender = {
+        want_tls: bool,
+    ) -> IoResult<Option<Vec<u8>>> {
+        let entry = {
             let listener_map = self.listening.lock().unwrap();
             listener_map.get(&target_addr).map(Clone::clone)
         };
-        if let Some(mut sender) = sender {
-            if sender.send((peer_stream, source_addr)).await.is_ok() {
-                return Ok(());
+        if let Some(mut entry) = entry {
+            if entry.tls_cert.is_some() != want_tls {
+                // XXXX This is not what you'd really see on a mismatched
+                // connection.
+                return Err(err(ErrorKind::ConnectionRefused));
+            }
+            if entry.send.send((peer_stream, source_addr)).await.is_ok() {
+                return Ok(entry.tls_cert);
             }
         }
         Err(err(ErrorKind::ConnectionRefused))
@@ -163,8 +188,11 @@ impl MockNetwork {
     /// Register a listener at `addr` and return the ConnReceiver
     /// that it should use for connections.
     ///
+    /// If tls_cert is provided, then the listener is a TLS listener
+    /// and any only TLS connection attempts should succeed.
+    ///
     /// Returns an error if the address is alrady in use.
-    fn add_listener(&self, addr: SocketAddr) -> IoResult<ConnReceiver> {
+    fn add_listener(&self, addr: SocketAddr, tls_cert: Option<Vec<u8>>) -> IoResult<ConnReceiver> {
         let mut listener_map = self.listening.lock().unwrap();
         if listener_map.contains_key(&addr) {
             // TODO: Maybe this should ignore dangling Weak references?
@@ -173,7 +201,9 @@ impl MockNetwork {
 
         let (send, recv) = mpsc::channel(16);
 
-        listener_map.insert(addr, send);
+        let entry = ListenerEntry { send, tls_cert };
+
+        listener_map.insert(addr, entry);
 
         Ok(recv)
     }
@@ -294,6 +324,19 @@ impl MockNetProvider {
 
         Ok(SocketAddr::new(ipaddr, port))
     }
+
+    /// Create a mock TLS listener with provided certificate.
+    ///
+    /// Note that no encryption or authentication is actually
+    /// performed!  Other parties are simply told that their connections
+    /// succeeded and were authenticated against the given certificate.
+    pub fn listen_tls(&self, addr: &SocketAddr, tls_cert: Vec<u8>) -> IoResult<MockNetListener> {
+        let addr = self.get_listener_addr(addr)?;
+
+        let receiver = AsyncMutex::new(self.inner.net.add_listener(addr, Some(tls_cert))?);
+
+        Ok(MockNetListener { addr, receiver })
+    }
 }
 
 #[async_trait]
@@ -305,9 +348,10 @@ impl TcpProvider for MockNetProvider {
         let my_addr = self.get_origin_addr_for(addr)?;
         let (mine, theirs) = stream_pair();
 
-        self.inner
+        let _no_cert = self
+            .inner
             .net
-            .send_connection(my_addr, *addr, theirs)
+            .send_connection(my_addr, *addr, theirs, false)
             .await?;
 
         Ok(mine)
@@ -316,9 +360,103 @@ impl TcpProvider for MockNetProvider {
     async fn listen(&self, addr: &SocketAddr) -> IoResult<Self::TcpListener> {
         let addr = self.get_listener_addr(addr)?;
 
-        let receiver = AsyncMutex::new(self.inner.net.add_listener(addr)?);
+        let receiver = AsyncMutex::new(self.inner.net.add_listener(addr, None)?);
 
         Ok(MockNetListener { addr, receiver })
+    }
+}
+
+#[async_trait]
+impl TlsProvider for MockNetProvider {
+    type Connector = MockTlsConnector;
+    type TlsStream = MockTlsStream;
+
+    fn tls_connector(&self) -> MockTlsConnector {
+        MockTlsConnector {
+            provider: self.clone(),
+        }
+    }
+}
+
+/// Mock TLS connector for use with MockNetProvider.
+///
+/// Note that no TLS is actually performed here: connections are simply
+/// told that they succeeded with a given certificate.
+#[derive(Clone)]
+pub struct MockTlsConnector {
+    /// A handle to the underlying provider.
+    provider: MockNetProvider,
+}
+
+/// Mock TLS connector for use with MockNetProvider.
+///
+/// Note that no TLS is actually performed here: connections are simply
+/// told that they succeeded with a given certificate.
+///
+/// Note also that we only use this type for client-side connections
+/// right now: Arti doesn't support being a real TLS Listener yet,
+/// since we only handle Tor client operations.
+pub struct MockTlsStream {
+    /// The peer certificate that we are pretending our peer has.
+    peer_cert: Option<Vec<u8>>,
+    /// The underlying stream.
+    stream: LocalStream,
+}
+
+#[async_trait]
+impl TlsConnector for MockTlsConnector {
+    type Conn = MockTlsStream;
+
+    async fn connect_unvalidated(
+        &self,
+        addr: &SocketAddr,
+        _sni_hostname: &str,
+    ) -> IoResult<MockTlsStream> {
+        let my_addr = self.provider.get_origin_addr_for(addr)?;
+        let (mine, theirs) = stream_pair();
+
+        let peer_cert = self
+            .provider
+            .inner
+            .net
+            .send_connection(my_addr, *addr, theirs, true)
+            .await?;
+
+        Ok(MockTlsStream {
+            peer_cert,
+            stream: mine,
+        })
+    }
+}
+
+impl CertifiedConn for MockTlsStream {
+    fn peer_certificate(&self) -> IoResult<Option<Vec<u8>>> {
+        Ok(self.peer_cert.clone())
+    }
+}
+
+impl AsyncRead for MockTlsStream {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<IoResult<usize>> {
+        Pin::new(&mut self.stream).poll_read(cx, buf)
+    }
+}
+impl AsyncWrite for MockTlsStream {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<IoResult<usize>> {
+        Pin::new(&mut self.stream).poll_write(cx, buf)
+    }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+        Pin::new(&mut self.stream).poll_flush(cx)
+    }
+    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+        Pin::new(&mut self.stream).poll_close(cx)
     }
 }
 
@@ -342,8 +480,7 @@ mod test {
     use crate::test_with_runtime;
     use futures::io::{AsyncReadExt, AsyncWriteExt};
 
-    #[test]
-    fn end_to_end() -> IoResult<()> {
+    fn client_pair() -> (MockNetProvider, MockNetProvider) {
         let net = MockNetwork::new();
         let client1 = {
             let mut builder = net.builder();
@@ -355,6 +492,13 @@ mod test {
             builder.add_address("198.51.100.7".parse().unwrap());
             builder.finish()
         };
+
+        (client1, client2)
+    }
+
+    #[test]
+    fn end_to_end() -> IoResult<()> {
+        let (client1, client2) = client_pair();
 
         test_with_runtime(|_rt| async {
             let lis = client2.listen(&"0.0.0.0:99".parse().unwrap()).await?;
@@ -431,18 +575,7 @@ mod test {
 
     #[test]
     fn listener_stream() -> IoResult<()> {
-        // XXXX some copy-paste here on the setup.
-        let net = MockNetwork::new();
-        let client1 = {
-            let mut builder = net.builder();
-            builder.add_address("192.0.2.55".parse().unwrap());
-            builder.finish()
-        };
-        let client2 = {
-            let mut builder = net.builder();
-            builder.add_address("198.51.100.7".parse().unwrap());
-            builder.finish()
-        };
+        let (client1, client2) = client_pair();
 
         test_with_runtime(|_rt| async {
             let lis = client2.listen(&"0.0.0.0:99".parse().unwrap()).await?;
@@ -464,6 +597,49 @@ mod test {
                         let _ = c.read_to_end(&mut v).await?;
                         assert_eq!(a.ip(), "192.0.2.55".parse::<IpAddr>().unwrap());
                     }
+                    Ok(())
+                }
+            );
+            r1?;
+            r2?;
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn tls_basics() -> IoResult<()> {
+        let (client1, client2) = client_pair();
+        let cert = b"I am certified for something I assure you.";
+
+        let lis = client2.listen_tls(&"0.0.0.0:0".parse().unwrap(), cert[..].into())?;
+        let address = lis.local_addr()?;
+
+        test_with_runtime(|_rt| async {
+            let (r1, r2): (IoResult<()>, IoResult<()>) = futures::join!(
+                async {
+                    let connector = client1.tls_connector();
+                    let mut conn = connector
+                        .connect_unvalidated(&address, "zombo.example.com")
+                        .await?;
+                    assert_eq!(&conn.peer_certificate()?.unwrap()[..], &cert[..]);
+                    conn.write_all(b"This is totally encrypted.").await?;
+                    let mut v = Vec::new();
+                    conn.read_to_end(&mut v).await?;
+                    conn.close().await?;
+                    assert_eq!(v[..], b"Yup, your secrets is safe"[..]);
+
+                    // Now try a non-tls connection.
+                    let e = client1.connect(&address).await;
+                    assert!(e.is_err());
+                    Ok(())
+                },
+                async {
+                    let (mut conn, a) = lis.accept().await?;
+                    assert_eq!(a.ip(), "192.0.2.55".parse::<IpAddr>().unwrap());
+                    let mut inp = [0_u8; 26];
+                    conn.read_exact(&mut inp[..]).await?;
+                    assert_eq!(&inp[..], &b"This is totally encrypted."[..]);
+                    conn.write_all(b"Yup, your secrets is safe").await?;
                     Ok(())
                 }
             );
