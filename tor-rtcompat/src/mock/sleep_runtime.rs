@@ -28,6 +28,16 @@ impl<R: Runtime> MockSleepRuntime<R> {
         MockSleepRuntime { runtime, sleep }
     }
 
+    /// Return a reference to the underlying runtime.
+    pub fn inner(&self) -> &R {
+        &self.runtime
+    }
+
+    /// Return a reference to the [`MockSleepProvider`]
+    pub fn mock_sleep(&self) -> &MockSleepProvider {
+        &self.sleep
+    }
+
     /// See [`MockSleepProvider::advance()`]
     pub async fn advance(&self, dur: Duration) {
         self.sleep.advance(dur).await;

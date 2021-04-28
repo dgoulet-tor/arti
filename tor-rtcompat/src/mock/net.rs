@@ -214,6 +214,11 @@ impl ProviderBuilder {
     pub fn add_address(&mut self, addr: IpAddr) {
         self.inner.addrs.push(addr);
     }
+    /// Consume this builder and return a new [`MockNetRuntime`] wrapping
+    /// an existing `runtime`.
+    pub fn runtime<R: Runtime>(self, runtime: R) -> super::MockNetRuntime<R> {
+        super::MockNetRuntime::new(runtime, self.finish())
+    }
     /// Consume this builder and return a new [`MockNetProvider`]
     pub fn finish(self) -> MockNetProvider {
         MockNetProvider {
