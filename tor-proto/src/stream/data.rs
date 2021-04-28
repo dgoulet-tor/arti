@@ -8,7 +8,6 @@ use tor_cell::relaycell::msg::EndReason;
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::task::{Context, Poll};
 use futures::Future;
-use pin_project::pin_project;
 
 use std::io::Result as IoResult;
 use std::pin::Pin;
@@ -20,13 +19,10 @@ use tor_cell::relaycell::msg::{Data, RelayMsg};
 /// byte-oriented IO.
 ///
 /// It's suitable for use with BEGIN or BEGIN_DIR streams.
-#[pin_project]
 pub struct DataStream {
     /// Underlying writer for this stream
-    #[pin]
     w: DataWriter,
     /// Underlying reader for this stream
-    #[pin]
     r: DataReader,
 }
 
@@ -34,7 +30,6 @@ pub struct DataStream {
 ///
 /// Note that this implementation writes Tor cells lazily, so it is essential to
 /// flush the stream when you need the data to do out right away.
-#[pin_project]
 pub struct DataWriter {
     /// Internal state for this writer
     ///
@@ -45,7 +40,6 @@ pub struct DataWriter {
 }
 
 /// Wrapper for the Read part of a DataStream
-#[pin_project]
 pub struct DataReader {
     /// Internal state for this reader.
     ///
@@ -86,23 +80,27 @@ impl DataStream {
 
 impl AsyncRead for DataStream {
     fn poll_read(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<IoResult<usize>> {
-        self.project().r.poll_read(cx, buf)
+        Pin::new(&mut self.r).poll_read(cx, buf)
     }
 }
 
 impl AsyncWrite for DataStream {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<IoResult<usize>> {
-        self.project().w.poll_write(cx, buf)
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<IoResult<usize>> {
+        Pin::new(&mut self.w).poll_write(cx, buf)
     }
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
-        self.project().w.poll_flush(cx)
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+        Pin::new(&mut self.w).poll_flush(cx)
     }
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
-        self.project().w.poll_close(cx)
+    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+        Pin::new(&mut self.w).poll_close(cx)
     }
 }
 
@@ -139,13 +137,11 @@ impl DataWriter {
     /// Helper for poll_flush() and poll_close(): Performs a flush, then
     /// closes the stream if should_close is true.
     fn poll_flush_impl(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         should_close: bool,
     ) -> Poll<IoResult<()>> {
-        let this = self.project();
-
-        let state = this.state.take().expect("Missing state in DataWriter");
+        let state = self.state.take().expect("Missing state in DataWriter");
 
         // TODO: this whole function is a bit copy-pasted.
 
@@ -153,7 +149,7 @@ impl DataWriter {
             DataWriterState::Ready(imp) => {
                 if imp.n_pending == 0 {
                     // Nothing to flush!
-                    *this.state = Some(DataWriterState::Ready(imp));
+                    self.state = Some(DataWriterState::Ready(imp));
                     return Poll::Ready(Ok(()));
                 }
 
@@ -161,26 +157,26 @@ impl DataWriter {
             }
             DataWriterState::Flushing(fut) => fut,
             DataWriterState::Closed => {
-                *this.state = Some(DataWriterState::Closed);
+                self.state = Some(DataWriterState::Closed);
                 return Poll::Ready(Err(Error::NotConnected.into()));
             }
         };
 
         match future.as_mut().poll(cx) {
             Poll::Ready((_imp, Err(e))) => {
-                *this.state = Some(DataWriterState::Closed);
+                self.state = Some(DataWriterState::Closed);
                 Poll::Ready(Err(e.into()))
             }
             Poll::Ready((imp, Ok(()))) => {
                 if should_close {
-                    *this.state = Some(DataWriterState::Closed);
+                    self.state = Some(DataWriterState::Closed);
                 } else {
-                    *this.state = Some(DataWriterState::Ready(imp));
+                    self.state = Some(DataWriterState::Ready(imp));
                 }
                 Poll::Ready(Ok(()))
             }
             Poll::Pending => {
-                *this.state = Some(DataWriterState::Flushing(future));
+                self.state = Some(DataWriterState::Flushing(future));
                 Poll::Pending
             }
         }
@@ -188,20 +184,22 @@ impl DataWriter {
 }
 
 impl AsyncWrite for DataWriter {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<IoResult<usize>> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<IoResult<usize>> {
         if buf.is_empty() {
             return Poll::Ready(Ok(0));
         }
 
-        let this = self.project();
-
-        let state = this.state.take().expect("Missing state in DataWriter");
+        let state = self.state.take().expect("Missing state in DataWriter");
 
         let mut future = match state {
             DataWriterState::Ready(mut imp) => {
                 let n_queued = imp.queue_bytes(buf);
                 if n_queued != 0 {
-                    *this.state = Some(DataWriterState::Ready(imp));
+                    self.state = Some(DataWriterState::Ready(imp));
                     return Poll::Ready(Ok(n_queued));
                 }
                 // we couldn't queue anything, so the current cell must be full.
@@ -209,25 +207,25 @@ impl AsyncWrite for DataWriter {
             }
             DataWriterState::Flushing(fut) => fut,
             DataWriterState::Closed => {
-                *this.state = Some(DataWriterState::Closed);
+                self.state = Some(DataWriterState::Closed);
                 return Poll::Ready(Err(Error::NotConnected.into()));
             }
         };
 
         match future.as_mut().poll(cx) {
             Poll::Ready((_imp, Err(e))) => {
-                *this.state = Some(DataWriterState::Closed);
+                self.state = Some(DataWriterState::Closed);
                 Poll::Ready(Err(e.into()))
             }
             Poll::Ready((mut imp, Ok(()))) => {
                 // Great!  We're done flushing.  Queue as much as we can of this
                 // cell.
                 let n_queued = imp.queue_bytes(buf);
-                *this.state = Some(DataWriterState::Ready(imp));
+                self.state = Some(DataWriterState::Ready(imp));
                 Poll::Ready(Ok(n_queued))
             }
             Poll::Pending => {
-                *this.state = Some(DataWriterState::Flushing(future));
+                self.state = Some(DataWriterState::Flushing(future));
                 Poll::Pending
             }
         }
@@ -307,15 +305,13 @@ struct DataReaderImpl {
 
 impl AsyncRead for DataReader {
     fn poll_read(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<IoResult<usize>> {
-        let this = self.project();
-
         // We're pulling the state object out of the reader.  We MUST
         // put it back before this function returns.
-        let mut state = this.state.take().expect("Missing state in DataReader");
+        let mut state = self.state.take().expect("Missing state in DataReader");
 
         loop {
             let mut future = match state {
@@ -324,7 +320,7 @@ impl AsyncRead for DataReader {
                     let n_copied = imp.extract_bytes(buf);
                     if n_copied != 0 {
                         // We read data into the buffer.  Tell the caller.
-                        *this.state = Some(DataReaderState::Ready(imp));
+                        self.state = Some(DataReaderState::Ready(imp));
                         return Poll::Ready(Ok(n_copied));
                     }
 
@@ -333,7 +329,7 @@ impl AsyncRead for DataReader {
                 }
                 DataReaderState::ReadingCell(fut) => fut,
                 DataReaderState::Closed => {
-                    *this.state = Some(DataReaderState::Closed);
+                    self.state = Some(DataReaderState::Closed);
                     return Poll::Ready(Err(Error::NotConnected.into()));
                 }
             };
@@ -344,7 +340,7 @@ impl AsyncRead for DataReader {
                 Poll::Ready((_imp, Err(e))) => {
                     // There aren't any survivable errors in the current
                     // design.
-                    *this.state = Some(DataReaderState::Closed);
+                    self.state = Some(DataReaderState::Closed);
                     let result = if matches!(e, Error::EndReceived(EndReason::DONE)) {
                         Ok(0)
                     } else {
@@ -359,7 +355,7 @@ impl AsyncRead for DataReader {
                 Poll::Pending => {
                     // The future is pending; store it and tell the
                     // caller to get back to us later.
-                    *this.state = Some(DataReaderState::ReadingCell(future));
+                    self.state = Some(DataReaderState::ReadingCell(future));
                     return Poll::Pending;
                 }
             }

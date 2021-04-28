@@ -46,7 +46,6 @@ pub(crate) mod test {
     use futures::task::{Context, Poll};
     use futures_await_test::async_test;
     use hex_literal::hex;
-    use pin_project::pin_project;
     use std::pin::Pin;
 
     use super::{futures_codec, ChannelCodec};
@@ -54,38 +53,35 @@ pub(crate) mod test {
 
     /// Helper type for reading and writing bytes to/from buffers.
     // TODO: We might want to move this
-    #[pin_project]
     pub(crate) struct MsgBuf {
         /// Data we have received as a reader.
-        #[pin]
         inbuf: futures::io::Cursor<Vec<u8>>,
         /// Data we write as a writer.
-        #[pin]
         outbuf: futures::io::Cursor<Vec<u8>>,
     }
 
     impl AsyncRead for MsgBuf {
         fn poll_read(
-            self: Pin<&mut Self>,
+            mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
             buf: &mut [u8],
         ) -> Poll<Result<usize>> {
-            self.project().inbuf.poll_read(cx, buf)
+            Pin::new(&mut self.inbuf).poll_read(cx, buf)
         }
     }
     impl AsyncWrite for MsgBuf {
         fn poll_write(
-            self: Pin<&mut Self>,
+            mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
             buf: &[u8],
         ) -> Poll<Result<usize>> {
-            self.project().outbuf.poll_write(cx, buf)
+            Pin::new(&mut self.outbuf).poll_write(cx, buf)
         }
-        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-            self.project().outbuf.poll_flush(cx)
+        fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+            Pin::new(&mut self.outbuf).poll_flush(cx)
         }
-        fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-            self.project().outbuf.poll_close(cx)
+        fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+            Pin::new(&mut self.outbuf).poll_close(cx)
         }
     }
 
