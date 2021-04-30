@@ -26,3 +26,4 @@ thiserror = "1.0.24"
 
 [dev-dependencies]
 futures-await-test = "0.3.0"
+hex-literal = "0.3.1"

@@ -22,6 +22,8 @@
 mod builder;
 mod err;
 mod mgr;
+#[cfg(test)]
+mod testing;
 
 use tor_linkspec::ChanTarget;
 use tor_proto::channel::Channel;
