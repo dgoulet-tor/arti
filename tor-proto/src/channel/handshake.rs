@@ -210,7 +210,9 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
     /// 'peer_cert' is the x.509 certificate that the peer presented during
     /// its handshake.
     ///
-    /// 'now' can be used for testing to override the current view of the
+    /// 'now' is the time at which to check that certificates are
+    /// valid.  `None` means to use the current time. It can be used
+    /// for testing to override the current view of the time.
     ///
     /// This is a separate function because it's likely to be somewhat
     /// CPU-intensive.
@@ -218,13 +220,14 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> UnverifiedChannel<T> {
         self,
         peer: &U,
         peer_cert: &[u8],
+        now: Option<std::time::SystemTime>,
     ) -> Result<VerifiedChannel<T>> {
         let peer_cert_sha256 = ll::d::Sha256::digest(peer_cert);
-        self.check_internal(peer, &peer_cert_sha256[..], None)
+        self.check_internal(peer, &peer_cert_sha256[..], now)
     }
 
-    /// Same as `check`, but with a less restrictive interface, for testing
-    /// purposes.
+    /// Same as `check`, but takes the SHA256 hash of the peer certificate,
+    /// since that is all we use.
     fn check_internal<U: ChanTarget + ?Sized>(
         self,
         peer: &U,
