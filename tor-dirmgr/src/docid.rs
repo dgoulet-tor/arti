@@ -25,7 +25,8 @@ pub enum DocId {
     AuthCert(AuthCertKeyIds),
     /// A request for a single microdescriptor, by SHA256 digest.
     Microdesc(MdDigest),
-    /// A request for a router descriptor, by SHA1 digest.
+    /// A request for the router descriptor of a public relay, by SHA1
+    /// digest.
     Routerdesc(RdDigest),
 }
 
