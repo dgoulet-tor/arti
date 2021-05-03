@@ -19,6 +19,7 @@
 #![warn(clippy::option_option)]
 #![warn(clippy::rc_buffer)]
 #![deny(clippy::ref_option_ref)]
+#![warn(clippy::trait_duplication_in_bounds)]
 #![warn(clippy::unseparated_literal_suffix)]
 
 /// A macro to implement string and int conversions for c-like enums.
