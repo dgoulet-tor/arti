@@ -32,7 +32,7 @@ http = "0.2.3"
 httpdate = "1.0.0"
 httparse = "1.4.0"
 log = "0.4.14"
-memchr = "2.3.4"
+memchr = "2.4.0"
 thiserror = "1.0.24"
 
 [dev-dependencies]
