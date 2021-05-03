@@ -13,7 +13,7 @@ caret_enum! {
 
 #[test]
 fn test_int_ops() {
-    assert_eq!(Demo::A.to_int(), 8u16);
+    assert_eq!(Demo::A.to_int(), 8_u16);
     assert_eq!(Demo::B.to_int(), 10);
     assert_eq!(Demo::C.to_int(), 11);
     assert_eq!(Demo::Dee.to_int(), 999);

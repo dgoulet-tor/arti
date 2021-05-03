@@ -73,7 +73,7 @@ fn test_auth_challenge() {
         cmd,
         "00DA5C085DEE4F3656710DA3B73652E48ACD5BAE608335FCA3FB6C4DEE104A51
          0002 0001 0003",
-        &msg::AuthChallenge::new(challenge, vec![1u16, 3u16]).into(),
+        &msg::AuthChallenge::new(challenge, vec![1_u16, 3_u16]).into(),
     );
 }
 

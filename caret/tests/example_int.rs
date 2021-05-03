@@ -15,7 +15,7 @@ fn test_int_ops() {
     let bval: u16 = Demo::B.into();
     let cval: u16 = Demo::C.into();
     let deeval: u16 = Demo::DEE.into();
-    assert_eq!(aval, 8u16);
+    assert_eq!(aval, 8_u16);
     assert_eq!(bval, 10);
     assert_eq!(cval, 7);
     assert_eq!(deeval, 999);

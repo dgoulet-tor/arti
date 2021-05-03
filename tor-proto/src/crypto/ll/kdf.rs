@@ -191,7 +191,7 @@ mod test {
             .unwrap();
 
         let kdf = hkdf::Hkdf::<Sha256>::new(Some(&b"key"[..]), &input[..]);
-        let mut expect_result = vec![0u8; 99];
+        let mut expect_result = vec![0_u8; 99];
         kdf.expand(&b"expand"[..], &mut expect_result[..]).unwrap();
 
         assert_eq!(&expect_result[..], &result[..]);

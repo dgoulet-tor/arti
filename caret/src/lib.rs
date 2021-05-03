@@ -19,6 +19,7 @@
 #![warn(clippy::option_option)]
 #![warn(clippy::rc_buffer)]
 #![deny(clippy::ref_option_ref)]
+#![warn(clippy::unseparated_literal_suffix)]
 
 /// A macro to implement string and int conversions for c-like enums.
 ///
@@ -67,7 +68,7 @@
 /// # } }
 /// // impl From<Fruit> for u16
 /// let val: u16 = Fruit::Peach.into();
-/// assert_eq!(val, 1u16);
+/// assert_eq!(val, 1_u16);
 ///
 /// // impl From<Fruit> for &str
 /// let val: &str = Fruit::Plum.into();
@@ -79,7 +80,7 @@
 ///
 /// // impl TryFrom<u16> for Fruit
 /// use std::convert::TryInto;
-/// let fruit: Fruit = 3u16.try_into().unwrap();
+/// let fruit: Fruit = 3_u16.try_into().unwrap();
 /// assert_eq!(fruit, Fruit::Plum);
 ///
 /// // impl FromStr for Fruit

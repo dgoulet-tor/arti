@@ -145,7 +145,7 @@ where
 {
     use futures::{poll, task::Poll};
 
-    let mut buf = [0u8; 1024];
+    let mut buf = [0_u8; 1024];
 
     // At this point we could just loop, calling read().await,
     // write_all().await, and flush().await.  But we want to be more

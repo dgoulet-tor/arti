@@ -202,7 +202,7 @@ impl RelayCell {
                 "too many bytes in relay cell".into(),
             ));
         }
-        let mut raw = [0u8; CELL_DATA_LEN];
+        let mut raw = [0_u8; CELL_DATA_LEN];
         raw[0..enc_len].copy_from_slice(&encoded);
 
         if enc_len < CELL_DATA_LEN - MIN_SPACE_BEFORE_PADDING {

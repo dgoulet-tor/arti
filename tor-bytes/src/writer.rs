@@ -29,7 +29,7 @@ use crate::WriteableOnce;
 /// ```
 /// use tor_bytes::{Writer,Writeable};
 /// let mut w: Vec<u8> = Vec::new();
-/// w.write(&4u16); // The unsigned types all implement Writeable.
+/// w.write(&4_u16); // The unsigned types all implement Writeable.
 ///
 /// // We also provide Writeable implementations for several important types.
 /// use std::net::Ipv4Addr;
@@ -67,7 +67,7 @@ pub trait Writer {
     /// NOTE: This implementation is somewhat inefficient, since it allocates
     /// a vector.  You should probably replace it if you can.
     fn write_zeros(&mut self, n: usize) {
-        let v = vec![0u8; n];
+        let v = vec![0_u8; n];
         self.write_all(&v[..])
     }
     /// Encode a Writeable object onto this writer, using its

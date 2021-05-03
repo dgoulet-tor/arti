@@ -114,7 +114,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         trace!("{}: waiting for versions", self.unique_id);
         let their_versions: msg::Versions = {
             // TODO: this could be turned into another function, I suppose.
-            let mut hdr = [0u8; 5];
+            let mut hdr = [0_u8; 5];
             self.tls.read(&mut hdr).await?;
             if hdr[0..3] != [0, 0, ChanCmd::VERSIONS.into()] {
                 return Err(Error::ChanProto("Doesn't seem to be a tor relay".into()));

@@ -16,12 +16,12 @@ use std::time;
 /// let one_hour = Duration::new(3600, 0);
 ///
 /// // This seven is only valid for another hour!
-/// let seven = TimerangeBound::new(7u32, ..now+one_hour);
+/// let seven = TimerangeBound::new(7_u32, ..now+one_hour);
 ///
 /// assert_eq!(seven.check_valid_at(&now).unwrap(), 7);
 ///
 /// // That consumed the previous seven. Try another one.
-/// let seven = TimerangeBound::new(7u32, ..now+one_hour);
+/// let seven = TimerangeBound::new(7_u32, ..now+one_hour);
 /// assert_eq!(seven.check_valid_at(&(now+2*one_hour)),
 ///            Err(TimeValidityError::Expired(one_hour)));
 ///

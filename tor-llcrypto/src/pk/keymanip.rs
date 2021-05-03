@@ -53,7 +53,7 @@ pub fn convert_curve25519_to_ed25519_private(
         .chain(&b"Derive high part of ed25519 key from curve25519 key\0"[..])
         .finalize();
 
-    let mut bytes = Zeroizing::new([0u8; 64]);
+    let mut bytes = Zeroizing::new([0_u8; 64]);
     bytes[0..32].clone_from_slice(&privkey.to_bytes());
     bytes[32..64].clone_from_slice(&h[0..32]);
 

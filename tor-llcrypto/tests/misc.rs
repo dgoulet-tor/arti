@@ -49,7 +49,7 @@ fn batch_verify() {
     for _ in 0..3 {
         let kp = Keypair::generate(&mut rng);
 
-        let mut bytes = [0u8; 128];
+        let mut bytes = [0_u8; 128];
         rng.fill_bytes(&mut bytes[..]);
 
         let sig = kp.sign(&bytes[..]);

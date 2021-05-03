@@ -72,6 +72,7 @@
 #![warn(clippy::rc_buffer)]
 #![deny(clippy::ref_option_ref)]
 #![allow(clippy::unnecessary_wraps)]
+#![warn(clippy::unseparated_literal_suffix)]
 
 pub mod channel;
 pub mod circuit;

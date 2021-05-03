@@ -393,7 +393,7 @@ mod tests {
         // Set up keys.
         let relay_secret = StaticSecret::new(&mut rng);
         let relay_public = PublicKey::from(&relay_secret);
-        let wrong_public = PublicKey::from([16u8; 32]);
+        let wrong_public = PublicKey::from([16_u8; 32]);
         let relay_identity = RsaIdentity::from_bytes(&[12; 20]).unwrap();
         let wrong_identity = RsaIdentity::from_bytes(&[13; 20]).unwrap();
         let relay_ntpk = NtorPublicKey {

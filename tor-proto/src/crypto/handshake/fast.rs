@@ -29,7 +29,7 @@ impl super::ClientHandshake for CreateFastClient {
         rng: &mut R,
         _key: &Self::KeyType,
     ) -> Result<(Self::StateType, Vec<u8>)> {
-        let mut state = [0u8; FAST_C_HANDSHAKE_LEN];
+        let mut state = [0_u8; FAST_C_HANDSHAKE_LEN];
         rng.fill_bytes(&mut state);
         Ok((CreateFastClientState(state), state.into()))
     }
@@ -71,7 +71,7 @@ impl super::ServerHandshake for CreateFastServer {
         if msg.len() != FAST_C_HANDSHAKE_LEN {
             return Err(Error::BadHandshake);
         }
-        let mut reply = vec![0u8; FAST_S_HANDSHAKE_LEN];
+        let mut reply = vec![0_u8; FAST_S_HANDSHAKE_LEN];
         rng.fill_bytes(&mut reply[0..20]);
 
         let mut inp = Vec::new();
@@ -109,7 +109,7 @@ mod test {
         let mut rng = rand::thread_rng();
 
         // badly formatted client message.
-        let cmsg = [6u8; 19];
+        let cmsg = [6_u8; 19];
         let ans = CreateFastServer::server(&mut rng, &[()], cmsg);
         assert!(ans.is_err());
 

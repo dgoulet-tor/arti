@@ -687,7 +687,7 @@ impl ClientCircImpl {
         let auth: Option<[u8; 20]> = match msg.into_tag() {
             Some(v) if v.len() == 20 => {
                 // XXXX ugly code.
-                let mut tag = [0u8; 20];
+                let mut tag = [0_u8; 20];
                 (&mut tag).copy_from_slice(&v[..]);
                 Some(tag)
             }

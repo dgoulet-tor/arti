@@ -27,6 +27,7 @@
 #![warn(clippy::option_option)]
 #![warn(clippy::rc_buffer)]
 #![deny(clippy::ref_option_ref)]
+#![warn(clippy::unseparated_literal_suffix)]
 
 use caret::caret_enum;
 use thiserror::Error;
@@ -136,7 +137,7 @@ impl Protocols {
     /// Return a new empty set of protocol versions.
     pub fn new() -> Self {
         Protocols {
-            recognized: [0u64; N_RECOGNIZED],
+            recognized: [0_u64; N_RECOGNIZED],
             unrecognized: Vec::new(),
         }
     }
@@ -309,7 +310,7 @@ impl std::str::FromStr for SubprotocolEntry {
             });
         }
         // Construct a bitmask based on the comma-separated versions.
-        let mut supported = 0u64;
+        let mut supported = 0_u64;
         for ent in versions.split(',') {
             // Find and parse lo and hi for a single range of versions.
             // (If this is not a range, but rather a single version v,
@@ -364,7 +365,7 @@ impl std::str::FromStr for Protocols {
 
     fn from_str(s: &str) -> Result<Self, ParseError> {
         let mut result = Protocols::new();
-        let mut foundmask = 0u64;
+        let mut foundmask = 0_u64;
         for ent in s.split(' ') {
             if ent.is_empty() {
                 continue;

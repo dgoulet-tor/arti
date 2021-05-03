@@ -116,7 +116,7 @@ impl ChanCmd {
         // Version 1 of the channel protocol had no variable-length
         // cells, but that's obsolete.  In version 2, only the VERSIONS
         // cell was variable-length.
-        self == ChanCmd::VERSIONS || self.0 >= 128u8
+        self == ChanCmd::VERSIONS || self.0 >= 128_u8
     }
     /// Return what kind of circuit ID this command expects.
     fn allows_circid(self) -> CircIdReq {

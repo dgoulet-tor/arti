@@ -39,6 +39,7 @@
 #![warn(clippy::option_option)]
 #![warn(clippy::rc_buffer)]
 #![deny(clippy::ref_option_ref)]
+#![warn(clippy::unseparated_literal_suffix)]
 
 use std::io::Result as IoResult;
 

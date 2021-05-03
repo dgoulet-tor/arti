@@ -84,7 +84,7 @@ fn self_connect<R: Runtime>(runtime: R) -> IoResult<()> {
 
     runtime.block_on(async {
         let task1 = async {
-            let mut buf = vec![0u8; 11];
+            let mut buf = vec![0_u8; 11];
             let (mut con, _addr) = listener.accept().await?;
             con.read_exact(&mut buf[..]).await?;
             IoResult::Ok(buf)
@@ -122,7 +122,7 @@ fn listener_stream<R: Runtime>(runtime: R) -> IoResult<()> {
             let mut n = 0_u32;
             loop {
                 let (mut con, _addr) = stream.next().await.unwrap()?;
-                let mut buf = vec![0u8; 11];
+                let mut buf = vec![0_u8; 11];
                 con.read_exact(&mut buf[..]).await?;
                 n += 1;
                 if &buf[..] == b"world done!" {

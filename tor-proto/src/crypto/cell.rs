@@ -367,7 +367,7 @@ pub(crate) mod tor1 {
             // Add bytes up to the 'Digest' field
             dtmp.update(&self.0[..5]);
             // Add zeroes where the 'Digest' field is
-            dtmp.update([0u8; 4]);
+            dtmp.update([0_u8; 4]);
             // Add the rest of the bytes
             dtmp.update(&self.0[9..]);
             // Clone the digest before finalize destroys it because we will use
@@ -500,7 +500,7 @@ mod test {
 
         let mut j = 0;
         for cellno in 0..51 {
-            let mut body = [0u8; 509];
+            let mut body = [0_u8; 509];
             body[0] = 2; // command: data.
             body[4] = 1; // streamid: 1.
             body[9] = 1; // length: 498

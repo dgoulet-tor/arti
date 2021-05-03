@@ -37,7 +37,7 @@ impl rand::distributions::Distribution<CircId> for CircIdRange {
         // Make sure v is nonzero.
         let v = loop {
             match rng.gen() {
-                0u32 => (), // zero is not a valid circuit ID
+                0_u32 => (), // zero is not a valid circuit ID
                 x => break x,
             }
         };
