@@ -582,14 +582,16 @@ impl<R: Runtime> CircMgr<R> {
     /// This function is unstable. It is only enabled if the crate was
     /// built with the `experimental-api` feature.
     #[cfg(feature = "experimental-api")]
-    pub async fn build_path<R: Rng + CryptoRng>(
+    pub async fn build_path<RC: Rng + CryptoRng>(
         &self,
-        rng: &mut R,
+        rng: &mut RC,
         netdir: DirInfo<'_>,
         path: &TorPath<'_>,
     ) -> Result<Arc<ClientCirc>> {
         let params = netdir.circ_params();
-        let circ = path.build_circuit(rng, &self.chanmgr, &params).await?;
+        let circ = path
+            .build_circuit(rng, &self.runtime, &self.chanmgr, &params)
+            .await?;
         Ok(circ)
     }
 }

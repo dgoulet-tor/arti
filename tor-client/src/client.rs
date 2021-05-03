@@ -139,7 +139,7 @@ impl<R: Runtime> TorClient<R> {
     /// This function is unstable. It is only enabled if the crate was
     /// built with the `experimental-api` feature.
     #[cfg(feature = "experimental-api")]
-    pub fn dirmgr(&self) -> Arc<tor_dirmgr::DirMgr> {
+    pub fn dirmgr(&self) -> Arc<tor_dirmgr::DirMgr<R>> {
         Arc::clone(&self.dirmgr)
     }
 
@@ -148,7 +148,7 @@ impl<R: Runtime> TorClient<R> {
     /// This function is unstable. It is only enabled if the crate was
     /// built with the `experimental-api` feature.
     #[cfg(feature = "experimental-api")]
-    pub fn circmgr(&self) -> Arc<tor_circmgr::CircMgr> {
+    pub fn circmgr(&self) -> Arc<tor_circmgr::CircMgr<R>> {
         Arc::clone(&self.circmgr)
     }
 }
