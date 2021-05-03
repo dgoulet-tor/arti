@@ -154,7 +154,9 @@ mod test {
         let goodstr = td.path().join("goodstr");
         std::fs::write(&goodstr, "This is a reasonable file.\n").unwrap();
         let s = InputString::load(&goodstr);
-        assert_eq!(s.unwrap().as_str().unwrap(), "This is a reasonable file.\n");
+        let s = s.unwrap();
+        assert_eq!(s.as_str().unwrap(), "This is a reasonable file.\n");
+        assert_eq!(s.as_ref(), b"This is a reasonable file.\n");
 
         let badutf8 = td.path().join("badutf8");
         std::fs::write(&badutf8, b"Not good \xff UTF-8.\n").unwrap();

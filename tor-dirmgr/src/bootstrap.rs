@@ -213,7 +213,7 @@ pub(crate) async fn download<R: Runtime>(
         // document, or we run out of tries, or we run out of time.
         'next_attempt: for attempt in retry_config.attempts() {
             info!("{}: {}", attempt + 1, state.describe());
-            let reset_time = no_more_than_a_week(state.reset_time());
+            let reset_time = no_more_than_a_week_from(SystemTime::now(), state.reset_time());
 
             {
                 let dirmgr = upgrade_weak_ref(&dirmgr)?;
@@ -255,7 +255,7 @@ pub(crate) async fn download<R: Runtime>(
             } else {
                 // We should wait a bit, and then retry.
                 // TODO: we shouldn't wait on the final attempt.
-                let reset_time = no_more_than_a_week(state.reset_time());
+                let reset_time = no_more_than_a_week_from(SystemTime::now(), state.reset_time());
                 let delay = retry.next_delay(&mut rand::thread_rng());
                 futures::select_biased! {
                     _ = runtime.sleep_until_wallclock(reset_time).fuse() => {
@@ -272,17 +272,40 @@ pub(crate) async fn download<R: Runtime>(
     }
 }
 
-/// Helper: Clamp `v` so that it is no more than one week from now.
+/// Helper: Clamp `v` so that it is no more than one week from `now`.
 ///
 /// If `v` is absent, return the time that's one week from now.
 ///
 /// We use this to determine a reset time when no reset time is
 /// available, or when it is too far in the future.
-fn no_more_than_a_week(v: Option<SystemTime>) -> SystemTime {
-    let now = SystemTime::now();
+fn no_more_than_a_week_from(now: SystemTime, v: Option<SystemTime>) -> SystemTime {
     let one_week_later = now + Duration::new(86400 * 7, 0);
     match v {
         Some(t) => std::cmp::min(t, one_week_later),
         None => one_week_later,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn week() {
+        let now = SystemTime::now();
+        let one_day = Duration::new(86400, 0);
+
+        assert_eq!(no_more_than_a_week_from(now, None), now + one_day * 7);
+        assert_eq!(
+            no_more_than_a_week_from(now, Some(now + one_day)),
+            now + one_day
+        );
+        assert_eq!(
+            no_more_than_a_week_from(now, Some(now - one_day)),
+            now - one_day
+        );
+        assert_eq!(
+            no_more_than_a_week_from(now, Some(now + 30 * one_day)),
+            now + one_day * 7
+        );
     }
 }
