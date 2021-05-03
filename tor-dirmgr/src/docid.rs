@@ -105,11 +105,11 @@ pub enum CacheUsage {
 }
 
 impl CacheUsage {
-    /// Turn this CacheUsage into a pending_ok field for use with
+    /// Turn this CacheUsage into a pending field for use with
     /// SqliteStorage.
-    pub(crate) fn pending_ok(&self) -> Option<bool> {
+    pub(crate) fn pending_requirement(&self) -> Option<bool> {
         match self {
-            CacheUsage::CacheOnly => Some(true),
+            CacheUsage::CacheOnly => Some(false),
             _ => None,
         }
     }

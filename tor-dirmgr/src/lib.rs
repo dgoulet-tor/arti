@@ -426,7 +426,9 @@ impl<R: Runtime> DirMgr<R> {
             } => {
                 if *cache_usage == CacheUsage::MustDownload {
                     // Do nothing: we don't want a cached consensus.
-                } else if let Some(c) = store.latest_consensus(*flavor, cache_usage.pending_ok())? {
+                } else if let Some(c) =
+                    store.latest_consensus(*flavor, cache_usage.pending_requirement())?
+                {
                     let id = DocId::LatestConsensus {
                         flavor: *flavor,
                         cache_usage: *cache_usage,

@@ -367,7 +367,7 @@ impl SqliteStore {
 
     /// Load the latest consensus from disk.
     ///
-    /// If `pending_ok` is given, we will only return a consensus with
+    /// If `pending` is given, we will only return a consensus with
     /// the given "pending" status.  (A pending consensus doesn't have
     /// enough descriptors yet.)  If `pending_ok` is None, we'll
     /// return a consensus with any pending status.
