@@ -17,8 +17,13 @@
 #![deny(clippy::exhaustive_enums)]
 #![deny(clippy::exhaustive_structs)]
 #![deny(clippy::expl_impl_clone_on_copy)]
+#![deny(clippy::fallible_impl_from)]
+#![deny(clippy::large_stack_arrays)]
+#![warn(clippy::manual_ok_or)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![warn(clippy::option_option)]
 #![warn(clippy::rc_buffer)]
+#![deny(clippy::ref_option_ref)]
 
 use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackDir, NetDir};
