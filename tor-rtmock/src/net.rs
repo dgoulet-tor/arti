@@ -122,8 +122,9 @@ pub struct MockNetListener {
 ///
 /// Returned by [`MockNetwork::builder()`].
 pub struct ProviderBuilder {
-    /// The provider that we're building.
-    inner: MockNetProviderInner,
+    /// List of public addresses.
+    addrs: Vec<IpAddr>,
+    net: Arc<MockNetwork>,
 }
 
 impl MockNetwork {
@@ -141,18 +142,16 @@ impl MockNetwork {
     /// ```
     /// # use tor_rtmock::net::*;
     /// # let mock_network = MockNetwork::new();
-    /// let mut builder = mock_network.builder();
-    /// builder.add_address("198.51.100.6".parse().unwrap());
-    /// builder.add_address("2001:db8::7".parse().unwrap());
-    /// let client = builder.finish();
+    /// let client_net = mock_network.builder()
+    ///       .add_address("198.51.100.6".parse().unwrap())
+    ///       .add_address("2001:db8::7".parse().unwrap())
+    ///       .provider();
     /// ```
     pub fn builder(self: &Arc<Self>) -> ProviderBuilder {
-        let inner = MockNetProviderInner {
+        ProviderBuilder {
             addrs: vec![],
             net: Arc::clone(self),
-            next_port: AtomicU16::new(1),
-        };
-        ProviderBuilder { inner }
+        }
     }
 
     /// Tell the listener at `target_addr` (if any) about an incoming
@@ -212,18 +211,24 @@ impl MockNetwork {
 
 impl ProviderBuilder {
     /// Add `addr` as a new address for the prrovider we're building.
-    pub fn add_address(&mut self, addr: IpAddr) {
-        self.inner.addrs.push(addr);
+    pub fn add_address(&mut self, addr: IpAddr) -> &mut Self {
+        self.addrs.push(addr);
+        self
     }
-    /// Consume this builder and return a new [`MockNetRuntime`] wrapping
+    /// Use this builder to return a new [`MockNetRuntime`] wrapping
     /// an existing `runtime`.
-    pub fn runtime<R: Runtime>(self, runtime: R) -> super::MockNetRuntime<R> {
-        super::MockNetRuntime::new(runtime, self.finish())
+    pub fn runtime<R: Runtime>(&self, runtime: R) -> super::MockNetRuntime<R> {
+        super::MockNetRuntime::new(runtime, self.provider())
     }
-    /// Consume this builder and return a new [`MockNetProvider`]
-    pub fn finish(self) -> MockNetProvider {
+    /// Use this builder to return a new [`MockNetProvider`]
+    pub fn provider(&self) -> MockNetProvider {
+        let inner = MockNetProviderInner {
+            addrs: self.addrs.clone(),
+            net: Arc::clone(&self.net),
+            next_port: AtomicU16::new(1),
+        };
         MockNetProvider {
-            inner: Arc::new(self.inner),
+            inner: Arc::new(inner),
         }
     }
 }
@@ -488,16 +493,14 @@ mod test {
 
     fn client_pair() -> (MockNetProvider, MockNetProvider) {
         let net = MockNetwork::new();
-        let client1 = {
-            let mut builder = net.builder();
-            builder.add_address("192.0.2.55".parse().unwrap());
-            builder.finish()
-        };
-        let client2 = {
-            let mut builder = net.builder();
-            builder.add_address("198.51.100.7".parse().unwrap());
-            builder.finish()
-        };
+        let client1 = net
+            .builder()
+            .add_address("192.0.2.55".parse().unwrap())
+            .provider();
+        let client2 = net
+            .builder()
+            .add_address("198.51.100.7".parse().unwrap())
+            .provider();
 
         (client1, client2)
     }
@@ -542,12 +545,7 @@ mod test {
         let net = MockNetwork::new();
         let ip4 = "192.0.2.55".parse().unwrap();
         let ip6 = "2001:db8::7".parse().unwrap();
-        let client = {
-            let mut builder = net.builder();
-            builder.add_address(ip4);
-            builder.add_address(ip6);
-            builder.finish()
-        };
+        let client = net.builder().add_address(ip4).add_address(ip6).provider();
 
         // Successful cases
         let a1 = client.get_listener_addr(&"0.0.0.0:99".parse().unwrap())?;

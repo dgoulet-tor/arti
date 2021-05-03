@@ -200,21 +200,18 @@ mod test {
             let network = MockNetwork::new();
 
             // Set up a client runtime with a given IP
-            let client_rt = {
-                // Mock the network
-                let mut b = network.builder();
-                b.add_address(client_addr);
-                let rt = b.runtime(rt.clone());
-                // Mock the current time too
-                MockSleepRuntime::new(rt)
-            };
+            let client_rt = network
+                .builder()
+                .add_address(client_addr)
+                .runtime(rt.clone());
+            // Mock the current time too
+            let client_rt = MockSleepRuntime::new(client_rt);
+
             // Set up a relay runtime with a different IP
-            let relay_rt = {
-                let mut b = network.builder();
-                // The relay needs to claim to be at a particular address.
-                b.add_address(orport.ip());
-                b.runtime(rt.clone())
-            };
+            let relay_rt = network
+                .builder()
+                .add_address(orport.ip())
+                .runtime(rt.clone());
 
             // open a fake TLS listener and be ready to handle a request.
             let lis = relay_rt.mock_net().listen_tls(&orport, tls_cert)?;
