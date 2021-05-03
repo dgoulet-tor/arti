@@ -124,6 +124,7 @@ pub struct MockNetListener {
 pub struct ProviderBuilder {
     /// List of public addresses.
     addrs: Vec<IpAddr>,
+    /// Shared reference to the network.
     net: Arc<MockNetwork>,
 }
 
