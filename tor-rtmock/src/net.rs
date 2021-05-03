@@ -6,7 +6,8 @@
 // things we don't need.
 
 use super::io::{stream_pair, LocalStream};
-use crate::traits::*;
+use tor_rtcompat::tls::TlsConnector;
+use tor_rtcompat::{CertifiedConn, Runtime, TcpListener, TcpProvider, TlsProvider};
 
 use async_trait::async_trait;
 use futures::channel::mpsc;
@@ -138,7 +139,7 @@ impl MockNetwork {
     /// # Examples
     ///
     /// ```
-    /// # use tor_rtcompat::mock::net::*;
+    /// # use tor_rtmock::net::*;
     /// # let mock_network = MockNetwork::new();
     /// let mut builder = mock_network.builder();
     /// builder.add_address("198.51.100.6".parse().unwrap());
@@ -482,8 +483,8 @@ fn err(k: ErrorKind) -> IoError {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test_with_runtime;
     use futures::io::{AsyncReadExt, AsyncWriteExt};
+    use tor_rtcompat::test_with_runtime;
 
     fn client_pair() -> (MockNetProvider, MockNetProvider) {
         let net = MockNetwork::new();

@@ -159,10 +159,8 @@ mod test {
     use pk::rsa::RsaIdentity;
     use std::time::{Duration, SystemTime};
     use tor_proto::channel::Channel;
-    use tor_rtcompat::{
-        mock::io::LocalStream, mock::net::MockNetwork, mock::MockSleepRuntime, test_with_runtime,
-        TcpListener,
-    };
+    use tor_rtcompat::{test_with_runtime, TcpListener};
+    use tor_rtmock::{io::LocalStream, net::MockNetwork, MockSleepRuntime};
 
     #[test]
     fn targetinfo() {

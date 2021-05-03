@@ -5,6 +5,7 @@
 members = [
     "caret",
     "tor-rtcompat",
+    "tor-rtmock",
     "tor-llcrypto",
     "tor-protover",
     "tor-bytes",

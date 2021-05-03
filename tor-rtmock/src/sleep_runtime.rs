@@ -1,7 +1,7 @@
 //! Declare MockSleepRuntime.
 
-use crate::mock::{self, time::MockSleepProvider};
-use crate::traits::*;
+use crate::time::MockSleepProvider;
+use tor_rtcompat::{Runtime, SleepProvider, SpawnBlocking, TcpProvider, TlsProvider};
 
 use async_trait::async_trait;
 use futures::task::{FutureObj, Spawn, SpawnError};
@@ -82,7 +82,7 @@ impl<R: Runtime> TlsProvider for MockSleepRuntime<R> {
 }
 
 impl<R: Runtime> SleepProvider for MockSleepRuntime<R> {
-    type SleepFuture = mock::time::Sleeping;
+    type SleepFuture = crate::time::Sleeping;
     fn sleep(&self, dur: Duration) -> Self::SleepFuture {
         self.sleep.sleep(dur)
     }

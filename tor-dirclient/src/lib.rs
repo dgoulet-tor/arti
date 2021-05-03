@@ -377,8 +377,7 @@ fn get_decoder<'a, S: AsyncBufRead + Unpin + Send + 'a>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use tor_rtcompat::mock::io::stream_pair;
-    use tor_rtcompat::mock::time::MockSleepProvider;
+    use tor_rtmock::{io::stream_pair, time::MockSleepProvider};
 
     use futures_await_test::async_test;
 

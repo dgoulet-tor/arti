@@ -38,7 +38,6 @@
 use std::io::Result as IoResult;
 
 pub(crate) mod impls;
-pub mod mock;
 pub mod task;
 
 mod timer;

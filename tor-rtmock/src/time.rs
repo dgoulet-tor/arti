@@ -17,7 +17,7 @@ use std::{
 
 use futures::Future;
 
-use crate::SleepProvider;
+use tor_rtcompat::SleepProvider;
 
 /// A dummy [`SleepProvider`] instance for testing.
 ///
@@ -89,7 +89,7 @@ impl MockSleepProvider {
     /// futures can get run before the ones scheduled to run after it.
     pub async fn advance(&self, dur: Duration) {
         self.advance_noyield(dur);
-        crate::task::yield_now().await;
+        tor_rtcompat::task::yield_now().await;
     }
 
     /// Advance the simulated timeline forward by `dur`.
@@ -198,7 +198,7 @@ impl Future for Sleeping {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test_with_runtime;
+    use tor_rtcompat::test_with_runtime;
 
     #[test]
     fn basics_of_time_travel() {

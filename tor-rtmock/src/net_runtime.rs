@@ -2,8 +2,8 @@
 
 // XXXX this is mostly copy-paste from MockSleepRuntime.
 
-use crate::mock::net::MockNetProvider;
-use crate::traits::*;
+use crate::net::MockNetProvider;
+use tor_rtcompat::{Runtime, SleepProvider, SpawnBlocking, TcpProvider, TlsProvider};
 
 use async_trait::async_trait;
 use futures::task::{FutureObj, Spawn, SpawnError};

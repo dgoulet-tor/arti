@@ -1,9 +1,9 @@
 //! Support for mocking with runtimes.
 //!
-//! This should only be used for writing tests.
+//! This crate should should only be used for writing tests.
 //!
-//! Currently, we support mocking the passage of time and making fake
-//! stream pairs.
+//! Currently, we support mocking the passage of time, making fake
+//! stream pairs, and impersonating the Internet.
 
 pub mod io;
 pub mod net;
