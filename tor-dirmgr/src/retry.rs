@@ -56,9 +56,7 @@ impl RetryDelay {
     /// If the base delay is less than 1000, a base delay of 1000 is
     /// used instead, since that's what the C tor implemenation does.
     pub fn from_msec(base_delay_msec: u32) -> Self {
-        // TODO: use Ord::clamp once we depend on rust 1.50
-        let low_bound_ms = std::cmp::max(MIN_LOW_BOUND, base_delay_msec);
-        let low_bound_ms = std::cmp::min(MAX_LOW_BOUND, low_bound_ms);
+        let low_bound_ms = base_delay_msec.clamp(MIN_LOW_BOUND, MAX_LOW_BOUND);
         RetryDelay {
             last_delay_ms: 0,
             low_bound_ms,
@@ -127,10 +125,7 @@ pub struct RetryConfig {
 
 impl Default for RetryConfig {
     fn default() -> Self {
-        RetryConfig {
-            num: 3.try_into().expect("3 is not 0"),
-            initial_delay: Duration::from_millis(1000),
-        }
+        RetryConfig::new(3, Duration::from_millis(1000))
     }
 }
 
@@ -212,5 +207,29 @@ mod test {
             assert!(delay >= b_lo);
             assert!(delay < b_hi);
         }
+    }
+
+    #[test]
+    fn config() {
+        // default configuration is 3 tries, 1000 msec initial delay
+        let cfg = RetryConfig::default();
+
+        assert_eq!(cfg.n_attempts(), 3);
+        let v: Vec<_> = cfg.attempts().collect();
+        assert_eq!(&v[..], &[0, 1, 2]);
+
+        let sched = cfg.schedule();
+        assert_eq!(sched.last_delay_ms, 0);
+        assert_eq!(sched.low_bound_ms, 1000);
+
+        // Try a zero-attempt schedule, and have it get remapped to 1,1
+        let cfg = RetryConfig::new(0, Duration::new(0, 0));
+        assert_eq!(cfg.n_attempts(), 1);
+        let v: Vec<_> = cfg.attempts().collect();
+        assert_eq!(&v[..], &[0]);
+
+        let sched = cfg.schedule();
+        assert_eq!(sched.last_delay_ms, 0);
+        assert_eq!(sched.low_bound_ms, 1000);
     }
 }

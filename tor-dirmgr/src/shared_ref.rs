@@ -9,6 +9,9 @@ use crate::{Error, Result};
 /// Because you can't actually change a shared [`Arc`], this type implements
 /// mutability by replacing the Arc itself with a new value.  It tries
 /// to avoid needless clones by taking advantage of [`Arc::new_mut`].
+///
+// We give this construction its own type to simplify its users, and make
+// sure we don't hold the lock against any async suspend points.
 #[derive(Debug)]
 pub(crate) struct SharedMutArc<T> {
     /// Locked reference to the current value.
@@ -74,5 +77,35 @@ impl<T> SharedMutArc<T> {
             None => Err(Error::DirectoryNotPresent.into()), // Kinda bogus.
             Some(arc) => func(Arc::make_mut(arc)),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn shared_mut_arc() {
+        let val: SharedMutArc<Vec<u32>> = SharedMutArc::new();
+        assert_eq!(val.get(), None);
+
+        val.replace(Vec::new());
+        assert_eq!(val.get().unwrap().as_ref()[..], []);
+
+        val.mutate(|v| {
+            v.push(99);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(val.get().unwrap().as_ref()[..], [99]);
+
+        val.clear();
+        assert_eq!(val.get(), None);
+
+        assert!(val
+            .mutate(|v| {
+                v.push(99);
+                Ok(())
+            })
+            .is_err());
     }
 }

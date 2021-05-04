@@ -66,3 +66,38 @@ pub(crate) fn default_authorities() -> Vec<Authority> {
         auth("tor26", "14C131DFC5C6F93646BE72FA1401C02A8DF2E8B4"),
     ]
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn authority() {
+        let key1: RsaIdentity = [9_u8; 20].into();
+        let key2: RsaIdentity = [10_u8; 20].into();
+        let auth = Authority::new("example".into(), key1.clone());
+
+        assert_eq!(auth.v3ident(), &key1);
+
+        let keyids1 = AuthCertKeyIds {
+            id_fingerprint: key1.clone(),
+            sk_fingerprint: key2.clone(),
+        };
+        assert!(auth.matches_keyid(&keyids1));
+
+        let keyids2 = AuthCertKeyIds {
+            id_fingerprint: key2.clone(),
+            sk_fingerprint: key2.clone(),
+        };
+        assert!(!auth.matches_keyid(&keyids2));
+    }
+
+    #[test]
+    fn auth() {
+        let dflt = default_authorities();
+        assert_eq!(&dflt[0].name[..], "bastet");
+        assert_eq!(
+            &dflt[0].v3ident.to_string()[..],
+            "$27102bc123e7af1d4741ae047e160c91adc76b21"
+        );
+    }
+}

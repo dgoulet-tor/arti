@@ -16,7 +16,8 @@ use std::{path::Path, str::Utf8Error};
 /// not necessarily valid UTF-8.
 pub struct DocumentText {
     /// The underlying InputString.  We only wrap this type to make it
-    /// opaque.
+    /// opaque to other crates, so they don't have to worry about the
+    /// implementation details.
     s: InputString,
 }
 
@@ -86,8 +87,9 @@ impl InputString {
         #[cfg(feature = "mmap")]
         {
             let mapping = unsafe {
-                // I'd rather have a safe option, but the crate that provides
-                // a safe API here is unix-only.
+                // I'd rather have a safe option, but that's not possible
+                // with mmap, since other processes could in theory replace
+                // the contents of the file while we're using it.
                 memmap::Mmap::map(&f)
             };
             if let Ok(m) = mapping {
@@ -133,13 +135,16 @@ mod test {
     #[test]
     fn strings() {
         let s: InputString = "Hello world".to_string().into();
+        assert_eq!(s.as_ref(), b"Hello world");
         assert_eq!(s.as_str().unwrap(), "Hello world");
 
         let s: InputString = b"Hello world".to_vec().into();
+        assert_eq!(s.as_ref(), b"Hello world");
         assert_eq!(s.as_str().unwrap(), "Hello world");
 
         // bad utf-8
         let s: InputString = b"Hello \xff world".to_vec().into();
+        assert_eq!(s.as_ref(), b"Hello \xff world");
         assert!(s.as_str().is_err());
     }
 
@@ -162,5 +167,18 @@ mod test {
         std::fs::write(&badutf8, b"Not good \xff UTF-8.\n").unwrap();
         let s = InputString::load(&badutf8);
         assert!(s.is_err() || s.unwrap().as_str().is_err());
+    }
+
+    #[test]
+    fn doctext() {
+        let s: InputString = "Hello universe".to_string().into();
+        let dt: DocumentText = s.into();
+        assert_eq!(dt.as_ref(), b"Hello universe");
+        assert_eq!(dt.as_str(), Ok("Hello universe"));
+
+        let s: InputString = b"Hello \xff universe".to_vec().into();
+        let dt: DocumentText = s.into();
+        assert_eq!(dt.as_ref(), b"Hello \xff universe");
+        assert!(dt.as_str().is_err());
     }
 }
