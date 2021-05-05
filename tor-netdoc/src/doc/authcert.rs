@@ -23,6 +23,12 @@ use std::{net, time};
 
 use digest::Digest;
 
+#[cfg(feature = "build_docs")]
+mod build;
+
+#[cfg(feature = "build_docs")]
+pub use build::AuthCertBuilder;
+
 decl_keyword! {
     AuthCertKwd {
         "dir-key-certificate-version" => DIR_KEY_CERTIFICATE_VERSION,
@@ -136,6 +142,13 @@ impl UncheckedAuthCert {
 }
 
 impl AuthCert {
+    /// Make an [`AuthCertBuilder`] object that can be used to
+    /// construct authority certificates for testing.
+    #[cfg(feature = "build_docs")]
+    pub fn builder() -> AuthCertBuilder {
+        AuthCertBuilder::new()
+    }
+
     /// Parse an authority certificate from a string.
     ///
     /// This function verifies the certificate's signatures, but doesn't
