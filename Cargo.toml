@@ -27,3 +27,5 @@ members = [
     "tor-client",
     "arti"
     ]
+
+resolver = "2"
