@@ -203,7 +203,7 @@ pub(crate) struct WeightSet {
     /// Number of bits that we need to right-shift our weighted products
     /// so that their sum won't overflow u64::MAX.
     shift: u8,
-    /// A set of RelayWeight values, indexed by [`WeightKind::as_idx`], used
+    /// A set of RelayWeight values, indexed by [`WeightKind::idx`], used
     /// to weight different kinds of relays.
     w: [RelayWeight; 8],
 }

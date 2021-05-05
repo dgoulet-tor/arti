@@ -67,7 +67,7 @@ impl InputString {
             .map_err(|_| Error::CacheCorruption("Invalid UTF-8").into())
     }
 
-    /// Helper for [`as_str()`], with unwrapped error type.
+    /// Helper for [`Self::as_str()`], with unwrapped error type.
     fn as_str_impl(&self) -> std::result::Result<&str, Utf8Error> {
         // TODO: it is not strictly necessary to re-check the UTF8 every time
         // this function is called; we could instead remember the result

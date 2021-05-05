@@ -8,7 +8,7 @@ use crate::{Error, Result};
 ///
 /// Because you can't actually change a shared [`Arc`], this type implements
 /// mutability by replacing the Arc itself with a new value.  It tries
-/// to avoid needless clones by taking advantage of [`Arc::new_mut`].
+/// to avoid needless clones by taking advantage of [`Arc::make_mut`].
 ///
 // We give this construction its own type to simplify its users, and make
 // sure we don't hold the lock against any async suspend points.

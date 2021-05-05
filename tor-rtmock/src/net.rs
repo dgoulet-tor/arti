@@ -6,6 +6,7 @@
 // things we don't need.
 
 use super::io::{stream_pair, LocalStream};
+use super::MockNetRuntime;
 use tor_rtcompat::tls::TlsConnector;
 use tor_rtcompat::{CertifiedConn, Runtime, TcpListener, TcpProvider, TlsProvider};
 
@@ -59,7 +60,7 @@ struct ListenerEntry {
 /// Each simulated host has its own addresses that it's allowed to listen on,
 /// and a reference to the network.
 ///
-/// This type implements [`TCPProvider`] so that it can be used as a
+/// This type implements [`TcpProvider`] so that it can be used as a
 /// drop-in replacement for testing code that uses the network.
 ///
 /// # Limitations
@@ -106,7 +107,7 @@ struct MockNetProviderInner {
     next_port: AtomicU16,
 }
 
-/// A [`TCPListener`] implementation returned by a [`MockNetProvider`].
+/// A [`TcpListener`] implementation returned by a [`MockNetProvider`].
 ///
 /// Represents listening on a public address for incoming TCP connections.
 pub struct MockNetListener {
@@ -118,7 +119,7 @@ pub struct MockNetListener {
     receiver: AsyncMutex<ConnReceiver>,
 }
 
-/// A builder object used to configure a [`MockNetworkProvider`]
+/// A builder object used to configure a [`MockNetProvider`]
 ///
 /// Returned by [`MockNetwork::builder()`].
 pub struct ProviderBuilder {
@@ -219,7 +220,7 @@ impl ProviderBuilder {
     /// Use this builder to return a new [`MockNetRuntime`] wrapping
     /// an existing `runtime`.
     pub fn runtime<R: Runtime>(&self, runtime: R) -> super::MockNetRuntime<R> {
-        super::MockNetRuntime::new(runtime, self.provider())
+        MockNetRuntime::new(runtime, self.provider())
     }
     /// Use this builder to return a new [`MockNetProvider`]
     pub fn provider(&self) -> MockNetProvider {

@@ -90,7 +90,7 @@ pub struct HsNtorClientInput {
 
     /// The plaintext that should be encrypted into ENCRYPTED_DATA It's
     /// structure is irrelevant for this crate, but can be found in section
-    /// [PROCESS_INTRO2] of the spec
+    /// \[PROCESS_INTRO2\] of the spec
     pub plaintext: Vec<u8>,
 
     /// The data of the INTRODUCE1 cell from the beginning and up to the start
@@ -340,11 +340,13 @@ fn hs_ntor_mac(key: &[u8], message: &[u8]) -> Result<MacTag> {
 /// key material for creating and handling INTRODUCE1 cells. Function used
 /// by both client and service. Specifically, calculate the following:
 ///
+/// ```pseudocode
 ///  intro_secret_hs_input = EXP(B,x) | AUTH_KEY | X | B | PROTOID
 ///  info = m_hsexpand | subcredential
 ///  hs_keys = KDF(intro_secret_hs_input | t_hsenc | info, S_KEY_LEN+MAC_LEN)
 ///  ENC_KEY = hs_keys[0:S_KEY_LEN]
 ///  MAC_KEY = hs_keys[S_KEY_LEN:S_KEY_LEN+MAC_KEY_LEN]
+/// ```
 ///
 /// Return (ENC_KEY, MAC_KEY).
 fn get_introduce1_key_material(

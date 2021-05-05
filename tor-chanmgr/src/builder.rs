@@ -108,7 +108,7 @@ impl crate::mgr::AbstractChannel for tor_proto::channel::Channel {
 }
 
 /// TargetInfo is a summary of a [`ChanTarget`] that we can pass to
-/// [`ChanBuilder::build_channel`].
+/// [`ChanBuilder`].
 ///
 /// This is a separate type since we can't declare ChanBuilder as having
 /// a parameterized method in today's Rust.

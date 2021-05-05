@@ -441,7 +441,7 @@ struct GetMicrodescsState<DM: WriteNetDir> {
 }
 
 impl<DM: WriteNetDir> GetMicrodescsState<DM> {
-    /// Create a new [`GetMicroDescsState`] from a provided
+    /// Create a new [`GetMicrodescsState`] from a provided
     /// microdescriptor consensus.
     fn new(consensus: MdConsensus, meta: ConsensusMeta, writedir: Weak<DM>) -> Result<Self> {
         let reset_time = consensus.lifetime().valid_until();

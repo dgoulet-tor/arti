@@ -28,7 +28,7 @@ pub struct RouterStatusBuilder<D> {
     doc_digest: Option<D>,
     /// See [`GenericRouterStatus::flags`].
     flags: RouterFlags,
-    /// See [`GenericRouterStatus::versions`].
+    /// See [`GenericRouterStatus::version`].
     version: Option<String>,
     /// See [`GenericRouterStatus::protos`].
     protos: Option<Protocols>,
