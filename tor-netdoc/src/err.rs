@@ -269,6 +269,9 @@ pub enum Error {
     /// A consensus lifetime was ill-formed.
     #[error("Invalid consensus lifetime")]
     InvalidLifetime,
+    /// We're unable to finish building an object, for some reason.
+    #[error("Unable to construct object: {0}")]
+    CannotBuild(&'static str),
 }
 
 impl Error {
@@ -307,6 +310,7 @@ impl Error {
             WrongEndingToken(_, p) => Some(p),
             WrongSortOrder(p) => Some(p),
             InvalidLifetime => None,
+            CannotBuild(_) => None,
         }
     }
 
@@ -347,6 +351,7 @@ impl Error {
             WrongEndingToken(_, p) => Some(p),
             WrongSortOrder(p) => Some(p),
             InvalidLifetime => None,
+            CannotBuild(_) => None,
         };
         *pos.unwrap_or(&Pos::Unknown)
     }

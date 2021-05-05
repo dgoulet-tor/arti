@@ -30,6 +30,12 @@ use std::sync::Arc;
 
 use std::time;
 
+#[cfg(feature = "build_docs")]
+mod build;
+
+#[cfg(feature = "build_docs")]
+pub use build::MicrodescBuilder;
+
 /// Annotations prepended to a microdescriptor that has been stored to
 /// disk.
 #[allow(dead_code)]
@@ -70,6 +76,22 @@ pub struct Microdesc {
 }
 
 impl Microdesc {
+    /// Create a new MicrodescBuilder that can be used to contruct
+    /// microdescriptors.
+    ///
+    /// This function is only available when the crate is built with the
+    /// `build_docs` feature.
+    ///
+    /// # Limitations
+    ///
+    /// The generated microdescriptors cannot yet be encoded, and do
+    /// not yet have correct sha256 digests. As such they are only
+    /// useful for testing.
+    #[cfg(feature = "build_docs")]
+    pub fn builder() -> MicrodescBuilder {
+        MicrodescBuilder::new()
+    }
+
     /// Return the sha256 digest of this microdesc.
     pub fn digest(&self) -> &MdDigest {
         &self.sha256

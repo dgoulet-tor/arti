@@ -10,6 +10,9 @@ description = "Network document formats used with the Tor protocols."
 keywords = [ "tor", "arti" ]
 categories = [ "parser-implementations" ]
 
+[features]
+build_docs = [ "rand" ]
+
 [dependencies]
 tor-llcrypto = { path="../tor-llcrypto", version="*" }
 tor-bytes = { path="../tor-bytes", version="*" }
@@ -28,6 +31,8 @@ serde = "1.0.124"
 signature = "1.3.0"
 thiserror = "1.0.24"
 weak-table = "0.3.0"
+
+rand = { version = "0.8.3", optional=true }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
