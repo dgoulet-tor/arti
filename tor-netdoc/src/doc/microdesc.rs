@@ -60,6 +60,7 @@ pub struct Microdesc {
     // correlate the microdesc to a consensus, it's never used again.
     sha256: MdDigest,
     /// Public key used for the deprecated TAP circuit extension protocol.
+    // TODO: why even store this? Nothing in Arti will ever use it.
     tap_onion_key: rsa::PublicKey,
     /// Public key used for the ntor circuit extension protocol.
     ntor_onion_key: curve25519::PublicKey,

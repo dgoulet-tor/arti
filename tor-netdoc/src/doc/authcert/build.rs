@@ -15,7 +15,7 @@ use tor_llcrypto::pk::rsa;
 ///
 /// Create one of these with the [`AuthCert::builder`] method.
 ///
-/// This facility is only enabled when the craet is built with
+/// This facility is only enabled when the crate is built with
 /// the `build_docs` feature.
 pub struct AuthCertBuilder {
     /// See [`AuthCert::address`]

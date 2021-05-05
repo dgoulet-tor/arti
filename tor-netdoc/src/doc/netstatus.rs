@@ -43,9 +43,10 @@
 //! As with the other tor-netdoc types, I'm deferring those till I know what
 //! they should be.
 
-#![allow(missing_docs)]
-
 mod rs;
+
+#[cfg(feature = "build_docs")]
+mod build;
 
 use crate::doc::authcert::{AuthCert, AuthCertKeyIds};
 use crate::parse::keyword::Keyword;
@@ -67,6 +68,8 @@ use tor_llcrypto::pk::rsa::RsaIdentity;
 
 use serde::{Deserialize, Deserializer};
 
+#[cfg(feature = "build_docs")]
+pub use build::ConsensusBuilder;
 pub use rs::MdConsensusRouterStatus;
 pub use rs::NsConsensusRouterStatus;
 
@@ -142,6 +145,13 @@ pub struct NetParams<T> {
 }
 
 impl<T> NetParams<T> {
+    /// Create a new empty list of NetParams.
+    #[allow(unused)]
+    pub(crate) fn new() -> Self {
+        NetParams {
+            params: HashMap::new(),
+        }
+    }
     /// Retrieve a given network parameter, if it is present.
     pub fn get<A: AsRef<str>>(&self, v: A) -> Option<&T> {
         self.params.get(v.as_ref())
@@ -149,6 +159,11 @@ impl<T> NetParams<T> {
     /// Return an iterator over all key value pares in an arbitrary order.
     pub fn iter(&self) -> impl Iterator<Item = (&String, &T)> {
         self.params.iter()
+    }
+    /// Set or replace the value of a network parameter.
+    #[allow(unused)]
+    pub(crate) fn set(&mut self, k: String, v: T) {
+        self.params.insert(k, v);
     }
 }
 
@@ -167,7 +182,7 @@ where
 
 /// A list of subprotocol versions that implementors should/must provide.
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ProtoStatus {
     /// Set of protocols that are recommended; if we're missing a protocol
     /// in this list we should warn the user.
@@ -280,8 +295,8 @@ struct CommonHeader {
     /// network should operator. Some of these adjust timeouts and
     /// whatnot; some features things on and off.
     params: NetParams<i32>,
-    /// How long should voters wait for votes and consensuses to
-    /// propagate?
+    /// How long in seconds should voters wait for votes and
+    /// signatures (respectively) to propagate?
     voting_delay: Option<(u32, u32)>,
 }
 
@@ -378,7 +393,7 @@ bitflags! {
 }
 
 /// Recognized weight fields on a single relay in a consensus
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub enum RouterWeight {
     // TODO SPEC: Document that these are u32 in dir-spec.txt
@@ -410,7 +425,7 @@ struct ConsensusVoterInfo {
     dir_source: DirSource,
     /// Human-readable contact information about the authority
     contact: String,
-    /// Digest of the vote that the auuthority cast to contribute to
+    /// Digest of the vote that the authority cast to contribute to
     /// this consensus.
     vote_digest: Vec<u8>,
 }
@@ -445,7 +460,7 @@ pub trait ParseRouterStatus: Sized + Sealed {
 /// Not implementable outside of the `tor-netdoc` crate.
 pub trait RouterStatus: Sealed {
     /// A digest of the document that's identified by this RouterStatus.
-    type DocumentDigest;
+    type DocumentDigest: Clone;
 
     /// Return RSA identity for the relay described by this RouterStatus
     fn rsa_identity(&self) -> &RsaIdentity;
@@ -525,6 +540,7 @@ decl_keyword! {
     // ParseRouterStatus crate.  But I'd rather find a way to make it
     // private.
     #[non_exhaustive]
+    #[allow(missing_docs)]
     pub NetstatusKwd {
         // Header
         "network-status-version" => NETWORK_STATUS_VERSION,
@@ -1133,6 +1149,15 @@ impl Signature {
 pub type UncheckedConsensus<RS> = TimerangeBound<UnvalidatedConsensus<RS>>;
 
 impl<RS: ParseRouterStatus + RouterStatus> Consensus<RS> {
+    /// Return a new ConsensusBuilder for building test consensus objects.
+    ///
+    /// This function is only available when the `build_docs` feature has
+    /// been enabled.
+    #[cfg(feature = "build_docs")]
+    pub fn builder() -> ConsensusBuilder<RS> {
+        ConsensusBuilder::new(RS::flavor())
+    }
+
     /// Try to parse a single networkstatus document from a string.
     pub fn parse(s: &str) -> Result<(&str, &str, UncheckedConsensus<RS>)> {
         let mut reader = NetDocReader::new(s);

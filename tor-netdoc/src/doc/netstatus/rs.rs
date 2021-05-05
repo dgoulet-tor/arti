@@ -3,6 +3,9 @@
 //! This is a private module; relevant pieces are re-exported by its
 //! parent.
 
+#[cfg(feature = "build_docs")]
+pub(crate) mod build;
+
 use super::{
     ConsensusFlavor, NetstatusKwd, ParseRouterStatus, RouterFlags, RouterStatus, RouterWeight,
 };
@@ -38,6 +41,18 @@ pub struct NsConsensusRouterStatus {
     rs: GenericRouterStatus<RdDigest>,
 }
 
+impl From<GenericRouterStatus<RdDigest>> for NsConsensusRouterStatus {
+    fn from(rs: GenericRouterStatus<RdDigest>) -> Self {
+        NsConsensusRouterStatus { rs }
+    }
+}
+
+impl From<GenericRouterStatus<MdDigest>> for MdConsensusRouterStatus {
+    fn from(rs: GenericRouterStatus<MdDigest>) -> Self {
+        MdConsensusRouterStatus { rs }
+    }
+}
+
 /// Shared implementation of MdConsensusRouterStatus and NsConsensusRouterStatus.
 #[derive(Debug, Clone)]
 struct GenericRouterStatus<D> {
@@ -53,6 +68,7 @@ struct GenericRouterStatus<D> {
     ///
     /// This value should be ignored for all purposes; see
     /// [proposal 275](https://gitlab.torproject.org/tpo/core/torspec/-/blob/master/proposals/275-md-published-time-is-silly.txt).
+    // TODO: so why not remove this?
     published: time::SystemTime,
     /// A list of address:port values where this relay can be reached.
     addrs: Vec<net::SocketAddr>,
