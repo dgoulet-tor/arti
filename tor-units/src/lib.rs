@@ -34,7 +34,6 @@
 #![warn(clippy::trait_duplication_in_bounds)]
 #![warn(clippy::unseparated_literal_suffix)]
 
-extern crate derive_more;
 use derive_more::{Add, Display, Div, From, FromStr, Mul};
 
 use std::convert::{TryFrom, TryInto};
