@@ -15,7 +15,7 @@ tor-llcrypto = { path="../tor-llcrypto" }
 
 arrayref = "0.3.6"
 bytes = "1.0.1"
-crypto-mac = "0.10.0"
+crypto-mac = "0.11.0"
 generic-array = "0.14.4"
 signature = "1.3.0"
 thiserror = "1.0.24"

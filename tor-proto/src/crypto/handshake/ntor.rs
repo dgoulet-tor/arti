@@ -218,7 +218,8 @@ fn ntor_derive(
     use hmac::Hmac;
     use tor_llcrypto::d::Sha256;
     let verify = {
-        let mut m = Hmac::<Sha256>::new_varkey(ntor1_verify).expect("Hmac allows keys of any size");
+        let mut m =
+            Hmac::<Sha256>::new_from_slice(ntor1_verify).expect("Hmac allows keys of any size");
         m.update(&secret_input[..]);
         m.finalize()
     };
@@ -232,7 +233,8 @@ fn ntor_derive(
     auth_input.write(server_string); // "Server"
 
     let auth_mac = {
-        let mut m = Hmac::<Sha256>::new_varkey(ntor1_mac).expect("Hmac allows keys of any size");
+        let mut m =
+            Hmac::<Sha256>::new_from_slice(ntor1_mac).expect("Hmac allows keys of any size");
         m.update(&auth_input[..]);
         m.finalize()
     };

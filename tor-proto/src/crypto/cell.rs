@@ -227,7 +227,7 @@ pub(crate) type Tor1RelayCrypto =
 /// Incomplete untested implementation of Tor's current cell crypto.
 pub(crate) mod tor1 {
     use super::*;
-    use cipher::stream::{NewStreamCipher, StreamCipher};
+    use cipher::{NewCipher, StreamCipher};
     use digest::Digest;
     use std::convert::TryInto;
     use typenum::Unsigned;
@@ -255,7 +255,7 @@ pub(crate) mod tor1 {
         back: CryptState<SC, D>,
     }
 
-    impl<SC: StreamCipher + NewStreamCipher, D: Digest + Clone> CryptInit for CryptStatePair<SC, D> {
+    impl<SC: StreamCipher + NewCipher, D: Digest + Clone> CryptInit for CryptStatePair<SC, D> {
         fn seed_len() -> usize {
             SC::KeySize::to_usize() * 2 + D::OutputSize::to_usize() * 2
         }
@@ -297,10 +297,10 @@ pub(crate) mod tor1 {
             cell.set_digest(&mut self.back.digest, &mut d_ignored);
         }
         fn encrypt_inbound(&mut self, cell: &mut RelayCellBody) {
-            self.back.cipher.encrypt(cell.as_mut());
+            self.back.cipher.apply_keystream(cell.as_mut());
         }
         fn decrypt_outbound(&mut self, cell: &mut RelayCellBody) -> bool {
-            self.fwd.cipher.decrypt(cell.as_mut());
+            self.fwd.cipher.apply_keystream(cell.as_mut());
             let mut d_ignored = GenericArray::default();
             cell.recognized(&mut self.fwd.digest, &mut d_ignored)
         }
@@ -313,13 +313,13 @@ pub(crate) mod tor1 {
             &self.last_digest_val
         }
         fn encrypt_outbound(&mut self, cell: &mut RelayCellBody) {
-            self.cipher.encrypt(&mut cell.0[..])
+            self.cipher.apply_keystream(&mut cell.0[..])
         }
     }
 
     impl<SC: StreamCipher, D: Digest + Clone> InboundClientLayer for CryptState<SC, D> {
         fn decrypt_inbound(&mut self, cell: &mut RelayCellBody) -> Option<&[u8]> {
-            self.cipher.decrypt(&mut cell.0[..]);
+            self.cipher.apply_keystream(&mut cell.0[..]);
             if cell.recognized(&mut self.digest, &mut self.last_digest_val) {
                 Some(&self.last_digest_val)
             } else {

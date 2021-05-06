@@ -1,4 +1,4 @@
-use cipher::stream::*;
+use cipher::{NewCipher, StreamCipher};
 use digest::{self, Digest, ExtendableOutput};
 use hex_literal::hex;
 use tor_llcrypto as ll;
@@ -199,7 +199,7 @@ fn tv_aes128_ctr() {
          f69f2445df4f9b17ad2b417be66c3710"
     );
 
-    cipher.encrypt(&mut data);
+    cipher.apply_keystream(&mut data);
 
     assert_eq!(
         &data[..],
@@ -234,7 +234,7 @@ fn tv_aes256_ctr() {
          f69f2445df4f9b17ad2b417be66c3710"
     );
 
-    cipher.encrypt(&mut data);
+    cipher.apply_keystream(&mut data);
 
     assert_eq!(
         &data[..],

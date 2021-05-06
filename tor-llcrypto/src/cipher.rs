@@ -11,5 +11,5 @@
 /// [cipher](https://docs.rs/cipher/0.2.1/cipher/) crate to access them.
 pub mod aes {
     // These implement StreamCipher.
-    pub use aes_ctr::{Aes128Ctr, Aes256Ctr};
+    pub use ::aes::{Aes128Ctr, Aes256Ctr};
 }
