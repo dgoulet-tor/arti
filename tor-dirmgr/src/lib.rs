@@ -385,7 +385,7 @@ impl<R: Runtime> DirMgr<R> {
     /// storage.
     pub async fn text(&self, doc: &DocId) -> Result<Option<DocumentText>> {
         let mut result = HashMap::new();
-        let query = doc.clone().into();
+        let query = (*doc).into();
         self.load_documents_into(&query, &mut result).await?;
         if let Some((docid, doctext)) = result.into_iter().next() {
             assert_eq!(&docid, doc);
@@ -535,7 +535,7 @@ impl<R: Runtime> DirMgr<R> {
                 return Err(Error::Unwanted("Received a consensus diff we did not ask for").into());
             }
         }
-        return Ok(text);
+        Ok(text)
     }
 }
 

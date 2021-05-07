@@ -51,9 +51,10 @@ impl ChannelCodec {
         dst.write_u32(circid.into());
         dst.write_u8(cmd.into());
 
+        let pos = dst.len(); // always 5?
+
         // now write the cell body and handle the length.
         if cmd.is_var_cell() {
-            let pos = dst.len(); // always 5?
             dst.write_u16(0);
             msg.write_body_onto(dst);
             let len = dst.len() - pos - 2;
@@ -63,7 +64,6 @@ impl ChannelCodec {
             // go back and set the length.
             *(array_mut_ref![&mut dst[pos..pos + 2], 0, 2]) = (len as u16).to_be_bytes();
         } else {
-            let pos = dst.len(); // Always 5?
             msg.write_body_onto(dst);
             let len = dst.len() - pos;
             if len > CELL_DATA_LEN {
