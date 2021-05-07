@@ -305,6 +305,7 @@ impl NetDir {
             }
         }
 
+        // XXXX This can be NaN.
         (have_weight as f64) / (total_weight as f64)
     }
     /// Return true if there is enough information in this NetDir to build
@@ -496,5 +497,142 @@ impl<'a> tor_linkspec::CircTarget for Relay<'a> {
     }
     fn protovers(&self) -> &tor_protover::Protocols {
         self.rs.protovers()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use hex_literal::hex;
+    use std::collections::HashSet;
+    use std::time::{Duration, SystemTime};
+    use tor_llcrypto::pk::rsa;
+    use tor_netdoc::doc::netstatus::{Lifetime, RouterFlags, RouterWeight};
+
+    fn rsa_example() -> rsa::PublicKey {
+        let der = hex!("30818902818100d527b6c63d6e81d39c328a94ce157dccdc044eb1ad8c210c9c9e22487b4cfade6d4041bd10469a657e3d82bc00cf62ac3b6a99247e573b54c10c47f5dc849b0accda031eca6f6e5dc85677f76dec49ff24d2fcb2b5887fb125aa204744119bb6417f45ee696f8dfc1c2fc21b2bae8e9e37a19dc2518a2c24e7d8fd7fac0f46950203010001");
+        rsa::PublicKey::from_der(&der).unwrap()
+    }
+
+    // Build a fake network with enough information to enable some basic
+    // tests.
+    fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
+        let f = RouterFlags::RUNNING | RouterFlags::VALID | RouterFlags::V2DIR;
+        // define 4 groups of flags
+        let flags = [
+            f,
+            f | RouterFlags::EXIT,
+            f | RouterFlags::GUARD,
+            f | RouterFlags::EXIT | RouterFlags::GUARD,
+        ];
+
+        let now = SystemTime::now();
+        let one_day = Duration::new(86400, 0);
+        let mut bld = MdConsensus::builder();
+        bld.consensus_method(34)
+            .lifetime(Lifetime::new(now, now + one_day / 2, now + one_day).unwrap())
+            .param("bwweightscale", 1)
+            .weights("".parse().unwrap());
+
+        let mut microdescs = Vec::new();
+        for idx in 0..40_u8 {
+            // Each relay gets a couple of no-good onion keys.
+            // Its identity fingerprints are set to `idx`, repeating.
+            // They all get the same address.
+            let md = Microdesc::builder()
+                .tap_key(rsa_example())
+                .ntor_key((*b"----nothing in dirmgr uses this-").into())
+                .ed25519_id([idx; 32].into())
+                .parse_ipv4_policy("accept 80,443")
+                .unwrap()
+                .testing_md()
+                .unwrap();
+            let protocols = if idx % 2 == 0 {
+                // even numbered routers are dircaches.
+                "DirCache=2".parse().unwrap()
+            } else {
+                "".parse().unwrap()
+            };
+            let weight = RouterWeight::Measured(1000 * (idx % 10 + 1) as u32);
+            bld.rs()
+                .identity([idx; 20].into())
+                .add_or_port("127.0.0.1:9001".parse().unwrap())
+                .doc_digest(*md.digest())
+                .protos(protocols)
+                .set_flags(flags[(idx / 10) as usize])
+                .weight(weight)
+                .build_into(&mut bld)
+                .unwrap();
+            microdescs.push(md);
+        }
+
+        let consensus = bld.testing_consensus().unwrap();
+
+        (consensus, microdescs)
+    }
+
+    // Basic functionality for a partial netdir: Add microdescriptors,
+    // then you have a netdir.
+    #[test]
+    fn partial_netdir() {
+        let (consensus, microdescs) = construct_network();
+        let dir = PartialNetDir::new(consensus, None);
+
+        // Check the lifetime
+        let lifetime = dir.lifetime();
+        assert_eq!(
+            lifetime
+                .valid_until()
+                .duration_since(lifetime.valid_after())
+                .unwrap(),
+            Duration::new(86400, 0)
+        );
+
+        // No microdescriptors, so we don't have enough paths, and can't
+        // advance.
+        assert_eq!(dir.have_enough_paths(), false);
+        let mut dir = match dir.unwrap_if_sufficient() {
+            Ok(_) => panic!(),
+            Err(d) => d,
+        };
+
+        let missing: HashSet<_> = dir.missing_microdescs().collect();
+        assert_eq!(missing.len(), 40);
+        assert_eq!(missing.len(), dir.netdir.consensus.routers().len());
+        for md in microdescs.iter() {
+            assert!(missing.contains(md.digest()));
+        }
+
+        // Now add all the mds and try again.
+        for md in microdescs {
+            let wanted = dir.add_microdesc(md);
+            assert!(wanted);
+        }
+
+        let missing: HashSet<_> = dir.missing_microdescs().collect();
+        assert!(missing.is_empty());
+        assert!(dir.have_enough_paths());
+        let _complete = match dir.unwrap_if_sufficient() {
+            Ok(d) => d,
+            Err(_) => panic!(),
+        };
+    }
+
+    #[test]
+    fn override_params() {
+        let (consensus, _microdescs) = construct_network();
+        let override_p = "bwweightscale=2 doesnotexist=77 circwindow=500"
+            .parse()
+            .unwrap();
+        let dir = PartialNetDir::new(consensus.clone(), Some(&override_p));
+        let params = &dir.netdir.params;
+        assert_eq!(params.get(Param::BwWeightScale), 2);
+        assert_eq!(params.get(Param::CircWindow), 500);
+
+        // try again without the override.
+        let dir = PartialNetDir::new(consensus, None);
+        let params = &dir.netdir.params;
+        assert_eq!(params.get(Param::BwWeightScale), 1);
+        assert_eq!(params.get(Param::CircWindow), 1000);
     }
 }
