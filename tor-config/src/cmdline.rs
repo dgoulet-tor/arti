@@ -122,11 +122,7 @@ fn tweak_toml_bareword(s: &str) -> Option<String> {
         .expect("Built-in regex compilation failed")
     });
 
-    let cap = RE.captures(s);
-    match cap {
-        None => None,
-        Some(c) => Some(format!("{}=\"{}\"", &c[1], &c[2])),
-    }
+    RE.captures(s).map(|c| format!("{}=\"{}\"", &c[1], &c[2]))
 }
 
 #[cfg(test)]

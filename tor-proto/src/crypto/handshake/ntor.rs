@@ -79,7 +79,7 @@ impl NtorSecretKey {
     #[allow(unused)]
     pub fn new(sk: StaticSecret, pk: PublicKey, id: RsaIdentity) -> Self {
         NtorSecretKey {
-            pk: NtorPublicKey { pk, id },
+            pk: NtorPublicKey { id, pk },
             sk,
         }
     }

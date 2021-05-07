@@ -41,8 +41,8 @@ impl DirResponse {
     ) -> Self {
         DirResponse {
             status,
-            error,
             output,
+            error,
             source,
         }
     }

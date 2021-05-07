@@ -69,7 +69,7 @@ impl DataStream {
                 n_pending: 0,
             })),
         };
-        DataStream { r, w }
+        DataStream { w, r }
     }
 
     /// Divide this DataStream into its consituent parts.

@@ -581,22 +581,20 @@ impl<DM: WriteNetDir> DirState for GetMicrodescsState<DM> {
             return Err(Error::BadArgument("Mismatched request").into());
         };
         let mut new_mds = Vec::new();
-        for annotated in MicrodescReader::new(text, AllowAnnotations::AnnotationsNotAllowed) {
-            if let Ok(anno) = annotated {
-                let txt = anno
-                    .within(&text)
-                    .expect("annotation not from within text as expected");
-                let md = anno.into_microdesc();
-                if !requested.contains(md.digest()) {
-                    warn!(
-                        "Received microdescriptor we did not ask for: {:?}",
-                        md.digest()
-                    );
-                    continue;
-                }
-                self.missing.remove(md.digest());
-                new_mds.push((txt, md));
+        for anno in MicrodescReader::new(text, AllowAnnotations::AnnotationsNotAllowed).flatten() {
+            let txt = anno
+                .within(&text)
+                .expect("annotation not from within text as expected");
+            let md = anno.into_microdesc();
+            if !requested.contains(md.digest()) {
+                warn!(
+                    "Received microdescriptor we did not ask for: {:?}",
+                    md.digest()
+                );
+                continue;
             }
+            self.missing.remove(md.digest());
+            new_mds.push((txt, md));
         }
 
         let mark_listed = self.meta.lifetime().valid_after();

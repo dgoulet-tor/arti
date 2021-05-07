@@ -309,8 +309,8 @@ impl RouterAnnotation {
             .map(|t| t.into());
         Ok(RouterAnnotation {
             source,
-            purpose,
             downloaded,
+            purpose,
         })
     }
 }
@@ -706,7 +706,7 @@ impl<'a> RouterReader<'a> {
     fn take_annotated_routerdesc_raw(&mut self) -> Result<AnnotatedRouterDesc> {
         let ann = self.take_annotation()?;
         let router = RouterDesc::parse_internal(&mut self.reader)?;
-        Ok(AnnotatedRouterDesc { router, ann })
+        Ok(AnnotatedRouterDesc { ann, router })
     }
 
     /// Extract an annotated router descriptor from this reader

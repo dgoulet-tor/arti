@@ -55,14 +55,10 @@ impl<'a> TorPath<'a> {
     /// Return the exit policy of the final relay in this path, if this
     /// is a path for use with exit circuits.
     pub(crate) fn exit_policy(&self) -> Option<super::ExitPolicy> {
-        if let Some(exit_relay) = self.exit_relay() {
-            Some(super::ExitPolicy {
-                v4: Arc::clone(exit_relay.ipv4_policy()),
-                v6: Arc::clone(exit_relay.ipv6_policy()),
-            })
-        } else {
-            None
-        }
+        self.exit_relay().map(|exit_relay| super::ExitPolicy {
+            v4: Arc::clone(exit_relay.ipv4_policy()),
+            v6: Arc::clone(exit_relay.ipv6_policy()),
+        })
     }
 
     /// Internal: get or create a channel for the first hop of a path.

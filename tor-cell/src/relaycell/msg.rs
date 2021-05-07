@@ -260,7 +260,8 @@ impl Body for Begin {
         let port = std::str::from_utf8(port)
             .map_err(|_| Error::BadMessage("port in begin cell not utf8"))?;
 
-        let port = port.parse()
+        let port = port
+            .parse()
             .map_err(|_| Error::BadMessage("port in begin cell not a valid port"))?;
 
         Ok(Begin {

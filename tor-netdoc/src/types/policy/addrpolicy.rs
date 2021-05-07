@@ -61,14 +61,10 @@ impl AddrPolicy {
     ///
     /// Returns None if no rule matches.
     pub fn allows(&self, addr: &IpAddr, port: u16) -> Option<RuleKind> {
-        match self
-            .rules
+        self.rules
             .iter()
             .find(|rule| rule.pattern.matches(addr, port))
-        {
-            Some(AddrPolicyRule { kind, .. }) => Some(*kind),
-            None => None,
-        }
+            .map(|AddrPolicyRule { kind, .. }| *kind)
     }
 
     /// As allows, but accept a SocketAddr.

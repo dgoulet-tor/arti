@@ -65,16 +65,12 @@ impl Extent {
     ///
     /// Return None if `needle` is not in fact a slice of `haystack`.
     pub fn new(haystack: &str, needle: &str) -> Option<Extent> {
-        if let Some(offset) = str_offset(haystack, needle) {
-            Some(Extent {
-                offset,
-                length: needle.len(),
-                sliceptr: haystack.as_ptr(),
-                slicelen: haystack.len(),
-            })
-        } else {
-            None
-        }
+        str_offset(haystack, needle).map(|offset| Extent {
+            offset,
+            length: needle.len(),
+            sliceptr: haystack.as_ptr(),
+            slicelen: haystack.len(),
+        })
     }
     /// Reconstruct the original `needle` within `haystack`.
     ///
