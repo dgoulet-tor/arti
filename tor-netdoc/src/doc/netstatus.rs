@@ -70,6 +70,9 @@ use serde::{Deserialize, Deserializer};
 
 #[cfg(feature = "build_docs")]
 pub use build::ConsensusBuilder;
+#[cfg(feature = "build_docs")]
+pub use rs::build::RouterStatusBuilder;
+
 pub use rs::MdConsensusRouterStatus;
 pub use rs::NsConsensusRouterStatus;
 

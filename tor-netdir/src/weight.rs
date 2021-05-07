@@ -371,6 +371,8 @@ fn log2_upper(n: u64) -> u32 {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::time::{Duration, SystemTime};
+    use tor_netdoc::doc::netstatus::{Lifetime, RouterFlags, RouterStatusBuilder};
 
     #[test]
     fn t_clamp() {
@@ -529,5 +531,89 @@ mod test {
             ),
             7777
         );
+
+        // Now try those last few with routerstatuses.
+        let rs = rs_builder()
+            .set_flags(RouterFlags::GUARD | RouterFlags::V2DIR)
+            .weight(RouterWeight::Measured(7777))
+            .build()
+            .unwrap();
+        assert_eq!(ws.weight_rs_for_role(&rs, WeightRole::Exit), 7777 * 10000);
+        assert_eq!(
+            ws.weight_rs_for_role(&rs, WeightRole::BeginDir),
+            7777 * 4096
+        );
+        assert_eq!(ws.weight_rs_for_role(&rs, WeightRole::Unweighted), 7777);
+    }
+
+    /// Return a routerstatus builder set up to deliver a routerstatus
+    /// with most features disabled.
+    fn rs_builder() -> RouterStatusBuilder<[u8; 32]> {
+        MdConsensus::builder()
+            .rs()
+            .identity([9; 20].into())
+            .add_or_port("127.0.0.1:9001".parse().unwrap())
+            .doc_digest([9; 32])
+            .protos("".parse().unwrap())
+            .clone()
+    }
+
+    #[test]
+    fn weight_flags() {
+        let rs1 = rs_builder().set_flags(RouterFlags::EXIT).build().unwrap();
+        assert_eq!(WeightKind::for_rs(&rs1).0, FLG_EXIT);
+
+        let rs1 = rs_builder().set_flags(RouterFlags::GUARD).build().unwrap();
+        assert_eq!(WeightKind::for_rs(&rs1).0, FLG_GUARD);
+
+        let rs1 = rs_builder().set_flags(RouterFlags::V2DIR).build().unwrap();
+        assert_eq!(WeightKind::for_rs(&rs1).0, FLG_DIR);
+
+        let rs1 = rs_builder().build().unwrap();
+        assert_eq!(WeightKind::for_rs(&rs1).0, 0);
+
+        let rs1 = rs_builder().set_flags(RouterFlags::all()).build().unwrap();
+        assert_eq!(WeightKind::for_rs(&rs1).0, FLG_EXIT | FLG_GUARD | FLG_DIR);
+    }
+
+    #[test]
+    fn weightset_from_consensus() {
+        use rand::Rng;
+        let now = SystemTime::now();
+        let one_hour = Duration::new(3600, 0);
+        let mut rng = rand::thread_rng();
+        let mut bld = MdConsensus::builder();
+        bld.consensus_method(34)
+            .lifetime(Lifetime::new(now, now + one_hour, now + 2 * one_hour).unwrap())
+            .weights(TESTVEC_PARAMS.parse().unwrap());
+
+        // We're going to add a huge amount of unmeasured bandwidth,
+        // and a reasonable amount of  measured bandwidth.
+        for _ in 0..10 {
+            rs_builder()
+                .identity(rng.gen::<[u8; 20]>().into()) // random id
+                .weight(RouterWeight::Unmeasured(1_000_000))
+                .set_flags(RouterFlags::GUARD | RouterFlags::EXIT)
+                .build_into(&mut bld)
+                .unwrap();
+        }
+        for n in 0..30 {
+            rs_builder()
+                .identity(rng.gen::<[u8; 20]>().into()) // random id
+                .weight(RouterWeight::Measured(1_000 * n))
+                .set_flags(RouterFlags::GUARD | RouterFlags::EXIT)
+                .build_into(&mut bld)
+                .unwrap();
+        }
+
+        let consensus = bld.testing_consensus().unwrap();
+        let params = NetParameters::new();
+        let ws = WeightSet::from_consensus(&consensus, &params);
+
+        assert_eq!(ws.bandwidth_fn, BandwidthFn::MeasuredOnly);
+        assert_eq!(ws.shift, 0);
+        assert_eq!(ws.w[0].as_guard, 5904);
+        assert_eq!(ws.w[5].as_guard, 5904);
+        assert_eq!(ws.w[5].as_middle, 4096);
     }
 }

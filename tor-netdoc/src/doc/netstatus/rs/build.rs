@@ -13,6 +13,7 @@ use std::time::SystemTime;
 
 /// A Builder object for creating a RouterStatus and adding it to a
 /// consensus.
+#[derive(Debug, Clone)]
 pub struct RouterStatusBuilder<D> {
     /// See [`GenericRouterStatus::nickname`].
     nickname: Option<String>,
@@ -123,6 +124,13 @@ impl<D: Clone> RouterStatusBuilder<D> {
         self.protos = Some(protos);
         self
     }
+    /// Set the weight of this router for random selection.
+    ///
+    /// This value is optional; it defaults to 0.
+    pub fn weight(&mut self, weight: RouterWeight) -> &mut Self {
+        self.weight = Some(weight);
+        self
+    }
     /// Try to build a GenericRouterStatus from this builder.
     fn finish(&self) -> Result<GenericRouterStatus<D>> {
         let nickname = self.nickname.clone().unwrap_or_else(|| "Unnamed".into());
@@ -165,19 +173,32 @@ impl<D: Clone> RouterStatusBuilder<D> {
 impl RouterStatusBuilder<RdDigest> {
     /// Try to finish this builder and add its RouterStatus to a
     /// provided ConsensusBuilder.
-    pub fn build(&self, builder: &mut ConsensusBuilder<NsConsensusRouterStatus>) -> Result<()> {
-        let rs = self.finish()?;
-        builder.add_rs(rs.into());
+    pub fn build_into(
+        &self,
+        builder: &mut ConsensusBuilder<NsConsensusRouterStatus>,
+    ) -> Result<()> {
+        builder.add_rs(self.build()?);
         Ok(())
+    }
+    /// Return a router status built by this object.
+    pub fn build(&self) -> Result<NsConsensusRouterStatus> {
+        Ok(self.finish()?.into())
     }
 }
 
 impl RouterStatusBuilder<MdDigest> {
     /// Try to finish this builder and add its RouterStatus to a
-    /// provided ConsensusBuilder.
-    pub fn build(&self, builder: &mut ConsensusBuilder<MdConsensusRouterStatus>) -> Result<()> {
-        let rs = self.finish()?;
-        builder.add_rs(rs.into());
+    /// provided ConsensusBuilder.x
+    pub fn build_into(
+        &self,
+        builder: &mut ConsensusBuilder<MdConsensusRouterStatus>,
+    ) -> Result<()> {
+        builder.add_rs(self.build()?);
         Ok(())
+    }
+
+    /// Return a router status built by this object.
+    pub fn build(&self) -> Result<MdConsensusRouterStatus> {
+        Ok(self.finish()?.into())
     }
 }

@@ -34,3 +34,4 @@ thiserror = "1.0.24"
 [dev-dependencies]
 hex-literal = "0.3.1"
 simple-logging = "2.0.2"
+tor-netdoc = { path="../tor-netdoc", version= "*", features=["build_docs"] }

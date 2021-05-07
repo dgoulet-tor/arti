@@ -165,7 +165,11 @@ impl<RS> ConsensusBuilder<RS> {
         self.weights.set(param.into(), val);
         self
     }
-
+    /// Replace all weight parameters for this consensus.
+    pub fn weights(&mut self, weights: NetParams<i32>) -> &mut Self {
+        self.weights = weights;
+        self
+    }
     /// Create a VoterInfoBuilder to add a voter to this builder.
     ///
     /// In theory these are requied, but nothing asks for them.
@@ -435,7 +439,7 @@ mod test {
             .add_flags(RouterFlags::STABLE | RouterFlags::V2DIR)
             .version("Arti 0.0.0".into())
             .protos("DirCache=7".parse().unwrap())
-            .build(&mut builder)
+            .build_into(&mut builder)
             .unwrap();
 
         let _cons = builder.testing_consensus().unwrap();
