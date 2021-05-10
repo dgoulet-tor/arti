@@ -211,6 +211,10 @@ pub(crate) struct WeightSet {
 impl WeightSet {
     /// Find the actual 64-bit weight to use for a given routerstatus when
     /// considering it for a given role.
+    ///
+    /// NOTE: This function _does not_ consider whether the relay in question
+    /// actually matches the given role.  For example, if `role` is Guard
+    /// we don't check whether or not `rs` actually has the Guard flag.
     pub(crate) fn weight_rs_for_role(&self, rs: &MdConsensusRouterStatus, role: WeightRole) -> u64 {
         self.weight_bw_for_role(WeightKind::for_rs(&rs), rs.weight(), role)
     }

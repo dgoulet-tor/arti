@@ -146,6 +146,7 @@ pub struct Relay<'a> {
 
 /// A relay that we haven't checked for validity or usability in
 /// routing.
+#[derive(Debug)]
 struct UncheckedRelay<'a> {
     /// A router descriptor for this relay.
     rs: &'a netstatus::MdConsensusRouterStatus,
@@ -285,13 +286,24 @@ impl NetDir {
     pub fn params(&self) -> &NetParameters {
         &self.params
     }
-    /// Return the fraction of total bandwidth weight for a given role
-    /// that we have available information for in this NetDir.
-    fn frac_for_role(&self, role: WeightRole) -> f64 {
+    /// Return weighted the fraction of routers we can use.  We only
+    /// consider routers that match the predicate `usable`.  We weight
+    /// this bandwidth according to the provided `role`.
+    ///
+    /// Note that this function can return NaN if the consensus contains
+    /// no relays that match the predicate, or if those relays have
+    /// no weighted bandwidth.
+    fn frac_for_role<'a, F>(&'a self, role: WeightRole, usable: F) -> f64
+    where
+        F: Fn(&UncheckedRelay<'a>) -> bool,
+    {
         let mut total_weight = 0_u64;
         let mut have_weight = 0_u64;
 
         for r in self.all_relays() {
+            if !usable(&r) {
+                continue;
+            }
             let w = self.weights.weight_rs_for_role(&r.rs, role);
             total_weight += w;
             if r.is_usable() {
@@ -299,8 +311,17 @@ impl NetDir {
             }
         }
 
-        // XXXX This can be NaN.
         (have_weight as f64) / (total_weight as f64)
+    }
+    /// Return the estimated fraction of possible paths that we have
+    /// enough microdescriptors to build.
+    ///
+    /// NOTE: This function can return NaN if the consensus contained
+    /// zero bandwidth for some type of router we need.
+    fn frac_usable_paths(&self) -> f64 {
+        self.frac_for_role(WeightRole::Guard, |u| u.rs.is_flagged_guard())
+            * self.frac_for_role(WeightRole::Middle, |_| true)
+            * self.frac_for_role(WeightRole::Exit, |u| u.rs.is_flagged_exit())
     }
     /// Return true if there is enough information in this NetDir to build
     /// multihop circuits.
@@ -312,9 +333,11 @@ impl NetDir {
         let min_frac_paths = (min_pct as f64) / 100.0;
 
         // What fraction of paths can we build?
-        let available = self.frac_for_role(WeightRole::Guard)
-            * self.frac_for_role(WeightRole::Middle)
-            * self.frac_for_role(WeightRole::Exit);
+        let available = self.frac_usable_paths();
+
+        // TODO: `available` could be NaN if the consensus is sufficiently
+        // messed-up.  If so it's not 100% clear what to fall back on.
+        // What does C Tor do? XXXX-SPEC
 
         available >= min_frac_paths
     }
@@ -628,5 +651,82 @@ mod test {
         let params = &dir.netdir.params;
         assert_eq!(params.get(Param::BwWeightScale), 1);
         assert_eq!(params.get(Param::CircWindow), 1000);
+    }
+
+    #[test]
+    fn fill_from_previous() {
+        let (consensus, microdescs) = construct_network();
+
+        let mut dir = PartialNetDir::new(consensus.clone(), None);
+        for md in microdescs.iter().skip(2) {
+            let wanted = dir.add_microdesc(md.clone());
+            assert!(wanted);
+        }
+        let dir1 = dir.unwrap_if_sufficient().unwrap();
+        assert_eq!(dir1.missing_microdescs().count(), 2);
+
+        let mut dir = PartialNetDir::new(consensus, None);
+        assert_eq!(dir.missing_microdescs().count(), 40);
+        dir.fill_from_previous_netdir(&dir1);
+        assert_eq!(dir.missing_microdescs().count(), 2);
+    }
+
+    #[test]
+    fn path_count() {
+        let low_threshold = "min_paths_for_circs_pct=64".parse().unwrap();
+        let high_threshold = "min_paths_for_circs_pct=65".parse().unwrap();
+
+        let (consensus, microdescs) = construct_network();
+
+        let mut dir = PartialNetDir::new(consensus.clone(), Some(&low_threshold));
+        for (idx, md) in microdescs.iter().enumerate() {
+            if idx % 7 == 2 {
+                continue; // skip a few relays.
+            }
+            dir.add_microdesc(md.clone());
+        }
+        let dir = dir.unwrap_if_sufficient().unwrap();
+
+        // We  have 40 relays that we know about from the consensus.
+        assert_eq!(dir.all_relays().count(), 40);
+
+        // But only 34 are usable.
+        assert_eq!(dir.relays().count(), 34);
+
+        // For guards: mds 20..=39 correspond to Guard relays.
+        // Their bandwidth is 2*(1000+2000+...10000) = 110_000.
+        // We skipped 23, 30, and 37.  They have bandwidth
+        // 4000 + 1000 + 8000 = 13_000.  So our fractional bandwidth
+        // should be (110-13)/110.
+        let f = dir.frac_for_role(WeightRole::Guard, |u| u.rs.is_flagged_guard());
+        assert!(((97.0 / 110.0) - f).abs() < 0.000001);
+
+        // For exits: mds 10..=19 and 30..=39 correspond to Exit relays.
+        // We skipped 16, 30,  and 37. Per above our fractional bandwidth is
+        // (110-16)/110.
+        let f = dir.frac_for_role(WeightRole::Exit, |u| u.rs.is_flagged_exit());
+        assert!(((94.0 / 110.0) - f).abs() < 0.000001);
+
+        // For middles: all relays are middles. We skipped 2, 9, 16,
+        // 23, 30, and 37. Per above our fractional bandwidth is
+        // (220-33)/220
+        let f = dir.frac_for_role(WeightRole::Middle, |_| true);
+        assert!(((187.0 / 220.0) - f).abs() < 0.000001);
+
+        // Multiplying those together, we get the fraction of paths we can
+        // build at ~0.64052066, which is above the threshold we set above for
+        // MinPathsForCircsPct.
+        let f = dir.frac_usable_paths();
+        assert!((f - 0.64052066).abs() < 0.000001);
+
+        // But if we try again with a slightly higher threshold...
+        let mut dir = PartialNetDir::new(consensus, Some(&high_threshold));
+        for (idx, md) in microdescs.into_iter().enumerate() {
+            if idx % 7 == 2 {
+                continue; // skip a few relays.
+            }
+            dir.add_microdesc(md);
+        }
+        assert!(dir.unwrap_if_sufficient().is_err());
     }
 }
