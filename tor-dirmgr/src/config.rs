@@ -152,39 +152,43 @@ impl NetDirConfigBuilder {
     }
 
     /// Set the network information (authorities and fallbacks) from `config`.
-    pub fn set_network_config(&mut self, config: NetworkConfig) {
+    pub fn set_network_config(&mut self, config: NetworkConfig) -> &mut Self {
         self.network = config;
+        self
     }
 
     /// Set the timining information that we use for deciding when to
     /// attempt and retry downloads.
-    pub fn set_timing_config(&mut self, timing: DownloadScheduleConfig) {
+    pub fn set_timing_config(&mut self, timing: DownloadScheduleConfig) -> &mut Self {
         self.timing = timing;
+        self
     }
 
     /// Use `path` as the directory to use for current directory files.
-    pub fn set_cache_path(&mut self, path: &Path) {
+    pub fn set_cache_path(&mut self, path: &Path) -> &mut Self {
         self.cache_path = Some(path.to_path_buf());
+        self
     }
 
     /// Try to use the default cache path.
     ///
     /// This will be ~/.cache/arti on unix, and in other suitable
     /// locations on other platforms.
-    pub fn use_default_cache_path(&mut self) -> Result<()> {
+    pub fn use_default_cache_path(&mut self) -> Result<&mut Self> {
         let pd = directories::ProjectDirs::from("org", "torproject", "Arti")
             .ok_or(Error::DirectoryNotPresent)?;
 
         self.cache_path = Some(pd.cache_dir().into());
 
-        Ok(())
+        Ok(self)
     }
 
-    /// Consume this builder and return a NetDirConfig that can be used
+    /// Use this builder to produce a NetDirConfig that can be used
     /// to load directories
-    pub fn finalize(self) -> Result<NetDirConfig> {
+    pub fn finalize(&self) -> Result<NetDirConfig> {
         let cache_path = self
             .cache_path
+            .as_ref()
             .ok_or(Error::BadNetworkConfig("No cache path configured"))?;
 
         if self.network.authority.is_empty() {
@@ -195,9 +199,9 @@ impl NetDirConfigBuilder {
         }
 
         Ok(NetDirConfig {
-            cache_path,
-            network: self.network,
-            timing: self.timing,
+            cache_path: cache_path.clone(),
+            network: self.network.clone(),
+            timing: self.timing.clone(),
         })
     }
 }
@@ -279,12 +283,41 @@ mod fallbacks {
                 .expect("Bad hex in built-in fallback list");
             let ed =
                 Ed25519Identity::from_bytes(&ed).expect("Wrong length in built-in fallback list");
-            let ports = ports
+            let mut bld = FallbackDir::builder();
+            bld.rsa_identity(rsa).ed_identity(ed);
+
+            ports
                 .iter()
                 .map(|s| s.parse().expect("Bad socket address in fallbacklist"))
-                .collect();
-            FallbackDir::new(rsa, ed, ports)
+                .for_each(|p| {
+                    bld.orport(p);
+                });
+
+            bld.build()
+                .expect("Unable to build default fallback directory!?")
         }
         include!("fallback_dirs.inc")
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use tempdir::TempDir;
+
+    #[test]
+    fn simplest_config() -> Result<()> {
+        let tmp = TempDir::new("arti-config").unwrap();
+
+        let dir = NetDirConfigBuilder::new()
+            .set_cache_path(tmp.path())
+            .finalize()?;
+
+        assert!(dir.authorities().len() >= 3);
+        assert!(dir.fallbacks().len() >= 3);
+
+        // TODO: verify other defaults.
+
+        Ok(())
     }
 }

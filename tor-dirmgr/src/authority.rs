@@ -3,6 +3,7 @@
 //! From a client's point of view, an authority's role is to to sign the
 //! consensus directory.
 
+use crate::{Error, Result};
 use serde::Deserialize;
 use tor_llcrypto::pk::rsa::RsaIdentity;
 use tor_netdoc::doc::authcert::{AuthCert, AuthCertKeyIds};
@@ -23,11 +24,18 @@ pub struct Authority {
 }
 
 impl Authority {
-    /// Construct information about a new authority.
-    pub fn new(name: String, v3ident: RsaIdentity) -> Self {
-        Authority { name, v3ident }
+    /// Return a new builder for constructing an [`Authority`].
+    ///
+    /// You only need this if you're using a non-default Tor network
+    /// with its own set of directory authorities.
+    pub fn builder() -> AuthorityBuilder {
+        AuthorityBuilder::new()
     }
     /// Return the v3 identity key of this certificate.
+    ///
+    /// This is the identity of the >=2048-bit RSA key that the
+    /// authority uses to sign documents; it is distinct from its
+    /// identity keys that it uses when operating as a relay.
     pub fn v3ident(&self) -> &RsaIdentity {
         &self.v3ident
     }
@@ -46,11 +54,14 @@ impl Authority {
 pub(crate) fn default_authorities() -> Vec<Authority> {
     /// Build an authority; panic if input is bad.
     fn auth(name: &str, key: &str) -> Authority {
-        let name = name.to_string();
         let v3ident = hex::decode(key).expect("Built-in authority identity had bad hex!?");
         let v3ident = RsaIdentity::from_bytes(&v3ident)
             .expect("Built-in authority identity had wrong length!?");
-        Authority { name, v3ident }
+        AuthorityBuilder::new()
+            .name(name)
+            .v3ident(v3ident)
+            .build()
+            .expect("unable to construct built-in authority!?")
     }
 
     // (List generated August 2020.)
@@ -67,6 +78,48 @@ pub(crate) fn default_authorities() -> Vec<Authority> {
     ]
 }
 
+/// A Builder object for constructing an [`Authority`] entry.
+#[derive(Debug, Clone, Default)]
+pub struct AuthorityBuilder {
+    /// See [`Authority::name`]
+    name: Option<String>,
+    /// See [`Authority::v3ident`]
+    v3ident: Option<RsaIdentity>,
+}
+
+impl AuthorityBuilder {
+    /// Make a new AuthorityBuilder with no fields set.
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// Set the name on this AuthorityBuilder.
+    ///
+    /// This field is required.
+    pub fn name(&mut self, name: &str) -> &mut Self {
+        self.name = Some(name.to_owned());
+        self
+    }
+    /// Set the v3 RSA identity of this AuthorityBuilder.
+    ///
+    /// This field is required.
+    pub fn v3ident(&mut self, key: RsaIdentity) -> &mut Self {
+        self.v3ident = Some(key);
+        self
+    }
+    /// Try to build an [`Authority`].
+    pub fn build(&self) -> Result<Authority> {
+        let name = self
+            .name
+            .as_ref()
+            .ok_or(Error::BadNetworkConfig("Missing authority name"))?
+            .clone();
+        let v3ident = self
+            .v3ident
+            .ok_or(Error::BadNetworkConfig("Missing v3 identity key."))?;
+        Ok(Authority { name, v3ident })
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -74,7 +127,11 @@ mod test {
     fn authority() {
         let key1: RsaIdentity = [9_u8; 20].into();
         let key2: RsaIdentity = [10_u8; 20].into();
-        let auth = Authority::new("example".into(), key1.clone());
+        let auth = Authority::builder()
+            .name("example")
+            .v3ident(key1)
+            .build()
+            .unwrap();
 
         assert_eq!(auth.v3ident(), &key1);
 
