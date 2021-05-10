@@ -1,10 +1,11 @@
 //! Methods for storing and loading directory information from disk.
 //!
-//! We have code implemented for two methods: the legacy format used by
-//! the C Tor implementation, and a more flexible format based on sqlite.
+//! We have code implemented for a flexible storage format based on sqlite.
 
-#[cfg(feature = "legacy-storage")]
-pub(crate) mod legacy;
+// (There was once a read-only format based on the C tor implemenentation's
+// storage: Search the git history for tor-dirmgr/src/storage/legacy.rs
+// if you ever need to reinstate it.)
+
 pub(crate) mod sqlite;
 
 use crate::{Error, Result};
