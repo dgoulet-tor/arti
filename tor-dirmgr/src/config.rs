@@ -182,7 +182,7 @@ impl NetDirConfigBuilder {
 
     /// Consume this builder and return a NetDirConfig that can be used
     /// to load directories
-    pub fn finalize(mut self) -> Result<NetDirConfig> {
+    pub fn finalize(self) -> Result<NetDirConfig> {
         let cache_path = self
             .cache_path
             .ok_or(Error::BadNetworkConfig("No cache path configured"))?;
@@ -263,7 +263,7 @@ impl DownloadScheduleConfig {
     }
 }
 
-/// Helpers for fallbacksx
+/// Helpers for initializing the fallback list.
 mod fallbacks {
     use tor_llcrypto::pk::{ed25519::Ed25519Identity, rsa::RsaIdentity};
     use tor_netdir::fallback::FallbackDir;
