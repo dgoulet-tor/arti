@@ -4,8 +4,6 @@
 //! information, where to fetch it from, and how to validate it.
 
 use crate::retry::RetryConfig;
-#[cfg(feature = "legacy-storage")]
-use crate::storage::legacy::LegacyStore;
 use crate::storage::sqlite::SqliteStore;
 use crate::Authority;
 use crate::{Error, Result};
@@ -116,13 +114,6 @@ impl Default for DownloadScheduleConfig {
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct NetDirConfigBuilder {
-    /// The directory from which to read legacy directory information.
-    ///
-    /// This has to be the directory used by a Tor instance
-    /// that downloads microdesc info, and has been running fairly
-    /// recently.
-    legacy_cache_path: Option<PathBuf>,
-
     /// Path to use for current (sqlite) directory information.
     cache_path: Option<PathBuf>,
 
@@ -140,13 +131,6 @@ pub struct NetDirConfigBuilder {
 /// To create an object of this type, use NetDirConfigBuilder.
 #[derive(Debug, Clone)]
 pub struct NetDirConfig {
-    /// The directory from which to read legacy directory information.
-    ///
-    /// This has to be the directory used by a Tor instance
-    /// that downloads microdesc info, and has been running fairly
-    /// recently.
-    legacy_cache_path: Option<PathBuf>,
-
     /// Location to use for storing and reading current-format
     /// directory information.
     cache_path: PathBuf,
@@ -178,14 +162,6 @@ impl NetDirConfigBuilder {
         self.timing = timing;
     }
 
-    /// Use `path` as the directory to search for legacy directory files.
-    ///
-    /// This path must contain `cached-certs`, `cached-microdesc-consensus`,
-    /// and at least one of `cached-microdescs` and `cached-microdescs.new`.
-    pub fn set_legacy_cache_path(&mut self, path: &Path) {
-        self.legacy_cache_path = Some(path.to_path_buf());
-    }
-
     /// Use `path` as the directory to use for current directory files.
     pub fn set_cache_path(&mut self, path: &Path) {
         self.cache_path = Some(path.to_path_buf());
@@ -207,14 +183,6 @@ impl NetDirConfigBuilder {
     /// Consume this builder and return a NetDirConfig that can be used
     /// to load directories
     pub fn finalize(mut self) -> Result<NetDirConfig> {
-        if self.legacy_cache_path.is_none() {
-            if let Some(home) = std::env::var_os("HOME") {
-                let mut pb: PathBuf = home.into();
-                pb.push(".tor");
-                self.legacy_cache_path = Some(pb);
-            }
-        };
-
         let cache_path = self
             .cache_path
             .ok_or(Error::BadNetworkConfig("No cache path configured"))?;
@@ -227,7 +195,6 @@ impl NetDirConfigBuilder {
         }
 
         Ok(NetDirConfig {
-            legacy_cache_path: self.legacy_cache_path,
             cache_path,
             network: self.network,
             timing: self.timing,
@@ -236,17 +203,6 @@ impl NetDirConfigBuilder {
 }
 
 impl NetDirConfig {
-    #[cfg(feature = "legacy-storage")]
-    /// Read directory information from the configured storage location.
-    pub fn load_legacy(&self) -> Result<tor_netdir::PartialNetDir> {
-        let path = self
-            .legacy_cache_path
-            .as_ref()
-            .ok_or(Error::BadNetworkConfig("No legacy cache path available"))?;
-        let store = LegacyStore::new(path.clone());
-        store.load_legacy(&self.authorities[..])
-    }
-
     /// Create a SqliteStore from this configuration.
     ///
     /// Note that each time this is called, a new store object will be
