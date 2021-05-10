@@ -94,12 +94,6 @@ impl From<Microdesc> for MdEntry {
         MdEntry::Present(Arc::new(md))
     }
 }
-impl From<MdDigest> for MdEntry {
-    fn from(d: MdDigest) -> MdEntry {
-        MdEntry::Absent(d)
-    }
-}
-
 impl PartialEq for MdEntry {
     fn eq(&self, rhs: &MdEntry) -> bool {
         self.digest() == rhs.digest()
