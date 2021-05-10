@@ -41,8 +41,8 @@ pub mod params;
 mod pick;
 mod weight;
 
-use ll::pk::rsa::RsaIdentity;
 use tor_llcrypto as ll;
+use tor_llcrypto::pk::{ed25519::Ed25519Identity, rsa::RsaIdentity};
 use tor_netdoc::doc::microdesc::{MdDigest, Microdesc};
 use tor_netdoc::doc::netstatus::{self, MdConsensus, RouterStatus};
 use tor_netdoc::types::policy::PortPolicy;
@@ -278,6 +278,14 @@ impl NetDir {
     pub fn relays(&self) -> impl Iterator<Item = Relay<'_>> {
         self.all_relays().filter_map(UncheckedRelay::into_relay)
     }
+    /// Return a relay matching a given Ed25519 identity, if we have a
+    /// usable relay with that key.
+    #[cfg(test)]
+    pub fn by_id(&self, id: &Ed25519Identity) -> Option<Relay<'_>> {
+        // TODO This is O(n); we will probably want to fix that if we use
+        // this function for anything besides testing.
+        self.relays().find(|r| r.id() == id)
+    }
     /// Return the parameters from the consensus, clamped to the
     /// correct ranges, with defaults filled in.
     ///
@@ -414,7 +422,7 @@ impl<'a> UncheckedRelay<'a> {
 
 impl<'a> Relay<'a> {
     /// Return the Ed25519 ID for this relay.
-    pub fn id(&self) -> &ll::pk::ed25519::Ed25519Identity {
+    pub fn id(&self) -> &Ed25519Identity {
         self.md.ed25519_id()
     }
     /// Return the RsaIdentity for this relay.
@@ -500,7 +508,7 @@ impl<'a> tor_linkspec::ChanTarget for Relay<'a> {
     fn addrs(&self) -> &[std::net::SocketAddr] {
         self.rs.addrs()
     }
-    fn ed_identity(&self) -> &ll::pk::ed25519::Ed25519Identity {
+    fn ed_identity(&self) -> &Ed25519Identity {
         self.id()
     }
     fn rsa_identity(&self) -> &RsaIdentity {
@@ -556,16 +564,27 @@ mod test {
             // Each relay gets a couple of no-good onion keys.
             // Its identity fingerprints are set to `idx`, repeating.
             // They all get the same address.
+            let flags = flags[(idx / 10) as usize];
+            let policy = if flags.contains(RouterFlags::EXIT) {
+                "accept 80,443"
+            } else {
+                "reject 1-65535"
+            };
+            // everybody is family with the adjacent relay.
+            let fam_id = [idx ^ 1; 20];
+            let family = hex::encode(&fam_id);
+
             let md = Microdesc::builder()
                 .tap_key(rsa_example())
                 .ntor_key((*b"----nothing in dirmgr uses this-").into())
                 .ed25519_id([idx; 32].into())
-                .parse_ipv4_policy("accept 80,443")
+                .family(family.parse().unwrap())
+                .parse_ipv4_policy(policy)
                 .unwrap()
                 .testing_md()
                 .unwrap();
             let protocols = if idx % 2 == 0 {
-                // even numbered routers are dircaches.
+                // even-numbered routers are dircaches.
                 "DirCache=2".parse().unwrap()
             } else {
                 "".parse().unwrap()
@@ -576,7 +595,7 @@ mod test {
                 .add_or_port("127.0.0.1:9001".parse().unwrap())
                 .doc_digest(*md.digest())
                 .protos(protocols)
-                .set_flags(flags[(idx / 10) as usize])
+                .set_flags(flags)
                 .weight(weight)
                 .build_into(&mut bld)
                 .unwrap();
@@ -728,5 +747,88 @@ mod test {
             dir.add_microdesc(md);
         }
         assert!(dir.unwrap_if_sufficient().is_err());
+    }
+
+    #[test]
+    fn test_pick() {
+        use crate::pick::test::*; // for stochastic testing
+        use tor_linkspec::ChanTarget;
+
+        let (consensus, microdescs) = construct_network();
+        let mut dir = PartialNetDir::new(consensus.clone(), None);
+        for md in microdescs.into_iter() {
+            let wanted = dir.add_microdesc(md.clone());
+            assert!(wanted);
+        }
+        let dir = dir.unwrap_if_sufficient().unwrap();
+
+        let total = get_iters() as isize;
+        let mut picked = [0_isize; 40];
+        let mut rng = get_rng();
+        for _ in 0..get_iters() {
+            let r = dir.pick_relay(&mut rng, WeightRole::Middle, |r| {
+                r.supports_exit_port_ipv4(80)
+            });
+            let r = r.unwrap();
+            let id_byte = r.rsa_identity().as_bytes()[0];
+            picked[id_byte as usize] += 1;
+        }
+        // non-exits should never get picked.
+        for idx in 0..10 {
+            assert_eq!(picked[idx], 0);
+        }
+        for idx in 20..30 {
+            assert_eq!(picked[idx], 0);
+        }
+        // We didn't we any non-default weights, so the other routers get
+        // weighted proportional to their bandwidth.
+        check_close(picked[19], (total * 10) / 110);
+        check_close(picked[38], (total * 9) / 110);
+        check_close(picked[39], (total * 10) / 110);
+    }
+
+    #[test]
+    fn relay_funcs() {
+        let (consensus, microdescs) = construct_network();
+        let mut dir = PartialNetDir::new(consensus.clone(), None);
+        for md in microdescs.into_iter() {
+            let wanted = dir.add_microdesc(md.clone());
+            assert!(wanted);
+        }
+        let dir = dir.unwrap_if_sufficient().unwrap();
+
+        // Pick out a few relays by ID.
+        let r0 = dir.by_id(&[0; 32].into()).unwrap();
+        let r1 = dir.by_id(&[1; 32].into()).unwrap();
+        let r2 = dir.by_id(&[2; 32].into()).unwrap();
+        let r3 = dir.by_id(&[3; 32].into()).unwrap();
+
+        assert_eq!(r0.id(), &[0; 32].into());
+        assert_eq!(r0.rsa_id(), &[0; 20].into());
+        assert_eq!(r1.id(), &[1; 32].into());
+        assert_eq!(r1.rsa_id(), &[1; 20].into());
+
+        assert!(r0.same_relay(&r0));
+        assert!(r1.same_relay(&r1));
+        assert!(!r1.same_relay(&r0));
+
+        assert!(r0.is_dir_cache());
+        assert!(!r1.is_dir_cache());
+        assert!(r2.is_dir_cache());
+        assert!(!r3.is_dir_cache());
+
+        assert!(!r0.supports_exit_port_ipv4(80));
+        assert!(!r1.supports_exit_port_ipv4(80));
+        assert!(!r2.supports_exit_port_ipv4(80));
+        assert!(!r3.supports_exit_port_ipv4(80));
+
+        assert!(r0.in_same_family(&r0));
+        assert!(r0.in_same_family(&r1));
+        assert!(r1.in_same_family(&r0));
+        assert!(r1.in_same_family(&r1));
+        assert!(!r0.in_same_family(&r2));
+        assert!(!r2.in_same_family(&r0));
+        assert!(r2.in_same_family(&r2));
+        assert!(r2.in_same_family(&r3));
     }
 }

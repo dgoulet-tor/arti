@@ -74,12 +74,12 @@ where
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use super::*;
     use rand;
 
     #[cfg(not(feature = "stochastic_tests"))]
-    fn get_rng() -> impl rand::Rng {
+    pub(crate) fn get_rng() -> impl rand::Rng {
         // When stochastic tests aren't enabled, we use a RNG seeded
         // with a fixed value and a small number of iterators for each test.
         //
@@ -96,28 +96,28 @@ mod test {
     }
 
     #[cfg(not(feature = "stochastic_tests"))]
-    fn get_iters() -> usize {
+    pub(crate) fn get_iters() -> usize {
         5000
     }
 
     #[cfg(feature = "stochastic_tests")]
-    fn get_rng() -> impl rand::Rng {
+    pub(crate) fn get_rng() -> impl rand::Rng {
         rand::thread_rng()
     }
 
     #[cfg(feature = "stochastic_tests")]
-    fn get_iters() -> usize {
+    pub(crate) fn get_iters() -> usize {
         1000000
     }
 
     /// Assert that a is close to b.
     #[cfg(not(feature = "stochastic_tests"))]
-    fn check_close(a: isize, b: isize) {
+    pub(crate) fn check_close(a: isize, b: isize) {
         assert!((a - b).abs() <= (b / 20) + 5);
     }
 
     #[cfg(feature = "stochastic_tests")]
-    fn check_close(a: isize, b: isize) {
+    pub(crate) fn check_close(a: isize, b: isize) {
         assert!((a - b).abs() <= (b / 100));
     }
 
