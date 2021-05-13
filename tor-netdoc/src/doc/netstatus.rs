@@ -164,8 +164,7 @@ impl<T> NetParams<T> {
         self.params.iter()
     }
     /// Set or replace the value of a network parameter.
-    #[allow(unused)]
-    pub(crate) fn set(&mut self, k: String, v: T) {
+    pub fn set(&mut self, k: String, v: T) {
         self.params.insert(k, v);
     }
 }

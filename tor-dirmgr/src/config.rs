@@ -35,6 +35,7 @@ pub struct NetworkConfig {
 
     /// A map of network parameters that we're overriding from their
     /// setttings in the consensus.
+    // TODO: move this?
     #[serde(default)]
     override_net_params: netstatus::NetParams<i32>,
 }
@@ -46,6 +47,75 @@ impl Default for NetworkConfig {
             authority: crate::authority::default_authorities(),
             override_net_params: Default::default(),
         }
+    }
+}
+
+/// An object used to build a network configuration.  You shouldn't
+/// need to use one of these directly for working on the standard Tor
+/// network; the defaults are correct for use there.
+#[derive(Debug,Clone,Default)]
+pub struct NetworkConfigBuilder {
+    fallbacks: Option<Vec<FallbackDir>>,
+    authorities: Option<Vec<Authority>>,
+    override_net_params: netstatus::NetParams<i32>,
+}
+
+impl NetworkConfigBuilder {
+    /// Return a new NetworkConfigBuilder.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add `fallback` as a fallback directory.
+    ///
+    /// Fallback directories are used to reach the Tor network if the
+    /// client has not yet retrieved any other directory information.
+    ///
+    /// By default, if we are using the default set of authorities, we
+    /// use a hardcoded set of fallback directories chosen from the
+    /// Tor network.  Using this function or the `authority()`
+    /// function means that we will not be using the default set of
+    /// fallback directories.
+    pub fn fallback(&mut self, fallback:FallbackDir) -> &mut Self {
+        self.fallbacks.get_or_insert_with(Vec::new).push(fallback);
+        self
+    }
+
+    /// Add `authority` as a directory authority.
+    ///
+    /// Directory authorites are a trusted set of servers that
+    /// periodically sign documents attesting to the state of the Tor
+    /// network.
+    ///
+    /// By default, we use the set of authorities that maintains the real
+    /// Tor network.  Calling this function opts out of using that set.
+    pub fn authority(&mut self, auth: Authority) -> &mut Self {
+        self.authorities.get_or_insert_with(Vec::new).push(auth);
+        self
+    }
+
+    /// Overrides the
+    ///
+    /// By default no parameters will be overridden.
+    pub fn override_param(&mut self, param: &str, value: i32) -> &mut Self {
+        self.override_net_params.set(param.to_owned(), value);
+        self
+    }
+
+    pub fn build(&self) -> Result<NetworkConfig> {
+        let using_default_authorities = self.authorities.is_none();
+        let authority = self.authorities.clone().unwrap_or_else(crate::authority::default_authorities);
+        let fallback_cache = if using_default_authorities {
+            self.fallbacks.clone().unwrap_or_else(fallbacks::default_fallbacks)
+        } else {
+            self.fallbacks.clone().unwrap_or_else(Vec::new)
+        };
+
+        Ok(NetworkConfig {
+            fallback_cache,
+            authority,
+            override_net_params: self.override_net_params.clone()
+        })
     }
 }
 
@@ -261,7 +331,7 @@ impl DownloadScheduleConfig {
         &self.retry_microdescs
     }
 
-    /// Number of microdescriptor fetches to attemppt in parallel
+    /// Number of microdescriptor fetches to attempt in parallel
     pub fn microdesc_parallelism(&self) -> usize {
         self.microdesc_parallelism.max(1).into()
     }
