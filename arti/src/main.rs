@@ -82,13 +82,13 @@ pub struct StorageConfig {
 impl ArtiConfig {
     fn get_dir_config(&self) -> Result<DirMgrConfig> {
         let mut dircfg = tor_dirmgr::DirMgrConfigBuilder::new();
-        dircfg.set_network_config(self.network.clone());
-        dircfg.set_timing_config(self.download_schedule.clone());
-        dircfg.set_cache_path(&self.storage.cache_dir.path()?);
+        dircfg.network_config(self.network.clone());
+        dircfg.schedule_config(self.download_schedule.clone());
+        dircfg.cache_path(&self.storage.cache_dir.path()?);
         for (k, v) in self.override_net_params.iter() {
             dircfg.override_net_param(k.clone(), *v);
         }
-        dircfg.finalize()
+        dircfg.build()
     }
 }
 

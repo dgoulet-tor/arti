@@ -42,6 +42,21 @@ impl Default for NetworkConfig {
     }
 }
 
+impl NetworkConfig {
+    /// Return a new builder to construct a NetworkConfig.
+    pub fn builder() -> NetworkConfigBuilder {
+        NetworkConfigBuilder::new()
+    }
+    /// Return the configured directory authorities
+    pub fn authorities(&self) -> &[Authority] {
+        &self.authority[..]
+    }
+    /// Return the configured fallback directories
+    pub fn fallbacks(&self) -> &[FallbackDir] {
+        &self.fallback_cache[..]
+    }
+}
+
 /// An object used to build a network configuration.  You shouldn't
 /// need to use one of these directly for working on the standard Tor
 /// network; the defaults are correct for use there.
@@ -161,6 +176,13 @@ impl Default for DownloadScheduleConfig {
     }
 }
 
+impl DownloadScheduleConfig {
+    /// Return a new builder to make a [`DownloadSchedulConfig`]
+    pub fn builder() -> DownloadScheduleConfigBuilder {
+        DownloadScheduleConfigBuilder::new()
+    }
+}
+
 /// Builder for a [`DownloadScheduleConfig`].
 #[derive(Debug, Clone, Default)]
 pub struct DownloadScheduleConfigBuilder {
@@ -219,16 +241,16 @@ impl DownloadScheduleConfigBuilder {
         self
     }
 
-    /// Construct a download schedule configuration from this building.
-    pub fn build(&self) -> DownloadScheduleConfig {
-        self.inner.clone()
+    /// Try to construct a download schedule configuration from this builder.
+    pub fn build(&self) -> Result<DownloadScheduleConfig> {
+        Ok(self.inner.clone())
     }
 }
 
 /// Builder for a [`DirMgrConfig`]
 ///
 /// To create a directory configuration, create one of these,
-/// configure it, then call its finalize function.
+/// configure it, then call its build function.
 ///
 /// # Examples
 ///
@@ -237,7 +259,7 @@ impl DownloadScheduleConfigBuilder {
 /// # fn x() -> anyhow::Result<()> {
 /// let mut builder = DirMgrConfigBuilder::new();
 /// builder.use_default_cache_path()?;
-/// let config: DirMgrConfig = builder.finalize()?;
+/// let config: DirMgrConfig = builder.build()?;
 /// # Ok(()) }
 /// # x().unwrap()
 /// ```
@@ -250,7 +272,7 @@ pub struct DirMgrConfigBuilder {
     network: NetworkConfig,
 
     /// Configuration information about when to download stuff.
-    timing: DownloadScheduleConfig,
+    schedule: DownloadScheduleConfig,
 
     /// A map of network parameters that we're overriding from their
     /// setttings in the consensus.
@@ -272,7 +294,7 @@ pub struct DirMgrConfig {
     network: NetworkConfig,
 
     /// Configuration information about when we download things.
-    timing: DownloadScheduleConfig,
+    schedule: DownloadScheduleConfig,
 
     /// A map of network parameters that we're overriding from their
     /// setttings in the consensus.
@@ -293,7 +315,7 @@ impl DirMgrConfigBuilder {
     /// (You shouldn't need to replace the defaults unless you are
     /// using a private Tor network, a testing-only Tor network, or a
     /// network that is otherwise nonstandard.)
-    pub fn set_network_config(&mut self, config: NetworkConfig) -> &mut Self {
+    pub fn network_config(&mut self, config: NetworkConfig) -> &mut Self {
         self.network = config;
         self
     }
@@ -302,13 +324,13 @@ impl DirMgrConfigBuilder {
     /// attempt and retry downloads.
     ///
     /// (The defaults should be reasonable for most use cases.)
-    pub fn set_timing_config(&mut self, timing: DownloadScheduleConfig) -> &mut Self {
-        self.timing = timing;
+    pub fn schedule_config(&mut self, schedule: DownloadScheduleConfig) -> &mut Self {
+        self.schedule = schedule;
         self
     }
 
     /// Use `path` as the directory to use for current directory files.
-    pub fn set_cache_path(&mut self, path: &Path) -> &mut Self {
+    pub fn cache_path(&mut self, path: &Path) -> &mut Self {
         self.cache_path = Some(path.to_path_buf());
         self
     }
@@ -344,7 +366,7 @@ impl DirMgrConfigBuilder {
 
     /// Use this builder to produce a DirMgrConfig that can be used
     /// to load directories
-    pub fn finalize(&self) -> Result<DirMgrConfig> {
+    pub fn build(&self) -> Result<DirMgrConfig> {
         let cache_path = self
             .cache_path
             .as_ref()
@@ -360,13 +382,18 @@ impl DirMgrConfigBuilder {
         Ok(DirMgrConfig {
             cache_path: cache_path.clone(),
             network: self.network.clone(),
-            timing: self.timing.clone(),
+            schedule: self.schedule.clone(),
             override_net_params: self.override_net_params.clone(),
         })
     }
 }
 
 impl DirMgrConfig {
+    /// Return a new builder to construct a DirMgrConfig.
+    pub fn builder() -> DirMgrConfigBuilder {
+        DirMgrConfigBuilder::new()
+    }
+
     /// Create a SqliteStore from this configuration.
     ///
     /// Note that each time this is called, a new store object will be
@@ -379,12 +406,12 @@ impl DirMgrConfig {
 
     /// Return a slice of the configured authorities
     pub fn authorities(&self) -> &[Authority] {
-        &self.network.authority[..]
+        self.network.authorities()
     }
 
     /// Return the configured set of fallback directories
     pub fn fallbacks(&self) -> &[FallbackDir] {
-        &self.network.fallback_cache[..]
+        self.network.fallbacks()
     }
 
     /// Return set of configured networkstatus parameter overrides.
@@ -392,10 +419,10 @@ impl DirMgrConfig {
         &self.override_net_params
     }
 
-    /// Return the timing configuration we should use to decide when to
-    /// attemppt and retry downloads.
-    pub fn timing(&self) -> &DownloadScheduleConfig {
-        &self.timing
+    /// Return the schedule configuration we should use to decide when to
+    /// attempt and retry downloads.
+    pub fn schedule(&self) -> &DownloadScheduleConfig {
+        &self.schedule
     }
 }
 
@@ -469,14 +496,98 @@ mod test {
     fn simplest_config() -> Result<()> {
         let tmp = TempDir::new("arti-config").unwrap();
 
-        let dir = DirMgrConfigBuilder::new()
-            .set_cache_path(tmp.path())
-            .finalize()?;
+        let dir = DirMgrConfigBuilder::new().cache_path(tmp.path()).build()?;
 
         assert!(dir.authorities().len() >= 3);
         assert!(dir.fallbacks().len() >= 3);
 
         // TODO: verify other defaults.
+
+        Ok(())
+    }
+
+    #[test]
+    fn build_network() -> Result<()> {
+        let dflt = NetworkConfig::default();
+
+        // with nothing set, we get the default.
+        let mut bld = NetworkConfig::builder();
+        let cfg = bld.build()?;
+        assert_eq!(cfg.authorities().len(), dflt.authority.len());
+        assert_eq!(cfg.fallbacks().len(), dflt.fallback_cache.len());
+
+        // with any authorities set, the fallback list becomes empty
+        // unless you set it.
+        bld.authority(
+            Authority::builder()
+                .name("Hello")
+                .v3ident([b'?'; 20].into())
+                .build()?,
+        );
+        bld.authority(
+            Authority::builder()
+                .name("world")
+                .v3ident([b'!'; 20].into())
+                .build()?,
+        );
+        let cfg = bld.build()?;
+        assert_eq!(cfg.authorities().len(), 2);
+        assert!(cfg.fallbacks().is_empty());
+
+        bld.fallback(
+            FallbackDir::builder()
+                .rsa_identity([b'x'; 20].into())
+                .ed_identity([b'y'; 32].into())
+                .orport("127.0.0.1:99".parse().unwrap())
+                .orport("[::]:99".parse().unwrap())
+                .build()?,
+        );
+        let cfg = bld.build()?;
+        assert_eq!(cfg.authorities().len(), 2);
+        assert_eq!(cfg.fallbacks().len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn build_schedule() -> Result<()> {
+        use std::time::Duration;
+        let mut bld = DownloadScheduleConfig::builder();
+
+        let cfg = bld.build()?;
+        assert_eq!(cfg.microdesc_parallelism(), 4);
+        assert_eq!(cfg.retry_microdescs().n_attempts(), 3);
+        assert_eq!(cfg.retry_bootstrap().n_attempts(), 128);
+
+        bld.microdesc_parallelism(0)
+            .retry_consensus(RetryConfig::new(7, Duration::new(86400, 0)))
+            .retry_bootstrap(RetryConfig::new(4, Duration::new(3600, 0)))
+            .retry_certs(RetryConfig::new(5, Duration::new(3600, 0)))
+            .retry_microdescs(RetryConfig::new(6, Duration::new(3600, 0)));
+
+        let cfg = bld.build()?;
+        assert_eq!(cfg.microdesc_parallelism(), 1); // gets clamped to 1
+        assert_eq!(cfg.retry_microdescs().n_attempts(), 6);
+        assert_eq!(cfg.retry_bootstrap().n_attempts(), 4);
+        assert_eq!(cfg.retry_consensus().n_attempts(), 7);
+        assert_eq!(cfg.retry_certs().n_attempts(), 5);
+
+        Ok(())
+    }
+
+    #[test]
+    fn build_dirmgrcfg() -> Result<()> {
+        let mut bld = DirMgrConfig::builder();
+        let tmp = TempDir::new("arti-config").unwrap();
+
+        let cfg = bld
+            .override_net_param("circwindow".into(), 999)
+            .cache_path(tmp.path())
+            .network_config(NetworkConfig::default())
+            .schedule_config(DownloadScheduleConfig::default())
+            .build()?;
+
+        assert_eq!(cfg.override_net_params().get("circwindow").unwrap(), &999);
 
         Ok(())
     }

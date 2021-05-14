@@ -147,7 +147,7 @@ impl<DM: WriteNetDir> DirState for GetConsensusState<DM> {
     }
     fn dl_config(&self) -> Result<(usize, RetryConfig)> {
         if let Some(wd) = Weak::upgrade(&self.writedir) {
-            Ok((1, *wd.config().timing().retry_consensus()))
+            Ok((1, *wd.config().schedule().retry_consensus()))
         } else {
             Err(Error::ManagerDropped.into())
         }
@@ -306,7 +306,7 @@ impl<DM: WriteNetDir> DirState for GetCertsState<DM> {
     }
     fn dl_config(&self) -> Result<(usize, RetryConfig)> {
         if let Some(wd) = Weak::upgrade(&self.writedir) {
-            Ok((1, *wd.config().timing().retry_certs()))
+            Ok((1, *wd.config().schedule().retry_certs()))
         } else {
             Err(Error::ManagerDropped.into())
         }
@@ -539,8 +539,8 @@ impl<DM: WriteNetDir> DirState for GetMicrodescsState<DM> {
     fn dl_config(&self) -> Result<(usize, RetryConfig)> {
         if let Some(wd) = Weak::upgrade(&self.writedir) {
             Ok((
-                wd.config().timing().microdesc_parallelism(),
-                *wd.config().timing().retry_microdescs(),
+                wd.config().schedule().microdesc_parallelism(),
+                *wd.config().schedule().retry_microdescs(),
             ))
         } else {
             Err(Error::ManagerDropped.into())

@@ -267,7 +267,7 @@ impl<R: Runtime> DirMgr<R> {
         let (retry_config, runtime) = {
             let dirmgr = upgrade_weak_ref(&weak)?;
             (
-                *dirmgr.config.timing().retry_bootstrap(),
+                *dirmgr.config.schedule().retry_bootstrap(),
                 dirmgr.runtime.clone(),
             )
         };
