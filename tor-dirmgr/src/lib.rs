@@ -56,7 +56,10 @@ use std::{collections::HashMap, sync::Weak};
 use std::{fmt::Debug, time::SystemTime};
 
 pub use authority::Authority;
-pub use config::{DownloadScheduleConfig, NetDirConfig, NetDirConfigBuilder, NetworkConfig};
+pub use config::{
+    DownloadScheduleConfig, DownloadScheduleConfigBuilder, NetDirConfig, NetDirConfigBuilder,
+    NetworkConfig, NetworkConfigBuilder,
+};
 pub use docid::DocId;
 pub use err::Error;
 pub use storage::DocumentText;

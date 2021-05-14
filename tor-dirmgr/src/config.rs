@@ -14,9 +14,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-/// Configuration information about the Tor network; used as part of
-/// Arti's configuration.
-// TODO: move this?
+/// Configuration information about the Tor network iteslf; used as
+/// part of Arti's configuration.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkConfig {
@@ -53,10 +52,17 @@ impl Default for NetworkConfig {
 /// An object used to build a network configuration.  You shouldn't
 /// need to use one of these directly for working on the standard Tor
 /// network; the defaults are correct for use there.
-#[derive(Debug,Clone,Default)]
+#[derive(Debug, Clone, Default)]
 pub struct NetworkConfigBuilder {
+    /// See [`NetworkConfig::fallback_cache`].  This is an option because
+    /// we need to distinguish "no fallback directories" from "default
+    /// fallback directories".
     fallbacks: Option<Vec<FallbackDir>>,
+    /// See [`NetworkConfig::authority`].  This is an option because
+    /// we need to distinguish "no fallback directories" from "default
+    /// fallback authorities".
     authorities: Option<Vec<Authority>>,
+    /// See [`NetworkConfig::override_net_params`].
     override_net_params: netstatus::NetParams<i32>,
 }
 
@@ -76,7 +82,7 @@ impl NetworkConfigBuilder {
     /// Tor network.  Using this function or the `authority()`
     /// function means that we will not be using the default set of
     /// fallback directories.
-    pub fn fallback(&mut self, fallback:FallbackDir) -> &mut Self {
+    pub fn fallback(&mut self, fallback: FallbackDir) -> &mut Self {
         self.fallbacks.get_or_insert_with(Vec::new).push(fallback);
         self
     }
@@ -102,11 +108,18 @@ impl NetworkConfigBuilder {
         self
     }
 
+    /// Try to build a network configuration corresponding to the
+    /// information in this builder.
     pub fn build(&self) -> Result<NetworkConfig> {
         let using_default_authorities = self.authorities.is_none();
-        let authority = self.authorities.clone().unwrap_or_else(crate::authority::default_authorities);
+        let authority = self
+            .authorities
+            .clone()
+            .unwrap_or_else(crate::authority::default_authorities);
         let fallback_cache = if using_default_authorities {
-            self.fallbacks.clone().unwrap_or_else(fallbacks::default_fallbacks)
+            self.fallbacks
+                .clone()
+                .unwrap_or_else(fallbacks::default_fallbacks)
         } else {
             self.fallbacks.clone().unwrap_or_else(Vec::new)
         };
@@ -114,7 +127,7 @@ impl NetworkConfigBuilder {
         Ok(NetworkConfig {
             fallback_cache,
             authority,
-            override_net_params: self.override_net_params.clone()
+            override_net_params: self.override_net_params.clone(),
         })
     }
 }
@@ -166,7 +179,71 @@ impl Default for DownloadScheduleConfig {
     }
 }
 
-/// Builder for a NetDirConfig.
+/// Builder for a [`DownloadScheduleConfig`].
+#[derive(Debug, Clone, Default)]
+pub struct DownloadScheduleConfigBuilder {
+    /// The DownloadScheduleConfig we're building.
+    ///
+    /// (There aren't currently any inconsistent partially constructed
+    /// states for this object, so we can just use an internal object.
+    /// We don't precisely need a builder here, but let's keep it for
+    /// consistency.)
+    inner: DownloadScheduleConfig,
+}
+
+impl DownloadScheduleConfigBuilder {
+    /// Construct a new builder to make a [`DownloadScheduleConfig`].
+    ///
+    /// All fields are optional, and are set to reasonable defaults.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the configuration for retrying our initial bootstrap attempt.
+    ///
+    /// Unlike other retry configurations, this should have a higher number
+    /// of attempts: if we were to 'give up' here, we would never get a
+    /// usable directory.
+    pub fn retry_bootstrap(&mut self, sched: RetryConfig) -> &mut Self {
+        self.inner.retry_bootstrap = sched;
+        self
+    }
+
+    /// Configure the schedule for retrying a consensus download.
+    pub fn retry_consensus(&mut self, sched: RetryConfig) -> &mut Self {
+        self.inner.retry_consensus = sched;
+        self
+    }
+
+    /// Configure the schedule for retrying an authority certificate
+    /// download.
+    pub fn retry_certs(&mut self, sched: RetryConfig) -> &mut Self {
+        self.inner.retry_certs = sched;
+        self
+    }
+
+    /// Configure the schedule for retrying a microdescriptor download.
+    pub fn retry_microdescs(&mut self, sched: RetryConfig) -> &mut Self {
+        self.inner.retry_microdescs = sched;
+        self
+    }
+
+    /// Set the number of microdescriptor downloads that we should be
+    /// allowed to launch in parallel.
+    ///
+    /// The default value is 4.
+    pub fn microdesc_parallelism(&mut self, parallelism: u8) -> &mut Self {
+        self.inner.microdesc_parallelism = parallelism;
+        self
+    }
+
+    /// Construct a download schedule configuration from this building.
+    pub fn build(&self) -> DownloadScheduleConfig {
+        self.inner.clone()
+    }
+}
+
+/// Builder for a [`NetDirConfig`]
 ///
 /// To create a directory configuration, create one of these,
 /// configure it, then call its finalize function.
@@ -222,6 +299,10 @@ impl NetDirConfigBuilder {
     }
 
     /// Set the network information (authorities and fallbacks) from `config`.
+    ///
+    /// (You shouldn't need to replace the defaults unless you are
+    /// using a private Tor network, a testing-only Tor network, or a
+    /// network that is otherwise nonstandard.)
     pub fn set_network_config(&mut self, config: NetworkConfig) -> &mut Self {
         self.network = config;
         self
@@ -229,6 +310,8 @@ impl NetDirConfigBuilder {
 
     /// Set the timining information that we use for deciding when to
     /// attempt and retry downloads.
+    ///
+    /// (The defaults should be reasonable for most use cases.)
     pub fn set_timing_config(&mut self, timing: DownloadScheduleConfig) -> &mut Self {
         self.timing = timing;
         self
