@@ -15,6 +15,7 @@ use anyhow::Result;
 use argh::FromArgs;
 use log::{info, warn, LevelFilter};
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(FromArgs, Debug, Clone)]
 /// Make a connection to the Tor network, open a SOCKS port, and proxy
@@ -58,6 +59,11 @@ pub struct ArtiConfig {
 
     /// Information about when and how often to download directory information
     download_schedule: DownloadScheduleConfig,
+
+    /// Facility to override network pparameters from the values set in the
+    /// consensus.
+    #[serde(default)]
+    override_net_params: HashMap<String, i32>,
 }
 
 /// Configuration for where information should be stored on disk.
@@ -79,6 +85,9 @@ impl ArtiConfig {
         dircfg.set_network_config(self.network.clone());
         dircfg.set_timing_config(self.download_schedule.clone());
         dircfg.set_cache_path(&self.storage.cache_dir.path()?);
+        for (k, v) in self.override_net_params.iter() {
+            dircfg.override_net_param(k.clone(), *v);
+        }
         dircfg.finalize()
     }
 }

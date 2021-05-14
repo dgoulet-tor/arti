@@ -31,12 +31,6 @@ pub struct NetworkConfig {
     /// consensus documents.
     #[serde(default = "crate::authority::default_authorities")]
     authority: Vec<Authority>,
-
-    /// A map of network parameters that we're overriding from their
-    /// setttings in the consensus.
-    // TODO: move this?
-    #[serde(default)]
-    override_net_params: netstatus::NetParams<i32>,
 }
 
 impl Default for NetworkConfig {
@@ -44,7 +38,6 @@ impl Default for NetworkConfig {
         NetworkConfig {
             fallback_cache: fallbacks::default_fallbacks(),
             authority: crate::authority::default_authorities(),
-            override_net_params: Default::default(),
         }
     }
 }
@@ -62,8 +55,6 @@ pub struct NetworkConfigBuilder {
     /// we need to distinguish "no fallback directories" from "default
     /// fallback authorities".
     authorities: Option<Vec<Authority>>,
-    /// See [`NetworkConfig::override_net_params`].
-    override_net_params: netstatus::NetParams<i32>,
 }
 
 impl NetworkConfigBuilder {
@@ -100,14 +91,6 @@ impl NetworkConfigBuilder {
         self
     }
 
-    /// Overrides the
-    ///
-    /// By default no parameters will be overridden.
-    pub fn override_param(&mut self, param: &str, value: i32) -> &mut Self {
-        self.override_net_params.set(param.to_owned(), value);
-        self
-    }
-
     /// Try to build a network configuration corresponding to the
     /// information in this builder.
     pub fn build(&self) -> Result<NetworkConfig> {
@@ -127,7 +110,6 @@ impl NetworkConfigBuilder {
         Ok(NetworkConfig {
             fallback_cache,
             authority,
-            override_net_params: self.override_net_params.clone(),
         })
     }
 }
@@ -269,6 +251,10 @@ pub struct DirMgrConfigBuilder {
 
     /// Configuration information about when to download stuff.
     timing: DownloadScheduleConfig,
+
+    /// A map of network parameters that we're overriding from their
+    /// setttings in the consensus.
+    override_net_params: netstatus::NetParams<i32>,
 }
 
 /// Configuration type for network directory operations.
@@ -287,6 +273,10 @@ pub struct DirMgrConfig {
 
     /// Configuration information about when we download things.
     timing: DownloadScheduleConfig,
+
+    /// A map of network parameters that we're overriding from their
+    /// setttings in the consensus.
+    override_net_params: netstatus::NetParams<i32>,
 }
 
 impl DirMgrConfigBuilder {
@@ -323,6 +313,22 @@ impl DirMgrConfigBuilder {
         self
     }
 
+    /// Overrides the network consensus parameter named `param` with a
+    /// new value.
+    ///
+    /// If the new value is out of range, it will be clamped to the
+    /// acceptable range.
+    ///
+    /// If the parameter is not recognized by Arti, it will be
+    /// ignored, and a warning will be produced when we try to apply
+    /// it to the consensus.
+    ///
+    /// By default no parameters will be overridden.
+    pub fn override_net_param(&mut self, param: String, value: i32) -> &mut Self {
+        self.override_net_params.set(param, value);
+        self
+    }
+
     /// Try to use the default cache path.
     ///
     /// This will be ~/.cache/arti on unix, and in other suitable
@@ -355,6 +361,7 @@ impl DirMgrConfigBuilder {
             cache_path: cache_path.clone(),
             network: self.network.clone(),
             timing: self.timing.clone(),
+            override_net_params: self.override_net_params.clone(),
         })
     }
 }
@@ -382,7 +389,7 @@ impl DirMgrConfig {
 
     /// Return set of configured networkstatus parameter overrides.
     pub fn override_net_params(&self) -> &netstatus::NetParams<i32> {
-        &self.network.override_net_params
+        &self.override_net_params
     }
 
     /// Return the timing configuration we should use to decide when to
