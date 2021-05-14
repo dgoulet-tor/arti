@@ -40,7 +40,7 @@ pub(crate) struct SqliteStore {
     ///
     /// (sqlite supports that with connection locking, but we want to
     /// be a little more coarse-grained here)
-    // XXXX This can behave oddly fail if this process already has
+    // XXXX This can behave oddly or fail if this process already has
     // XXXX another instance of this file; see fslock documentation.
     lockfile: Option<fslock::LockFile>,
 }
@@ -52,9 +52,17 @@ impl SqliteStore {
     /// necessary.
     ///
     /// If readonly is true, the result will be a read-only store.
-    /// Otherwise,, when readonly is false, the result may be
+    /// Otherwise, when readonly is false, the result may be
     /// read-only or read-write, depending on whether we can acquire
     /// the lock.
+    ///
+    /// # Limitations:
+    ///
+    /// The file locking that we use to ensure that only one dirmgr is
+    /// writing to a given storage directory at a time is currently
+    /// _per process_. Therefore, you might get unexpected results if
+    /// two SqliteStores are created in the same process with the
+    /// path.
     pub fn from_path<P: AsRef<Path>>(path: P, mut readonly: bool) -> Result<Self> {
         let path = path.as_ref();
         let sqlpath = path.join("dir.sqlite3");
@@ -1081,6 +1089,43 @@ mod test {
                 .unwrap();
             assert_eq!(consensus.as_str()?, "Pretend this is a consensus");
         }
+
+        {
+            let consensus_text = store.consensus_by_meta(&cmeta)?;
+            assert_eq!(consensus_text.as_str()?, "Pretend this is a consensus");
+
+            let (is, _cmeta2) = store
+                .consensus_by_sha3_digest_of_signed_part(&[0xAB; 32])?
+                .unwrap();
+            assert_eq!(is.as_str()?, "Pretend this is a consensus");
+
+            let cmeta3 = ConsensusMeta::new(
+                netstatus::Lifetime::new(
+                    now.into(),
+                    (now + one_hour).into(),
+                    (now + one_hour * 2).into(),
+                )
+                .unwrap(),
+                [0x99; 32],
+                [0x99; 32],
+            );
+            assert!(store.consensus_by_meta(&cmeta3).is_err());
+
+            assert!(store
+                .consensus_by_sha3_digest_of_signed_part(&[0x99; 32])?
+                .is_none());
+        }
+
+        {
+            assert!(store
+                .consensus_by_sha3_digest_of_signed_part(&[0xAB; 32])?
+                .is_some());
+            store.delete_consensus(&cmeta)?;
+            assert!(store
+                .consensus_by_sha3_digest_of_signed_part(&[0xAB; 32])?
+                .is_none());
+        }
+
         Ok(())
     }
 
@@ -1182,6 +1227,36 @@ mod test {
         assert_eq!(rds.len(), 1);
         assert_eq!(rds.get(&d2).unwrap(), "Fake routerdesc 2");
 
+        Ok(())
+    }
+
+    #[test]
+    fn from_path_rw() -> Result<()> {
+        let tmp = TempDir::new("arti-from-path").unwrap();
+
+        // Nothing there: can't open read-only
+        let r = SqliteStore::from_path(tmp.path(), true);
+        assert!(r.is_err());
+        assert!(!tmp.path().join("dir_blobs").exists());
+
+        // Opening it read-write will crate the files
+        {
+            let mut store = SqliteStore::from_path(tmp.path(), false)?;
+            assert!(tmp.path().join("dir_blobs").is_dir());
+            assert!(store.lockfile.is_some());
+            assert!(!store.is_readonly());
+            assert!(store.upgrade_to_readwrite()?); // no-op.
+        }
+
+        // At this point, we can successfully make a read-only connection.
+        {
+            let mut store2 = SqliteStore::from_path(tmp.path(), true)?;
+            assert!(store2.is_readonly());
+
+            // Nobody else is locking this, so we can upgrade.
+            assert!(store2.upgrade_to_readwrite()?); // no-op.
+            assert!(!store2.is_readonly());
+        }
         Ok(())
     }
 }
