@@ -57,7 +57,7 @@ use std::{fmt::Debug, time::SystemTime};
 
 pub use authority::Authority;
 pub use config::{
-    DownloadScheduleConfig, DownloadScheduleConfigBuilder, NetDirConfig, NetDirConfigBuilder,
+    DirMgrConfig, DirMgrConfigBuilder, DownloadScheduleConfig, DownloadScheduleConfigBuilder,
     NetworkConfig, NetworkConfigBuilder,
 };
 pub use docid::DocId;
@@ -86,7 +86,7 @@ pub use storage::DocumentText;
 pub struct DirMgr<R: Runtime> {
     /// Configuration information: where to find directories, how to
     /// validate them, and so on.
-    config: NetDirConfig,
+    config: DirMgrConfig,
     /// Handle to our sqlite cache.
     // XXXX I'd like to use an rwlock, but that's not feasible, since
     // rusqlite::Connection isn't Sync.
@@ -118,7 +118,7 @@ impl<R: Runtime> DirMgr<R> {
     /// In general, you shouldn't use this function in a long-running
     /// program; it's only suitable for command-line or batch tools.
     // TODO: I wish this function didn't have to be async or take a runtime.
-    pub async fn load_once(runtime: R, config: NetDirConfig) -> Result<Arc<NetDir>> {
+    pub async fn load_once(runtime: R, config: DirMgrConfig) -> Result<Arc<NetDir>> {
         let dirmgr = Arc::new(Self::from_config(config, runtime, None)?);
 
         // TODO: add some way to return a directory that isn't up-to-date
@@ -139,7 +139,7 @@ impl<R: Runtime> DirMgr<R> {
     /// In general, you shouldn't use this function in a long-running
     /// program; it's only suitable for command-line or batch tools.
     pub async fn load_or_bootstrap_once(
-        config: NetDirConfig,
+        config: DirMgrConfig,
         runtime: R,
         circmgr: Arc<CircMgr<R>>,
     ) -> Result<Arc<NetDir>> {
@@ -155,7 +155,7 @@ impl<R: Runtime> DirMgr<R> {
     /// background task that fetches any missing information, and that
     /// replaces the directory when a new one is available.
     pub async fn bootstrap_from_config(
-        config: NetDirConfig,
+        config: DirMgrConfig,
         runtime: R,
         circmgr: Arc<CircMgr<R>>,
     ) -> Result<Arc<Self>> {
@@ -338,9 +338,9 @@ impl<R: Runtime> DirMgr<R> {
         self.store.lock().await.upgrade_to_readwrite()
     }
 
-    /// Construct a DirMgr from a NetDirConfig.
+    /// Construct a DirMgr from a DirMgrConfig.
     fn from_config(
-        config: NetDirConfig,
+        config: DirMgrConfig,
         runtime: R,
         circmgr: Option<Arc<CircMgr<R>>>,
     ) -> Result<Self> {

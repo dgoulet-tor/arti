@@ -243,7 +243,7 @@ impl DownloadScheduleConfigBuilder {
     }
 }
 
-/// Builder for a [`NetDirConfig`]
+/// Builder for a [`DirMgrConfig`]
 ///
 /// To create a directory configuration, create one of these,
 /// configure it, then call its finalize function.
@@ -253,14 +253,14 @@ impl DownloadScheduleConfigBuilder {
 /// ```
 /// # use tor_dirmgr::*;
 /// # fn x() -> anyhow::Result<()> {
-/// let mut builder = NetDirConfigBuilder::new();
+/// let mut builder = DirMgrConfigBuilder::new();
 /// builder.use_default_cache_path()?;
-/// let config: NetDirConfig = builder.finalize()?;
+/// let config: DirMgrConfig = builder.finalize()?;
 /// # Ok(()) }
 /// # x().unwrap()
 /// ```
 #[derive(Debug, Clone, Default)]
-pub struct NetDirConfigBuilder {
+pub struct DirMgrConfigBuilder {
     /// Path to use for current (sqlite) directory information.
     cache_path: Option<PathBuf>,
 
@@ -275,9 +275,9 @@ pub struct NetDirConfigBuilder {
 ///
 /// This type is immutable once constructed.
 ///
-/// To create an object of this type, use NetDirConfigBuilder.
+/// To create an object of this type, use DirMgrConfigBuilder.
 #[derive(Debug, Clone)]
-pub struct NetDirConfig {
+pub struct DirMgrConfig {
     /// Location to use for storing and reading current-format
     /// directory information.
     cache_path: PathBuf,
@@ -289,13 +289,13 @@ pub struct NetDirConfig {
     timing: DownloadScheduleConfig,
 }
 
-impl NetDirConfigBuilder {
-    /// Construct a new NetDirConfig.
+impl DirMgrConfigBuilder {
+    /// Construct a new DirMgrConfig.
     ///
     /// To use this, call at least one method to set a cache directory,
     /// then call load().
     pub fn new() -> Self {
-        NetDirConfigBuilder::default()
+        DirMgrConfigBuilder::default()
     }
 
     /// Set the network information (authorities and fallbacks) from `config`.
@@ -336,9 +336,9 @@ impl NetDirConfigBuilder {
         Ok(self)
     }
 
-    /// Use this builder to produce a NetDirConfig that can be used
+    /// Use this builder to produce a DirMgrConfig that can be used
     /// to load directories
-    pub fn finalize(&self) -> Result<NetDirConfig> {
+    pub fn finalize(&self) -> Result<DirMgrConfig> {
         let cache_path = self
             .cache_path
             .as_ref()
@@ -351,7 +351,7 @@ impl NetDirConfigBuilder {
             return Err(Error::BadNetworkConfig("No fallback caches configured").into());
         }
 
-        Ok(NetDirConfig {
+        Ok(DirMgrConfig {
             cache_path: cache_path.clone(),
             network: self.network.clone(),
             timing: self.timing.clone(),
@@ -359,7 +359,7 @@ impl NetDirConfigBuilder {
     }
 }
 
-impl NetDirConfig {
+impl DirMgrConfig {
     /// Create a SqliteStore from this configuration.
     ///
     /// Note that each time this is called, a new store object will be
@@ -462,7 +462,7 @@ mod test {
     fn simplest_config() -> Result<()> {
         let tmp = TempDir::new("arti-config").unwrap();
 
-        let dir = NetDirConfigBuilder::new()
+        let dir = DirMgrConfigBuilder::new()
             .set_cache_path(tmp.path())
             .finalize()?;
 

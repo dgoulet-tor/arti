@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use tor_client::TorClient;
 use tor_config::CfgPath;
-use tor_dirmgr::{DownloadScheduleConfig, NetDirConfig, NetworkConfig};
+use tor_dirmgr::{DirMgrConfig, DownloadScheduleConfig, NetworkConfig};
 use tor_rtcompat::SpawnBlocking;
 
 use anyhow::Result;
@@ -74,8 +74,8 @@ pub struct StorageConfig {
 }
 
 impl ArtiConfig {
-    fn get_dir_config(&self) -> Result<NetDirConfig> {
-        let mut dircfg = tor_dirmgr::NetDirConfigBuilder::new();
+    fn get_dir_config(&self) -> Result<DirMgrConfig> {
+        let mut dircfg = tor_dirmgr::DirMgrConfigBuilder::new();
         dircfg.set_network_config(self.network.clone());
         dircfg.set_timing_config(self.download_schedule.clone());
         dircfg.set_cache_path(&self.storage.cache_dir.path()?);

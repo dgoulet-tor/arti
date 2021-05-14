@@ -4,7 +4,7 @@
 //! Once the client is bootstrapped, you can make connections over the Tor
 //! network using `TorClient::connect()`.
 use tor_circmgr::TargetPort;
-use tor_dirmgr::NetDirConfig;
+use tor_dirmgr::DirMgrConfig;
 use tor_proto::circuit::IpVersionPreference;
 use tor_proto::stream::DataStream;
 use tor_rtcompat::{Runtime, SleepProviderExt};
@@ -76,7 +76,7 @@ impl<R: Runtime> TorClient<R> {
     ///
     /// Return a client once there is enough directory material to
     /// connect safely over the Tor network.
-    pub async fn bootstrap(runtime: R, dircfg: NetDirConfig) -> Result<TorClient<R>> {
+    pub async fn bootstrap(runtime: R, dircfg: DirMgrConfig) -> Result<TorClient<R>> {
         let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(runtime.clone()));
         let circmgr = Arc::new(tor_circmgr::CircMgr::new(
             runtime.clone(),

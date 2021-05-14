@@ -27,7 +27,7 @@ use crate::{
     retry::RetryConfig,
     shared_ref::SharedMutArc,
     storage::sqlite::SqliteStore,
-    CacheUsage, ClientRequest, DirState, DocId, DocumentText, Error, NetDirConfig, Readiness,
+    CacheUsage, ClientRequest, DirMgrConfig, DirState, DocId, DocumentText, Error, Readiness,
     Result,
 };
 use tor_checkable::{ExternallySigned, SelfSigned, Timebound};
@@ -53,16 +53,16 @@ use tor_rtcompat::Runtime;
 /// in this module can _only_ interact with the DirMgr through
 /// modifying the NetDir and looking at the configuration.
 pub(crate) trait WriteNetDir: 'static + Sync + Send {
-    /// Return a NetDirConfig to use when asked how to retry downloads,
+    /// Return a DirMgrConfig to use when asked how to retry downloads,
     /// or when we need to find a list of descriptors.
-    fn config(&self) -> &NetDirConfig;
+    fn config(&self) -> &DirMgrConfig;
 
     /// Return a reference where we can write or modify a NetDir.
     fn netdir(&self) -> &SharedMutArc<NetDir>;
 }
 
 impl<R: Runtime> WriteNetDir for crate::DirMgr<R> {
-    fn config(&self) -> &NetDirConfig {
+    fn config(&self) -> &DirMgrConfig {
         &self.config
     }
     fn netdir(&self) -> &SharedMutArc<NetDir> {
