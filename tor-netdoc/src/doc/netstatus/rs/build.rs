@@ -2,7 +2,7 @@
 
 use super::{GenericRouterStatus, MdConsensusRouterStatus, NsConsensusRouterStatus};
 use crate::doc::microdesc::MdDigest;
-use crate::doc::netstatus::{ConsensusBuilder, RouterFlags, RouterWeight};
+use crate::doc::netstatus::{ConsensusBuilder, RelayFlags, RelayWeight};
 use crate::doc::routerdesc::RdDigest;
 use crate::{Error, Result};
 use tor_llcrypto::pk::rsa::RsaIdentity;
@@ -28,13 +28,13 @@ pub struct RouterStatusBuilder<D> {
     /// See [`GenericRouterStatus::doc_digest`].
     doc_digest: Option<D>,
     /// See [`GenericRouterStatus::flags`].
-    flags: RouterFlags,
+    flags: RelayFlags,
     /// See [`GenericRouterStatus::version`].
     version: Option<String>,
     /// See [`GenericRouterStatus::protos`].
     protos: Option<Protocols>,
     /// See [`GenericRouterStatus::weight`].
-    weight: Option<RouterWeight>,
+    weight: Option<RelayWeight>,
 }
 
 impl<D: Clone> RouterStatusBuilder<D> {
@@ -47,14 +47,14 @@ impl<D: Clone> RouterStatusBuilder<D> {
             addrs: Vec::new(),
             dir_port: 0,
             doc_digest: None,
-            flags: RouterFlags::empty(),
+            flags: RelayFlags::empty(),
             version: None,
             protos: None,
             weight: None,
         }
     }
 
-    /// Set the nickname for this router.
+    /// Set the nickname for this routerstatus.
     ///
     /// This value defaults to "Unnamed".
     pub fn nickname(&mut self, nickname: String) -> &mut Self {
@@ -62,7 +62,7 @@ impl<D: Clone> RouterStatusBuilder<D> {
         self
     }
 
-    /// Set the RSA identity for this router.
+    /// Set the RSA identity for this routerstatus.
     ///
     /// (The Ed25519 identity is in the microdescriptor).
     ///
@@ -71,63 +71,64 @@ impl<D: Clone> RouterStatusBuilder<D> {
         self.identity = Some(identity);
         self
     }
-    /// Set the publication time for this router.
+    /// Set the publication time for this routerstatus.
     ///
     /// This value is optional, and does nothing (TODO).
     pub fn published(&mut self, published: SystemTime) -> &mut Self {
         self.published = Some(published);
         self
     }
-    /// Add an OrPort at `addr` to this router.
+    /// Add an OrPort at `addr` to this routerstatus.
     ///
     /// At least one value here is required.
     pub fn add_or_port(&mut self, addr: SocketAddr) -> &mut Self {
         self.addrs.push(addr);
         self
     }
-    /// Set a directory port for this router.
+    /// Set a directory port for this routerstatus.
     ///
     /// Nothing in Arti uses this value; it defaults to 0.
     pub fn dir_port(&mut self, dir_port: u16) -> &mut Self {
         self.dir_port = dir_port;
         self
     }
-    /// Set the document digest for this router.
+    /// Set the document digest for this routerstatus.
     ///
     /// This value is required.
     pub fn doc_digest(&mut self, doc_digest: D) -> &mut Self {
         self.doc_digest = Some(doc_digest);
         self
     }
-    /// Replace the current flags in this router with `flags`.
-    pub fn set_flags(&mut self, flags: RouterFlags) -> &mut Self {
+    /// Replace the current flags in this routerstatus with `flags`.
+    pub fn set_flags(&mut self, flags: RelayFlags) -> &mut Self {
         self.flags = flags;
         self
     }
-    /// Make all the flags in `flags` become set on this router,
+    /// Make all the flags in `flags` become set on this routerstatus,
     /// in addition to the flags already set.
-    pub fn add_flags(&mut self, flags: RouterFlags) -> &mut Self {
+    pub fn add_flags(&mut self, flags: RelayFlags) -> &mut Self {
         self.flags |= flags;
         self
     }
-    /// Set the version of this router.
+    /// Set the version of the relay described in this routerstatus.
     ///
     /// This value is optional.
     pub fn version(&mut self, version: String) -> &mut Self {
         self.version = Some(version);
         self
     }
-    /// Set the list of subprotocols supported by this router.
+    /// Set the list of subprotocols supported by the relay described
+    /// by this routerstatus.
     ///
     /// This value is required.
     pub fn protos(&mut self, protos: Protocols) -> &mut Self {
         self.protos = Some(protos);
         self
     }
-    /// Set the weight of this router for random selection.
+    /// Set the weight of this routerstatus for random selection.
     ///
     /// This value is optional; it defaults to 0.
-    pub fn weight(&mut self, weight: RouterWeight) -> &mut Self {
+    pub fn weight(&mut self, weight: RelayWeight) -> &mut Self {
         self.weight = Some(weight);
         self
     }
@@ -152,7 +153,7 @@ impl<D: Clone> RouterStatusBuilder<D> {
             .as_ref()
             .ok_or(Error::CannotBuild("Missing protocols"))?
             .clone();
-        let weight = self.weight.unwrap_or(RouterWeight::Unmeasured(0));
+        let weight = self.weight.unwrap_or(RelayWeight::Unmeasured(0));
 
         Ok(GenericRouterStatus {
             nickname,

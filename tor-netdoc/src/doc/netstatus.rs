@@ -350,7 +350,7 @@ bitflags! {
     /// they are not listed in this type.
     ///
     /// The bit values used to represent the flags have no meaning.
-    pub struct RouterFlags: u16 {
+    pub struct RelayFlags: u16 {
         /// Is this a directory authority?
         const AUTHORITY = (1<<0);
         /// Is this relay marked as a bad exit?
@@ -397,25 +397,22 @@ bitflags! {
 /// Recognized weight fields on a single relay in a consensus
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
-pub enum RouterWeight {
+pub enum RelayWeight {
     // TODO SPEC: Document that these are u32 in dir-spec.txt
-    /// An unmeasured weight for a router.
+    /// An unmeasured weight for a relay.
     Unmeasured(u32),
-    /// An measured weight for a router.
+    /// An measured weight for a relay.
     Measured(u32),
 }
 
-impl RouterWeight {
+impl RelayWeight {
     /// Return true if this weight is the result of a successful measurement
     pub fn is_measured(&self) -> bool {
-        matches!(self, RouterWeight::Measured(_))
+        matches!(self, RelayWeight::Measured(_))
     }
     /// Return true if this weight is nonzero
     pub fn is_nonzero(&self) -> bool {
-        !matches!(
-            self,
-            RouterWeight::Unmeasured(0) | RouterWeight::Measured(0)
-        )
+        !matches!(self, RelayWeight::Unmeasured(0) | RelayWeight::Measured(0))
     }
 }
 
@@ -483,8 +480,9 @@ pub struct Consensus<RS> {
     header: ConsensusHeader,
     /// List of voters whose votes contributed to this consensus.
     voters: Vec<ConsensusVoterInfo>,
-    /// A list of the relays on the network, with one entry per relay.
-    routers: Vec<RS>,
+    /// A list of routerstatus entries for the relays on the network,
+    /// with one entry per relay.
+    relays: Vec<RS>,
     /// Footer for the consensus object.
     footer: Footer,
 }
@@ -520,8 +518,8 @@ impl<RS> Consensus<RS> {
     }
 
     /// Return a slice of all the routerstatus entries in this consensus.
-    pub fn routers(&self) -> &[RS] {
-        &self.routers[..]
+    pub fn relays(&self) -> &[RS] {
+        &self.relays[..]
     }
 
     /// Return a mapping from keywords to integers representing how
@@ -967,35 +965,35 @@ impl ConsensusVoterInfo {
     }
 }
 
-impl std::str::FromStr for RouterFlags {
+impl std::str::FromStr for RelayFlags {
     type Err = std::convert::Infallible;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         Ok(match s {
-            "Authority" => RouterFlags::AUTHORITY,
-            "BadExit" => RouterFlags::BAD_EXIT,
-            "Exit" => RouterFlags::EXIT,
-            "Fast" => RouterFlags::FAST,
-            "Guard" => RouterFlags::GUARD,
-            "HSDir" => RouterFlags::HSDIR,
-            "NoEdConsensus" => RouterFlags::NO_ED_CONSENSUS,
-            "Stable" => RouterFlags::STABLE,
-            "StaleDesc" => RouterFlags::STALE_DESC,
-            "Running" => RouterFlags::RUNNING,
-            "Valid" => RouterFlags::VALID,
-            "V2Dir" => RouterFlags::V2DIR,
-            _ => RouterFlags::empty(),
+            "Authority" => RelayFlags::AUTHORITY,
+            "BadExit" => RelayFlags::BAD_EXIT,
+            "Exit" => RelayFlags::EXIT,
+            "Fast" => RelayFlags::FAST,
+            "Guard" => RelayFlags::GUARD,
+            "HSDir" => RelayFlags::HSDIR,
+            "NoEdConsensus" => RelayFlags::NO_ED_CONSENSUS,
+            "Stable" => RelayFlags::STABLE,
+            "StaleDesc" => RelayFlags::STALE_DESC,
+            "Running" => RelayFlags::RUNNING,
+            "Valid" => RelayFlags::VALID,
+            "V2Dir" => RelayFlags::V2DIR,
+            _ => RelayFlags::empty(),
         })
     }
 }
 
-impl RouterFlags {
-    /// Parse a router-flags entry from an "s" line.
-    fn from_item(item: &Item<'_, NetstatusKwd>) -> Result<RouterFlags> {
+impl RelayFlags {
+    /// Parse a relay-flags entry from an "s" line.
+    fn from_item(item: &Item<'_, NetstatusKwd>) -> Result<RelayFlags> {
         if item.kwd() != NetstatusKwd::RS_S {
             return Err(Error::Internal(item.pos()));
         }
         // These flags are implicit.
-        let mut flags: RouterFlags = RouterFlags::RUNNING | RouterFlags::VALID;
+        let mut flags: RelayFlags = RelayFlags::RUNNING | RelayFlags::VALID;
 
         let mut prev: Option<&str> = None;
         for s in item.args() {
@@ -1017,15 +1015,15 @@ impl RouterFlags {
     }
 }
 
-impl Default for RouterWeight {
-    fn default() -> RouterWeight {
-        RouterWeight::Unmeasured(0)
+impl Default for RelayWeight {
+    fn default() -> RelayWeight {
+        RelayWeight::Unmeasured(0)
     }
 }
 
-impl RouterWeight {
+impl RelayWeight {
     /// Parse a routerweight from a "w" line.
-    fn from_item(item: &Item<'_, NetstatusKwd>) -> Result<RouterWeight> {
+    fn from_item(item: &Item<'_, NetstatusKwd>) -> Result<RelayWeight> {
         if item.kwd() != NetstatusKwd::RS_W {
             return Err(Error::Internal(item.pos()));
         }
@@ -1036,13 +1034,13 @@ impl RouterWeight {
         let unmeas = params.params.get("Unmeasured");
 
         let bw = match bw {
-            None => return Ok(RouterWeight::Unmeasured(0)),
+            None => return Ok(RelayWeight::Unmeasured(0)),
             Some(b) => *b,
         };
 
         match unmeas {
-            None | Some(0) => Ok(RouterWeight::Measured(bw)),
-            Some(1) => Ok(RouterWeight::Unmeasured(bw)),
+            None | Some(0) => Ok(RelayWeight::Measured(bw)),
+            Some(1) => Ok(RelayWeight::Unmeasured(bw)),
             _ => Err(Error::BadArgument(
                 item.pos(),
                 "unmeasured value".to_string(),
@@ -1271,14 +1269,14 @@ impl<RS: ParseRouterStatus + RouterStatus> Consensus<RS> {
             voters.push(voter);
         }
 
-        let mut routers: Vec<RS> = Vec::new();
-        while let Some((pos, router)) = Self::take_routerstatus(r)? {
-            if let Some(prev) = routers.last() {
-                if prev.rsa_identity() >= router.rsa_identity() {
+        let mut relays: Vec<RS> = Vec::new();
+        while let Some((pos, routerstatus)) = Self::take_routerstatus(r)? {
+            if let Some(prev) = relays.last() {
+                if prev.rsa_identity() >= routerstatus.rsa_identity() {
                     return Err(Error::WrongSortOrder(pos));
                 }
             }
-            routers.push(router);
+            relays.push(routerstatus);
         }
 
         let footer = Self::take_footer(r)?;
@@ -1286,7 +1284,7 @@ impl<RS: ParseRouterStatus + RouterStatus> Consensus<RS> {
         let consensus = Consensus {
             header,
             voters,
-            routers,
+            relays,
             footer,
         };
 
@@ -1584,8 +1582,8 @@ mod test {
         assert!(consensus.key_is_correct(&certs).is_ok());
         let consensus = consensus.check_signature(&certs)?;
 
-        assert_eq!(6, consensus.routers().len());
-        let r0 = &consensus.routers()[0];
+        assert_eq!(6, consensus.relays().len());
+        let r0 = &consensus.relays()[0];
         assert_eq!(
             r0.md_digest(),
             &hex!("73dabe0a0468f4f7a67810a18d11e36731bb1d2ec3634db459100609f3b3f535")
@@ -1683,34 +1681,34 @@ mod test {
     #[test]
     fn test_weight() {
         let w = gettok("w Unmeasured=1 Bandwidth=6\n").unwrap();
-        let w = RouterWeight::from_item(&w).unwrap();
+        let w = RelayWeight::from_item(&w).unwrap();
         assert!(!w.is_measured());
         assert!(w.is_nonzero());
 
         let w = gettok("w Bandwidth=10\n").unwrap();
-        let w = RouterWeight::from_item(&w).unwrap();
+        let w = RelayWeight::from_item(&w).unwrap();
         assert!(w.is_measured());
         assert!(w.is_nonzero());
 
-        let w = RouterWeight::default();
+        let w = RelayWeight::default();
         assert!(!w.is_measured());
         assert!(!w.is_nonzero());
 
         let w = gettok("w Mustelid=66 Cheato=7 Unmeasured=1\n").unwrap();
-        let w = RouterWeight::from_item(&w).unwrap();
+        let w = RelayWeight::from_item(&w).unwrap();
         assert!(!w.is_measured());
         assert!(!w.is_nonzero());
 
         let w = gettok("r foo\n").unwrap();
-        let w = RouterWeight::from_item(&w);
+        let w = RelayWeight::from_item(&w);
         assert!(w.is_err());
 
         let w = gettok("r Bandwidth=6 Unmeasured=Frog\n").unwrap();
-        let w = RouterWeight::from_item(&w);
+        let w = RelayWeight::from_item(&w);
         assert!(w.is_err());
 
         let w = gettok("r Bandwidth=6 Unmeasured=3\n").unwrap();
-        let w = RouterWeight::from_item(&w);
+        let w = RelayWeight::from_item(&w);
         assert!(w.is_err());
     }
 

@@ -187,7 +187,7 @@ impl PartialNetDir {
             }
         }
 
-        // Compute the weights we'll want to use for these routers.
+        // Compute the weights we'll want to use for these relays.
         let weights = weight::WeightSet::from_consensus(&consensus, &params);
 
         let mut netdir = NetDir {
@@ -197,7 +197,7 @@ impl PartialNetDir {
             weights,
         };
 
-        for rs in netdir.consensus.routers().iter() {
+        for rs in netdir.consensus.relays().iter() {
             netdir.mds.insert(MdEntry::Absent(*rs.md_digest()));
         }
         PartialNetDir { netdir }
@@ -270,7 +270,7 @@ impl NetDir {
         // TODO: I'd like if if we could memoize this so we don't have to
         // do so many hashtable lookups.
         self.consensus
-            .routers()
+            .relays()
             .iter()
             .map(move |rs| self.relay_from_rs(rs))
     }
@@ -294,8 +294,8 @@ impl NetDir {
     pub fn params(&self) -> &NetParameters {
         &self.params
     }
-    /// Return weighted the fraction of routers we can use.  We only
-    /// consider routers that match the predicate `usable`.  We weight
+    /// Return weighted the fraction of relays we can use.  We only
+    /// consider relays that match the predicate `usable`.  We weight
     /// this bandwidth according to the provided `role`.
     ///
     /// Note that this function can return NaN if the consensus contains
@@ -325,7 +325,7 @@ impl NetDir {
     /// enough microdescriptors to build.
     ///
     /// NOTE: This function can return NaN if the consensus contained
-    /// zero bandwidth for some type of router we need.
+    /// zero bandwidth for some type of relay we need.
     fn frac_usable_paths(&self) -> f64 {
         self.frac_for_role(WeightRole::Guard, |u| u.rs.is_flagged_guard())
             * self.frac_for_role(WeightRole::Middle, |_| true)
@@ -379,7 +379,7 @@ impl NetDir {
 
 impl MdReceiver for NetDir {
     fn missing_microdescs(&self) -> Box<dyn Iterator<Item = &MdDigest> + '_> {
-        Box::new(self.consensus.routers().iter().filter_map(move |rs| {
+        Box::new(self.consensus.relays().iter().filter_map(move |rs| {
             let d = rs.md_digest();
             match self.mds.get(d) {
                 Some(MdEntry::Absent(d)) => Some(d),
@@ -532,7 +532,7 @@ mod test {
     use std::collections::HashSet;
     use std::time::{Duration, SystemTime};
     use tor_llcrypto::pk::rsa;
-    use tor_netdoc::doc::netstatus::{Lifetime, RouterFlags, RouterWeight};
+    use tor_netdoc::doc::netstatus::{Lifetime, RelayFlags, RelayWeight};
 
     fn rsa_example() -> rsa::PublicKey {
         let der = hex!("30818902818100d527b6c63d6e81d39c328a94ce157dccdc044eb1ad8c210c9c9e22487b4cfade6d4041bd10469a657e3d82bc00cf62ac3b6a99247e573b54c10c47f5dc849b0accda031eca6f6e5dc85677f76dec49ff24d2fcb2b5887fb125aa204744119bb6417f45ee696f8dfc1c2fc21b2bae8e9e37a19dc2518a2c24e7d8fd7fac0f46950203010001");
@@ -542,13 +542,13 @@ mod test {
     // Build a fake network with enough information to enable some basic
     // tests.
     fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
-        let f = RouterFlags::RUNNING | RouterFlags::VALID | RouterFlags::V2DIR;
+        let f = RelayFlags::RUNNING | RelayFlags::VALID | RelayFlags::V2DIR;
         // define 4 groups of flags
         let flags = [
             f,
-            f | RouterFlags::EXIT,
-            f | RouterFlags::GUARD,
-            f | RouterFlags::EXIT | RouterFlags::GUARD,
+            f | RelayFlags::EXIT,
+            f | RelayFlags::GUARD,
+            f | RelayFlags::EXIT | RelayFlags::GUARD,
         ];
 
         let now = SystemTime::now();
@@ -565,7 +565,7 @@ mod test {
             // Its identity fingerprints are set to `idx`, repeating.
             // They all get the same address.
             let flags = flags[(idx / 10) as usize];
-            let policy = if flags.contains(RouterFlags::EXIT) {
+            let policy = if flags.contains(RelayFlags::EXIT) {
                 "accept 80,443"
             } else {
                 "reject 1-65535"
@@ -584,12 +584,12 @@ mod test {
                 .testing_md()
                 .unwrap();
             let protocols = if idx % 2 == 0 {
-                // even-numbered routers are dircaches.
+                // even-numbered relays are dircaches.
                 "DirCache=2".parse().unwrap()
             } else {
                 "".parse().unwrap()
             };
-            let weight = RouterWeight::Measured(1000 * (idx % 10 + 1) as u32);
+            let weight = RelayWeight::Measured(1000 * (idx % 10 + 1) as u32);
             bld.rs()
                 .identity([idx; 20].into())
                 .add_or_port("127.0.0.1:9001".parse().unwrap())
@@ -634,7 +634,7 @@ mod test {
 
         let missing: HashSet<_> = dir.missing_microdescs().collect();
         assert_eq!(missing.len(), 40);
-        assert_eq!(missing.len(), dir.netdir.consensus.routers().len());
+        assert_eq!(missing.len(), dir.netdir.consensus.relays().len());
         for md in microdescs.iter() {
             assert!(missing.contains(md.digest()));
         }
@@ -780,7 +780,7 @@ mod test {
         for idx in 20..30 {
             assert_eq!(picked[idx], 0);
         }
-        // We didn't we any non-default weights, so the other routers get
+        // We didn't we any non-default weights, so the other relays get
         // weighted proportional to their bandwidth.
         check_close(picked[19], (total * 10) / 110);
         check_close(picked[38], (total * 9) / 110);

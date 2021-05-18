@@ -13,13 +13,13 @@
 //!   use it for other roles, or to use it less commonly for them.
 
 use crate::params::{NetParameters, Param};
-use tor_netdoc::doc::netstatus::{MdConsensus, MdConsensusRouterStatus, NetParams, RouterWeight};
+use tor_netdoc::doc::netstatus::{self, MdConsensus, MdConsensusRouterStatus, NetParams};
 
 /// Helper: Calculate the function we should use to find initial relay
 /// bandwidths.
 fn pick_bandwidth_fn<'a, I>(mut weights: I) -> BandwidthFn
 where
-    I: Clone + Iterator<Item = &'a RouterWeight>,
+    I: Clone + Iterator<Item = &'a netstatus::RelayWeight>,
 {
     let has_measured = weights.clone().any(|w| w.is_measured());
     let has_nonzero = weights.clone().any(|w| w.is_nonzero());
@@ -62,10 +62,10 @@ enum BandwidthFn {
 
 impl BandwidthFn {
     /// Apply this function to the measured or unmeasured bandwidth
-    /// of a single router.
-    fn apply(&self, w: &RouterWeight) -> u32 {
+    /// of a single relay.
+    fn apply(&self, w: &netstatus::RelayWeight) -> u32 {
+        use netstatus::RelayWeight::*;
         use BandwidthFn::*;
-        use RouterWeight::*;
         match (self, w) {
             (Uniform, _) => 1,
             (IncludeUnmeasured, Unmeasured(u)) => *u,
@@ -77,9 +77,9 @@ impl BandwidthFn {
     }
 }
 
-/// Possible ways to weight routers when selecting them a random.
+/// Possible ways to weight relays when selecting them a random.
 ///
-/// Routers are weighted by a function of their bandwidth that
+/// Relays are weighted by a function of their bandwidth that
 /// depends on how scarce that "kind" of bandwidth is.  For
 /// example, if Exit bandwidth is rare, then Exits should be
 /// less likely to get chosen for the middle hop of a path.
@@ -194,7 +194,7 @@ impl WeightKind {
 /// weighted bandwidth.
 #[derive(Debug, Clone)]
 pub(crate) struct WeightSet {
-    /// How to find the bandwidth to use when picking a router by weighted
+    /// How to find the bandwidth to use when picking a relay by weighted
     /// bandwidth.
     ///
     /// (This tells us us whether to count unmeasured relays, whether
@@ -220,16 +220,16 @@ impl WeightSet {
     }
 
     /// Find the 64-bit weight to report for a relay of `kind` whose weight in
-    /// the consensus is `router_weight` when using it for `role`.
+    /// the consensus is `relay_weight` when using it for `role`.
     fn weight_bw_for_role(
         &self,
         kind: WeightKind,
-        router_weight: &RouterWeight,
+        relay_weight: &netstatus::RelayWeight,
         role: WeightRole,
     ) -> u64 {
         let ws = &self.w[kind.idx()];
 
-        let router_bw = self.bandwidth_fn.apply(router_weight);
+        let router_bw = self.bandwidth_fn.apply(relay_weight);
         // Note a subtlety here: we multiply the two values _before_
         // we shift, to improve accuracy.  We know that this will be
         // safe, since the inputs are both u32, and so cannot overflow
@@ -240,10 +240,10 @@ impl WeightSet {
 
     /// Compute the correct WeightSet for a provided MdConsensus.
     pub(crate) fn from_consensus(consensus: &MdConsensus, params: &NetParameters) -> Self {
-        let bandwidth_fn = pick_bandwidth_fn(consensus.routers().iter().map(|rs| rs.weight()));
+        let bandwidth_fn = pick_bandwidth_fn(consensus.relays().iter().map(|rs| rs.weight()));
         let weight_scale = params.get(Param::BwWeightScale);
         let total_bw = consensus
-            .routers()
+            .relays()
             .iter()
             .map(|rs| bandwidth_fn.apply(rs.weight()) as u64)
             .sum();
@@ -375,8 +375,9 @@ fn log2_upper(n: u64) -> u32 {
 #[cfg(test)]
 mod test {
     use super::*;
+    use netstatus::RelayWeight as RW;
     use std::time::{Duration, SystemTime};
-    use tor_netdoc::doc::netstatus::{Lifetime, RouterFlags, RouterStatusBuilder};
+    use tor_netdoc::doc::netstatus::{Lifetime, RelayFlags, RouterStatusBuilder};
 
     #[test]
     fn t_clamp() {
@@ -413,24 +414,20 @@ mod test {
         let empty = [];
         assert_eq!(pick_bandwidth_fn(empty.iter()), BandwidthFn::Uniform);
 
-        let all_zero = [
-            RouterWeight::Unmeasured(0),
-            RouterWeight::Measured(0),
-            RouterWeight::Unmeasured(0),
-        ];
+        let all_zero = [RW::Unmeasured(0), RW::Measured(0), RW::Unmeasured(0)];
         assert_eq!(pick_bandwidth_fn(all_zero.iter()), BandwidthFn::Uniform);
 
-        let all_unmeasured = [RouterWeight::Unmeasured(9), RouterWeight::Unmeasured(2222)];
+        let all_unmeasured = [RW::Unmeasured(9), RW::Unmeasured(2222)];
         assert_eq!(
             pick_bandwidth_fn(all_unmeasured.iter()),
             BandwidthFn::IncludeUnmeasured
         );
 
         let some_measured = [
-            RouterWeight::Unmeasured(10),
-            RouterWeight::Measured(7),
-            RouterWeight::Measured(4),
-            RouterWeight::Unmeasured(0),
+            RW::Unmeasured(10),
+            RW::Measured(7),
+            RW::Measured(4),
+            RW::Unmeasured(0),
         ];
         assert_eq!(
             pick_bandwidth_fn(some_measured.iter()),
@@ -440,7 +437,7 @@ mod test {
         // This corresponds to an open question in
         // `pick_bandwidth_fn`, about what to do when the only nonzero
         // weights are unmeasured.
-        let measured_all_zero = [RouterWeight::Unmeasured(10), RouterWeight::Measured(0)];
+        let measured_all_zero = [RW::Unmeasured(10), RW::Measured(0)];
         assert_eq!(
             pick_bandwidth_fn(measured_all_zero.iter()),
             BandwidthFn::Uniform
@@ -449,8 +446,8 @@ mod test {
 
     #[test]
     fn t_apply_bwfn() {
+        use netstatus::RelayWeight::*;
         use BandwidthFn::*;
-        use RouterWeight::*;
 
         assert_eq!(Uniform.apply(&Measured(7)), 1);
         assert_eq!(Uniform.apply(&Unmeasured(0)), 1);
@@ -485,7 +482,7 @@ mod test {
         assert_eq!(
             ws.weight_bw_for_role(
                 WeightKind(FLG_GUARD | FLG_DIR),
-                &RouterWeight::Unmeasured(7777),
+                &RW::Unmeasured(7777),
                 WeightRole::Guard
             ),
             0
@@ -494,7 +491,7 @@ mod test {
         assert_eq!(
             ws.weight_bw_for_role(
                 WeightKind(FLG_GUARD | FLG_DIR),
-                &RouterWeight::Measured(7777),
+                &RW::Measured(7777),
                 WeightRole::Guard
             ),
             7777 * 5904
@@ -503,7 +500,7 @@ mod test {
         assert_eq!(
             ws.weight_bw_for_role(
                 WeightKind(FLG_GUARD | FLG_DIR),
-                &RouterWeight::Measured(7777),
+                &RW::Measured(7777),
                 WeightRole::Middle
             ),
             7777 * 4096
@@ -512,7 +509,7 @@ mod test {
         assert_eq!(
             ws.weight_bw_for_role(
                 WeightKind(FLG_GUARD | FLG_DIR),
-                &RouterWeight::Measured(7777),
+                &RW::Measured(7777),
                 WeightRole::Exit
             ),
             7777 * 10000
@@ -521,7 +518,7 @@ mod test {
         assert_eq!(
             ws.weight_bw_for_role(
                 WeightKind(FLG_GUARD | FLG_DIR),
-                &RouterWeight::Measured(7777),
+                &RW::Measured(7777),
                 WeightRole::BeginDir
             ),
             7777 * 4096
@@ -530,7 +527,7 @@ mod test {
         assert_eq!(
             ws.weight_bw_for_role(
                 WeightKind(FLG_GUARD | FLG_DIR),
-                &RouterWeight::Measured(7777),
+                &RW::Measured(7777),
                 WeightRole::Unweighted
             ),
             7777
@@ -538,8 +535,8 @@ mod test {
 
         // Now try those last few with routerstatuses.
         let rs = rs_builder()
-            .set_flags(RouterFlags::GUARD | RouterFlags::V2DIR)
-            .weight(RouterWeight::Measured(7777))
+            .set_flags(RelayFlags::GUARD | RelayFlags::V2DIR)
+            .weight(RW::Measured(7777))
             .build()
             .unwrap();
         assert_eq!(ws.weight_rs_for_role(&rs, WeightRole::Exit), 7777 * 10000);
@@ -564,19 +561,19 @@ mod test {
 
     #[test]
     fn weight_flags() {
-        let rs1 = rs_builder().set_flags(RouterFlags::EXIT).build().unwrap();
+        let rs1 = rs_builder().set_flags(RelayFlags::EXIT).build().unwrap();
         assert_eq!(WeightKind::for_rs(&rs1).0, FLG_EXIT);
 
-        let rs1 = rs_builder().set_flags(RouterFlags::GUARD).build().unwrap();
+        let rs1 = rs_builder().set_flags(RelayFlags::GUARD).build().unwrap();
         assert_eq!(WeightKind::for_rs(&rs1).0, FLG_GUARD);
 
-        let rs1 = rs_builder().set_flags(RouterFlags::V2DIR).build().unwrap();
+        let rs1 = rs_builder().set_flags(RelayFlags::V2DIR).build().unwrap();
         assert_eq!(WeightKind::for_rs(&rs1).0, FLG_DIR);
 
         let rs1 = rs_builder().build().unwrap();
         assert_eq!(WeightKind::for_rs(&rs1).0, 0);
 
-        let rs1 = rs_builder().set_flags(RouterFlags::all()).build().unwrap();
+        let rs1 = rs_builder().set_flags(RelayFlags::all()).build().unwrap();
         assert_eq!(WeightKind::for_rs(&rs1).0, FLG_EXIT | FLG_GUARD | FLG_DIR);
     }
 
@@ -596,16 +593,16 @@ mod test {
         for _ in 0..10 {
             rs_builder()
                 .identity(rng.gen::<[u8; 20]>().into()) // random id
-                .weight(RouterWeight::Unmeasured(1_000_000))
-                .set_flags(RouterFlags::GUARD | RouterFlags::EXIT)
+                .weight(RW::Unmeasured(1_000_000))
+                .set_flags(RelayFlags::GUARD | RelayFlags::EXIT)
                 .build_into(&mut bld)
                 .unwrap();
         }
         for n in 0..30 {
             rs_builder()
                 .identity(rng.gen::<[u8; 20]>().into()) // random id
-                .weight(RouterWeight::Measured(1_000 * n))
-                .set_flags(RouterFlags::GUARD | RouterFlags::EXIT)
+                .weight(RW::Measured(1_000 * n))
+                .set_flags(RelayFlags::GUARD | RelayFlags::EXIT)
                 .build_into(&mut bld)
                 .unwrap();
         }

@@ -52,7 +52,7 @@ pub type RdDigest = [u8; 20];
 /// A router descriptor, with possible annotations.
 #[allow(dead_code)]
 pub struct AnnotatedRouterDesc {
-    /// Annotation for this router; possibly empty.
+    /// Annotation for this router descriptor; possibly empty.
     ann: RouterAnnotation,
     /// Underlying router descriptor; signatures not checked yet.
     router: UncheckedRouterDesc,
@@ -84,22 +84,23 @@ pub struct RouterAnnotation {
 /// it is valid, using is_expired_at().
 #[allow(dead_code)] // don't warn about fields not getting read.
 pub struct RouterDesc {
-    /// Human-readable nickname for this router.
+    /// Human-readable nickname for this relay.
     ///
     /// This is not secure, and not guaranteed to be unique.
     nickname: String,
-    /// IPv4 address for this router.
+    /// IPv4 address for this relay.
     ipv4addr: Option<net::Ipv4Addr>,
-    /// IPv4 ORPort for this router
+    /// IPv4 ORPort for this relay.
     orport: u16,
-    /// IPv6 address and port for this router.
+    /// IPv6 address and port for this relay.
     // TODO: we don't use a socketaddrv6 because we don't care about
     // the flow and scope fields.  We should decide whether that's a
     // good idea.
     ipv6addr: Option<(net::Ipv6Addr, u16)>,
-    /// Directory port for contacting this router for HTTP directory downloads.
+    /// Directory port for contacting this relay for direct HTTP
+    /// directory downloads.
     dirport: u16,
-    /// Declared uptime for this router in seconds.
+    /// Declared uptime for this relay, in seconds.
     uptime: Option<u64>,
     /// Time when this router descriptor was published.
     published: time::SystemTime,
@@ -202,7 +203,7 @@ decl_keyword! {
     }
 }
 
-/// Rules for parsing a set of router annotations.
+/// Rules for parsing a set of router descriptor annotations.
 static ROUTER_ANNOTATIONS: Lazy<SectionRules<RouterKwd>> = Lazy::new(|| {
     use RouterKwd::*;
 

@@ -37,7 +37,7 @@
 //!
 //! TODO: Possibly, this module should be extracted into a crate of
 //! its own.  I'm not 100% sure though -- does anything need versions
-//! but not router docs?
+//! but not network docs?
 
 use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};

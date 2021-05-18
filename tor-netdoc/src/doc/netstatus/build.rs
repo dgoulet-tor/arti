@@ -47,7 +47,7 @@ pub struct ConsensusBuilder<RS> {
     /// See [`Consensus::voters`]
     voters: Vec<ConsensusVoterInfo>,
     /// See [`Consensus::routers`]
-    routers: Vec<RS>,
+    relays: Vec<RS>,
     /// See [`Footer::weights`]
     weights: NetParams<i32>,
 }
@@ -68,7 +68,7 @@ impl<RS> ConsensusBuilder<RS> {
             shared_rand_prev: None,
             shared_rand_cur: None,
             voters: Vec::new(),
-            routers: Vec::new(),
+            relays: Vec::new(),
             weights: NetParams::new(),
         }
     }
@@ -179,7 +179,7 @@ impl<RS> ConsensusBuilder<RS> {
 
     /// Insert a single routerstatus into this builder.
     pub(crate) fn add_rs(&mut self, rs: RS) -> &mut Self {
-        self.routers.push(rs);
+        self.relays.push(rs);
         self
     }
 }
@@ -231,14 +231,14 @@ impl<RS: RouterStatus + Clone> ConsensusBuilder<RS> {
             weights: self.weights.clone(),
         };
 
-        let mut routers = self.routers.clone();
-        routers.sort_by_key(|r| *r.rsa_identity());
+        let mut relays = self.relays.clone();
+        relays.sort_by_key(|r| *r.rsa_identity());
         // TODO: check for duplicates?
 
         Ok(Consensus {
             header,
             voters: self.voters.clone(),
-            routers,
+            relays,
             footer,
         })
     }
@@ -386,7 +386,7 @@ impl VoterInfoBuilder {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::doc::netstatus::RouterFlags;
+    use crate::doc::netstatus::RelayFlags;
 
     use std::time::{Duration, SystemTime};
 
@@ -435,8 +435,8 @@ mod test {
             .add_or_port("[f00f::1]:9200".parse().unwrap())
             .dir_port(66)
             .doc_digest([99; 32])
-            .set_flags(RouterFlags::FAST)
-            .add_flags(RouterFlags::STABLE | RouterFlags::V2DIR)
+            .set_flags(RelayFlags::FAST)
+            .add_flags(RelayFlags::STABLE | RelayFlags::V2DIR)
             .version("Arti 0.0.0".into())
             .protos("DirCache=7".parse().unwrap())
             .build_into(&mut builder)

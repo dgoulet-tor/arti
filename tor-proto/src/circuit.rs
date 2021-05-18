@@ -575,7 +575,7 @@ impl ClientCirc {
         self.begin_data_stream(beginmsg.into()).await
     }
 
-    /// Start a new connection to the last router in the circuit, using
+    /// Start a new connection to the last relay in the circuit, using
     /// a BEGIN_DIR cell.
     pub async fn begin_dir_stream(self: Arc<Self>) -> Result<DataStream> {
         self.begin_data_stream(RelayMsg::BeginDir).await

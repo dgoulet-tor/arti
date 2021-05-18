@@ -7,7 +7,7 @@
 pub(crate) mod build;
 
 use super::{
-    ConsensusFlavor, NetstatusKwd, ParseRouterStatus, RouterFlags, RouterStatus, RouterWeight,
+    ConsensusFlavor, NetstatusKwd, ParseRouterStatus, RelayFlags, RelayWeight, RouterStatus,
 };
 use crate::doc::microdesc::MdDigest;
 use crate::doc::routerdesc::RdDigest;
@@ -79,14 +79,14 @@ struct GenericRouterStatus<D> {
     /// Digest of the document for this relay.
     doc_digest: D,
     /// Flags applied by the authorities to this relay.
-    flags: RouterFlags,
+    flags: RelayFlags,
     /// Version of the software that this relay is running.
     version: Option<String>,
     /// List of subprotocol versions supported by this relay.
     protos: Protocols,
     /// Information about how to weight this relay when choosing a
     /// relay at random.
-    weight: RouterWeight,
+    weight: RelayWeight,
 }
 
 // TODO: These methods should probably become, in whole or in part,
@@ -99,7 +99,7 @@ macro_rules! implement_accessors {
                 self.rs.addrs.iter()
             }
             /// Return the declared weight of this routerstatus in the directory.
-            pub fn weight(&self) -> &RouterWeight {
+            pub fn weight(&self) -> &RelayWeight {
                 &self.rs.weight
             }
             /// Return the ORPort addresses of this routerstatus
@@ -114,8 +114,8 @@ macro_rules! implement_accessors {
             pub fn nickname(&self) -> &String {
                 &self.rs.nickname
             }
-            /// Return the router flags of this routerstatus.
-            pub fn flags(&self) -> &RouterFlags {
+            /// Return the relay flags of this routerstatus.
+            pub fn flags(&self) -> &RelayFlags {
                 &self.rs.flags
             }
             /// Return the version of this routerstatus.
@@ -125,23 +125,23 @@ macro_rules! implement_accessors {
             /// Return true if the ed25519 identity on this relay reflects a
             /// true consensus among the authorities.
             pub fn ed25519_id_is_usable(&self) -> bool {
-                !self.rs.flags.contains(RouterFlags::NO_ED_CONSENSUS)
+                !self.rs.flags.contains(RelayFlags::NO_ED_CONSENSUS)
             }
             /// Return true if this routerstatus is listed with the BadExit flag.
             pub fn is_flagged_bad_exit(&self) -> bool {
-                self.rs.flags.contains(RouterFlags::BAD_EXIT)
+                self.rs.flags.contains(RelayFlags::BAD_EXIT)
             }
             /// Return true if this routerstatus is listed with the v2dir flag.
             pub fn is_flagged_v2dir(&self) -> bool {
-                self.rs.flags.contains(RouterFlags::V2DIR)
+                self.rs.flags.contains(RelayFlags::V2DIR)
             }
             /// Return true if this routerstatus is listed with the Exit flag.
             pub fn is_flagged_exit(&self) -> bool {
-                self.rs.flags.contains(RouterFlags::EXIT)
+                self.rs.flags.contains(RelayFlags::EXIT)
             }
             /// Return true if this routerstatus is listed with the Guard flag.
             pub fn is_flagged_guard(&self) -> bool {
-                self.rs.flags.contains(RouterFlags::GUARD)
+                self.rs.flags.contains(RelayFlags::GUARD)
             }
         }
     };
@@ -287,7 +287,7 @@ where
         }
 
         // S line
-        let flags = RouterFlags::from_item(sec.required(RS_S)?)?;
+        let flags = RelayFlags::from_item(sec.required(RS_S)?)?;
 
         // V line
         let version = sec.maybe(RS_V).args_as_str().map(str::to_string);
@@ -303,7 +303,7 @@ where
         // W line
         let weight = sec
             .get(RS_W)
-            .map(RouterWeight::from_item)
+            .map(RelayWeight::from_item)
             .transpose()?
             .unwrap_or_else(Default::default);
 

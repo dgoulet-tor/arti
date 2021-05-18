@@ -16,7 +16,7 @@
 //! as bridges), clients use those relays' self-signed router
 //! descriptors ([routerdesc::RouterDesc]).  These router descriptors
 //! are also uploaded to the authorities in order to tell them about
-//! routers and their status.
+//! relays and their status.
 //!
 //! All of these formats are described in
 //! [dir-spec.txt](https://spec.torproject.org/dir-spec).
@@ -25,9 +25,7 @@
 //!
 //! Tor recognizes other kinds of documents that this crate doesn't
 //! parse yet.  There are "ExtraInfo documents" that encode
-//! information about relays that almost nobody needs.  There are
-//! "ns-flavored" consensus documents that list all the router
-//! descriptors on the network, instead of listing microdescriptors.
+//! information about relays that almost nobody needs.
 //! Finally, there are the voting documents themselves that authorities
 //! use in order to calculate the consensus.
 

@@ -62,9 +62,9 @@ caret_enum! {
         HSIntro = 5,
         /// Providing an onion service rendezvous point
         HSRend = 6,
-        /// Describing a relay's functionality as a router descriptor
+        /// Describing a relay's functionality using router descriptors.
         Desc = 7,
-        /// Describing a relay's functionality as a microdescriptor.
+        /// Describing a relay's functionality using microdescriptors.
         MicroDesc = 8,
         /// Describing the network as a consensus directory document.
         Cons = 9,
