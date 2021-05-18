@@ -371,7 +371,7 @@ impl ClientCirc {
             RelayMsg::Extended2(e) => e,
             _ => return Err(Error::InternalError("Body didn't match cmd".into())),
         };
-        let server_handshake = msg.into_body();
+        let relay_handshake = msg.into_body();
 
         trace!(
             "{}: Received EXTENDED2 cell; completing handshake.",
@@ -379,7 +379,7 @@ impl ClientCirc {
         );
         // Now perform the second part of the handshake, and see if it
         // succeeded.
-        let keygen = H::client2(state, server_handshake)?;
+        let keygen = H::client2(state, relay_handshake)?;
         let layer = L::construct(keygen)?;
 
         debug!("{}: Handshake complete; circuit extended.", unique_id);
@@ -864,8 +864,8 @@ impl PendingClientCirc {
             .await
             .map_err(|_| Error::CircProto("Circuit closed while waiting".into()))?;
 
-        let server_handshake = wrap.from_chanmsg(reply)?;
-        let keygen = H::client2(state, server_handshake)?;
+        let relay_handshake = wrap.from_chanmsg(reply)?;
+        let keygen = H::client2(state, relay_handshake)?;
 
         let layer = L::construct(keygen)?;
 
@@ -1109,7 +1109,7 @@ mod test {
             rsa_id: [10_u8; 20].into(),
         }
     }
-    fn example_serverkey() -> crate::crypto::handshake::ntor::NtorSecretKey {
+    fn example_ntor_key() -> crate::crypto::handshake::ntor::NtorSecretKey {
         crate::crypto::handshake::ntor::NtorSecretKey::new(
             hex!("7789d92a89711a7e2874c61ea495452cfd48627b3ca2ea9546aafa5bf7b55803").into(),
             hex!("395cb26b83b3cd4b91dba9913e562ae87d21ecdd56843da7ca939a6a69001253").into(),
@@ -1157,7 +1157,7 @@ mod test {
                     _ => panic!(),
                 };
                 let (_, rep) =
-                    NtorServer::server(&mut rng, &[example_serverkey()], c2.body()).unwrap();
+                    NtorServer::server(&mut rng, &[example_ntor_key()], c2.body()).unwrap();
                 CreateResponse::Created2(Created2::new(rep))
             };
             created_send.send(reply).unwrap();
@@ -1396,7 +1396,7 @@ mod test {
             };
             let mut rng = thread_rng();
             let (_, reply) =
-                NtorServer::server(&mut rng, &[example_serverkey()], e2.handshake()).unwrap();
+                NtorServer::server(&mut rng, &[example_ntor_key()], e2.handshake()).unwrap();
             let extended2 = relaymsg::Extended2::new(reply).into();
             sink.send(rmsg_to_ccmsg(0, extended2)).await.unwrap();
             sink // gotta keep the sink alive, or the reactor will exit.

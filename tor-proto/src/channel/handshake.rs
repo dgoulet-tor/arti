@@ -45,7 +45,7 @@ pub struct OutboundClientHandshake<T: AsyncRead + AsyncWrite + Send + Unpin + 's
 }
 
 /// A client channel on which versions have been negotiated and the
-/// server's handshake has been read, but where the certs have not
+/// relay's handshake has been read, but where the certs have not
 /// been checked.
 pub struct UnverifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// The negotiated link protocol.  Must be a member of LINK_PROTOCOLS
@@ -64,7 +64,7 @@ pub struct UnverifiedChannel<T: AsyncRead + AsyncWrite + Send + Unpin + 'static>
 }
 
 /// A client channel on which versions have been negotiated,
-/// server's handshake has been read, but the client has not yet
+/// relay's handshake has been read, but the client has not yet
 /// finished the handshake.
 ///
 /// This type is separate from UnverifiedChannel, since finishing the

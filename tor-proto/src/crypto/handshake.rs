@@ -3,7 +3,7 @@
 //! Tor circuit handshakes all implement a one-way-authenticated key
 //! exchange, where a client that knows a public "onion key" for a
 //! relay sends a "client onionskin" to extend to a relay, and receives a
-//! "server onionskin" in response.  When the handshake is successful,
+//! "relay onionskin" in response.  When the handshake is successful,
 //! both the client and relay share a set of session keys, and the
 //! client knows that nobody _else_ shares those keys unless they
 //! relay's private onion key.
@@ -20,7 +20,7 @@ use crate::{Result, SecretBytes};
 use rand_core::{CryptoRng, RngCore};
 
 /// A ClientHandshake is used to generate a client onionskin and
-/// handle a server onionskin.
+/// handle a relay onionskin.
 pub trait ClientHandshake {
     /// The type for the onion key.
     type KeyType;
@@ -36,7 +36,7 @@ pub trait ClientHandshake {
         rng: &mut R,
         key: &Self::KeyType,
     ) -> Result<(Self::StateType, Vec<u8>)>;
-    /// Handle a server onionskin from a relay, and produce a key generator.
+    /// Handle an onionskin from a relay, and produce a key generator.
     ///
     /// The state object must match the one that was used to make the
     /// client onionskin that the server is replying to.

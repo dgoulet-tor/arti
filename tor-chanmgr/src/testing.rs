@@ -9,7 +9,7 @@ use std::io::Result as IoResult;
 
 /// Respond to a newly oppened channel using a canned set of certificates.
 ///
-/// Note that this isn't a real server handshake, and doesn't check
+/// Note that this isn't a real responder-side handshake, and doesn't check
 /// whether the client is behaving correctly at all.
 pub async fn answer_channel_req<S>(conn: &mut S) -> IoResult<()>
 where

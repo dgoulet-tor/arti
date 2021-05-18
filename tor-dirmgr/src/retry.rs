@@ -19,10 +19,10 @@ use serde::Deserialize;
 /// The algorithm used here has several desirable properties:
 ///    * It is randomized, so that multiple timeouts don't have a
 ///      danger of getting synchonized with each other and hammering the
-///      same servers all at once.
-///    * It tends on average to wait longer and longer over time,
-///      so that if the server is down, it won't get pummeled by a zillion
-///      failing clients when it comes back up.
+///      same directory servers all at once.
+///    * It tends on average to wait longer and longer over time, so
+///      that if the directory server is down, it won't get pummeled by
+///      a zillion failing clients when it comes back up.
 ///    * It has a chance of retrying promptly, which results in better
 ///      client performance on average.
 pub struct RetryDelay {

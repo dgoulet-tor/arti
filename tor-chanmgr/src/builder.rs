@@ -228,7 +228,7 @@ mod test {
                     builder.build_channel(&target).await
                 },
                 async {
-                    // server-side: accept the channel
+                    // relay-side: accept the channel
                     // (and pretend to know what we're doing).
                     let (mut con, addr) = lis.accept().await?;
                     assert_eq!(client_addr, addr.ip());

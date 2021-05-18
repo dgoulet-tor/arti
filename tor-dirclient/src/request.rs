@@ -312,7 +312,7 @@ impl Default for RouterDescRequest {
 }
 
 impl RouterDescRequest {
-    /// Construct a request for all server descriptors.
+    /// Construct a request for all router descriptors.
     pub fn all() -> Self {
         RouterDescRequest {
             all_descriptors: true,
