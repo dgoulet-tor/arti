@@ -18,6 +18,10 @@ use std::hash::Hash;
 ///
 /// See macro::decl_keyword! for help defining a Keyword type for a
 /// network document.
+///
+/// TODO: I'd rather have this be pub(crate), but I haven't figured out
+/// how to make that work; there is a cascading change of other stuff that
+/// would need to be more hidden.
 pub trait Keyword: Hash + Eq + PartialEq + Copy + Clone {
     /// Find a Keyword corresponding to a string that appears in a
     /// network document.

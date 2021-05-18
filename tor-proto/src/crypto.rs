@@ -6,8 +6,8 @@
 //!   * `handshake` implements the ntor handshake.
 //!   * `ll` provides building blocks for other parts of the protocol.
 
-pub mod cell;
-pub mod handshake;
-pub mod ll;
+pub(crate) mod cell;
+pub(crate) mod handshake;
+pub(crate) mod ll;
 #[cfg(test)]
 mod testing;

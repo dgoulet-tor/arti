@@ -12,7 +12,7 @@ use std::iter::Peekable;
 ///
 /// We guarantee that the predicate is called no more than once for
 /// each item.
-pub struct PauseAt<'a, I: Iterator, F: FnMut(&I::Item) -> bool> {
+pub(crate) struct PauseAt<'a, I: Iterator, F: FnMut(&I::Item) -> bool> {
     /// An underlying iterator that we should take items from
     peek: &'a mut Peekable<I>,
     /// A predicate telling us which items mean that we should pause
@@ -25,7 +25,7 @@ pub struct PauseAt<'a, I: Iterator, F: FnMut(&I::Item) -> bool> {
 impl<'a, I: Iterator, F: FnMut(&I::Item) -> bool> PauseAt<'a, I, F> {
     /// Construct a PauseAt that will pause the iterator `peek` when the
     /// predicate `pred` is about to be true.
-    pub fn from_peekable(peek: &'a mut Peekable<I>, pred: F) -> Self
+    pub(crate) fn from_peekable(peek: &'a mut Peekable<I>, pred: F) -> Self
     where
         F: FnMut(&I::Item) -> bool,
     {
@@ -36,7 +36,7 @@ impl<'a, I: Iterator, F: FnMut(&I::Item) -> bool> PauseAt<'a, I, F> {
         }
     }
     /// Replace the predicate on a PauseAt, returning a new PauseAt.
-    pub fn new_pred<F2>(self, pred: F2) -> PauseAt<'a, I, F2>
+    pub(crate) fn new_pred<F2>(self, pred: F2) -> PauseAt<'a, I, F2>
     where
         F2: FnMut(&I::Item) -> bool,
     {
@@ -44,13 +44,13 @@ impl<'a, I: Iterator, F: FnMut(&I::Item) -> bool> PauseAt<'a, I, F> {
     }
     /// Unwrap this PauseAt, returning its underlying Peekable.
     #[allow(unused)]
-    pub fn remaining(self) -> &'a mut Peekable<I> {
+    pub(crate) fn remaining(self) -> &'a mut Peekable<I> {
         self.peek
     }
     /// Return the next item that will be yielded from this iterator, or
     /// None if this iterator is about to yield None.
     #[allow(unused)]
-    pub fn peek(&mut self) -> Option<&I::Item> {
+    pub(crate) fn peek(&mut self) -> Option<&I::Item> {
         // TODO: I wish it weren't necessary for this function to take
         // a mutable reference.
         if self.check_paused() {

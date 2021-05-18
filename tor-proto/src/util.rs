@@ -1,4 +1,4 @@
 //! Utilities used for the tor protocol.
 
-pub mod ct;
-pub mod err;
+pub(crate) mod ct;
+pub(crate) mod err;

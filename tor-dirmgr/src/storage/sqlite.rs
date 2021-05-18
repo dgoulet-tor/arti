@@ -63,7 +63,7 @@ impl SqliteStore {
     /// _per process_. Therefore, you might get unexpected results if
     /// two SqliteStores are created in the same process with the
     /// path.
-    pub fn from_path<P: AsRef<Path>>(path: P, mut readonly: bool) -> Result<Self> {
+    pub(crate) fn from_path<P: AsRef<Path>>(path: P, mut readonly: bool) -> Result<Self> {
         let path = path.as_ref();
         let sqlpath = path.join("dir.sqlite3");
         let blobpath = path.join("dir_blobs/");
@@ -105,7 +105,7 @@ impl SqliteStore {
     /// for blob files.
     ///
     /// Used for testing with a memory-backed database.
-    pub fn from_conn<P>(conn: rusqlite::Connection, path: P) -> Result<Self>
+    pub(crate) fn from_conn<P>(conn: rusqlite::Connection, path: P) -> Result<Self>
     where
         P: AsRef<Path>,
     {
@@ -123,7 +123,7 @@ impl SqliteStore {
     }
 
     /// Return true if this store is opened in read-only mode.
-    pub fn is_readonly(&self) -> bool {
+    pub(crate) fn is_readonly(&self) -> bool {
         match &self.lockfile {
             Some(f) => !f.owns_lock(),
             None => false,
@@ -133,7 +133,7 @@ impl SqliteStore {
     /// Try to upgrade from a read-only connection to a read-write connection.
     ///
     /// Return true on succcess; false if another process had the lock.
-    pub fn upgrade_to_readwrite(&mut self) -> Result<bool> {
+    pub(crate) fn upgrade_to_readwrite(&mut self) -> Result<bool> {
         if self.is_readonly() && self.sql_path.is_some() {
             let lf = self.lockfile.as_mut().unwrap();
             if !lf.try_lock()? {
@@ -197,7 +197,7 @@ impl SqliteStore {
     ///
     /// This is pretty conservative, and only removes things that are
     /// definitely past their good-by date.
-    pub fn expire_all(&mut self) -> Result<()> {
+    pub(crate) fn expire_all(&mut self) -> Result<()> {
         let tx = self.conn.transaction()?;
         let expired_blobs: Vec<String> = {
             let mut stmt = tx.prepare(FIND_EXPIRED_EXTDOCS)?;
@@ -308,7 +308,7 @@ impl SqliteStore {
     }
 
     /// Write a consensus to disk.
-    pub fn store_consensus(
+    pub(crate) fn store_consensus(
         &mut self,
         cmeta: &ConsensusMeta,
         flavor: ConsensusFlavor,
@@ -354,7 +354,10 @@ impl SqliteStore {
 
     /// Return the information about the latest non-pending consensus,
     /// including its valid-after time and digest.
-    pub fn latest_consensus_meta(&self, flavor: ConsensusFlavor) -> Result<Option<ConsensusMeta>> {
+    pub(crate) fn latest_consensus_meta(
+        &self,
+        flavor: ConsensusFlavor,
+    ) -> Result<Option<ConsensusMeta>> {
         let mut stmt = self.conn.prepare(FIND_LATEST_CONSENSUS_META)?;
         let mut rows = stmt.query(params![flavor.name()])?;
         if let Some(row) = rows.next()? {
@@ -379,7 +382,7 @@ impl SqliteStore {
     /// the given "pending" status.  (A pending consensus doesn't have
     /// enough descriptors yet.)  If `pending_ok` is None, we'll
     /// return a consensus with any pending status.
-    pub fn latest_consensus(
+    pub(crate) fn latest_consensus(
         &self,
         flavor: ConsensusFlavor,
         pending: Option<bool>,
@@ -409,7 +412,7 @@ impl SqliteStore {
 
     /// Try to read the consensus corresponding to the provided metadata object.
     #[allow(unused)]
-    pub fn consensus_by_meta(&self, cmeta: &ConsensusMeta) -> Result<InputString> {
+    pub(crate) fn consensus_by_meta(&self, cmeta: &ConsensusMeta) -> Result<InputString> {
         if let Some((text, _)) =
             self.consensus_by_sha3_digest_of_signed_part(cmeta.sha3_256_of_signed())?
         {
@@ -421,7 +424,7 @@ impl SqliteStore {
 
     /// Try to read the consensus whose SHA3-256 digests is the provided
     /// value, and its metadata.
-    pub fn consensus_by_sha3_digest_of_signed_part(
+    pub(crate) fn consensus_by_sha3_digest_of_signed_part(
         &self,
         d: &[u8; 32],
     ) -> Result<Option<(InputString, ConsensusMeta)>> {
@@ -441,7 +444,7 @@ impl SqliteStore {
     }
 
     /// Mark the consensus generated from `cmeta` as no longer pending.
-    pub fn mark_consensus_usable(&mut self, cmeta: &ConsensusMeta) -> Result<()> {
+    pub(crate) fn mark_consensus_usable(&mut self, cmeta: &ConsensusMeta) -> Result<()> {
         let d = hex::encode(cmeta.sha3_256_of_whole());
         let digest = format!("sha3-256-{}", d);
 
@@ -454,7 +457,7 @@ impl SqliteStore {
 
     /// Remove the consensus generated from `cmeta`.
     #[allow(unused)]
-    pub fn delete_consensus(&mut self, cmeta: &ConsensusMeta) -> Result<()> {
+    pub(crate) fn delete_consensus(&mut self, cmeta: &ConsensusMeta) -> Result<()> {
         let d = hex::encode(cmeta.sha3_256_of_whole());
         let digest = format!("sha3-256-{}", d);
 
@@ -468,7 +471,7 @@ impl SqliteStore {
     }
 
     /// Save a list of authority certificates to the cache.
-    pub fn store_authcerts(&mut self, certs: &[(AuthCertMeta, &str)]) -> Result<()> {
+    pub(crate) fn store_authcerts(&mut self, certs: &[(AuthCertMeta, &str)]) -> Result<()> {
         let tx = self.conn.transaction()?;
         let mut stmt = tx.prepare(INSERT_AUTHCERT)?;
         for (meta, content) in certs {
@@ -485,7 +488,10 @@ impl SqliteStore {
     }
 
     /// Read all of the specified authority certs from the cache.
-    pub fn authcerts(&self, certs: &[AuthCertKeyIds]) -> Result<HashMap<AuthCertKeyIds, String>> {
+    pub(crate) fn authcerts(
+        &self,
+        certs: &[AuthCertKeyIds],
+    ) -> Result<HashMap<AuthCertKeyIds, String>> {
         let mut result = HashMap::new();
         // XXXX Do I need to get a transaction here for performance?
         let mut stmt = self.conn.prepare(FIND_AUTHCERT)?;
@@ -505,7 +511,7 @@ impl SqliteStore {
     }
 
     /// Read all the microdescriptors listed in `input` from the cache.
-    pub fn microdescs<'a, I>(&self, input: I) -> Result<HashMap<MdDigest, String>>
+    pub(crate) fn microdescs<'a, I>(&self, input: I) -> Result<HashMap<MdDigest, String>>
     where
         I: IntoIterator<Item = &'a MdDigest>,
     {
@@ -528,7 +534,7 @@ impl SqliteStore {
     }
 
     /// Read all the microdescriptors listed in `input` from the cache.
-    pub fn routerdescs<'a, I>(&self, input: I) -> Result<HashMap<RdDigest, String>>
+    pub(crate) fn routerdescs<'a, I>(&self, input: I) -> Result<HashMap<RdDigest, String>>
     where
         I: IntoIterator<Item = &'a RdDigest>,
     {
@@ -552,7 +558,11 @@ impl SqliteStore {
 
     /// Update the `last-listed` time of every microdescriptor in
     /// `input` to `when` or later.
-    pub fn update_microdescs_listed<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
+    pub(crate) fn update_microdescs_listed<'a, I>(
+        &mut self,
+        input: I,
+        when: SystemTime,
+    ) -> Result<()>
     where
         I: IntoIterator<Item = &'a MdDigest>,
     {
@@ -572,7 +582,7 @@ impl SqliteStore {
 
     /// Store every microdescriptor in `input` into the cache, and say that
     /// it was last listed at `when`.
-    pub fn store_microdescs<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
+    pub(crate) fn store_microdescs<'a, I>(&mut self, input: I, when: SystemTime) -> Result<()>
     where
         I: IntoIterator<Item = (&'a str, &'a MdDigest)>,
     {
@@ -592,7 +602,7 @@ impl SqliteStore {
 
     /// Store every router descriptors in `input` into the cache.
     #[allow(unused)]
-    pub fn store_routerdescs<'a, I>(&mut self, input: I) -> Result<()>
+    pub(crate) fn store_routerdescs<'a, I>(&mut self, input: I) -> Result<()>
     where
         I: IntoIterator<Item = (&'a str, SystemTime, &'a RdDigest)>,
     {

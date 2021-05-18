@@ -23,7 +23,7 @@ use crate::{Error, Result};
 /// The rules are represented as a mapping from token index to
 /// rules::TokenFmt.
 #[derive(Clone)]
-pub struct SectionRules<T: Keyword> {
+pub(crate) struct SectionRules<T: Keyword> {
     /// A set of rules for decoding a series of tokens into a Section
     /// object.  Each element of this array corresponds to the
     /// token with the corresponding index values.
@@ -92,6 +92,9 @@ impl<'a, K: Keyword> TokVal<'a, K> {
 }
 
 /// A Section is the result of sorting a document's entries by keyword.
+///
+/// TODO: I'd rather have this be pub(crate), but I haven't figured out
+/// how to make that work.
 pub struct Section<'a, T: Keyword> {
     /// Map from Keyword index to TokVal
     v: Vec<TokVal<'a, T>>,
@@ -121,11 +124,11 @@ impl<'a, T: Keyword> Section<'a, T> {
         &self.v[idx]
     }
     /// Return all the Items for some Keyword, as a slice.
-    pub fn slice(&self, t: T) -> &[Item<'a, T>] {
+    pub(crate) fn slice(&self, t: T) -> &[Item<'a, T>] {
         self.tokval(t).as_slice()
     }
     /// Return a single Item for some Keyword, if there is exactly one.
-    pub fn get(&self, t: T) -> Option<&Item<'a, T>> {
+    pub(crate) fn get(&self, t: T) -> Option<&Item<'a, T>> {
         self.tokval(t).singleton()
     }
     /// Return a single Item for some Keyword, giving an error if there
@@ -133,19 +136,19 @@ impl<'a, T: Keyword> Section<'a, T> {
     ///
     /// It is usually a mistake to use this function on a Keyword that is
     /// not required.
-    pub fn required(&self, t: T) -> Result<&Item<'a, T>> {
+    pub(crate) fn required(&self, t: T) -> Result<&Item<'a, T>> {
         self.get(t).ok_or_else(|| Error::MissingToken(t.to_str()))
     }
     /// Return a proxy MaybeItem object for some keyword.
     //
     /// A MaybeItem is used to represent an object that might or might
     /// not be there.
-    pub fn maybe<'b>(&'b self, t: T) -> MaybeItem<'b, 'a, T> {
+    pub(crate) fn maybe<'b>(&'b self, t: T) -> MaybeItem<'b, 'a, T> {
         MaybeItem::from_option(self.get(t))
     }
     /// Return the first item that was accepted for this section, or None
     /// if no items were accepted for this section.
-    pub fn first_item(&self) -> Option<&Item<'a, T>> {
+    pub(crate) fn first_item(&self) -> Option<&Item<'a, T>> {
         match self.first {
             None => None,
             Some(t) => self.tokval(t).first(),
@@ -153,7 +156,7 @@ impl<'a, T: Keyword> Section<'a, T> {
     }
     /// Return the last item that was accepted for this section, or None
     /// if no items were accepted for this section.
-    pub fn last_item(&self) -> Option<&Item<'a, T>> {
+    pub(crate) fn last_item(&self) -> Option<&Item<'a, T>> {
         match self.last {
             None => None,
             Some(t) => self.tokval(t).last(),
@@ -189,7 +192,7 @@ impl<T: Keyword> SectionRules<T> {
     /// Create a new SectionRules with no rules.
     ///
     /// By default, no Keyword is allowed by this SectionRules.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let n = T::n_vals();
         let mut rules = Vec::with_capacity(n);
         rules.resize(n, None);
@@ -199,7 +202,7 @@ impl<T: Keyword> SectionRules<T> {
     /// Add a rule to this SectionRules, based on a TokenFmtBuilder.
     ///
     /// Requires that no rule yet exists for the provided keyword.
-    pub fn add(&mut self, t: TokenFmtBuilder<T>) {
+    pub(crate) fn add(&mut self, t: TokenFmtBuilder<T>) {
         let rule: TokenFmt<_> = t.into();
         let idx = rule.kwd().idx();
         assert!(self.rules[idx].is_none());
@@ -277,7 +280,7 @@ impl<T: Keyword> SectionRules<T> {
     }
 
     /// Parse a stream of tokens into a validated section.
-    pub fn parse<'a, I>(&self, tokens: &mut I) -> Result<Section<'a, T>>
+    pub(crate) fn parse<'a, I>(&self, tokens: &mut I) -> Result<Section<'a, T>>
     where
         I: Iterator<Item = Result<Item<'a, T>>>,
     {

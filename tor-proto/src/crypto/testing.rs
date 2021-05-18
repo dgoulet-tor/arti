@@ -1,10 +1,10 @@
 use rand_core;
 
-pub struct FakePRNG<'a> {
+pub(crate) struct FakePRNG<'a> {
     bytes: &'a [u8],
 }
 impl<'a> FakePRNG<'a> {
-    pub fn new(bytes: &'a [u8]) -> Self {
+    pub(crate) fn new(bytes: &'a [u8]) -> Self {
         Self { bytes }
     }
 }

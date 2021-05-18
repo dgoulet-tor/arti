@@ -10,7 +10,6 @@ mod net {
     use crate::traits;
     use async_trait::async_trait;
 
-    pub use tokio_crate::io::split as split_io;
     use tokio_crate::net::{TcpListener as TokioTcpListener, TcpStream as TokioTcpStream};
 
     use futures::io::{AsyncRead, AsyncWrite};

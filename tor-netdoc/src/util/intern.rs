@@ -15,14 +15,14 @@ use weak_table::WeakHashSet;
 /// It's "weak" because it only holds weak references to its objects;
 /// once every strong reference is gone, the object is unallocated.
 /// Later, the hash entry is (lazily) removed.
-pub struct InternCache<T> {
+pub(crate) struct InternCache<T> {
     /// Underlying hashset for interned objects
     cache: OnceCell<Mutex<WeakHashSet<Weak<T>>>>,
 }
 
 impl<T> InternCache<T> {
     /// Create a new, empty, InternCache.
-    pub const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         InternCache {
             cache: OnceCell::new(),
         }
@@ -41,7 +41,7 @@ impl<T: Eq + Hash> InternCache<T> {
     /// If `value` is already stored in this cache, we return a
     /// reference to the stored value.  Otherwise, we insert `value`
     /// into the cache, and return that.
-    pub fn intern(&self, value: T) -> Arc<T> {
+    pub(crate) fn intern(&self, value: T) -> Arc<T> {
         let mut cache = self.cache();
         if let Some(pp) = cache.get(&value) {
             pp

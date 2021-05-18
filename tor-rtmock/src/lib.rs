@@ -6,6 +6,7 @@
 //! stream pairs, and impersonating the Internet.
 
 #![deny(missing_docs)]
+#![deny(unreachable_pub)]
 #![deny(clippy::await_holding_lock)]
 #![warn(clippy::clone_on_ref_ptr)]
 #![warn(clippy::cognitive_complexity)]

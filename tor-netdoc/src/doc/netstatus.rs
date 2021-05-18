@@ -446,7 +446,7 @@ struct Footer {
 /// XXXX: I'd rather not have this trait be public, but I haven't yet
 /// figured out how to make it private.
 pub trait ParseRouterStatus: Sized + Sealed {
-    /// Return the name of the consensus flavor that uses this kind of routerstatus objejct.
+    /// Parse this object from a [`Section`].
     fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<Self>;
 
     /// Return the networkstatus consensus flavor in which this
@@ -1148,7 +1148,7 @@ impl Signature {
 /// signatures and timeliness.
 pub type UncheckedConsensus<RS> = TimerangeBound<UnvalidatedConsensus<RS>>;
 
-impl<RS: ParseRouterStatus + RouterStatus> Consensus<RS> {
+impl<RS: RouterStatus + ParseRouterStatus> Consensus<RS> {
     /// Return a new ConsensusBuilder for building test consensus objects.
     ///
     /// This function is only available when the `build_docs` feature has

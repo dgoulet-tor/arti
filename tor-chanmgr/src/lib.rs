@@ -9,6 +9,7 @@
 //! a [ChanMgr] type that can be used to do that.
 
 #![deny(missing_docs)]
+#![deny(unreachable_pub)]
 #![deny(clippy::await_holding_lock)]
 #![warn(clippy::clone_on_ref_ptr)]
 #![warn(clippy::cognitive_complexity)]

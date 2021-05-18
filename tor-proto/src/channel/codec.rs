@@ -86,21 +86,21 @@ pub(crate) mod test {
     }
 
     impl MsgBuf {
-        pub fn new<T: Into<Vec<u8>>>(output: T) -> Self {
+        pub(crate) fn new<T: Into<Vec<u8>>>(output: T) -> Self {
             let inbuf = Cursor::new(output.into());
             let outbuf = Cursor::new(Vec::new());
             MsgBuf { inbuf, outbuf }
         }
 
-        pub fn consumed(&self) -> usize {
+        pub(crate) fn consumed(&self) -> usize {
             self.inbuf.position() as usize
         }
 
-        pub fn all_consumed(&self) -> bool {
+        pub(crate) fn all_consumed(&self) -> bool {
             self.inbuf.get_ref().len() == self.consumed()
         }
 
-        pub fn into_response(self) -> Vec<u8> {
+        pub(crate) fn into_response(self) -> Vec<u8> {
             self.outbuf.into_inner()
         }
     }

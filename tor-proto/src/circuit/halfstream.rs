@@ -28,7 +28,11 @@ pub(super) struct HalfStream {
 
 impl HalfStream {
     /// Create a new half-closed stream.
-    pub fn new(sendw: StreamSendWindow, recvw: StreamRecvWindow, connected_ok: bool) -> Self {
+    pub(super) fn new(
+        sendw: StreamSendWindow,
+        recvw: StreamRecvWindow,
+        connected_ok: bool,
+    ) -> Self {
         HalfStream {
             sendw,
             recvw,
@@ -42,7 +46,7 @@ impl HalfStream {
     /// The caller must handle END cells; it is an internal error to pass
     /// END cells to this method.
     /// no ends here.
-    pub async fn handle_msg(&mut self, msg: &RelayMsg) -> Result<()> {
+    pub(super) async fn handle_msg(&mut self, msg: &RelayMsg) -> Result<()> {
         match msg {
             RelayMsg::Sendme(_) => {
                 self.sendw.put(Some(())).await.ok_or_else(|| {

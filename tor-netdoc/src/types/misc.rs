@@ -5,19 +5,19 @@
 //!
 //! These types shouldn't be exposed outside of the netdoc crate.
 
-pub use b16impl::*;
-pub use b64impl::*;
-pub use curve25519impl::*;
-pub use ed25519impl::*;
-pub use edcert::*;
-pub use fingerprint::*;
-pub use rsa::*;
-pub use timeimpl::*;
+pub(crate) use b16impl::*;
+pub(crate) use b64impl::*;
+pub(crate) use curve25519impl::*;
+pub(crate) use ed25519impl::*;
+pub(crate) use edcert::*;
+pub(crate) use fingerprint::*;
+pub(crate) use rsa::*;
+pub(crate) use timeimpl::*;
 
 /// Describes a value that van be decoded from a bunch of bytes.
 ///
 /// Used for decoding the objects between BEGIN and END tags.
-pub trait FromBytes: Sized {
+pub(crate) trait FromBytes: Sized {
     /// Try to parse a value of this type from a byte slice
     fn from_bytes(b: &[u8], p: crate::Pos) -> crate::Result<Self>;
     /// Try to parse a value of this type from a vector of bytes,
@@ -33,7 +33,7 @@ mod b64impl {
     use std::ops::RangeBounds;
 
     /// A byte array, encoded in base64 with optional padding.
-    pub struct B64(Vec<u8>);
+    pub(crate) struct B64(Vec<u8>);
 
     impl std::str::FromStr for B64 {
         type Err = Error;
@@ -46,12 +46,12 @@ mod b64impl {
 
     impl B64 {
         /// Return the byte array from this object.
-        pub fn as_bytes(&self) -> &[u8] {
+        pub(crate) fn as_bytes(&self) -> &[u8] {
             &self.0[..]
         }
         /// Return this object if its length is within the provided bounds
         /// object, or an error otherwise.
-        pub fn check_len<B: RangeBounds<usize>>(self, bounds: B) -> Result<Self> {
+        pub(crate) fn check_len<B: RangeBounds<usize>>(self, bounds: B) -> Result<Self> {
             if bounds.contains(&self.0.len()) {
                 Ok(self)
             } else {
@@ -77,7 +77,7 @@ mod b16impl {
     use crate::{Error, Pos, Result};
 
     /// A byte array encoded in hexadecimal.
-    pub struct B16(Vec<u8>);
+    pub(crate) struct B16(Vec<u8>);
 
     impl std::str::FromStr for B16 {
         type Err = Error;
@@ -90,10 +90,12 @@ mod b16impl {
 
     impl B16 {
         /// Return the underlying byte array.
-        pub fn as_bytes(&self) -> &[u8] {
+        #[allow(unused)]
+        pub(crate) fn as_bytes(&self) -> &[u8] {
             &self.0[..]
         }
     }
+
     impl From<B16> for Vec<u8> {
         fn from(w: B16) -> Vec<u8> {
             w.0
@@ -111,7 +113,7 @@ mod curve25519impl {
     use tor_llcrypto::pk::curve25519::PublicKey;
 
     /// A Curve25519 public key, encoded in base64 with optional padding
-    pub struct Curve25519Public(PublicKey);
+    pub(crate) struct Curve25519Public(PublicKey);
 
     impl std::str::FromStr for Curve25519Public {
         type Err = Error;
@@ -141,7 +143,7 @@ mod ed25519impl {
 
     /// An alleged ed25519 public key, encoded in base64 with optional
     /// padding.
-    pub struct Ed25519Public(Ed25519Identity);
+    pub(crate) struct Ed25519Public(Ed25519Identity);
 
     impl std::str::FromStr for Ed25519Public {
         type Err = Error;
@@ -178,7 +180,7 @@ mod timeimpl {
     /// space between the date and time.
     ///
     /// (Example: "2020-10-09 17:38:12")
-    pub struct Iso8601TimeSp(SystemTime);
+    pub(crate) struct Iso8601TimeSp(SystemTime);
 
     impl std::str::FromStr for Iso8601TimeSp {
         type Err = Error;
@@ -206,7 +208,7 @@ mod rsa {
 
     /// An RSA public key, as parsed from a base64-encoded object.
     #[allow(non_camel_case_types)]
-    pub struct RsaPublic(PublicKey, Pos);
+    pub(crate) struct RsaPublic(PublicKey, Pos);
 
     impl From<RsaPublic> for PublicKey {
         fn from(k: RsaPublic) -> PublicKey {
@@ -223,7 +225,7 @@ mod rsa {
     }
     impl RsaPublic {
         /// Give an error if the exponent of this key is not 'e'
-        pub fn check_exponent(self, e: u32) -> Result<Self> {
+        pub(crate) fn check_exponent(self, e: u32) -> Result<Self> {
             if self.0.exponent_is(e) {
                 Ok(self)
             } else {
@@ -232,7 +234,7 @@ mod rsa {
         }
         /// Give an error if the length of of this key's modulus, in
         /// bits, is not contained in 'bounds'
-        pub fn check_len<B: RangeBounds<usize>>(self, bounds: B) -> Result<Self> {
+        pub(crate) fn check_len<B: RangeBounds<usize>>(self, bounds: B) -> Result<Self> {
             if bounds.contains(&self.0.bits()) {
                 Ok(self)
             } else {
@@ -241,7 +243,7 @@ mod rsa {
         }
         /// Give an error if the length of of this key's modulus, in
         /// bits, is not exactly `n`.
-        pub fn check_len_eq(self, n: usize) -> Result<Self> {
+        pub(crate) fn check_len_eq(self, n: usize) -> Result<Self> {
             self.check_len(n..=n)
         }
     }
@@ -255,7 +257,7 @@ mod edcert {
 
     /// An ed25519 certificate as parsed from a directory object, with
     /// signature not validated.
-    pub struct UnvalidatedEdCert(KeyUnknownCert, Pos);
+    pub(crate) struct UnvalidatedEdCert(KeyUnknownCert, Pos);
 
     impl super::FromBytes for UnvalidatedEdCert {
         fn from_bytes(b: &[u8], p: Pos) -> Result<Self> {
@@ -270,7 +272,7 @@ mod edcert {
     }
     impl UnvalidatedEdCert {
         /// Give an error if this certificate's type is not `desired_type`.
-        pub fn check_cert_type(self, desired_type: CertType) -> Result<Self> {
+        pub(crate) fn check_cert_type(self, desired_type: CertType) -> Result<Self> {
             if self.0.peek_cert_type() != desired_type {
                 return Err(Error::BadObjectVal(
                     self.1,
@@ -284,14 +286,14 @@ mod edcert {
             Ok(self)
         }
         /// Give an error if this certificate's subject_key is not `pk`
-        pub fn check_subject_key_is(self, pk: &ed25519::PublicKey) -> Result<Self> {
+        pub(crate) fn check_subject_key_is(self, pk: &ed25519::PublicKey) -> Result<Self> {
             if self.0.peek_subject_key().as_ed25519() != Some(pk) {
                 return Err(Error::BadObjectVal(self.1, "incorrect subject key".into()));
             }
             Ok(self)
         }
         /// Consume this object and return the inner Ed25519 certificate.
-        pub fn into_unchecked(self) -> KeyUnknownCert {
+        pub(crate) fn into_unchecked(self) -> KeyUnknownCert {
             self.0
         }
     }
@@ -303,13 +305,13 @@ mod fingerprint {
     use tor_llcrypto::pk::rsa::RsaIdentity;
 
     /// A hex-encoded fingerprint with spaces in it.
-    pub struct SpFingerprint(RsaIdentity);
+    pub(crate) struct SpFingerprint(RsaIdentity);
 
     /// A hex-encoded fingerprint with no spaces.
-    pub struct Fingerprint(RsaIdentity);
+    pub(crate) struct Fingerprint(RsaIdentity);
 
     /// A "long identity" in the format used for Family members.
-    pub struct LongIdent(RsaIdentity);
+    pub(crate) struct LongIdent(RsaIdentity);
 
     impl From<SpFingerprint> for RsaIdentity {
         fn from(f: SpFingerprint) -> RsaIdentity {

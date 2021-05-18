@@ -13,7 +13,7 @@ use std::str::FromStr;
 
 /// Return true iff a given character is "space" according to the rules
 /// of dir-spec.txt
-pub fn is_sp(c: char) -> bool {
+pub(crate) fn is_sp(c: char) -> bool {
     c == ' ' || c == '\t'
 }
 /// Check that all the characters in `s` are valid base64.
@@ -44,7 +44,7 @@ fn b64check(s: &str) -> Result<()> {
 /// require either that we parse the base64 twice, or that we allocate
 /// a buffer to hold the data before it's needed.
 #[derive(Clone, Copy, Debug)]
-pub struct Object<'a> {
+pub(crate) struct Object<'a> {
     /// Reference to the "tag" string (the 'foo') in the BEGIN line.
     tag: &'a str,
     /// Reference to the allegedly base64-encoded data.  This may or
@@ -64,7 +64,7 @@ pub struct Object<'a> {
 /// This is a zero-copy implementation that points to slices within a
 /// containing string.
 #[derive(Clone, Debug)]
-pub struct Item<'a, K: Keyword> {
+pub(crate) struct Item<'a, K: Keyword> {
     /// The keyword that determinds the type of this item.
     kwd: K,
     /// A reference to the actual string that defines the keyword for
@@ -297,19 +297,19 @@ fn base64_decode_multiline(s: &str) -> std::result::Result<Vec<u8>, base64::Deco
 
 impl<'a, K: Keyword> Item<'a, K> {
     /// Return the parsed keyword part of this item.
-    pub fn kwd(&self) -> K {
+    pub(crate) fn kwd(&self) -> K {
         self.kwd
     }
     /// Return the keyword part of this item, as a string.
-    pub fn kwd_str(&self) -> &'a str {
+    pub(crate) fn kwd_str(&self) -> &'a str {
         self.kwd_str
     }
     /// Return true if the keyword for this item is in 'ks'.
-    pub fn has_kwd_in(&self, ks: &[K]) -> bool {
+    pub(crate) fn has_kwd_in(&self, ks: &[K]) -> bool {
         ks.contains(&self.kwd)
     }
     /// Return the arguments of this item, as a single string.
-    pub fn args_as_str(&self) -> &'a str {
+    pub(crate) fn args_as_str(&self) -> &'a str {
         self.args
     }
     /// Return the arguments of this item as a vector.
@@ -325,15 +325,15 @@ impl<'a, K: Keyword> Item<'a, K> {
         })
     }
     /// Return an iterator over the arguments of this item.
-    pub fn args(&self) -> impl Iterator<Item = &'a str> {
+    pub(crate) fn args(&self) -> impl Iterator<Item = &'a str> {
         self.args.split(is_sp).filter(|s| !s.is_empty())
     }
     /// Return the nth argument of this item, if there is one.
-    pub fn arg(&self, idx: usize) -> Option<&'a str> {
+    pub(crate) fn arg(&self, idx: usize) -> Option<&'a str> {
         self.args_as_vec().get(idx).copied()
     }
     /// Return the nth argument of this item, or an error if it isn't there.
-    pub fn required_arg(&self, idx: usize) -> Result<&'a str> {
+    pub(crate) fn required_arg(&self, idx: usize) -> Result<&'a str> {
         self.arg(idx)
             .ok_or_else(|| Error::MissingArgument(Pos::at(self.args)))
     }
@@ -341,7 +341,7 @@ impl<'a, K: Keyword> Item<'a, K> {
     /// that supports FromStr.
     ///
     /// Returns Ok(None) if the argument doesn't exist.
-    pub fn parse_optional_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
+    pub(crate) fn parse_optional_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
     where
         Error: From<V::Err>,
     {
@@ -360,7 +360,7 @@ impl<'a, K: Keyword> Item<'a, K> {
     /// that supports FromStr.
     ///
     /// Return an error if the argument doesn't exist.
-    pub fn parse_arg<V: FromStr>(&self, idx: usize) -> Result<V>
+    pub(crate) fn parse_arg<V: FromStr>(&self, idx: usize) -> Result<V>
     where
         Error: From<V::Err>,
     {
@@ -371,21 +371,21 @@ impl<'a, K: Keyword> Item<'a, K> {
         }
     }
     /// Return the number of arguments for this Item
-    pub fn n_args(&self) -> usize {
+    pub(crate) fn n_args(&self) -> usize {
         self.args().count()
     }
     /// Return true iff this Item has an associated object.
-    pub fn has_obj(&self) -> bool {
+    pub(crate) fn has_obj(&self) -> bool {
         self.object.is_some()
     }
     /// Return the tag of this item's associated object, if it has one.
-    pub fn obj_tag(&self) -> Option<&'a str> {
+    pub(crate) fn obj_tag(&self) -> Option<&'a str> {
         self.object.map(|o| o.tag)
     }
     /// Try to decode the base64 contents of this Item's associated object.
     ///
     /// On success, return the object's tag and decoded contents.
-    pub fn obj_raw(&self) -> Result<Option<(&'a str, Vec<u8>)>> {
+    pub(crate) fn obj_raw(&self) -> Result<Option<(&'a str, Vec<u8>)>> {
         match self.object {
             None => Ok(None),
             Some(obj) => {
@@ -397,7 +397,7 @@ impl<'a, K: Keyword> Item<'a, K> {
     }
     /// Try to decode the base64 contents of this Item's associated object,
     /// and make sure that its tag matches 'want_tag'.
-    pub fn obj(&self, want_tag: &str) -> Result<Vec<u8>> {
+    pub(crate) fn obj(&self, want_tag: &str) -> Result<Vec<u8>> {
         match self.obj_raw()? {
             None => Err(Error::MissingObject(self.kwd.to_str(), self.end_pos())),
             Some((tag, decoded)) => {
@@ -411,7 +411,7 @@ impl<'a, K: Keyword> Item<'a, K> {
     }
     /// Try to decode the base64 contents of this item's associated object
     /// as a given type that implements FromBytes.
-    pub fn parse_obj<V: FromBytes>(&self, want_tag: &str) -> Result<V> {
+    pub(crate) fn parse_obj<V: FromBytes>(&self, want_tag: &str) -> Result<V> {
         let bytes = self.obj(want_tag)?;
         let p = Pos::at(self.object.unwrap().data);
         V::from_vec(bytes, p).map_err(|e| e.at_pos(p))
@@ -420,20 +420,20 @@ impl<'a, K: Keyword> Item<'a, K> {
     ///
     /// This position won't be useful unless it is later contextualized
     /// with the containing string.
-    pub fn pos(&self) -> Pos {
+    pub(crate) fn pos(&self) -> Pos {
         Pos::at(self.kwd_str)
     }
     /// Return the position of this Item in a string.
     ///
     /// Returns None if this item doesn't actually belong to the string.
-    pub fn offset_in(&self, s: &str) -> Option<usize> {
+    pub(crate) fn offset_in(&self, s: &str) -> Option<usize> {
         crate::util::str::str_offset(s, self.kwd_str)
     }
     /// Return the position of the n'th argument of this item.
     ///
     /// If this item does not have a n'th argument, return the
     /// position of the end of the final argument.
-    pub fn arg_pos(&self, n: usize) -> Pos {
+    pub(crate) fn arg_pos(&self, n: usize) -> Pos {
         let args = self.args_as_vec();
         if n < args.len() {
             Pos::at(args[n])
@@ -454,7 +454,7 @@ impl<'a, K: Keyword> Item<'a, K> {
     }
     /// Return the position of the end of this object. (This will point to a
     /// newline.)
-    pub fn end_pos(&self) -> Pos {
+    pub(crate) fn end_pos(&self) -> Pos {
         match self.object {
             Some(o) => Pos::at_end_of(o.endline),
             None => self.last_arg_end_pos(),
@@ -462,7 +462,7 @@ impl<'a, K: Keyword> Item<'a, K> {
     }
     /// If this item occurs within s, return the byte offset
     /// immediately after the end of this item.
-    pub fn offset_after(&self, s: &str) -> Option<usize> {
+    pub(crate) fn offset_after(&self, s: &str) -> Option<usize> {
         self.end_pos().offset_within(s).map(|nl_pos| nl_pos + 1)
     }
 }
@@ -470,7 +470,7 @@ impl<'a, K: Keyword> Item<'a, K> {
 /// Represents an Item that might not be present, whose arguments we
 /// want to inspect.  If the Item is there, this acts like a proxy to the
 /// item; otherwise, it treats the item as having no arguments.
-pub struct MaybeItem<'a, 'b, K: Keyword>(Option<&'a Item<'b, K>>);
+pub(crate) struct MaybeItem<'a, 'b, K: Keyword>(Option<&'a Item<'b, K>>);
 
 // All methods here are as for Item.
 impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
@@ -482,14 +482,14 @@ impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
         }
     }
     /// Construct a MaybeItem from an Option reference to an item.
-    pub fn from_option(opt: Option<&'a Item<'b, K>>) -> Self {
+    pub(crate) fn from_option(opt: Option<&'a Item<'b, K>>) -> Self {
         MaybeItem(opt)
     }
 
     /// If this item is present, parse its argument at position `idx`.
     /// Treat the absence or malformedness of the argument as an error,
     /// but treat the absence of this item as acceptable.
-    pub fn parse_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
+    pub(crate) fn parse_arg<V: FromStr>(&self, idx: usize) -> Result<Option<V>>
     where
         Error: From<V::Err>,
     {
@@ -502,12 +502,12 @@ impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
         }
     }
     /// If this item is present, return its arguments as a single stirng.
-    pub fn args_as_str(&self) -> Option<&str> {
+    pub(crate) fn args_as_str(&self) -> Option<&str> {
         self.0.map(|item| item.args_as_str())
     }
     /// If this item is present, parse all of its arguments as a
     /// single string.
-    pub fn parse_args_as_str<V: FromStr>(&self) -> Result<Option<V>>
+    pub(crate) fn parse_args_as_str<V: FromStr>(&self) -> Result<Option<V>>
     where
         Error: From<V::Err>,
     {
@@ -526,7 +526,7 @@ impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
 
 /// Extension trait for Result<Item> -- makes it convenient to implement
 /// PauseAt predicates
-pub trait ItemResult<K: Keyword> {
+pub(crate) trait ItemResult<K: Keyword> {
     /// Return true if this is an ok result with an annotation.
     fn is_ok_with_annotation(&self) -> bool;
     /// Return true if this is an ok result with a non-annotation.
@@ -570,7 +570,7 @@ impl<'a, K: Keyword> ItemResult<K> for Result<Item<'a, K>> {
 
 /// A peekable cursor into a string that returns Items one by one.
 #[derive(Debug)]
-pub struct NetDocReader<'a, K: Keyword> {
+pub(crate) struct NetDocReader<'a, K: Keyword> {
     // TODO: I wish there were some way around having this string
     // reference, since we already need one inside NetDocReaderBase.
     /// The underlying string being parsed.
@@ -581,24 +581,29 @@ pub struct NetDocReader<'a, K: Keyword> {
 
 impl<'a, K: Keyword> NetDocReader<'a, K> {
     /// Construct a new NetDocReader to read tokens from `s`.
-    pub fn new(s: &'a str) -> Self {
+    pub(crate) fn new(s: &'a str) -> Self {
         NetDocReader {
             s,
             tokens: NetDocReaderBase::new(s).peekable(),
         }
     }
     /// Return a reference to the string used for this NetDocReader.
-    pub fn str(&self) -> &'a str {
+    pub(crate) fn str(&self) -> &'a str {
         self.s
     }
     /// Return the peekable iterator over the string's tokens.
-    pub fn iter(&mut self) -> &mut std::iter::Peekable<impl Iterator<Item = Result<Item<'a, K>>>> {
+    pub(crate) fn iter(
+        &mut self,
+    ) -> &mut std::iter::Peekable<impl Iterator<Item = Result<Item<'a, K>>>> {
         &mut self.tokens
     }
     /// Return a PauseAt wrapper around the peekable iterator in this
     /// NetDocReader that reads tokens until it reaches an element where
     /// 'f' is true.
-    pub fn pause_at<F>(&mut self, f: F) -> PauseAt<'_, impl Iterator<Item = Result<Item<'a, K>>>, F>
+    pub(crate) fn pause_at<F>(
+        &mut self,
+        f: F,
+    ) -> PauseAt<'_, impl Iterator<Item = Result<Item<'a, K>>>, F>
     where
         F: FnMut(&Result<Item<'a, K>>) -> bool,
     {
@@ -607,7 +612,7 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
     /// Return a PauseAt wrapper around the peekable iterator in this
     /// NetDocReader that returns all items.
     #[allow(unused)]
-    pub fn pauseable(
+    pub(crate) fn pauseable(
         &mut self,
     ) -> PauseAt<
         '_,
@@ -618,12 +623,12 @@ impl<'a, K: Keyword> NetDocReader<'a, K> {
     }
 
     /// Return true if there are no more items in this NetDocReader.
-    pub fn is_exhausted(&mut self) -> bool {
+    pub(crate) fn is_exhausted(&mut self) -> bool {
         self.iter().peek().is_none()
     }
 
     /// Give an error if there are remaining tokens in this NetDocReader.
-    pub fn should_be_exhausted(&mut self) -> Result<()> {
+    pub(crate) fn should_be_exhausted(&mut self) -> Result<()> {
         match self.iter().peek() {
             None => Ok(()),
             Some(Ok(t)) => Err(Error::UnexpectedToken(t.kwd().to_str(), t.pos())),

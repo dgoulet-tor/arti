@@ -16,7 +16,7 @@ pub(crate) struct HalfCirc {
 
 impl HalfCirc {
     /// Create a new HalfCirc that will allow `total_windows` RELAY cells.
-    pub fn new(total_windows: u16) -> Self {
+    pub(crate) fn new(total_windows: u16) -> Self {
         HalfCirc {
             allow_relay_cells: total_windows,
         }
@@ -24,7 +24,7 @@ impl HalfCirc {
 
     /// Try receiving a relay cell on this circuit. Give an error if there
     /// have been too many such cells to believe.
-    pub fn receive_cell(&mut self) -> Result<()> {
+    pub(crate) fn receive_cell(&mut self) -> Result<()> {
         if let Some(n) = self.allow_relay_cells.checked_sub(1) {
             self.allow_relay_cells = n;
             Ok(())

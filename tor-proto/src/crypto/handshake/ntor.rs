@@ -19,7 +19,7 @@ use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroizing;
 
 /// Client side of the Ntor handshake.
-pub struct NtorClient;
+pub(crate) struct NtorClient;
 
 impl super::ClientHandshake for NtorClient {
     type KeyType = NtorPublicKey;
@@ -39,7 +39,7 @@ impl super::ClientHandshake for NtorClient {
 }
 
 /// Server side of the ntor handshake.
-pub struct NtorServer;
+pub(crate) struct NtorServer;
 
 impl super::ServerHandshake for NtorServer {
     type KeyType = NtorSecretKey;
@@ -56,16 +56,16 @@ impl super::ServerHandshake for NtorServer {
 
 /// A set of public keys used by a client to initiate an ntor handshake.
 #[derive(Clone)]
-pub struct NtorPublicKey {
+pub(crate) struct NtorPublicKey {
     /// Public RSA identity fingerprint for the relay; used in authentication
     /// calculation.
-    pub id: RsaIdentity,
+    pub(crate) id: RsaIdentity,
     /// Public curve25519 ntor key for the relay.
-    pub pk: PublicKey,
+    pub(crate) pk: PublicKey,
 }
 
 /// A secret key used by a relay to answer an ntor request
-pub struct NtorSecretKey {
+pub(crate) struct NtorSecretKey {
     /// Public key components; must match those held by the client.
     pk: NtorPublicKey,
     /// Secret curve25519 ntor key for the relay; must correspond to
@@ -77,7 +77,7 @@ use subtle::{Choice, ConstantTimeEq};
 impl NtorSecretKey {
     /// Construct a new NtorSecretKey from its components.
     #[allow(unused)]
-    pub fn new(sk: StaticSecret, pk: PublicKey, id: RsaIdentity) -> Self {
+    pub(crate) fn new(sk: StaticSecret, pk: PublicKey, id: RsaIdentity) -> Self {
         NtorSecretKey {
             pk: NtorPublicKey { id, pk },
             sk,
@@ -92,7 +92,7 @@ impl NtorSecretKey {
 }
 
 /// Client state for an ntor handshake.
-pub struct NtorHandshakeState {
+pub(crate) struct NtorHandshakeState {
     /// The relay's public key.  We need to remember this since it is
     /// used to finish the handshake.
     relay_public: NtorPublicKey,
@@ -106,7 +106,7 @@ pub struct NtorHandshakeState {
 }
 
 /// KeyGenerator for use with ntor circuit handshake.
-pub struct NtorHkdfKeyGenerator {
+pub(crate) struct NtorHkdfKeyGenerator {
     /// Secret key information derived from the handshake, used as input
     /// to HKDF
     seed: SecretBytes,
@@ -114,7 +114,7 @@ pub struct NtorHkdfKeyGenerator {
 
 impl NtorHkdfKeyGenerator {
     /// Create a new key generator to expand a given seed
-    pub fn new(seed: SecretBytes) -> Self {
+    pub(crate) fn new(seed: SecretBytes) -> Self {
         NtorHkdfKeyGenerator { seed }
     }
 }

@@ -19,7 +19,7 @@ enum ObjKind {
 ///
 /// These are built by the TokenFmtBuilder API.
 #[derive(Clone)]
-pub struct TokenFmt<T: Keyword> {
+pub(crate) struct TokenFmt<T: Keyword> {
     /// Which keyword is being restricted?
     kwd: T,
     /// If present, a lower bound on how many arguments may be present.
@@ -36,7 +36,7 @@ pub struct TokenFmt<T: Keyword> {
 
 impl<T: Keyword> TokenFmt<T> {
     /// Return the keyword that this rule restricts.
-    pub fn kwd(&self) -> T {
+    pub(crate) fn kwd(&self) -> T {
         self.kwd
     }
     /// Check whether a single Item matches this TokenFmt rule, with respect
@@ -70,13 +70,13 @@ impl<T: Keyword> TokenFmt<T> {
 
     /// Check whether a single item has the right number of arguments
     /// and object.
-    pub fn check_item<'a>(&self, item: &Item<'a, T>) -> Result<()> {
+    pub(crate) fn check_item<'a>(&self, item: &Item<'a, T>) -> Result<()> {
         self.item_matches_args(item)?;
         self.item_matches_obj(item)
     }
 
     /// Check whether this kind of item may appear this many times.
-    pub fn check_multiplicity<'a>(&self, items: &[Item<'a, T>]) -> Result<()> {
+    pub(crate) fn check_multiplicity<'a>(&self, items: &[Item<'a, T>]) -> Result<()> {
         match items.len() {
             0 => {
                 if self.required {
@@ -106,6 +106,9 @@ impl<T: Keyword> TokenFmt<T> {
 /// // There must be exactly one "ROUTER" entry, with 5 or more arguments.
 /// section_rules.add(D.rule().required().args(5..));
 /// ```
+///
+/// TODO: I'd rather have this be pub(crate), but I haven't figured out
+/// how to make that work.  There are complicated cascading side-effects.
 pub struct TokenFmtBuilder<T: Keyword>(TokenFmt<T>);
 
 impl<T: Keyword> From<TokenFmtBuilder<T>> for TokenFmt<T> {
@@ -119,7 +122,7 @@ impl<T: Keyword> TokenFmtBuilder<T> {
     ///
     /// (By default, all arguments are allowed, the Item may appear 0
     /// or 1 times, and it may not take an object.)
-    pub fn new(t: T) -> Self {
+    pub(crate) fn new(t: T) -> Self {
         Self(TokenFmt {
             kwd: t,
             min_args: None,
@@ -133,7 +136,7 @@ impl<T: Keyword> TokenFmtBuilder<T> {
     /// Indicate that this Item is required.
     ///
     /// By default, no item is required.
-    pub fn required(self) -> Self {
+    pub(crate) fn required(self) -> Self {
         Self(TokenFmt {
             required: true,
             ..self.0
@@ -142,7 +145,7 @@ impl<T: Keyword> TokenFmtBuilder<T> {
     /// Indicate that this Item is required.
     ///
     /// By default, items may not repeat.
-    pub fn may_repeat(self) -> Self {
+    pub(crate) fn may_repeat(self) -> Self {
         Self(TokenFmt {
             may_repeat: true,
             ..self.0
@@ -152,7 +155,7 @@ impl<T: Keyword> TokenFmtBuilder<T> {
     /// Indicate that this Item takes no arguments.
     ///
     /// By default, items may take any number of arguments.
-    pub fn no_args(self) -> Self {
+    pub(crate) fn no_args(self) -> Self {
         Self(TokenFmt {
             max_args: Some(0),
             ..self.0
@@ -161,7 +164,7 @@ impl<T: Keyword> TokenFmtBuilder<T> {
     /// Indicate that this item takes a certain number of arguments.
     ///
     /// The number of arguments is provided as a range, like `5..`.
-    pub fn args<R>(self, r: R) -> Self
+    pub(crate) fn args<R>(self, r: R) -> Self
     where
         R: std::ops::RangeBounds<usize>,
     {
@@ -185,7 +188,7 @@ impl<T: Keyword> TokenFmtBuilder<T> {
     /// Indicate that this token takes an optional objet.
     ///
     /// By default, objects are not allowed.
-    pub fn obj_optional(self) -> Self {
+    pub(crate) fn obj_optional(self) -> Self {
         Self(TokenFmt {
             obj: ObjKind::ObjOk,
             ..self.0
@@ -194,7 +197,7 @@ impl<T: Keyword> TokenFmtBuilder<T> {
     /// Indicate that this token takes an required objet.
     ///
     /// By default, objects are not allowed.
-    pub fn obj_required(self) -> Self {
+    pub(crate) fn obj_required(self) -> Self {
         Self(TokenFmt {
             obj: ObjKind::RequireObj,
             ..self.0

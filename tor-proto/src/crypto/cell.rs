@@ -15,7 +15,7 @@ use generic_array::GenericArray;
 
 /// Type for the body of a relay cell.
 #[derive(Clone)]
-pub struct RelayCellBody(RawCellBody);
+pub(crate) struct RelayCellBody(RawCellBody);
 
 impl From<RawCellBody> for RelayCellBody {
     fn from(body: RawCellBody) -> Self {
@@ -150,7 +150,7 @@ pub(crate) struct InboundClientCrypt {
 
 impl OutboundClientCrypt {
     /// Return a new (empty) OutboundClientCrypt.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         OutboundClientCrypt { layers: Vec::new() }
     }
     /// Prepare a cell body to sent away from the client.
@@ -160,7 +160,7 @@ impl OutboundClientCrypt {
     ///
     /// On success, returns a reference to tag that should be expected
     /// for an authenticated SENDME sent in response to this cell.
-    pub fn encrypt(&mut self, cell: &mut RelayCellBody, hop: HopNum) -> Result<&[u8; 20]> {
+    pub(crate) fn encrypt(&mut self, cell: &mut RelayCellBody, hop: HopNum) -> Result<&[u8; 20]> {
         let hop: usize = hop.into();
         if hop >= self.layers.len() {
             return Err(Error::NoSuchHop);
@@ -176,27 +176,27 @@ impl OutboundClientCrypt {
     }
 
     /// Add a new layer to this OutboundClientCrypt
-    pub fn add_layer(&mut self, layer: Box<dyn OutboundClientLayer + Send>) {
+    pub(crate) fn add_layer(&mut self, layer: Box<dyn OutboundClientLayer + Send>) {
         assert!(self.layers.len() < std::u8::MAX as usize);
         self.layers.push(layer);
     }
 
     /// Return the number of layers configured on this OutoubndClientCrypt.
-    pub fn n_layers(&self) -> usize {
+    pub(crate) fn n_layers(&self) -> usize {
         self.layers.len()
     }
 }
 
 impl InboundClientCrypt {
     /// Return a new (empty) InboundClientCrypt.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         InboundClientCrypt { layers: Vec::new() }
     }
     /// Decrypt an incoming cell that is coming to the client.
     ///
     /// On success, return which hop was the originator of the cell.
     // XXXX use real tag type
-    pub fn decrypt(&mut self, cell: &mut RelayCellBody) -> Result<(HopNum, &[u8])> {
+    pub(crate) fn decrypt(&mut self, cell: &mut RelayCellBody) -> Result<(HopNum, &[u8])> {
         for (hopnum, layer) in self.layers.iter_mut().enumerate() {
             if let Some(tag) = layer.decrypt_inbound(cell) {
                 assert!(hopnum <= std::u8::MAX as usize);
@@ -206,7 +206,7 @@ impl InboundClientCrypt {
         Err(Error::BadCellAuth)
     }
     /// Add a new layer to this InboundClientCrypt
-    pub fn add_layer(&mut self, layer: Box<dyn InboundClientLayer + Send>) {
+    pub(crate) fn add_layer(&mut self, layer: Box<dyn InboundClientLayer + Send>) {
         assert!(self.layers.len() < std::u8::MAX as usize);
         self.layers.push(layer);
     }
@@ -215,7 +215,7 @@ impl InboundClientCrypt {
     ///
     /// TODO: use HopNum
     #[allow(dead_code)]
-    pub fn n_layers(&self) -> usize {
+    pub(crate) fn n_layers(&self) -> usize {
         self.layers.len()
     }
 }
@@ -237,7 +237,7 @@ pub(crate) mod tor1 {
     /// It is parameterized on a stream cipher and a digest type: most
     /// circuits will use AES-128-CTR and SHA1, but v3 onion services
     /// use AES-256-CTR and SHA-3.
-    pub struct CryptState<SC: StreamCipher, D: Digest + Clone> {
+    pub(crate) struct CryptState<SC: StreamCipher, D: Digest + Clone> {
         /// Stream cipher for en/decrypting cell bodies.
         cipher: SC,
         /// Digest for authenticating cells to/from this hop.
@@ -248,7 +248,7 @@ pub(crate) mod tor1 {
 
     /// A pair of CryptStates, one for the forward (away from client)
     /// direction, and one for the reverse (towards client) direction.
-    pub struct CryptStatePair<SC: StreamCipher, D: Digest + Clone> {
+    pub(crate) struct CryptStatePair<SC: StreamCipher, D: Digest + Clone> {
         /// State for en/decrypting cells sent away from the client.
         fwd: CryptState<SC, D>,
         /// State for en/decrypting cells sent towards the client.

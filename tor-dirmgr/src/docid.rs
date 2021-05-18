@@ -138,7 +138,7 @@ pub(crate) enum DocQuery {
 
 impl DocQuery {
     /// Construct an "empty" docquery from the given DocId
-    pub fn empty_from_docid(id: &DocId) -> Self {
+    pub(crate) fn empty_from_docid(id: &DocId) -> Self {
         match *id {
             DocId::LatestConsensus {
                 flavor,

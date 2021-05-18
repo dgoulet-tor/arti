@@ -443,7 +443,7 @@ pub(crate) mod test {
     /// reactor and a network.
     #[allow(unused)]
     pub(crate) struct FakeChanHandle {
-        pub cells: mpsc::Receiver<ChanCell>,
+        pub(crate) cells: mpsc::Receiver<ChanCell>,
         circmap: Arc<Mutex<circmap::CircMap>>,
         ignore_control_msgs: mpsc::Receiver<CtrlResult>,
     }

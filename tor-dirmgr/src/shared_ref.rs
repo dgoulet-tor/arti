@@ -1,5 +1,7 @@
 //! Utility module to safely refer to a mutable Arc.
 
+#![allow(unreachable_pub)]
+
 use std::sync::{Arc, RwLock};
 
 use crate::{Error, Result};

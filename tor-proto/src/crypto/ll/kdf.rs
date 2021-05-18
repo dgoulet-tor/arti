@@ -21,7 +21,7 @@ use tor_llcrypto::d::{Sha1, Sha256, Shake256};
 use zeroize::Zeroizing;
 
 /// A trait for a key derivation function.
-pub trait Kdf {
+pub(crate) trait Kdf {
     /// Derive `n_bytes` of key data from some secret `seed`.
     fn derive(&self, seed: &[u8], n_bytes: usize) -> Result<SecretBytes>;
 }
@@ -29,7 +29,7 @@ pub trait Kdf {
 /// A legacy KDF, for use with TAP.
 ///
 /// This KDF is based on SHA1.  Don't use this for anything new.
-pub struct LegacyKdf {
+pub(crate) struct LegacyKdf {
     /// Starting index value for the TAP kdf.  should always be 1.
     idx: u8,
 }
@@ -37,7 +37,7 @@ pub struct LegacyKdf {
 /// A parameterized KDF, for use with ntor.
 ///
 /// This KDF is based on HKDF-SHA256.
-pub struct Ntor1Kdf<'a, 'b> {
+pub(crate) struct Ntor1Kdf<'a, 'b> {
     /// A constant for parameterizing the kdf, during the key extraction
     /// phase.
     t_key: &'a [u8],
@@ -49,11 +49,11 @@ pub struct Ntor1Kdf<'a, 'b> {
 /// A modern KDF, for use with v3 onion services.
 ///
 /// This KDF is based on SHAKE256
-pub struct ShakeKdf();
+pub(crate) struct ShakeKdf();
 
 impl LegacyKdf {
     /// Instantiate a LegacyKdf.
-    pub fn new(idx: u8) -> Self {
+    pub(crate) fn new(idx: u8) -> Self {
         LegacyKdf { idx }
     }
 }
@@ -82,7 +82,7 @@ impl Kdf for LegacyKdf {
 
 impl<'a, 'b> Ntor1Kdf<'a, 'b> {
     /// Instantiate an Ntor1Kdf, with given values for t_key and m_expand.
-    pub fn new(t_key: &'a [u8], m_expand: &'b [u8]) -> Self {
+    pub(crate) fn new(t_key: &'a [u8], m_expand: &'b [u8]) -> Self {
         Ntor1Kdf { t_key, m_expand }
     }
 }
@@ -101,7 +101,7 @@ impl Kdf for Ntor1Kdf<'_, '_> {
 
 impl ShakeKdf {
     /// Instantiate a ShakeKdf.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         ShakeKdf()
     }
 }

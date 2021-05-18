@@ -36,7 +36,7 @@ impl AsRef<[u8]> for DocumentText {
 
 impl DocumentText {
     /// Try to return a view of this document as a a string.
-    pub fn as_str(&self) -> std::result::Result<&str, Utf8Error> {
+    pub(crate) fn as_str(&self) -> std::result::Result<&str, Utf8Error> {
         self.s.as_str_impl()
     }
 
@@ -63,7 +63,7 @@ pub(crate) enum InputString {
 
 impl InputString {
     /// Return a view of this InputString as a &str, if it is valid UTF-8.
-    pub fn as_str(&self) -> Result<&str> {
+    pub(crate) fn as_str(&self) -> Result<&str> {
         self.as_str_impl()
             .map_err(|_| Error::CacheCorruption("Invalid UTF-8").into())
     }
@@ -83,7 +83,7 @@ impl InputString {
 
     /// Construct a new InputString from a file on disk, trying to
     /// memory-map the file if possible.
-    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
+    pub(crate) fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let f = std::fs::File::open(path)?;
         #[cfg(feature = "mmap")]
         {

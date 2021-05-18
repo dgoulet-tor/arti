@@ -85,7 +85,7 @@ impl<CF: ChannelFactory> AbstractChanMgr<CF> {
     }
 
     /// Remove every unusable entry from this channel manager.
-    pub fn remove_unusable_entries(&self) -> Result<()> {
+    pub(crate) fn remove_unusable_entries(&self) -> Result<()> {
         self.channels.remove_unusable()
     }
 
@@ -106,7 +106,7 @@ impl<CF: ChannelFactory> AbstractChanMgr<CF> {
     ///
     /// If no such channel exists already, but we have one that's in
     /// progress, wait for it to succeed or fail.
-    pub async fn get_or_launch(
+    pub(crate) async fn get_or_launch(
         &self,
         ident: <<CF as ChannelFactory>::Channel as AbstractChannel>::Ident,
         target: CF::BuildSpec,
@@ -218,7 +218,7 @@ impl<CF: ChannelFactory> AbstractChanMgr<CF> {
     /// Test only: return the current open usable channel with a given
     /// `ident`, if any.
     #[cfg(test)]
-    pub fn get_nowait(
+    pub(crate) fn get_nowait(
         &self,
         ident: &<<CF as ChannelFactory>::Channel as AbstractChannel>::Ident,
     ) -> Option<Arc<CF::Channel>> {

@@ -56,7 +56,7 @@ pub fn validate_all_sigs(v: &[Box<dyn ValidatableSignature>]) -> bool {
 #[cfg(test)]
 mod test {
     #[test]
-    pub fn validatable_ed_sig() {
+    fn validatable_ed_sig() {
         use super::ed25519::{PublicKey, Signature, ValidatableEd25519Signature};
         use super::ValidatableSignature;
         use hex_literal::hex;

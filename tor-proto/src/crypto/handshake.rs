@@ -10,10 +10,10 @@
 //!
 //! Currently, this module implements only the "ntor" handshake used
 //! for circuits on today's Tor.
-pub mod fast;
+pub(crate) mod fast;
 #[cfg(feature = "hs")]
-pub mod hs_ntor;
-pub mod ntor;
+pub(crate) mod hs_ntor;
+pub(crate) mod ntor;
 
 use crate::{Result, SecretBytes};
 //use zeroize::Zeroizing;
@@ -21,7 +21,7 @@ use rand_core::{CryptoRng, RngCore};
 
 /// A ClientHandshake is used to generate a client onionskin and
 /// handle a relay onionskin.
-pub trait ClientHandshake {
+pub(crate) trait ClientHandshake {
     /// The type for the onion key.
     type KeyType;
     /// The type for the state that the client holds while waiting for a reply.
@@ -45,7 +45,7 @@ pub trait ClientHandshake {
 
 /// A ServerHandshake is used to hanle a client onionskin and generate a
 /// server onionskin.
-pub trait ServerHandshake {
+pub(crate) trait ServerHandshake {
     /// The type for the onion key.  This is a private key type.
     type KeyType;
     /// The returned key generator type.
@@ -69,7 +69,7 @@ pub trait ServerHandshake {
 /// Typically, it wraps a KDF function, and some seed key material.
 ///
 /// It can only be used once.
-pub trait KeyGenerator {
+pub(crate) trait KeyGenerator {
     /// Consumethe key
     fn expand(self, keylen: usize) -> Result<SecretBytes>;
 }
@@ -77,14 +77,14 @@ pub trait KeyGenerator {
 /// Generates keys based on the KDF-TOR function.
 ///
 /// This is deprecated and shouldn't be used for new keys.
-pub struct TapKeyGenerator {
+pub(crate) struct TapKeyGenerator {
     /// Seed for the TAP KDF.
     seed: SecretBytes,
 }
 
 impl TapKeyGenerator {
     /// Create a key generator based on a provided seed
-    pub fn new(seed: SecretBytes) -> Self {
+    pub(crate) fn new(seed: SecretBytes) -> Self {
         TapKeyGenerator { seed }
     }
 }
@@ -97,7 +97,7 @@ impl KeyGenerator for TapKeyGenerator {
 }
 
 /// Generates keys based on SHAKE-256.
-pub struct ShakeKeyGenerator {
+pub(crate) struct ShakeKeyGenerator {
     /// Seed for the key generator
     seed: SecretBytes,
 }
@@ -105,7 +105,7 @@ pub struct ShakeKeyGenerator {
 impl ShakeKeyGenerator {
     /// Create a key generator based on a provided seed
     #[allow(dead_code)] // We'll construct these for v3 onion services
-    pub fn new(seed: SecretBytes) -> Self {
+    pub(crate) fn new(seed: SecretBytes) -> Self {
         ShakeKeyGenerator { seed }
     }
 }

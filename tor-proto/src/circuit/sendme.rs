@@ -28,26 +28,26 @@ use crate::{Error, Result};
 // XXXX   operation.
 
 /// Tag type used in regular v1 sendme cells.
-pub type CircTag = [u8; 20];
+pub(crate) type CircTag = [u8; 20];
 /// Absence of a tag, as with stream cells.
-pub type NoTag = ();
+pub(crate) type NoTag = ();
 
 /// A circuit's send window.
-pub type CircSendWindow = SendWindow<CircParams, CircTag>;
+pub(crate) type CircSendWindow = SendWindow<CircParams, CircTag>;
 /// A stream's send window.
-pub type StreamSendWindow = SendWindow<StreamParams, NoTag>;
+pub(crate) type StreamSendWindow = SendWindow<StreamParams, NoTag>;
 
 /// A circuit's receive window.
-pub type CircRecvWindow = RecvWindow<CircParams>;
+pub(crate) type CircRecvWindow = RecvWindow<CircParams>;
 /// A stream's receive window.
-pub type StreamRecvWindow = RecvWindow<StreamParams>;
+pub(crate) type StreamRecvWindow = RecvWindow<StreamParams>;
 
 /// Tracks how many cells we can safely send on a circuit or stream.
 ///
 /// Additionally, remembers a list of tags that could be used to
 /// acknowledge the cells we have already sent, so we know it's safe
 /// to send more.
-pub struct SendWindow<P, T>
+pub(crate) struct SendWindow<P, T>
 where
     P: WindowParams,
     T: PartialEq + Eq + Clone,
@@ -76,7 +76,7 @@ where
 }
 
 /// Helper: parameterizes a window to determine its maximum and its increment.
-pub trait WindowParams {
+pub(crate) trait WindowParams {
     /// Largest allowable value for this window.
     fn maximum() -> u16;
     /// Increment for this window.
@@ -85,7 +85,7 @@ pub trait WindowParams {
 
 /// Parameters used for SENDME windows on circuits: limit at 1000 cells,
 /// and each SENDME adjusts by 100.
-pub struct CircParams;
+pub(crate) struct CircParams;
 impl WindowParams for CircParams {
     fn maximum() -> u16 {
         1000
@@ -98,7 +98,7 @@ impl WindowParams for CircParams {
 /// Parameters used for SENDME windows on streams: limit at 500 cells,
 /// and each SENDME adjusts by 50.
 #[derive(Clone)]
-pub struct StreamParams;
+pub(crate) struct StreamParams;
 impl WindowParams for StreamParams {
     fn maximum() -> u16 {
         500
@@ -114,7 +114,7 @@ where
     T: PartialEq + Eq + Clone,
 {
     /// Construct a new SendWindow.
-    pub fn new(window: u16) -> SendWindow<P, T> {
+    pub(crate) fn new(window: u16) -> SendWindow<P, T> {
         let increment = P::increment();
         let capacity = (window + increment - 1) / increment;
         let inner = SendWindowInner {
@@ -129,7 +129,7 @@ where
     }
 
     /// Add a reference-count to SendWindow and return a new handle to it.
-    pub fn new_ref(&self) -> Self {
+    pub(crate) fn new_ref(&self) -> Self {
         SendWindow {
             w: Arc::clone(&self.w),
             _dummy: std::marker::PhantomData,
@@ -143,7 +143,7 @@ where
     /// need to check for it later.
     ///
     /// Return the number of cells left in the window.
-    pub async fn take(&mut self, tag: &T) -> Result<u16> {
+    pub(crate) async fn take(&mut self, tag: &T) -> Result<u16> {
         loop {
             let wait_on = {
                 let mut w = self.w.lock().await;
@@ -179,7 +179,7 @@ where
     /// On failure, return None: the caller should close the stream
     /// or circuit with a protocol error.
     #[must_use = "didn't check whether SENDME tag was right."]
-    pub async fn put(&mut self, tag: Option<T>) -> Option<u16> {
+    pub(crate) async fn put(&mut self, tag: Option<T>) -> Option<u16> {
         let mut w = self.w.lock().await;
 
         match (w.tags.front(), tag) {
@@ -214,7 +214,7 @@ where
 
 /// Structure to track when we need to send SENDME cells for incoming data.
 #[derive(Clone)]
-pub struct RecvWindow<P: WindowParams> {
+pub(crate) struct RecvWindow<P: WindowParams> {
     /// Number of cells that we'd be willing to receive on this window
     /// before sending a SENDME.
     window: u16,
@@ -224,7 +224,7 @@ pub struct RecvWindow<P: WindowParams> {
 
 impl<P: WindowParams> RecvWindow<P> {
     /// Create a new RecvWindow.
-    pub fn new(window: u16) -> RecvWindow<P> {
+    pub(crate) fn new(window: u16) -> RecvWindow<P> {
         RecvWindow {
             window,
             _dummy: std::marker::PhantomData,
@@ -236,7 +236,7 @@ impl<P: WindowParams> RecvWindow<P> {
     ///
     /// Returns None if we should not have sent the cell, and we just
     /// violated the window.
-    pub fn take(&mut self) -> Result<bool> {
+    pub(crate) fn take(&mut self) -> Result<bool> {
         let v = self.window.checked_sub(1);
         if let Some(x) = v {
             self.window = x;
@@ -251,7 +251,7 @@ impl<P: WindowParams> RecvWindow<P> {
     }
 
     /// Reduce this window by `n`; give an error if this is not possible.
-    pub fn decrement_n(&mut self, n: u16) -> crate::Result<()> {
+    pub(crate) fn decrement_n(&mut self, n: u16) -> crate::Result<()> {
         let v = self.window.checked_sub(n);
         if let Some(x) = v {
             self.window = x;
@@ -264,7 +264,7 @@ impl<P: WindowParams> RecvWindow<P> {
     }
 
     /// Called when we've just sent a SENDME.
-    pub fn put(&mut self) {
+    pub(crate) fn put(&mut self) {
         self.window = self.window.checked_add(P::increment()).unwrap();
     }
 }

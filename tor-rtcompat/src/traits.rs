@@ -1,13 +1,11 @@
 //! Declarations for traits that we need our runtimes to implement.
 use async_trait::async_trait;
 use futures::stream;
+use futures::task::Spawn;
 use futures::{AsyncRead, AsyncWrite, Future};
 use std::io::Result as IoResult;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant, SystemTime};
-
-pub use async_executors::SpawnHandle;
-pub use futures::task::Spawn;
 
 /// A runtime that we can use to run Tor as a client.
 ///

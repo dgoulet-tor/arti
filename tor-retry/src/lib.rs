@@ -4,6 +4,7 @@
 //! retry something a few times, and they all fail.
 
 #![deny(missing_docs)]
+#![deny(unreachable_pub)]
 #![deny(clippy::await_holding_lock)]
 #![warn(clippy::clone_on_ref_ptr)]
 #![warn(clippy::cognitive_complexity)]

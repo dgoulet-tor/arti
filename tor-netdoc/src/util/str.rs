@@ -26,7 +26,7 @@
 /// assert_eq!(str_offset(&quote[1..], &quote[2..6]), Some(1));
 /// assert_eq!(str_offset(&quote[1..5], &quote[2..6]), None);
 /// ```
-pub fn str_offset(haystack: &str, needle: &str) -> Option<usize> {
+pub(crate) fn str_offset(haystack: &str, needle: &str) -> Option<usize> {
     let needle_start_u = needle.as_ptr() as usize;
     let needle_end_u = needle_start_u + needle.len();
     let haystack_start_u = haystack.as_ptr() as usize;
@@ -64,7 +64,7 @@ impl Extent {
     /// within `haystack`.
     ///
     /// Return None if `needle` is not in fact a slice of `haystack`.
-    pub fn new(haystack: &str, needle: &str) -> Option<Extent> {
+    pub(crate) fn new(haystack: &str, needle: &str) -> Option<Extent> {
         str_offset(haystack, needle).map(|offset| Extent {
             offset,
             length: needle.len(),
@@ -80,7 +80,7 @@ impl Extent {
     /// Note that it is possible for this to give a bogus result if
     /// provided a new haystack that happens to be at the same
     /// position in memory as the original one.
-    pub fn reconstruct<'a>(&self, haystack: &'a str) -> Option<&'a str> {
+    pub(crate) fn reconstruct<'a>(&self, haystack: &'a str) -> Option<&'a str> {
         if self.sliceptr != haystack.as_ptr() || self.slicelen != haystack.len() {
             None
         } else {

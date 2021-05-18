@@ -8,17 +8,17 @@ use crate::{Error, Result};
 use rand::{CryptoRng, RngCore};
 
 /// Number of bytes used for a "CREATE_FAST" handshake by the initiator.
-pub const FAST_C_HANDSHAKE_LEN: usize = 20;
+pub(crate) const FAST_C_HANDSHAKE_LEN: usize = 20;
 /// Number of bytes used for a "CREATE_FAST" handshake by the responder
-pub const FAST_S_HANDSHAKE_LEN: usize = 20 * 2;
+pub(crate) const FAST_S_HANDSHAKE_LEN: usize = 20 * 2;
 
 /// State for a CREATE_FAST client handshake.
-pub struct CreateFastClientState([u8; FAST_C_HANDSHAKE_LEN]);
+pub(crate) struct CreateFastClientState([u8; FAST_C_HANDSHAKE_LEN]);
 
 /// Client-handshake for CREATE_FAST.
 ///
 /// See module documentation; you probably don't want to use this.
-pub struct CreateFastClient;
+pub(crate) struct CreateFastClient;
 
 impl super::ClientHandshake for CreateFastClient {
     type KeyType = ();
@@ -56,7 +56,7 @@ impl super::ClientHandshake for CreateFastClient {
 /// Relay-handshake for CREATE_FAST.
 ///
 /// See module documentation; you probably don't want to use this.
-pub struct CreateFastServer;
+pub(crate) struct CreateFastServer;
 
 impl super::ServerHandshake for CreateFastServer {
     type KeyType = ();

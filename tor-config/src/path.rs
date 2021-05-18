@@ -96,7 +96,7 @@ impl std::fmt::Display for CfgPath {
 }
 
 /// Return a ProjectDirs object for the Arti project.
-pub fn project_dirs() -> Result<&'static ProjectDirs, Error> {
+fn project_dirs() -> Result<&'static ProjectDirs, Error> {
     /// lazy cell holding the ProjectDirs object.
     static PROJECT_DIRS: Lazy<Option<ProjectDirs>> =
         Lazy::new(|| ProjectDirs::from("org", "torproject", "Arti"));
@@ -105,7 +105,7 @@ pub fn project_dirs() -> Result<&'static ProjectDirs, Error> {
 }
 
 /// Return a UserDirs object for the current user.
-pub fn base_dirs() -> Result<&'static BaseDirs, Error> {
+fn base_dirs() -> Result<&'static BaseDirs, Error> {
     /// lazy cell holding the BaseDirs object.
     static BASE_DIRS: Lazy<Option<BaseDirs>> = Lazy::new(BaseDirs::new);
 

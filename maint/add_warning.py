@@ -9,6 +9,7 @@ PAT = re.compile(r'^#!\[(allow|deny|warn)')
 
 WANT_LINTS = """
 #![deny(missing_docs)]
+#![deny(unreachable_pub)]
 #![deny(clippy::await_holding_lock)]
 #![deny(clippy::debug_assert_with_mut_call)]
 #![deny(clippy::exhaustive_enums)]
@@ -33,7 +34,6 @@ SOON="""
 #![deny(clippy::cargo_common_metadata)]
 #![deny(clippy::future_not_send)]
 #![deny(clippy::redundant_closure_for_method_calls)]
-#![deny(clippy::redundant_pub_crate)]
 #![deny(clippy::unwrap_used)]
 #![deny(clippy::panic)]
 #![deny(clippy::expect_used)]
@@ -44,6 +44,11 @@ SOON="""
 #![deny(clippy::if_then_some_else_none)]
 #![deny(clippy::implicit_clone)]
 """
+
+DECIDED_NOT = """
+#![deny(clippy::redundant_pub_crate)]
+"""
+
 
 PAT2 = re.compile(r'^#!\[(allow|deny|warn)\(((?:clippy::)?)([^\)]*)')
 def warning_key(w):

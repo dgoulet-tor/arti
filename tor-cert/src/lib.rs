@@ -31,6 +31,7 @@
 //! ```
 
 #![deny(missing_docs)]
+#![deny(unreachable_pub)]
 #![deny(clippy::await_holding_lock)]
 #![warn(clippy::clone_on_ref_ptr)]
 #![warn(clippy::cognitive_complexity)]
@@ -238,7 +239,7 @@ struct UnrecognizedExt {
 
 impl CertExt {
     /// Return the identifier code for this Extension.
-    pub fn ext_id(&self) -> ExtType {
+    fn ext_id(&self) -> ExtType {
         match self {
             CertExt::SignedWithEd25519(_) => ExtType::SIGNED_WITH_ED25519_KEY,
             CertExt::Unrecognized(u) => u.ext_type,
@@ -614,7 +615,7 @@ mod test {
     }
 
     #[test]
-    pub fn certified_key() -> Result<()> {
+    fn certified_key() -> Result<()> {
         let b =
             hex!("4c27616d6f757220756e6974206365757820717527656e636861c3ae6e616974206c6520666572");
         let mut r = Reader::from_slice(&b);

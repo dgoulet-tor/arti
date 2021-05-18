@@ -19,7 +19,7 @@ use std::time::SystemTime;
 /// This information is ordinarily derived from the consensus, but doesn't
 /// have to be.
 #[derive(Debug, Clone)]
-pub struct ConsensusMeta {
+pub(crate) struct ConsensusMeta {
     /// The time over which the consensus is valid.
     lifetime: Lifetime,
     /// A sha3-256 digest of the signed portion of the consensus: used for
@@ -32,7 +32,7 @@ pub struct ConsensusMeta {
 
 impl ConsensusMeta {
     /// Create a new ConsensusMeta
-    pub fn new(
+    pub(crate) fn new(
         lifetime: Lifetime,
         sha3_256_of_signed: [u8; 32],
         sha3_256_of_whole: [u8; 32],
@@ -45,7 +45,7 @@ impl ConsensusMeta {
     }
     /// Derive a new ConsensusMeta from an UnvalidatedMdConsensus and the
     /// text of its signed portino.
-    pub fn from_unvalidated(
+    pub(crate) fn from_unvalidated(
         signed_part: &str,
         remainder: &str,
         con: &UnvalidatedMdConsensus,
@@ -57,21 +57,21 @@ impl ConsensusMeta {
     /// Derive a new ConsensusMeta from a MdConsensus and the text of its
     /// signed portion.
     #[allow(unused)]
-    pub fn from_consensus(signed_part: &str, remainder: &str, con: &MdConsensus) -> Self {
+    pub(crate) fn from_consensus(signed_part: &str, remainder: &str, con: &MdConsensus) -> Self {
         let lifetime = con.lifetime().clone();
         let (sd, wd) = sha3_dual(signed_part, remainder);
         ConsensusMeta::new(lifetime, sd, wd)
     }
     /// Return the lifetime of this ConsensusMeta
-    pub fn lifetime(&self) -> &Lifetime {
+    pub(crate) fn lifetime(&self) -> &Lifetime {
         &self.lifetime
     }
     /// Return the sha3-256 of the signed portion of this consensus.
-    pub fn sha3_256_of_signed(&self) -> &[u8; 32] {
+    pub(crate) fn sha3_256_of_signed(&self) -> &[u8; 32] {
         &self.sha3_256_of_signed
     }
     /// Return the sha3-256 of the entirety of this consensus.
-    pub fn sha3_256_of_whole(&self) -> &[u8; 32] {
+    pub(crate) fn sha3_256_of_whole(&self) -> &[u8; 32] {
         &self.sha3_256_of_whole
     }
 }
@@ -92,7 +92,7 @@ fn sha3_dual(signed_part: impl AsRef<[u8]>, remainder: impl AsRef<[u8]>) -> ([u8
 /// This information is ordinarily derived from the authority cert, but it
 /// doesn't have to be.
 #[derive(Clone, Debug)]
-pub struct AuthCertMeta {
+pub(crate) struct AuthCertMeta {
     /// Key IDs (identity and signing) for the certificate.
     ids: AuthCertKeyIds,
     /// Time of publication.
@@ -103,7 +103,7 @@ pub struct AuthCertMeta {
 
 impl AuthCertMeta {
     /// Construct a new AuthCertMeta from its components
-    pub fn new(ids: AuthCertKeyIds, published: SystemTime, expires: SystemTime) -> Self {
+    pub(crate) fn new(ids: AuthCertKeyIds, published: SystemTime, expires: SystemTime) -> Self {
         AuthCertMeta {
             ids,
             published,
@@ -112,20 +112,20 @@ impl AuthCertMeta {
     }
 
     /// Construct a new AuthCertMeta from a certificate.
-    pub fn from_authcert(cert: &AuthCert) -> Self {
+    pub(crate) fn from_authcert(cert: &AuthCert) -> Self {
         AuthCertMeta::new(*cert.key_ids(), cert.published(), cert.expires())
     }
 
     /// Return the key IDs for this certificate
-    pub fn key_ids(&self) -> &AuthCertKeyIds {
+    pub(crate) fn key_ids(&self) -> &AuthCertKeyIds {
         &self.ids
     }
     /// Return the published time for this certificate
-    pub fn published(&self) -> SystemTime {
+    pub(crate) fn published(&self) -> SystemTime {
         self.published
     }
     /// Return the expiration time for this certificate
-    pub fn expires(&self) -> SystemTime {
+    pub(crate) fn expires(&self) -> SystemTime {
         self.expires
     }
 }
