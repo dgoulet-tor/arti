@@ -122,6 +122,7 @@ mod tls {
     use std::net::SocketAddr;
 
     /// The TLS-over-TCP type returned by this module.
+    #[allow(unreachable_pub)] // not actually unreachable; depends on features
     pub type TlsStream = async_native_tls::TlsStream<TcpStream>;
 
     /// A connection factory for use with async_std.
