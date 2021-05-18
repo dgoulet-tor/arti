@@ -1,8 +1,9 @@
 //! A general interface for Tor client usage.
 //!
 //! To construct a client, run the `TorClient::bootstrap()` method.
-//! Once the client is bootstrapped, you can make connections over the Tor
-//! network using `TorClient::connect()`.
+//! Once the client is bootstrapped, you can make anonymous
+//! connections ("streams") over the Tor network using
+//! `TorClient::connect()`.
 use tor_circmgr::TargetPort;
 use tor_dirmgr::DirMgrConfig;
 use tor_proto::circuit::IpVersionPreference;
@@ -15,7 +16,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Context, Result};
 use log::info;
 
-/// An active client connection to the Tor network.
+/// An active client session on the Tor network.
 ///
 /// While it's running, it will fetch directory information, build
 /// circuits, and make connections for you.
@@ -125,8 +126,8 @@ impl<R: Runtime> TorClient<R> {
         })
     }
 
-    /// Launch a connection to the provided address and port over the Tor
-    /// network.
+    /// Launch an anonymized connection to the provided address and
+    /// port over the Tor network.
     ///
     /// Note that because Tor prefers to do DNS resolution on the remote
     /// side of the network, this function takes its address as a string.

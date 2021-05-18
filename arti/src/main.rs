@@ -18,7 +18,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 
 #[derive(FromArgs, Debug, Clone)]
-/// Make a connection to the Tor network, open a SOCKS port, and proxy
+/// Connect to the Tor network, open a SOCKS port, and proxy
 /// traffic.
 ///
 /// This is a demo; you get no stability guarantee.

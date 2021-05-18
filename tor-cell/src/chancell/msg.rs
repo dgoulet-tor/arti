@@ -61,7 +61,7 @@ pub enum ChanMsg {
     /// as part of authentication
     AuthChallenge(AuthChallenge),
     /// Part of channel negotiation: used to authenticate relays when they
-    /// initiate connection
+    /// initiate the channel.
     Authenticate(Authenticate),
     /// Not yet used
     Authorize(Authorize),
@@ -539,7 +539,7 @@ caret_int! {
         CONNECTFAILED = 6,
         /// Connected to a relay, but its OR identity wasn't as requested.
         OR_IDENTITY = 7,
-        /// The OR connection carrying this circuit died.
+        /// One of the OR channels carrying this circuit died.
         CHANNEL_CLOSED = 8,
         /// Circuit expired for being too dirty or old
         FINISHED = 9,

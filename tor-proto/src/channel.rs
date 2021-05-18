@@ -263,7 +263,7 @@ impl Channel {
         Ok(())
     }
 
-    /// Return true if this connection is closed and therefore unusable.
+    /// Return true if this channel is closed and therefore unusable.
     pub fn is_closing(&self) -> bool {
         self.closed.load(Ordering::SeqCst)
     }

@@ -539,8 +539,8 @@ impl ClientCirc {
         Ok(RawCellStream::new(target, receiver))
     }
 
-    /// Start a DataStream connection to the given address and port,
-    /// using a BEGIN cell.
+    /// Start a DataStream (anonymized connection) to the given
+    /// address and port, using a BEGIN cell.
     async fn begin_data_stream(self: Arc<Self>, msg: RelayMsg) -> Result<DataStream> {
         let stream = self.begin_stream_impl(msg).await?;
         // TODO: waiting for a response here preculdes optimistic data.
@@ -559,7 +559,7 @@ impl ClientCirc {
         }
     }
 
-    /// Start a connection to the given address and port, using a BEGIN
+    /// Start a stream to the given address and port, using a BEGIN
     /// cell.
     ///
     /// The use of a string for the address is intentional: you should let
@@ -575,7 +575,7 @@ impl ClientCirc {
         self.begin_data_stream(beginmsg.into()).await
     }
 
-    /// Start a new connection to the last relay in the circuit, using
+    /// Start a new stream to the last relay in the circuit, using
     /// a BEGIN_DIR cell.
     pub async fn begin_dir_stream(self: Arc<Self>) -> Result<DataStream> {
         self.begin_data_stream(RelayMsg::BeginDir).await
