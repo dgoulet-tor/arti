@@ -27,7 +27,7 @@ pub enum DocId {
     Microdesc(MdDigest),
     /// A request for the router descriptor of a public relay, by SHA1
     /// digest.
-    Routerdesc(RdDigest),
+    RouterDesc(RdDigest),
 }
 
 /// The underlying type of a DocId.
@@ -44,7 +44,7 @@ pub(crate) enum DocType {
     /// A microdescriptor
     Microdesc,
     /// A router descriptor.
-    Routerdesc,
+    RouterDesc,
 }
 
 impl DocId {
@@ -56,7 +56,7 @@ impl DocId {
             LatestConsensus { flavor: f, .. } => T::Consensus(*f),
             AuthCert(_) => T::AuthCert,
             Microdesc(_) => T::Microdesc,
-            Routerdesc(_) => T::Routerdesc,
+            RouterDesc(_) => T::RouterDesc,
         }
     }
 }
@@ -72,7 +72,7 @@ pub(crate) enum ClientRequest {
     /// Request for one or more microdescriptors
     Microdescs(request::MicrodescRequest),
     /// Request for one or more router descriptors
-    Routerdescs(request::RouterDescRequest),
+    RouterDescs(request::RouterDescRequest),
 }
 
 impl ClientRequest {
@@ -83,7 +83,7 @@ impl ClientRequest {
             Consensus(a) => a,
             AuthCert(a) => a,
             Microdescs(a) => a,
-            Routerdescs(a) => a,
+            RouterDescs(a) => a,
         }
     }
 }
@@ -133,7 +133,7 @@ pub(crate) enum DocQuery {
     /// A request for microdescriptors
     Microdesc(Vec<MdDigest>),
     /// A request for router descriptors
-    Routerdesc(Vec<RdDigest>),
+    RouterDesc(Vec<RdDigest>),
 }
 
 impl DocQuery {
@@ -149,7 +149,7 @@ impl DocQuery {
             },
             DocId::AuthCert(_) => Self::AuthCert(Vec::new()),
             DocId::Microdesc(_) => Self::Microdesc(Vec::new()),
-            DocId::Routerdesc(_) => Self::Routerdesc(Vec::new()),
+            DocId::RouterDesc(_) => Self::RouterDesc(Vec::new()),
         }
     }
 
@@ -159,7 +159,7 @@ impl DocQuery {
             (Self::LatestConsensus { .. }, DocId::LatestConsensus { .. }) => {}
             (Self::AuthCert(ids), DocId::AuthCert(id)) => ids.push(id),
             (Self::Microdesc(ids), DocId::Microdesc(id)) => ids.push(id),
-            (Self::Routerdesc(ids), DocId::Routerdesc(id)) => ids.push(id),
+            (Self::RouterDesc(ids), DocId::RouterDesc(id)) => ids.push(id),
             (_, _) => panic!(),
         }
     }
@@ -180,9 +180,9 @@ impl DocQuery {
                 v.sort_unstable();
                 v[..].chunks(N).map(|s| Microdesc(s.to_vec())).collect()
             }
-            Routerdesc(mut v) => {
+            RouterDesc(mut v) => {
                 v.sort_unstable();
-                v[..].chunks(N).map(|s| Routerdesc(s.to_vec())).collect()
+                v[..].chunks(N).map(|s| RouterDesc(s.to_vec())).collect()
             }
         }
     }

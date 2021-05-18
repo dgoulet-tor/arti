@@ -754,7 +754,7 @@ const INSTALL_V0_SCHEMA: &str = "
 
 /// Update the database schema from version 0 to version 1.
 const UPDATE_SCHEMA_V0_TO_V1: &str = "
-  CREATE TABLE Routerdescs (
+  CREATE TABLE RouterDescs (
     sha1_digest TEXT PRIMARY KEY NOT NULL,
     published DATE NOT NULL,
     contents BLOB NOT NULL
@@ -833,7 +833,7 @@ const FIND_MD: &str = "
 /// Query: find the router descriptors with a given hex-encoded sha1 digest
 const FIND_RD: &str = "
   SELECT contents
-  FROM Routerdescs
+  FROM RouterDescs
   WHERE sha1_digest = ?
 ";
 
@@ -871,7 +871,7 @@ const INSERT_MD: &str = "
 /// Query: Add a new router descriptor
 #[allow(unused)]
 const INSERT_RD: &str = "
-  INSERT OR REPLACE INTO Routerdescs ( sha1_digest, published, contents )
+  INSERT OR REPLACE INTO RouterDescs ( sha1_digest, published, contents )
   VALUES ( ?, ?, ? );
 ";
 
@@ -890,7 +890,7 @@ const DROP_OLD_EXTDOCS: &str = "
 /// months.
 // TODO: Choose a more realistic time.
 const DROP_OLD_ROUTERDESCS: &str = "
-  DELETE FROM Routerdescs WHERE published < datetime('now','-3 months');
+  DELETE FROM RouterDescs WHERE published < datetime('now','-3 months');
   ";
 /// Query: Discard every microdescriptor that hasn't been listed for 3 months.
 // TODO: Choose a more realistic time.

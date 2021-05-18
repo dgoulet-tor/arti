@@ -453,11 +453,11 @@ impl<R: Runtime> DirMgr<R> {
                         .map(|(id, md)| (DocId::Microdesc(id), DocumentText::from_string(md))),
                 );
             }
-            Routerdesc(digests) => result.extend(
+            RouterDesc(digests) => result.extend(
                 store
                     .routerdescs(digests)?
                     .into_iter()
-                    .map(|(id, rd)| (DocId::Routerdesc(id), DocumentText::from_string(rd))),
+                    .map(|(id, rd)| (DocId::RouterDesc(id), DocumentText::from_string(rd))),
             ),
         }
         Ok(())
@@ -481,8 +481,8 @@ impl<R: Runtime> DirMgr<R> {
                 DocQuery::Microdesc(ids) => {
                     res.push(ClientRequest::Microdescs(ids.into_iter().collect()));
                 }
-                DocQuery::Routerdesc(ids) => {
-                    res.push(ClientRequest::Routerdescs(ids.into_iter().collect()));
+                DocQuery::RouterDesc(ids) => {
+                    res.push(ClientRequest::RouterDescs(ids.into_iter().collect()));
                 }
             }
         }
