@@ -45,12 +45,41 @@ impl ConnectPrefs {
     pub fn new() -> Self {
         Self::default()
     }
-    /// Set the preference for what kind of IPv4/IPv6 connection we'd
-    /// like to make.
+
+    /// Indicate that a stream may be made over IPv4 or IPv6, but that
+    /// we'd prefer IPv6.
+    pub fn ipv6_preferred(&mut self) -> &mut Self {
+        self.ip_ver_pref = IpVersionPreference::Ipv6Preferred;
+        self
+    }
+
+    /// Indicate that a stream may only be made over IPv6.
     ///
-    /// (By default, IPv4 is preferred.)
-    pub fn set_ip_preference(&mut self, pref: IpVersionPreference) {
-        self.ip_ver_pref = pref;
+    /// When this option is set, we will only pick exit relays that
+    /// suppport IPv6, and we will tell them to only give us IPv6
+    /// connections.
+    pub fn ipv6_only(&mut self) -> &mut Self {
+        self.ip_ver_pref = IpVersionPreference::Ipv6Only;
+        self
+    }
+
+    /// Indicate that a stream may be made over IPv4 or IPv6, but that
+    /// we'd prefer IPv4.
+    ///
+    /// This is the default.
+    pub fn ipv4_preferred(&mut self) -> &mut Self {
+        self.ip_ver_pref = IpVersionPreference::Ipv4Preferred;
+        self
+    }
+
+    /// Indicate that a stream may only be made over IPv4.
+    ///
+    /// When this option is set, we will only pick exit relays that
+    /// suppport IPv4, and we will tell them to only give us IPv4
+    /// connections.
+    pub fn ipv4_only(&mut self) -> &mut Self {
+        self.ip_ver_pref = IpVersionPreference::Ipv4Only;
+        self
     }
 
     /// Get the begin_flags fields that we should use for the BEGIN

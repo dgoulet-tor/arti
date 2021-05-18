@@ -18,7 +18,6 @@ tokio = [ "tor-client/tokio", "tor-rtcompat/tokio" ]
 [dependencies]
 tor-client = { path = "../tor-client", version = "*", default-features=false }
 tor-dirmgr = { path="../tor-dirmgr", version="*" }
-tor-proto = { path="../tor-proto", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
 tor-socksproto = { path="../tor-socksproto", version= "*" }
 tor-config = { path="../tor-config", version = "*" }
