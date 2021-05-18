@@ -86,26 +86,26 @@ impl BandwidthFn {
 #[derive(Clone, Debug, Copy)]
 #[non_exhaustive]
 pub enum WeightRole {
-    /// Selecting a node to use as a guard
+    /// Selecting a relay to use as a guard
     Guard,
-    /// Selecting a node to use as a middle relay in a circuit.
+    /// Selecting a relay to use as a middle relay in a circuit.
     Middle,
-    /// Selecting a node to use to deliver traffic to the internet.
+    /// Selecting a relay to use to deliver traffic to the internet.
     Exit,
-    /// Selecting a node for a one-hop BEGIN_DIR directory request.
+    /// Selecting a relay for a one-hop BEGIN_DIR directory request.
     BeginDir,
-    /// Selecting a node with no additional weight beyond its bandwidth.
+    /// Selecting a relay with no additional weight beyond its bandwidth.
     Unweighted,
 }
 
 /// Description for how to weight a single kind of relay for each WeightRole.
 #[derive(Clone, Debug, Copy)]
 struct RelayWeight {
-    /// How to weight this kind of relay when picking a guard node.
+    /// How to weight this kind of relay when picking a guard relay.
     as_guard: u32,
-    /// How to weight this kind of relay when picking a middle node.
+    /// How to weight this kind of relay when picking a middle relay.
     as_middle: u32,
-    /// How to weight this kind of relay when picking a exit node.
+    /// How to weight this kind of relay when picking a exit relay.
     as_exit: u32,
     /// How to weight this kind of relay when picking a one-hop BEGIN_DIR.
     as_dir: u32,
@@ -162,11 +162,11 @@ impl RelayWeight {
 /// All together, this makes 8 kinds of relays.
 // TODO: use bitflags here?
 struct WeightKind(u8);
-/// Flag in weightkind for Guard nodes.
+/// Flag in weightkind for Guard relays.
 const FLG_GUARD: u8 = 1 << 0;
-/// Flag in weightkind for Exit nodes.
+/// Flag in weightkind for Exit relays.
 const FLG_EXIT: u8 = 1 << 1;
-/// Flag in weightkind for V2Dir nodes.
+/// Flag in weightkind for V2Dir relays.
 const FLG_DIR: u8 = 1 << 2;
 
 impl WeightKind {
@@ -263,7 +263,7 @@ impl WeightSet {
     ) -> Self {
         /// Find a single RelayWeight, given the names that its bandwidth
         /// parameters have. The `g` parameter is the weight as a guard, the
-        /// `m` parameter is the weight as a middle node, the `e` parameter is
+        /// `m` parameter is the weight as a middle relay, the `e` parameter is
         /// the weight as an exit, and the `d` parameter is the weight as a
         /// directory.
         #[allow(clippy::many_single_char_names)]
@@ -279,9 +279,9 @@ impl WeightSet {
         assert!(weight_scale >= 0);
         let weight_scale = weight_scale as u32;
 
-        // For non-V2Dir nodes, we have names for most of their weights.
+        // For non-V2Dir relays, we have names for most of their weights.
         //
-        // (There is no Wge, since we only use Guard nodes as guards.  By the
+        // (There is no Wge, since we only use Guard relays as guards.  By the
         // same logic, Wme has no reason to exist, but according to the spec it
         // does.)
         let w_none = single(p, "Wgm", "Wmm", "Wem", "Wbm");

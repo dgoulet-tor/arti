@@ -74,7 +74,7 @@ caret_int! {
         // note gap in numbering: 7 is grouped with the variable-length cells
         /// Finish a channel handshake with time and address information
         NETINFO = 8,
-        /// Relay cellm transmitted over a circuit.  Limited.
+        /// Relay cell, transmitted over a circuit.  Limited.
         RELAY_EARLY = 9,
         /// Create a new circuit (current format)
         CREATE2 = 10,

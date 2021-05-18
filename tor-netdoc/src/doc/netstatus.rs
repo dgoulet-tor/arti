@@ -362,10 +362,10 @@ bitflags! {
         const EXIT = (1<<2);
         /// Is this relay considered "fast" above a certain threshold?
         const FAST = (1<<3);
-        /// Is this relay suitable for use as a guard node?
+        /// Is this relay suitable for use as a guard relay?
         ///
         /// Clients choose their their initial relays from among the set
-        /// of Guard nodes.
+        /// of Guard relays.
         const GUARD = (1<<4);
         /// Does this relay participate on the hidden service directory
         /// ring?

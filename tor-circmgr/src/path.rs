@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use crate::{Error, Result};
 
-/// A list of Tor nodes through the network.
+/// A list of Tor relays through the network.
 #[non_exhaustive]
 pub enum TorPath<'a> {
     /// A single-hop path for use with a directory cache, when a relay is

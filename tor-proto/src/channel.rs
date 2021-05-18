@@ -1,4 +1,4 @@
-//! Code for talking directly (over a TLS connection) to a Tor node.
+//! Code for talking directly (over a TLS connection) to a Tor client or relay.
 //!
 //! Channels form the basis of the rest of the Tor protocol: they are
 //! the only way for two Tor instances to talk.

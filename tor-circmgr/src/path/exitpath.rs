@@ -4,7 +4,7 @@ use super::*;
 use crate::{DirInfo, Error, TargetPort};
 use tor_netdir::WeightRole;
 
-/// A PathBuilder that builds a path to an exit node supporting a given
+/// A PathBuilder that builds a path to an exit relay supporting a given
 /// set of ports.
 pub struct ExitPathBuilder {
     /// List of ports that the exit needs to support
@@ -12,7 +12,7 @@ pub struct ExitPathBuilder {
 }
 
 impl ExitPathBuilder {
-    /// Create a new builder that will try to get an exit node
+    /// Create a new builder that will try to get an exit relay
     /// containing all the ports in `ports`.
     pub(crate) fn new(wantports: Vec<TargetPort>) -> Self {
         ExitPathBuilder { wantports }

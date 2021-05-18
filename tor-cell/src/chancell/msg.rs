@@ -19,9 +19,9 @@ pub trait Body: Readable {
 
 /// Decoded message from a channel.
 ///
-/// A ChanMsg is an item received on a channel -- a message
-/// from another Tor node that we are connected to directly over a TLS
-/// connection.
+/// A ChanMsg is an item received on a channel -- a message from
+/// another Tor client or relay that we are connected to directly over
+/// a TLS connection.
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub enum ChanMsg {
@@ -491,7 +491,7 @@ impl Readable for Relay {
 ///
 /// On receiving a Destroy message, a Tor implementation should
 /// tear down the associated circuit, and pass the destroy message
-/// down the circuit to later/earlier nodes on the circuit (if any).
+/// down the circuit to later/earlier hops on the circuit (if any).
 #[derive(Clone, Debug)]
 pub struct Destroy {
     /// Reason code given for tearing down this circuit
