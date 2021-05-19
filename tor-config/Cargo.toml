@@ -9,6 +9,7 @@ homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Configuration types and code used by the Arti Tor implementation"
 keywords = [ "tor", "arti" ]
 categories = [ "configuration" ]
+repository="https://gitlab.torproject.org/tpo/core/arti.git/"
 
 [dependencies]
 config = { version = "0.11.0", default-features = false, features = ["toml"] }

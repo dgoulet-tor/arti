@@ -9,6 +9,7 @@ homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Non-standard certificate formats used by Tor"
 keywords = [ "tor", "arti", "certificate" ]
 categories = [ "parser-implementations" ]
+repository="https://gitlab.torproject.org/tpo/core/arti.git/"
 
 [dependencies]
 caret = { path="../caret" }

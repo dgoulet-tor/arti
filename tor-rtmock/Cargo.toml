@@ -9,6 +9,7 @@ homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Testing mock support for tor-rtcomapt"
 keywords = [ "tor", "arti", "async", "testing" ]
 categories = [ "asynchronous", ]
+repository="https://gitlab.torproject.org/tpo/core/arti.git/"
 
 [dependencies]
 async-trait = "0.1.48"

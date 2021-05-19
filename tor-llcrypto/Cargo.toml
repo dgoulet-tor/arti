@@ -9,6 +9,7 @@ homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Low level cryptography wrappers used by Tor"
 keywords = [ "tor", "arti", "cryptography" ]
 categories = [ "cryptography" ]
+repository="https://gitlab.torproject.org/tpo/core/arti.git/"
 
 [dependencies]
 aes = { version = "0.7.0", features = ["ctr"] }

@@ -9,6 +9,7 @@ homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Compatibility layer for asynchronous runtimes, used by Tor"
 keywords = [ "tor", "arti", "async" ]
 categories = [ "asynchronous" ]
+repository="https://gitlab.torproject.org/tpo/core/arti.git/"
 
 [features]
 

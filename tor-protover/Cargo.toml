@@ -9,6 +9,7 @@ homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Implementation for Tor's subprotocol versioning"
 keywords = [ "tor", "arti" ]
 categories = [ "network-programming" ]
+repository="https://gitlab.torproject.org/tpo/core/arti.git/"
 
 [dependencies]
 caret = { path="../caret", version="*" }
