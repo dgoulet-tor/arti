@@ -15,7 +15,7 @@
 //
 // Performance note: this implementation requires a fast RNG, but
 // doesn't need much storage.
-pub fn pick_weighted<R, I, F>(rng: &mut R, i: I, weightfn: F) -> Option<I::Item>
+pub(crate) fn pick_weighted<R, I, F>(rng: &mut R, i: I, weightfn: F) -> Option<I::Item>
 where
     I: Iterator,
     F: Fn(&I::Item) -> u64,
