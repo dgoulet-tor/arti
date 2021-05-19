@@ -8,6 +8,7 @@ publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Implementation for Tor's subprotocol versioning"
 keywords = [ "tor", "arti" ]
+categories = [ "network-programming" ]
 
 [dependencies]
 caret = { path="../caret", version="*" }

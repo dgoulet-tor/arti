@@ -8,6 +8,7 @@ publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Helpers to retry fallable operations, used by Tor"
 keywords = [ "tor", "arti", "async", "retry" ]
+categories = [ "algorithms" ]
 
 [dependencies]
 

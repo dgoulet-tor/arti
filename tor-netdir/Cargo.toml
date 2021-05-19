@@ -8,6 +8,7 @@ publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Types to represent and use a Tor network directory"
 keywords = [ "tor", "arti" ]
+categories = [ "network-programming" ]
 
 [features]
 default = []

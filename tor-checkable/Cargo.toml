@@ -8,6 +8,7 @@ publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Types to ensure that signed or time-bound data is validated before use"
 keywords = [ "tor", "arti", "typestate" ]
+categories = [ "cryptography", "rust-patterns" ]
 
 [dependencies]
 tor-llcrypto = { path="../tor-llcrypto", version = "*" }

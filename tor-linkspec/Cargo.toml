@@ -8,6 +8,7 @@ publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Parts of the Tor protocol that indicate specific relays on the network"
 keywords = [ "tor", "arti" ]
+categories = [ "network-programming" ]
 
 [dependencies]
 tor-llcrypto = { path="../tor-llcrypto" }
