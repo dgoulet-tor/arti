@@ -321,7 +321,7 @@ impl TargetCircUsage {
                 Ok((path, CircUsage::Dir))
             }
             TargetCircUsage::Exit(p) => {
-                let path = ExitPathBuilder::new(p.clone()).pick_path(rng, netdir)?;
+                let path = ExitPathBuilder::from_target_ports(p.clone()).pick_path(rng, netdir)?;
                 let policy = path
                     .exit_policy()
                     .expect("ExitPathBuilder gave us a one-hop circuit?");

@@ -2,38 +2,63 @@
 
 use super::*;
 use crate::{DirInfo, Error, TargetPort};
-use tor_netdir::WeightRole;
+use tor_netdir::{NetDir, WeightRole};
+
+/// Internal representation of PathBuilder.
+enum ExitPathBuilderInner<'a> {
+    /// Request a path that allows exit to the given TargetPort's.
+    WantsPorts(Vec<TargetPort>),
+
+    /// Request a path that uses a given relay as exit node.
+    ChosenExit(Relay<'a>),
+}
 
 /// A PathBuilder that builds a path to an exit relay supporting a given
 /// set of ports.
-pub struct ExitPathBuilder {
-    /// List of ports that the exit needs to support
-    wantports: Vec<TargetPort>,
+pub struct ExitPathBuilder<'a> {
+    /// The inner ExitPathBuilder state.
+    inner: ExitPathBuilderInner<'a>,
 }
 
-impl ExitPathBuilder {
+impl<'a> ExitPathBuilder<'a> {
     /// Create a new builder that will try to get an exit relay
     /// containing all the ports in `ports`.
-    pub(crate) fn new(wantports: Vec<TargetPort>) -> Self {
-        ExitPathBuilder { wantports }
+    pub fn from_target_ports(wantports: Vec<TargetPort>) -> Self {
+        Self {
+            inner: ExitPathBuilderInner::WantsPorts(wantports),
+        }
     }
 
-    /// Return true if `r` supports every port in `self.wantports`
-    fn ports_supported_by(&self, r: &Relay<'_>) -> bool {
-        self.wantports.iter().all(|p| p.is_supported_by(r))
+    /// Create a new builder that will try to build a path with the given exit
+    /// relay as the last hop.
+    pub fn from_chosen_exit(exit_relay: Relay<'a>) -> Self {
+        Self {
+            inner: ExitPathBuilderInner::ChosenExit(exit_relay),
+        }
+    }
+
+    /// Find a suitable exit node from either the chosen exit or from the network directory.
+    fn pick_exit<R: Rng>(&self, rng: &mut R, netdir: &'a NetDir) -> Result<Relay<'a>> {
+        match &self.inner {
+            ExitPathBuilderInner::WantsPorts(wantports) => Ok(netdir
+                .pick_relay(rng, WeightRole::Exit, |r| {
+                    wantports.iter().all(|p| p.is_supported_by(r))
+                })
+                .ok_or_else(|| Error::NoRelays("No exit relay found".into()))?),
+
+            ExitPathBuilderInner::ChosenExit(exit_relay) => Ok(exit_relay.clone()),
+        }
     }
 
     /// Try to create and return a path corresponding to the requirements of
     /// this builder.
-    pub fn pick_path<'a, R: Rng>(&self, rng: &mut R, netdir: DirInfo<'a>) -> Result<TorPath<'a>> {
+    pub fn pick_path<R: Rng>(&self, rng: &mut R, netdir: DirInfo<'a>) -> Result<TorPath<'a>> {
         // TODO: implement guards
         let netdir = match netdir {
             DirInfo::Fallbacks(_) => return Err(Error::NeedConsensus.into()),
             DirInfo::Directory(d) => d,
         };
-        let exit = netdir
-            .pick_relay(rng, WeightRole::Exit, |r| self.ports_supported_by(r))
-            .ok_or_else(|| Error::NoRelays("No exit relay found".into()))?;
+        let exit = self.pick_exit(rng, &netdir)?;
 
         let middle = netdir
             .pick_relay(rng, WeightRole::Middle, |r| !r.in_same_family(&exit))
@@ -45,6 +70,6 @@ impl ExitPathBuilder {
             })
             .ok_or_else(|| Error::NoRelays("No entry relay found".into()))?;
 
-        Ok(TorPath::Path(vec![entry, middle, exit]))
+        Ok(TorPath::new_multihop(vec![entry, middle, exit]))
     }
 }

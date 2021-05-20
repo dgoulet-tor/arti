@@ -29,13 +29,13 @@ impl DirPathBuilder {
             DirInfo::Fallbacks(f) => {
                 let relay = f.choose(rng);
                 if let Some(r) = relay {
-                    return Ok(TorPath::FallbackOneHop(r));
+                    return Ok(TorPath::new_fallback_one_hop(r));
                 }
             }
             DirInfo::Directory(netdir) => {
                 let relay = netdir.pick_relay(rng, WeightRole::BeginDir, Relay::is_dir_cache);
                 if let Some(r) = relay {
-                    return Ok(TorPath::OneHop(r));
+                    return Ok(TorPath::new_one_hop(r));
                 }
             }
         }
