@@ -10,7 +10,9 @@ mod net {
     use crate::traits;
     use async_trait::async_trait;
 
-    use tokio_crate::net::{TcpListener as TokioTcpListener, TcpStream as TokioTcpStream};
+    pub(crate) use tokio_crate::net::{
+        TcpListener as TokioTcpListener, TcpStream as TokioTcpStream,
+    };
 
     use futures::io::{AsyncRead, AsyncWrite};
     use tokio_util::compat::{Compat, TokioAsyncReadCompatExt as _};
@@ -60,7 +62,7 @@ mod net {
     /// Wrap a Tokio TcpListener to behave as a futures::io::TcpListener.
     pub struct TcpListener {
         /// The underlying listener.
-        lis: TokioTcpListener,
+        pub(super) lis: TokioTcpListener,
     }
 
     /// Asynchronous stream that yields incoming connections from a
@@ -69,7 +71,7 @@ mod net {
     /// This is analogous to async_std::net::Incoming.
     pub struct IncomingTcpStreams {
         /// Reference to the underlying listener.
-        lis: TokioTcpListener,
+        pub(super) lis: TokioTcpListener,
     }
 
     impl futures::stream::Stream for IncomingTcpStreams {
@@ -83,7 +85,6 @@ mod net {
             }
         }
     }
-
     #[async_trait]
     impl traits::TcpListener for TcpListener {
         type TcpStream = TcpStream;
@@ -97,21 +98,6 @@ mod net {
         }
         fn local_addr(&self) -> IoResult<SocketAddr> {
             self.lis.local_addr()
-        }
-    }
-
-    #[async_trait]
-    impl traits::TcpProvider for async_executors::TokioTp {
-        type TcpStream = TcpStream;
-        type TcpListener = TcpListener;
-
-        async fn connect(&self, addr: &SocketAddr) -> IoResult<Self::TcpStream> {
-            let s = TokioTcpStream::connect(addr).await?;
-            Ok(s.into())
-        }
-        async fn listen(&self, addr: &SocketAddr) -> IoResult<Self::TcpListener> {
-            let lis = TokioTcpListener::bind(*addr).await?;
-            Ok(TcpListener { lis })
         }
     }
 }
@@ -219,9 +205,54 @@ mod tls {
 // ==============================
 
 use crate::traits::*;
+use async_trait::async_trait;
 use futures::Future;
 use std::io::Result as IoResult;
 use std::time::Duration;
+
+macro_rules! implement_traits_for {
+    ($runtime:ty) => {
+        impl SleepProvider for $runtime {
+            type SleepFuture = tokio_crate::time::Sleep;
+            fn sleep(&self, duration: Duration) -> Self::SleepFuture {
+                tokio_crate::time::sleep(duration)
+            }
+        }
+
+        impl TlsProvider for $runtime {
+            type TlsStream = tls::TlsStream;
+            type Connector = tls::TlsConnector;
+
+            fn tls_connector(&self) -> tls::TlsConnector {
+                let mut builder = native_tls::TlsConnector::builder();
+                // These function names are scary, but they just mean that we
+                // aren't checking whether the signer of this cert
+                // participates in the web PKI, and we aren't checking the
+                // hostname in the cert.
+                builder
+                    .danger_accept_invalid_certs(true)
+                    .danger_accept_invalid_hostnames(true);
+
+                builder.try_into().expect("Couldn't build a TLS connector!")
+            }
+        }
+
+        #[async_trait]
+        impl crate::traits::TcpProvider for $runtime {
+            type TcpStream = net::TcpStream;
+            type TcpListener = net::TcpListener;
+
+            async fn connect(&self, addr: &std::net::SocketAddr) -> IoResult<Self::TcpStream> {
+                let s = net::TokioTcpStream::connect(addr).await?;
+                Ok(s.into())
+            }
+            async fn listen(&self, addr: &std::net::SocketAddr) -> IoResult<Self::TcpListener> {
+                let lis = net::TokioTcpListener::bind(*addr).await?;
+                Ok(net::TcpListener { lis })
+            }
+        }
+    };
+}
 
 /// Create and return a new Tokio multithreaded runtime.
 pub fn create_runtime() -> IoResult<async_executors::TokioTp> {
@@ -230,10 +261,35 @@ pub fn create_runtime() -> IoResult<async_executors::TokioTp> {
     builder.build()
 }
 
-impl SleepProvider for async_executors::TokioTp {
-    type SleepFuture = tokio_crate::time::Sleep;
-    fn sleep(&self, duration: Duration) -> Self::SleepFuture {
-        tokio_crate::time::sleep(duration)
+/// Wrapper around a Handle to a tokio runtime.
+///
+/// # Limitations
+///
+/// Note that Arti requires that the runtime should have working
+/// implementations for Tokio's time, net, and io facilities, but we have
+/// no good way to check that when creating this object.
+#[derive(Clone, Debug)]
+pub struct TokioRuntimeHandle {
+    /// The underlying Handle.
+    handle: tokio_crate::runtime::Handle,
+}
+
+impl TokioRuntimeHandle {
+    /// Wrap a tokio runtime handle into a format that Arti can use.
+    ///
+    /// # Limitations
+    ///
+    /// Note that Arti requires that the runtime should have working
+    /// implementations for Tokio's time, net, and io facilities, but we have
+    /// no good way to check that when creating this object.
+    pub fn new(handle: tokio_crate::runtime::Handle) -> Self {
+        handle.into()
+    }
+}
+
+impl From<tokio_crate::runtime::Handle> for TokioRuntimeHandle {
+    fn from(handle: tokio_crate::runtime::Handle) -> Self {
+        Self { handle }
     }
 }
 
@@ -243,20 +299,22 @@ impl SpawnBlocking for async_executors::TokioTp {
     }
 }
 
-impl TlsProvider for async_executors::TokioTp {
-    type TlsStream = tls::TlsStream;
-    type Connector = tls::TlsConnector;
-
-    fn tls_connector(&self) -> tls::TlsConnector {
-        let mut builder = native_tls::TlsConnector::builder();
-        // These function names are scary, but they just mean that we
-        // aren't checking whether the signer of this cert
-        // participates in the web PKI, and we aren't checking the
-        // hostname in the cert.
-        builder
-            .danger_accept_invalid_certs(true)
-            .danger_accept_invalid_hostnames(true);
-
-        builder.try_into().expect("Couldn't build a TLS connector!")
+impl SpawnBlocking for TokioRuntimeHandle {
+    fn block_on<F: Future>(&self, f: F) -> F::Output {
+        self.handle.block_on(f)
     }
 }
+
+impl futures::task::Spawn for TokioRuntimeHandle {
+    fn spawn_obj(
+        &self,
+        future: futures::task::FutureObj<'static, ()>,
+    ) -> Result<(), futures::task::SpawnError> {
+        let join_handle = self.handle.spawn(future);
+        drop(join_handle); // this makes the task detached.
+        Ok(())
+    }
+}
+
+implement_traits_for! {async_executors::TokioTp}
+implement_traits_for! {TokioRuntimeHandle}

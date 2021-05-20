@@ -14,12 +14,19 @@
 //! standardized API currently exist (sleeping and networking and
 //! TLS).
 //!
-//! The [`Runtime`] trait is implemented using the [`async_executors`]
-//! crate; if that crate later expands to provide similar
-//! functionality, this crate will contract.  Implementations are
-//! currently provided for `async_executors::TokioTp` (if this crate
-//! was builtwith the `tokio` feature) and `async_executors::AsyncStd`
-//! (if this crate was built with the `async-std` feature).
+//! The [`Runtime`] trait can be implemented using the
+//! [`async_executors`] crate; if that crate later expands to provide
+//! similar functionality, this crate will contract.  Implementations
+//! are currently provided for `async_executors::TokioTp` (if this
+//! crate was builtwith the `tokio` feature) and
+//! `async_executors::AsyncStd` (if this crate was built with the
+//! `async-std` feature).
+//!
+//! We also provide an implementation of [`Runtime`] for
+//! [`TokioRuntimeHandle`], a think wrapper over Tokio's runtime
+//! handle type.  You can use this Runtime implementation if you would
+//! rather construct your own runtime (for example, by running within
+//! `#[tokio::main]`.)
 //!
 //! Note that this crate is explicitly limited to the features that
 //! Arti requires.
@@ -43,7 +50,7 @@
 #![warn(clippy::trait_duplication_in_bounds)]
 #![warn(clippy::unseparated_literal_suffix)]
 
-use std::io::Result as IoResult;
+use std::io::{Error as IoError, ErrorKind, Result as IoResult};
 
 pub(crate) mod impls;
 pub mod task;
@@ -73,6 +80,8 @@ pub mod tls {
 pub use impls::async_std::create_runtime as create_async_std_runtime;
 #[cfg(feature = "tokio")]
 pub use impls::tokio::create_runtime as create_tokio_runtime;
+#[cfg(feature = "tokio")]
+pub use impls::tokio::TokioRuntimeHandle;
 
 /// The default runtime type that we return from [`create_runtime()`] or
 /// [`test_with_runtime()`]
@@ -84,20 +93,47 @@ type DefaultRuntime = async_executors::TokioTp;
 #[cfg(all(feature = "async-std", not(feature = "tokio")))]
 type DefaultRuntime = async_executors::AsyncStd;
 
+/// Try to return an instance of the currently running [`Runtime`].
+///
+pub fn current_user_runtime() -> IoResult<impl Runtime> {
+    #[cfg(feature = "tokio")]
+    {
+        let handle = tokio_crate::runtime::Handle::try_current()
+            .map_err(|e| IoError::new(ErrorKind::Other, e))?;
+        Ok(TokioRuntimeHandle::new(handle))
+    }
+    #[cfg(all(feature = "async-std", not(feature = "tokio")))]
+    {
+        // In async_std, the runtime is a global singleton.
+        Ok(create_async_std_runtime())
+    }
+    #[cfg(not(any(feature = "async-std", feature = "tokio")))]
+    {
+        // This isn't reachable, since the crate won't actually compile
+        // unless some runtime is enabled.
+        panic!("tor-rtcompat was built with no supported runtimes.")
+    }
+}
+
 /// Return a new instance of the default [`Runtime`].
 ///
 /// Generally you should call this function only once, and then use
 /// [`Clone::clone()`] to create additional references to that
 /// runtime.
 ///
+/// Tokio users may want to avoid this function and instead make a
+/// runtime using [`current_user_runtime()`] or
+/// [`TokioRuntimeHandle::new()`]: this function always _builds_ a
+/// runtime, and if you already have a runtime, that isn't what you
+/// want with Tokio.
+///
 /// If you need more fine-grained control over a runtime, you can
-/// create it using an appropriate builder type from
-/// [`async_executors`].
+/// create it using an appropriate builder type or function.
 pub fn create_runtime() -> IoResult<impl Runtime> {
     create_default_runtime()
 }
 
-/// Helper: create and return a default runtime.
+/// Helper: create and return a default runtime type.
 #[allow(clippy::unnecessary_wraps)]
 fn create_default_runtime() -> IoResult<DefaultRuntime> {
     #[cfg(feature = "tokio")]
