@@ -23,9 +23,9 @@ pub struct ExitPathBuilder<'a> {
 impl<'a> ExitPathBuilder<'a> {
     /// Create a new builder that will try to get an exit relay
     /// containing all the ports in `ports`.
-    pub fn from_target_ports(wantports: Vec<TargetPort>) -> Self {
+    pub fn from_target_ports(wantports: impl IntoIterator<Item = TargetPort>) -> Self {
         Self {
-            inner: ExitPathBuilderInner::WantsPorts(wantports),
+            inner: ExitPathBuilderInner::WantsPorts(wantports.into_iter().collect()),
         }
     }
 
