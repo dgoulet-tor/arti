@@ -19,8 +19,15 @@ use std::sync::Arc;
 use crate::{Error, Result};
 
 /// A list of Tor relays through the network.
-#[non_exhaustive]
-pub enum TorPath<'a> {
+pub struct TorPath<'a> {
+    /// The inner TorPath state.
+    inner: TorPathInner<'a>,
+}
+
+/// Non-public helper type to repersent the different kinds of Tor path.
+///
+/// (This is a separate type to avoid exposing its details to the user.)
+enum TorPathInner<'a> {
     /// A single-hop path for use with a directory cache, when a relay is
     /// known.
     OneHop(Relay<'a>), // This could just be a routerstatus.
@@ -32,10 +39,33 @@ pub enum TorPath<'a> {
 }
 
 impl<'a> TorPath<'a> {
+    /// Create a new one-hop path for use with a directory cache with a known
+    /// relay.
+    pub fn new_one_hop(relay: Relay<'a>) -> Self {
+        Self {
+            inner: TorPathInner::OneHop(relay),
+        }
+    }
+
+    /// Create a new one-hop path for use with a directory cache when we don't
+    /// have a consensus.
+    pub fn new_fallback_one_hop(fallback_dir: &'a FallbackDir) -> Self {
+        Self {
+            inner: TorPathInner::FallbackOneHop(fallback_dir),
+        }
+    }
+
+    /// Create a new multi-hop path with a given number of ordered relays.
+    pub fn new_multihop(relays: impl IntoIterator<Item = Relay<'a>>) -> Self {
+        Self {
+            inner: TorPathInner::Path(relays.into_iter().collect()),
+        }
+    }
+
     /// Internal: Get the first hop of the path as a ChanTarget.
     fn first_hop(&self) -> Result<&(dyn tor_linkspec::ChanTarget + Sync)> {
-        use TorPath::*;
-        match self {
+        use TorPathInner::*;
+        match &self.inner {
             OneHop(r) => Ok(r),
             FallbackOneHop(f) => Ok(*f),
             Path(p) if p.is_empty() => Err(Error::NoRelays("Path with no entries!".into()).into()),
@@ -46,8 +76,8 @@ impl<'a> TorPath<'a> {
     /// Return the final relay in this path, if this is a path for use
     /// with exit circuits.
     fn exit_relay(&self) -> Option<&Relay<'a>> {
-        match self {
-            TorPath::Path(relays) if !relays.is_empty() => Some(&relays[relays.len() - 1]),
+        match &self.inner {
+            TorPathInner::Path(relays) if !relays.is_empty() => Some(&relays[relays.len() - 1]),
             _ => None,
         }
     }
@@ -80,7 +110,7 @@ impl<'a> TorPath<'a> {
         RNG: Rng + CryptoRng,
         RT: Runtime,
     {
-        use TorPath::*;
+        use TorPathInner::*;
         let chan = self.get_channel(chanmgr).await?;
         let (pcirc, reactor) = chan.new_circ(rng).await?;
 
@@ -88,7 +118,7 @@ impl<'a> TorPath<'a> {
             let _ = reactor.run().await;
         })?;
 
-        match self {
+        match &self.inner {
             OneHop(_) | FallbackOneHop(_) => {
                 let circ = pcirc.create_firsthop_fast(rng, &params).await?;
                 Ok(circ)
