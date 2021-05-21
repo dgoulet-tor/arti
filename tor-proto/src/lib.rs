@@ -1,5 +1,19 @@
 //! Implementations for the core Tor protocol
 //!
+//! # Overview
+//!
+//! The `tor-proto` crate lies at the core of
+//! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
+//! implement Tor in Rust. Most people shouldn't use this crate directly,
+//! since its APIs are needlessly low-level for most purposes, and it is
+//! easy to miuse them in an incsecure or privacy-violating way.
+//!
+//! Most people should use the [`tor-client`] crate instead.  This crate is
+//! of interest mainly for those that want to access the Tor protocols at
+//! a low level.
+//!
+//! ## Core concepts
+//!
 //! At its essence, Tor makes connections called "channels" to other
 //! Tor instances.  These channels are implemented using TLS.  Each of
 //! these channels multiplexes a number of anonymized multihop
@@ -16,6 +30,8 @@
 //! work with nearly any TLS implementation that exposes AsyncRead and
 //! AsyncWrite traits.
 //!
+//! ## Not in this crate
+//!
 //! This crate does _not_ implement higher level protocols, like onion
 //! services or the Tor directory protocol, that are based on the Tor
 //! protocol here.  Nor does it decide _when_, _how_, or _where_ to
@@ -29,22 +45,34 @@
 //! In order to create channels and circuits, you'll need to know
 //! about some Tor relays, and expose their information via
 //! [tor_linkspec::ChanTarget] and [tor_linkspec::CircTarget].
-//! Currently, the [tor-netdir] crate is
-//! the easiest way to do so.
+//! Currently, the [tor-netdir] crate is the easiest way to do so.
 //!
-//! For an example of this crate in action, see the [tor-client]
-//! program.
+//! For an example of this crate in action, see the `tor-client`
+//! library, or the `arti` CLI.
+//!
+//! # Design notes
+//!
+//! This crate's APIs are structured to explicitly avoid any usage of
+//! an asynchronous runtime: It doesn't launch tasks or include
+//! timeouts.  Those are done at a higher level in Arti, via the
+//! [`tor-rtcompat`] crate.
+//!
+//! To the extent possible, this crate avoids doing public-key
+//! cryptography in the same functions it uses for network activity.
+//! This makes it easier for higher-level code to parallelize or yield
+//! around public-key operations.
 //!
 //! # Limitations
 //!
 //! This is all a work in progress, and will need severe refactoring
-//! before we're done.
+//! before it's done.
 //!
-//! This is a client-only implementation for now.
+//! This is a client-only implementation; there is no support the
+//! operations that Relays need.
 //!
 //! There are too many missing features to list.
 //!
-//! There isn't enough documentation.
+//! There isn't enough documentation or examples.
 //!
 //! This crate was my first attempt to use async in rust, and is probably
 //! pretty kludgy.
@@ -53,7 +81,7 @@
 //! all the ones I could find or think of, but it would be great to
 //! find a good way to eliminate every lock that we have.
 //!
-//! This doesn't work with rusttls because of a limitation in the
+//! This crate doesn't work with rusttls because of a limitation in the
 //! webpki crate.
 
 #![deny(missing_docs)]
@@ -85,7 +113,7 @@ mod util;
 pub use util::err::Error;
 
 /// A vector of bytes that gets cleared when it's dropped.
-pub type SecretBytes = zeroize::Zeroizing<Vec<u8>>;
+type SecretBytes = zeroize::Zeroizing<Vec<u8>>;
 
 /// A Result type for this crate.
 pub type Result<T> = std::result::Result<T, Error>;

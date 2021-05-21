@@ -19,6 +19,12 @@ use tor_cell::relaycell::msg::{Data, RelayMsg};
 /// byte-oriented IO.
 ///
 /// It's suitable for use with BEGIN or BEGIN_DIR streams.
+///
+/// # Semver note:
+///
+/// Note that this type is re-exported as a part of the public API of
+/// the `tor-client` crate.  Any changes to its API here in
+/// `tor-proto` need to be reflected above.
 pub struct DataStream {
     /// Underlying writer for this stream
     w: DataWriter,

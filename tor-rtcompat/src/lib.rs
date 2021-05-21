@@ -1,6 +1,6 @@
 //! Compatibility between different async runtimes for Arti
 //!
-//! ## Overview
+//! # Overview
 //!
 //! Rust's support for asynchronous programming is powerful, but still
 //! a bit immature: there are multiple powerful runtimes you can use,
@@ -35,7 +35,7 @@
 //! replaced) with standardized and general-purpose versions of the
 //! traits it provides.
 //!
-//! ## Using `tor-rtcompat`
+//! # Using `tor-rtcompat`
 //!
 //! The `tor-rtcompat` crate provide several traits that that
 //! encapsulate different runtime capabilities.
@@ -66,15 +66,15 @@
 //!     tokio runtime that you want to use, you can wrap it as a
 //!     [`Runtime`] explicitly with [`TokioRuntimeHandle`].
 //!
-//! ## Cargo features
+//! # Cargo features
 //!
 //! `tokio` -- (Default) Build with Tokio support.
 //!
 //! `async-std` -- Build with async_std support.
 //!
-//! ## Design FAQ
+//! # Design FAQ
 //!
-//! ### Why support `async_std`?
+//! ## Why support `async_std`?
 //!
 //! Although Tokio currently a more popular and widely supported
 //! asynchronous runtime than `async_std` is, we believe that it's
@@ -84,7 +84,7 @@
 //! assumptions in our code, which we hope will make it easier to port
 //! to other environments (like WASM) in the future.
 //!
-//! ### Why a `Runtime` trait, and not a set of functions?
+//! ## Why a `Runtime` trait, and not a set of functions?
 //!
 //! We could simplify this code significantly by removing most of the
 //! traits it exposes, and instead just exposing a single
@@ -104,7 +104,7 @@
 //! ability to replace [`Runtime`]s.  By treating a runtime as an
 //! object, we can override a runtime's view of time, or of the
 //! network, in order to test asynchronous code effectively.
-//! (See the `tor-rtmock` crate for examples.)
+//! (See the [`tor-rtmock`] crate for examples.)
 
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]

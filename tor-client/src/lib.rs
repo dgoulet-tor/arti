@@ -1,6 +1,6 @@
 //! High-level functionality for accessing the Tor network as a client.
 //!
-//! ## Overview
+//! # Overview
 //!
 //! The `tor-client` crate aims to provide a safe, easy-to-use API for
 //! applications that want to use Tor network to anonymize their
@@ -83,3 +83,17 @@
 mod client;
 
 pub use client::{ConnectPrefs, TorClient};
+
+/// An anonymized stream over the Tor network.
+///
+/// For most purposes, you can think of this type as an anonymized
+/// TCP stream: it can read and write data, and get closed when it's done.
+///
+/// To get one of these, clients should use [`TorClient::connect()`].
+/// [`DataStream`] implements [`futures::io::AsyncRead`] and
+/// [`futures::io::AsyncWrite`], so you can use it anywhere that those
+/// types are expected.
+///
+/// This type is a re-export from [`tor_proto::stream::DataStream`];
+/// see that crate for its documentation in a more low-level context.
+pub use tor_proto::stream::DataStream;

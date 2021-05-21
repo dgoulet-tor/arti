@@ -1,6 +1,6 @@
-//! # `tor-llcrypto`: Low-level cryptographic implementations for Tor.
+//! `tor-llcrypto`: Low-level cryptographic implementations for Tor.
 //!
-//! ## Overview
+//! # Overview
 //!
 //! The `tor-llcrypto` crate wraps lower-level cryptographic
 //! primitives that Tor needs, and provides a few smaller pieces of
@@ -18,7 +18,7 @@
 //! add security to something else.  It is easy to accidentally put
 //! these functions together in ways that are unsafe.
 //!
-//! ### Why a separate crate?
+//! ## Why a separate crate?
 //!
 //! Why do we collect and re-export our cryptography here in
 //! `tor-llcrypto`, instead of having the different crates in Arti use
@@ -26,7 +26,7 @@
 //!
 //! By wrapping our cryptography in this crate, we.
 //!
-//! ### Adding to `tor-llcrypto`
+//! ## Adding to `tor-llcrypto`
 //!
 //! Any low-level cryptographic algorithm that is used by at least two
 //! other crates in Arti is a candidate for inclusion in
@@ -37,7 +37,7 @@
 //! go in `tor-llcrypto`, since they are interfaces rather than
 //! implementations.
 //!
-//! ## Contents
+//! # Contents
 //!
 //! Encryption is implemented in [`cipher`]: Currently only AES is
 //! exposed or needed.
