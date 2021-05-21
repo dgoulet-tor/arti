@@ -5,12 +5,6 @@
 //! versions to tell which relays support which features.  They are
 //! also used to determine which versions of the protocol are required
 //! to connect to the network (or just recommended).
-//!
-//! ## Caveats
-//!
-//! This implementation assumes that the "xxx-limit-protovers.md"
-//! proposal has been accepted, limiting versions to the range 0
-//! through 63.
 
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]

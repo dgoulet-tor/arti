@@ -143,7 +143,6 @@ We do not ever plan to support these:
 We presume that these proposals will be accepted and merged into Tor:
   * [ ] 285 (Directory documents should be standardized as utf-8, tor#40131)
   * [ ] 315 (Make some directory fields "required", tor#40132)
-  * [ ] 318 (Limit protovers to 0-63, tor#40133)
 
 ## What can I do with this?
 
