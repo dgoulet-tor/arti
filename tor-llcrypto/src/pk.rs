@@ -1,7 +1,7 @@
 //! Public-key cryptography for Tor.
 //!
 //! In old places, Tor uses RSA; newer Tor public-key cryptography is
-//! basd on curve25519 and ed25519.
+//! based on curve25519 and ed25519.
 
 pub mod ed25519;
 pub mod keymanip;
@@ -9,17 +9,23 @@ pub mod rsa;
 
 /// Re-exporting Curve25519 implementations.
 ///
-/// Eventually there should probably be a key-agreement trait or two
-/// that this implements, but for now I'm just re-using the API from
-/// x25519-dalek.
+/// *TODO*: Eventually we should probably recommend using is code via some
+/// key-agreement trait, but for now we are just re-using the APIs from
+/// [`x25519_dalek`].
 pub mod curve25519 {
     pub use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
 }
 
-/// Type for a validatable signature.
+/// A type for a validatable signature.
 ///
 /// It necessarily includes the signature, the public key, and (a hash
 /// of?) the document being checked.
+///
+/// Having this trait enables us to write code for checking a large number
+/// of validatable signatures in a way that permits batch signatures for
+/// Ed25519.
+///
+/// To be used with [`validate_all_sigs`].
 pub trait ValidatableSignature {
     /// Check whether this signature is a correct signature for the document.
     fn is_valid(&self) -> bool;
@@ -32,8 +38,14 @@ pub trait ValidatableSignature {
 
 /// Check whether all of the signatures in this Vec are valid.
 ///
-/// (Having a separate implementation here enables us to use
-/// batch-verification when available.)
+/// Return `true` if every signature is valid; return `false` if even
+/// one is invalid.
+///
+/// This function should typically give the same result as just
+/// calling `v.iter().all(ValidatableSignature::is_valid))`, while taking
+/// advantage of batch verification to whatever extent possible.
+///
+/// (See [`ed25519::validate_batch`] for caveats.)
 pub fn validate_all_sigs(v: &[Box<dyn ValidatableSignature>]) -> bool {
     // First we break out the ed25519 signatures (if any) so we can do
     // a batch-verification on them.

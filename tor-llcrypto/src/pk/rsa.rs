@@ -4,15 +4,18 @@
 //! verification used in the Tor directory protocol and
 //! similar places.
 //!
-//! Currently, that means supporting validating PKCSv1
-//! signatures, and encoding and decoding keys from DER.
-//!
-//! Currently missing is signing and RSA-OEAP.
+//! Currently, that means validating PKCSv1 signatures, and encoding
+//! and decoding RSA public keys from DER.
 //!
 //! # Limitations:
 //!
+//! Currently missing are support for signing and RSA-OEAP.  In Tor,
+//! RSA signing is only needed for relays and authorities, and
+//! RSA-OAEP padding is only needed for the (obsolete) TAP protocol.
+//!
+//!
 //! XXXX This module should expose RustCrypto trait-based wrappers,
-//! but the rsa crate didn't support them as of initial writing.
+//! but the [`rsa`] crate didn't support them as of initial writing.
 use arrayref::array_ref;
 use std::fmt;
 use subtle::*;
@@ -20,11 +23,15 @@ use zeroize::Zeroize;
 
 /// How many bytes are in an "RSA ID"?  (This is a legacy tor
 /// concept, and refers to identifying a relay by a SHA1 digest
-/// of its public key.)
+/// of its RSA public identity key.)
 pub const RSA_ID_LEN: usize = 20;
 
-/// An identifier for a Tor relay, based on its legacy RSA
-/// identity key.  These are used all over the Tor protocol.
+/// An identifier for a Tor relay, based on its legacy RSA identity
+/// key.  These are used all over the Tor protocol.
+///
+/// Note that for modern purposes, you should almost always identify a
+/// relay by its [`crate::pk::ed25519::Ed25519Identity`] instead of
+/// by this kind of identity key.
 #[derive(Clone, Copy, Hash, Zeroize, Ord, PartialOrd)]
 #[allow(clippy::derive_hash_xor_eq)]
 pub struct RsaIdentity {
@@ -110,7 +117,7 @@ impl<'de> serde::Deserialize<'de> for RsaIdentity {
 }
 
 impl RsaIdentity {
-    /// Expose and RsaIdentity as a slice of bytes.
+    /// Expose an RsaIdentity as a slice of bytes.
     pub fn as_bytes(&self) -> &[u8] {
         &self.id[..]
     }
@@ -152,7 +159,12 @@ impl From<[u8; 20]> for RsaIdentity {
 /// methods and traits on the type.
 #[derive(Clone, Debug)]
 pub struct PublicKey(rsa::RSAPublicKey);
+
 /// An RSA private key.
+///
+/// This is not so useful at present, since Arti currently only has
+/// client support, and Tor clients never actually need RSA private
+/// keys.
 pub struct PrivateKey(rsa::RSAPrivateKey);
 
 impl PrivateKey {

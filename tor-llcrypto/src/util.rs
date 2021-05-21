@@ -1,12 +1,12 @@
 //! Utilities for cryptographic purposes
 //!
-//! For now, this just has a workaround for some other libraries'
-//! lack of full x509 support
+//! For now, this module is just contains a couple of workarounds for the
+//! limitations of other libraries.
 
 use simple_asn1::{oid, ASN1Block, BigUint, OID};
 pub mod rand_compat;
 
-/// Given an X.509 certificate, return its SubjectPublicKey if that key
+/// Given an X.509 certificate in DER, return its SubjectPublicKey if that key
 /// is an RSA key.
 ///
 /// WARNING: Does not validate the X.509 certificate at all!
