@@ -24,6 +24,12 @@ impl std::fmt::Display for TimeoutError {
     }
 }
 
+impl From<TimeoutError> for std::io::Error {
+    fn from(err: TimeoutError) -> std::io::Error {
+        std::io::Error::new(std::io::ErrorKind::TimedOut, err)
+    }
+}
+
 /// An extension trait on [`SleepProvider`] for timeouts and clock delays.
 pub trait SleepProviderExt: SleepProvider {
     /// Wrap a [`Future`] with a timeout.
