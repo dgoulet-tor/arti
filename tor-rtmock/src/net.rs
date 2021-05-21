@@ -73,6 +73,9 @@ struct ListenerEntry {
 /// We don't handle localhost specially, and we don't simulate providers
 /// that can connect to some addresses but not all.
 ///
+/// We don't do the right thing (block) if there is a listener that
+/// never calls accept.
+///
 /// We use a simple `u16` counter to decide what arbitrary port
 /// numbers to use: Once that counter is exhausted, we will fail with
 /// an assertion.  We don't do anything to prevent those arbitrary
