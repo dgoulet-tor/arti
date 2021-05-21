@@ -177,7 +177,7 @@ impl Default for DownloadScheduleConfig {
 }
 
 impl DownloadScheduleConfig {
-    /// Return a new builder to make a [`DownloadSchedulConfig`]
+    /// Return a new builder to make a [`DownloadScheduleConfig`]
     pub fn builder() -> DownloadScheduleConfigBuilder {
         DownloadScheduleConfigBuilder::new()
     }

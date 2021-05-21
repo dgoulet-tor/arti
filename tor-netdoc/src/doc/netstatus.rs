@@ -446,7 +446,8 @@ struct Footer {
 /// XXXX: I'd rather not have this trait be public, but I haven't yet
 /// figured out how to make it private.
 pub trait ParseRouterStatus: Sized + Sealed {
-    /// Parse this object from a [`Section`].
+    /// Parse this object from a `Section` object containing its
+    /// elements.
     fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<Self>;
 
     /// Return the networkstatus consensus flavor in which this
