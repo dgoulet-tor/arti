@@ -1,35 +1,110 @@
 //! Compatibility between different async runtimes for Arti
 //!
-//! We try to isolate these dependencies in a single place so that
-//! we depend only on a minimal set of required features that our
-//! runtime needs to give us.
+//! ## Overview
 //!
-//! Right now this crate supports async_std and tokio; tokio is the
-//! default.  You can control this with the `async-std` or `tokio`
-//! features on this crate.
+//! Rust's support for asynchronous programming is powerful, but still
+//! a bit immature: there are multiple powerful runtimes you can use,
+//! but they do not expose a consistent set of interfaces.
 //!
-//! This crate exposes a [`Runtime`] type that represents the features
-//! available from an asynchronous runtime.  This includes the
-//! standardized features (spawning tasks), and ones for which no
-//! standardized API currently exist (sleeping and networking and
-//! TLS).
+//! The [`futures`] API abstracts much of the differences among these
+//! runtime libraries, but there are still areas where no standard API
+//! yet exists, including:
+//!  - Network programming.
+//!  - Time and delays.
+//!  - Launching new tasks
+//!  - Blocking until a task is finished.
 //!
-//! The [`Runtime`] trait can be implemented using the
-//! [`async_executors`] crate; if that crate later expands to provide
-//! similar functionality, this crate will contract.  Implementations
-//! are currently provided for `async_executors::TokioTp` (if this
-//! crate was builtwith the `tokio` feature) and
-//! `async_executors::AsyncStd` (if this crate was built with the
-//! `async-std` feature).
+//! Additionally, the `AsyncRead` and `AsyncWrite` traits provide by
+//! [`futures`] are not the same as those provided by `tokio`, and
+//! require compatibility wrappers to use. (We re-export those of
+//! [`tokio_util`].
 //!
-//! We also provide an implementation of [`Runtime`] for
-//! [`TokioRuntimeHandle`], a think wrapper over Tokio's runtime
-//! handle type.  You can use this Runtime implementation if you would
-//! rather construct your own runtime (for example, by running within
-//! `#[tokio::main]`.)
+//! To solve these problems, the `tor-rtcompat` crate provides a set
+//! of traits that represent a runtime's ability to perform these
+//! tasks, along with implementations for these traits for the `tokio`
+//! and `async-std` runtimes.  In the future we hope to add support
+//! for other runtimes as needed.
 //!
-//! Note that this crate is explicitly limited to the features that
-//! Arti requires.
+//! This crate is part of
+//! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
+//! implement Tor in Rust.  As such, it does not currently include (or
+//! plan to include) any functionality beyond what Arti needs to
+//! implement Tor.
+//!
+//! We hope that in the future this crate can be replaced (or mostly
+//! replaced) with standardized and general-purpose versions of the
+//! traits it provides.
+//!
+//! ## Using `tor-rtcompat`
+//!
+//! The `tor-rtcompat` crate provide several traits that that
+//! encapsulate different runtime capabilities.
+//!
+//!  * A runtime is a [`SpawnBlocking`] if it can block on a future.
+//!  * A runtime if a [`SleepProvider`] if it can make timer futures that
+//!    become Ready after a given interval of time.
+//!  * A runtime is a [`TcpProvider`] if it can make and receive TCP
+//!    connections
+//!  * A runtime is a [`TlsProvider`] if it can make TLS connections.
+//!
+//! For convenience, the [`Runtime`] trait derives from all the traits
+//! above, plus [`futures::task::Spawn`] and [`Send`].
+//!
+//! You can get a [`Runtime`] in several ways:
+//!
+//!   * If you already have an asynchronous backend (for example, one
+//!     that you built with tokio, or by running with
+//!     `#[tokio::main]`, you can wrap it as a [`Runtime`] with
+//!     [`current_user_runtime()`].
+//!
+//!   * If you want to construct a default runtime that you won't be
+//!     using for anything besides Arti, you can use [`create_runtime()`].
+//!
+//!   * If you want to explicitly construct a runtime with a specific
+//!     backend, you can do so with `create_async_std_runtime` or
+//!     [`create_tokio_runtime`].  Or if you have already constructed a
+//!     tokio runtime that you want to use, you can wrap it as a
+//!     [`Runtime`] explicitly with [`TokioRuntimeHandle`].
+//!
+//! ## Cargo features
+//!
+//! `tokio` -- (Default) Build with Tokio support.
+//!
+//! `async-std` -- Build with async_std support.
+//!
+//! ## Design FAQ
+//!
+//! ### Why support `async_std`?
+//!
+//! Although Tokio currently a more popular and widely supported
+//! asynchronous runtime than `async_std` is, we believe that it's
+//! critical to build Arti against multiple runtimes.
+//!
+//! By supporting multiple runtimes, we avoid making tokio-specific
+//! assumptions in our code, which we hope will make it easier to port
+//! to other environments (like WASM) in the future.
+//!
+//! ### Why a `Runtime` trait, and not a set of functions?
+//!
+//! We could simplify this code significantly by removing most of the
+//! traits it exposes, and instead just exposing a single
+//! implementation.  For example, instead of exposing a
+//! [`SpawnBlocking`] trait to represent blocking until a task is
+//! done, we could just provide a single global `block_on` function.
+//!
+//! That simplification would come at a cost, however.  First of all,
+//! it would make it harder for us to use Rust's "feature" system
+//! correctly.  Current features are supposed to be _additive only_,
+//! but if had a single global runtime, then support for diffferent
+//! backends would be _mutually exclusive_.  (That is, you couldn't
+//! have both the tokio and async-std features building at the same
+//! time.)
+//!
+//! Secondly, much of our testing in the rest of Arti relies on the
+//! ability to replace [`Runtime`]s.  By treating a runtime as an
+//! object, we can override a runtime's view of time, or of the
+//! network, in order to test asynchronous code effectively.
+//! (See the `tor-rtmock` crate for examples.)
 
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
@@ -95,6 +170,21 @@ type DefaultRuntime = async_executors::AsyncStd;
 
 /// Try to return an instance of the currently running [`Runtime`].
 ///
+/// # Limitations
+///
+/// If the `tor-rtcompat` crate was compiled with `tokio` support,
+/// this function will never return an `async_std` runtime.
+///
+/// # Usage note
+///
+/// We should never call this from inside other Arti crates, or from
+/// library crates that want to supporet multiple runtimes!  This
+/// function is for Arti _users_ who want to wrap some existing Tokio
+/// or Async_std runtime as a [`Runtime`].  It is not for library
+/// crates that want to work with multiple runtimes.
+///
+/// Once you have a runtime returned by this function, you should
+/// just create more handles to it via [`Clone`].
 pub fn current_user_runtime() -> IoResult<impl Runtime> {
     #[cfg(feature = "tokio")]
     {
@@ -134,6 +224,11 @@ pub fn create_runtime() -> IoResult<impl Runtime> {
 }
 
 /// Helper: create and return a default runtime type.
+///
+/// This function is separate from `create_runtime()` because of its
+/// separate return type: we hide the actual type with
+/// `create_runtime()` to avoid writing code that relies on any
+/// particular runtimes.
 #[allow(clippy::unnecessary_wraps)]
 fn create_default_runtime() -> IoResult<DefaultRuntime> {
     #[cfg(feature = "tokio")]
