@@ -1,12 +1,32 @@
 //! Implementation for Tor certificates
 //!
-//! This is the certificate type as documented as Tor's cert-spec.txt,
-//! where everything is signed with ed25519 keys.
+//! # Overview
 //!
-//! There are other types of certificate used by Tor as well, but they
-//! will be implemented in other places.
+//! The `tor-cert` crate implements the binary certificate types
+//! documented in Tor's cert-spec.txt, which are used when
+//! authenticating Tor channels.  (Eventually, support for onion service
+//! certificate support will get added too.)
+//!
+//! This crate is part of
+//! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
+//! implement Tor in Rust.
+//!
+//! There are other types of certificate used by Tor as well, and they
+//! are implemented in other places.  In particular, see
+//! [`tor-netdoc::doc::authcert`] for the certificate types used by
+//! authorities in the directory protocol.
+//!
+//! ## Design notes
+//!
+//! The `tor-cert` code is in its own separate crate because it is
+//! required by several other higher-level crates that do not depend
+//! upon each other.  For example, [`tor-netdoc`] parses encoded
+//! certificates from router descriptors, while [`tor-proto`] uses
+//! certificates when authenticating relays.
 //!
 //! # Examples
+//!
+//! Parsing, validating, and inspecting a certificate:
 //!
 //! ```
 //! use base64::decode;

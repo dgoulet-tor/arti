@@ -1,10 +1,36 @@
 //! Implementation of Tor's "subprotocol versioning" feature.
 //!
-//! Different aspects of the Tor protocol (called "subprotocols") are
-//! given versions independently, and Tor implementations use these
-//! versions to tell which relays support which features.  They are
-//! also used to determine which versions of the protocol are required
-//! to connect to the network (or just recommended).
+//! # Overview
+//!
+//! The Tor system is built out of numerous "subprotocols" that are
+//! versioned more or less independently. The `tor-protover` crate
+//! implements parsing and handling for these subprotocol versions, so
+//! that different Tor instances can one another which which parts of
+//! the protocol they support.
+//!
+//! Subprotocol versions are also used to determine which versions of
+//! the protocol are required to connect to the network (or just
+//! recommended).
+//!
+//! For more details, see the Tor specifications. (TODO: Reference a
+//! particular section.)
+//!
+//! This crate is part of
+//! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
+//! implement Tor in Rust.  It's unlikely to be of general interest
+//! unless you are writing a Tor implementation, or a program that
+//! needs to examine fine-grained details of the Tor network.
+//!
+//! ## Design notes
+//!
+//! We're giving `tor-protover` its own crate within arti because it
+//! needs to be used to multiple higher level crates that do not
+//! themselves depend on one another.  (For example, [`tor-proto`]
+//! needs to know which variant of a subprotocol can be used with a
+//! given relay, whereas [`tor-netdoc`] needs to parse lists of
+//! subprotocol versions from directory documents.  Eventually,
+//! [`tor-client`] will need to check its own list of supported
+//! protocols against the required list in the consensus.)
 
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
@@ -166,6 +192,7 @@ impl Protocols {
             None => false,
         }
     }
+    // TODO: Combine these next two functions into one by using a trait.
     /// Check whether a known protocol version is supported.
     ///
     /// ```
