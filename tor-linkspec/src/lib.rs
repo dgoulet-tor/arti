@@ -14,7 +14,7 @@
 //!
 //! When a client is building a circuit through the Tor network, it
 //! needs to know certain information about the relays in that
-//! circuit.  This crate's [`ChanTarget`] and [`CircuitTarget`] traits
+//! circuit.  This crate's [`ChanTarget`] and [`CircTarget`] traits
 //! represent objects that describe a relay on the network that a
 //! client can use as the first hop, or as any hop, in a circuit.
 //!
