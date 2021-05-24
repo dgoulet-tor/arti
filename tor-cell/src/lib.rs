@@ -1,5 +1,7 @@
 //! Coding and decoding for the cell types that make up Tor's protocol
 //!
+//! # Overview
+//!
 //! Tor's primary network protocol is oriented around a set of
 //! messages called "Cells".  They exist at two primary layers of the
 //! protocol: the channel-cell layer, and the relay-cell layer.
@@ -34,6 +36,10 @@
 //! services)](https://spec.torproject.org/tor-spec) and
 //! [padding-spec.txt (for padding
 //! negotiation)](https://spec.torproject.org/padding-spec).
+//!
+//! This crate is part of
+//! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
+//! implement [Tor](https://www.torproject.org/) in Rust.
 //!
 //! # Futureproofing note:
 //!
