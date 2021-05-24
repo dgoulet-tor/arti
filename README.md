@@ -90,7 +90,7 @@ client-side support for:
 
   * [x] `Cons=2` [^1]
   * [x] `Desc=2`
-  * [ ] `DirCache=2`
+  * [x] `DirCache=2`
   * [x] `FlowCtrl=0`
   * [x] `FlowCtrl=1`
   * [ ] `HSDir=2`
@@ -221,8 +221,11 @@ various ways.  Other crates should use this crate, and not actually
 use any crypto implementation crates directly.  (It's okay to use crates that
 define cryptographic traits.)
 
-`tor-rtcompat`: Wrappers and re-exports of asynchronous runtime
+`tor-rtcompat`: Traits to expose a common interface for asynchronous runtime
 code. Currently it supports async-std and tokio.
+
+`tor-rtmock`: Implementations of the traits in `tor-rtcompat` to support
+testing.
 
 `tor-bytes`: Byte-by-byte encoder and decoder functions and traits.  We use
 this to safely parse cells, certs, and other byte-oriented things.
@@ -271,9 +274,12 @@ when they already exist.
 to download, cache, and maintain an up-to-date network view. Exposes the
 network view as an instance of `tor-netdir::NetDir`.
 
+`tor-config`: Support for loading and managing configuration files.
+
 `tor-client`: A client library that can be used to connect to the Tor network
-and make connections.  Also comes with a a simple Tor client program that run
-a SOCKS proxy.
+and make connections.
+
+`arti`:  A simple command-line client program that can run as a SOCKS proxy.
 
 ## Intended architecture
 
