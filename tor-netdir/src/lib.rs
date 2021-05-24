@@ -1,21 +1,29 @@
 //! Represents a clients'-eye view of the Tor network.
 //!
-//! The tor-netdir crate wraps objects from tor-netdoc, and combines
+//! # Overview
+//!
+//! The `tor-netdir` crate wraps objects from tor-netdoc, and combines
 //! them to provide a unified view of the relays on the network.
 //! It is responsible for representing a client's knowledge of the
 //! network's state and who is on it.
 //!
-//! # Limitations
+//! This crate is part of
+//! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
+//! implement [Tor](https://www.torproject.org/) in Rust.  Its purpose
+//! is to expose an abstract view of a Tor network and the relays in
+//! it, so that higher-level crates don't need to know about the
+//! particular documents that describe the network and its properties.
 //!
-//! Right now, this code doesn't fetch network information: instead,
-//! it looks in a local Tor cache directory.
+//! There are two intended users for this crate.  First, producers
+//! like [`tor-dirmgr`] create [`NetDir`] objects fill them with
+//! information from the Tor nettwork directory.  Later, consumers
+//! like [`tor-circmgr`] use [`NetDir`]s to select relays for random
+//! paths through the Tor network.
+//!
+//! # Limitations
 //!
 //! Only modern consensus methods and microdescriptor consensuses are
 //! supported.
-//!
-//! TODO: Eventually, there should be the ability to download
-//! directory information and store it, but that should probably be
-//! another module.
 
 #![deny(missing_docs)]
 #![deny(clippy::await_holding_lock)]
@@ -109,6 +117,16 @@ impl std::hash::Hash for MdEntry {
 
 /// A view of the Tor directory, suitable for use in building
 /// circuits.
+///
+/// Abstractly, a [`NetDir`] is a set of usable public [`Relay`]s,
+/// each of which has its own properties, identity, and correct weighted
+/// probability for use under different circumstances.
+///
+/// A [`NetDir`] is constructed by making a [`PartialNetDir`] from a
+/// consensus document, and then adding enough microdescriptors to
+/// that `PartialNetDir` so that it can be used to build paths.
+/// (Thus, if you have a NetDir, it is definitely adequate to build
+/// paths.)
 #[derive(Debug, Clone)]
 pub struct NetDir {
     /// A microdescriptor consensus that lists the members of the network,
