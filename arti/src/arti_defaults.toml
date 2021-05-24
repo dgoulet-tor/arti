@@ -2,6 +2,8 @@
 
 # Default port to use when listening to SOCKS connections.  We always
 # listen on localhost.
+#
+# Note that only one process can listen on a given port at a time.
 socks_port = 9150
 
 # Whether to log at the "trace" debugging level.  By default, we log at
@@ -15,6 +17,11 @@ trace = false
 #
 # Supported variables are APP_CACHE, APP_CONFIG, APP_SHARED_DATA,
 # APP_LOCAL_DATA, and USER_HOME.
+#
+# Multiple processes can share the same cache_dir.  If they do, one of them
+# will download directory information for all of the others.
+#
+# The state directory is not yet used.
 [storage]
 cache_dir = "${APP_CACHE}"
 state_dir = "${APP_LOCAL_DATA}"

@@ -1,0 +1,111 @@
+digraph dependencies {
+
+	label="Arti module diagram (simplified)";
+
+	subgraph cluster_subgraph {
+		label="Async Tor implementation";
+		color="#00a000";
+		style=dashed;
+
+		tor_client [label="tor-client"];
+		tor_dirmgr [label="tor-dirmgr"];
+		tor_chanmgr [label="tor-chanmgr"];
+		tor_circmgr [label="tor-circmgr"];
+		tor_dirclient [label="tor-dirclient"];
+	}
+
+        subgraph cluster_subgraph2 {
+		label="Generic functionality";
+		color="#00a000";
+		style=dashed;
+
+#		caret [label="caret"];
+		tor_bytes [label="tor-bytes"];
+		tor_llcrypto [label="tor-llcrypto"];
+		tor_retry [label="tor-retry"];
+		tor_checkable [label="tor-checkable"];
+	}
+
+	subgraph cluster_core {
+		label="Core Tor protocol"
+		color="#00a000";
+		style=dashed;
+
+		tor_proto [label="tor-proto"];
+		tor_cell [label="tor-cell"];
+
+	}
+	subgraph cluster_proto_impl {
+		label="Lower-level Tor functionality";
+		color="#00a000";
+		style=dashed;
+
+		tor_netdir [label="tor-netdir"];
+		tor_protover [label="tor-protover"];
+		tor_cert [label="tor-cert"];
+		tor_linkspec [label="tor-linkspec"];
+		tor_netdoc [label="tor-netdoc"];
+		tor_consdiff [label="tor-consdiff"];
+	}
+	subgraph cluster_proxy {
+		label="Proxy application";
+		color="#00a000";
+		style=dashed;
+
+		arti [label="arti", shape=box];
+		tor_config [label="tor-config"];
+		tor_socksproto [label="tor-socksproto"];
+	}
+	subgraph cluster_async {
+		label="Rust async runtime";
+		color="#00a000";
+		style=dashed;
+
+		tor_rtcompat [label="tor-rtcompat"];
+	}
+
+	arti -> tor_client;
+	arti -> tor_config;
+	arti -> tor_socksproto;
+	tor_client -> tor_dirmgr;
+	tor_dirmgr -> tor_consdiff;
+	tor_dirmgr -> tor_dirclient;
+	tor_consdiff -> tor_llcrypto;
+	tor_dirclient -> tor_circmgr;
+	tor_circmgr -> tor_chanmgr;
+	tor_circmgr -> tor_netdir;
+	tor_circmgr -> tor_retry;
+	tor_proto -> tor_cell;
+	tor_cell -> tor_cert;
+	tor_cell -> tor_linkspec;
+	tor_netdir -> tor_linkspec;
+	tor_netdir -> tor_netdoc;
+	tor_linkspec -> tor_bytes;
+	tor_linkspec -> tor_protover;
+	tor_netdoc -> tor_cert;
+	tor_netdoc -> tor_protover;
+#	tor_cert -> caret;
+	tor_cert -> tor_bytes;
+	tor_cert -> tor_checkable;
+	tor_checkable -> tor_llcrypto;
+#	tor_protover -> caret;
+#	tor_socksproto -> caret;
+	tor_socksproto -> tor_bytes;
+	tor_bytes -> tor_llcrypto;
+
+tor_circmgr -> tor_proto;
+
+tor_chanmgr -> tor_rtcompat
+tor_circmgr -> tor_rtcompat;
+tor_client -> tor_rtcompat;
+tor_dirclient -> tor_rtcompat;
+tor_dirmgr -> tor_rtcompat;
+
+tor_chanmgr -> tor_proto;
+tor_circmgr -> tor_proto;
+tor_client -> tor_proto;
+tor_dirclient -> tor_proto;
+
+#tor_dirmgr -> tor_netdoc;
+
+}
