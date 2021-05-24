@@ -1,12 +1,20 @@
-//! Files that encode the difference between two consensus documents.
+//! `tor-consdiff`: Restructed ed diff and patch formats for Tor.
 //!
+//! # Overview
+//!
+//! This crate is part of
+//! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
+//! implement [Tor](https://www.torproject.org/) in Rust.
 //! Tor uses a restricted vesion of the "ed-style" diff format to
 //! record the difference between a pair of consensus documents, so that
 //! clients can download only the changes since the last document they
 //! have.
 //!
-//! This module provides a function to apply one of these diffs to a
-//! consensus.
+//! This crate provides a function to apply one of these diffs to an older
+//! consensus document, to get a newer one.
+//!
+//! TODO: Eventually, when we add relay support, we will need to generate
+//! these diffs as well as consume them.
 
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
