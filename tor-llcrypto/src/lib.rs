@@ -25,7 +25,9 @@
 //! `tor-llcrypto`, instead of having the different crates in Arti use
 //! underlying cryptographic crates directly?
 //!
-//! By wrapping our cryptography in this crate, we.
+//! By wrapping our cryptography in this crate, we ensure that we're
+//! using the same implementations across our ecosystem, and provide
+//! a single place to upgrade and test our cryptography.
 //!
 //! ## Adding to `tor-llcrypto`
 //!
