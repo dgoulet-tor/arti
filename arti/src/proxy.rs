@@ -188,7 +188,7 @@ where
 
 /// Launch a SOCKS proxy to listen on a given localhost port, and run until
 /// indefinitely.
-pub async fn run_socks_proxy<R: Runtime>(
+pub(crate) async fn run_socks_proxy<R: Runtime>(
     runtime: R,
     client: Arc<TorClient<R>>,
     socks_port: u16,
