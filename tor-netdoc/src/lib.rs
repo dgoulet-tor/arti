@@ -1,5 +1,7 @@
 //! Parse and represent directory objects used in Tor.
 //!
+//! # Overview
+//!
 //! Tor has several "directory objects" that it uses to convey
 //! information about relays on the network. They are documented in
 //! dir-spec.txt.
@@ -9,7 +11,11 @@
 //! of the router descriptor type. We will eventually need to handle
 //! more types.
 //!
-//! # Structure
+//! This crate is part of
+//! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
+//! implement [Tor](https://www.torproject.org/) in Rust.
+//!
+//! ## Design notes
 //!
 //! The crate is derived into three main parts.  In the `parse`
 //! module, we have the generic code that we use to parse different
@@ -24,7 +30,7 @@
 //! This is fine only if we assume that proposal 285 is implemented in
 //! mainline Tor.
 //!
-//! TODO: This crate has several pieces that should probably be split out
+//! TODO: This crate has several pieces that could probably be split out
 //! into other smaller cases, including handling for version numbers
 //! and exit policies.
 //!
