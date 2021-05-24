@@ -24,9 +24,9 @@
 //!
 //! TODO: Look into using the "bytes" crate more here.
 //!
-//! TODO: The "untrusted" crate is designed for parsing untrusted
-//! inputs in a way that can never panic.  We might want to look into
-//! using that as a backend instead.
+//! TODO: The "untrusted" crate has similar goals to our [`Reader`],
+//! but takes more steps to make sure it can never panic. Perhaps we
+//! should see if we can learn any tricks from it.
 //!
 //! TODO: Do we really want to keep `Reader` as a struct and
 //! `Writer` as a trait?

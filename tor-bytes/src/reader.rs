@@ -8,6 +8,10 @@ use arrayref::array_ref;
 /// Unlike io::Read, this object has a simpler error type, and is designed
 /// for in-memory parsing only.
 ///
+/// The methods in [`Reader`] should never panic, with one exception:
+/// the `extract` and `extract_n` methods will panic if the underlying
+/// [`Readable`] object's `take_from` method panics.
+///
 /// # Examples
 ///
 /// You can use a Reader to extract information byte-by-byte:
@@ -106,7 +110,9 @@ impl<'a> Reader<'a> {
     /// Fewer than `n` bytes may remain if there were not enough bytes
     /// to begin with.
     pub fn truncate(&mut self, n: usize) {
-        self.b = &self.b[..self.off + n];
+        if n < self.remaining() {
+            self.b = &self.b[..self.off + n];
+        }
     }
     /// Try to return a slice of `n` bytes from this reader without
     /// consuming them.
@@ -378,6 +384,14 @@ mod tests {
         assert_eq!(r.take_until(b' ').unwrap(), &b"si"[..]);
         assert_eq!(r.take_until(b' ').unwrap(), &b"vales"[..]);
         assert_eq!(r.take_until(b' '), Err(Error::Truncated));
+    }
+
+    #[test]
+    fn truncate_badly() {
+        let mut r = Reader::from_slice(&b"abcdefg"[..]);
+        r.truncate(1000);
+        assert_eq!(r.total_len(), 7);
+        assert_eq!(r.remaining(), 7);
     }
 
     #[test]
