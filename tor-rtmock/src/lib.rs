@@ -9,7 +9,8 @@
 //!
 //! This crate is part of
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
-//! implement Tor in Rust. It is used to write tests for higher-level
+//! implement [Tor](https://www.torproject.org/) in Rust.
+//! It is used to write tests for higher-level
 //! crates in Arti that rely on asynchronous runtimes.
 //!
 //! This crate should should only be used for writing tests.

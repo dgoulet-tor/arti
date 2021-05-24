@@ -7,7 +7,8 @@
 //!
 //! This crate is part of
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
-//! implement Tor in Rust.  It's used by higher-level crates that retry
+//! implement [Tor](https://www.torproject.org/) in Rust.
+//! It's used by higher-level crates that retry
 //! operations.
 //!
 //! ## Design notes

@@ -9,7 +9,8 @@
 //!
 //! This crate is part of
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
-//! implement Tor in Rust.  It is the highest-level library crate in
+//! implement [Tor](https://www.torproject.org/) in Rust.
+//! It is the highest-level library crate in
 //! Arti, and the one that nearly all client-only programs should use.
 //! Most of its functionality is provided by lower-level crates in Arti.
 //!

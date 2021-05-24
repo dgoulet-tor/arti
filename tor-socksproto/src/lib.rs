@@ -8,9 +8,10 @@
 //!
 //! The `tor-socksproto` crate tries to hide the actual details of the
 //! protocol, and expose a stateful handshake type that eventually
-//! provides a [SocksRequest] or an error.  It is a part of
+//! provides a [SocksRequest] or an error.  It is part of
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
-//! implement Tor in Rust.  At present, it is only used to provide a
+//! implement [Tor](https://www.torproject.org/) in Rust.
+//! At present, it is only used to provide a
 //! SOCKS proxy _over_ the Tor network, but eventually it may be used
 //! to implement support for connecting to the Tor network over a
 //! SOCKS proxy.

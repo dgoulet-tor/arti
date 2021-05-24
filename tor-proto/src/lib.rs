@@ -4,7 +4,8 @@
 //!
 //! The `tor-proto` crate lies at the core of
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
-//! implement Tor in Rust. Most people shouldn't use this crate directly,
+//! implement [Tor](https://www.torproject.org/) in Rust.
+//! Most people shouldn't use this crate directly,
 //! since its APIs are needlessly low-level for most purposes, and it is
 //! easy to miuse them in an incsecure or privacy-violating way.
 //!

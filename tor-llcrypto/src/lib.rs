@@ -9,7 +9,8 @@
 //!
 //! This crate is part of
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
-//! implement Tor in Rust.  Many other crates in Arti depend on it.
+//! implement [Tor](https://www.torproject.org/) in Rust.
+//! Many other crates in Arti depend on it.
 //!
 //! You probably wouldn't want to use this crate for implementing
 //! non-Tor-based protocols; instead you should probably use the other

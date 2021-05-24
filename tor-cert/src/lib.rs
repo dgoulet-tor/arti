@@ -9,7 +9,7 @@
 //!
 //! This crate is part of
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
-//! implement Tor in Rust.
+//! implement [Tor](https://www.torproject.org/) in Rust.
 //!
 //! There are other types of certificate used by Tor as well, and they
 //! are implemented in other places.  In particular, see

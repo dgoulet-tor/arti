@@ -27,7 +27,8 @@
 //!
 //! This crate is part of
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
-//! implement Tor in Rust.  As such, it does not currently include (or
+//! implement [Tor](https://www.torproject.org/) in Rust.
+//! As such, it does not currently include (or
 //! plan to include) any functionality beyond what Arti needs to
 //! implement Tor.
 //!
