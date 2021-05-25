@@ -11,6 +11,8 @@
 //! In particular, it provides:
 //!   * a bounded i32 with both checked and clamping constructors,
 //!   * an integer milliseconds wrapper with conversion to [`Duration`]
+//!   * a percentage wrapper, to prevent accidental failure
+//!     to divide by 100.
 //!   * a SendMeVersion which can be compared only.
 
 #![deny(missing_docs)]
@@ -178,6 +180,12 @@ impl<const L: i32, const U: i32> std::convert::From<BoundedInt32<L, U>> for i32 
     }
 }
 
+impl<const L: i32, const U: i32> From<BoundedInt32<L, U>> for f64 {
+    fn from(val: BoundedInt32<L, U>) -> f64 {
+        val.value.into()
+    }
+}
+
 impl<const L: i32, const H: i32> TryFrom<i32> for BoundedInt32<L, H> {
     type Error = Error;
     fn try_from(val: i32) -> Result<Self, Self::Error> {
@@ -210,10 +218,62 @@ impl std::convert::From<BoundedInt32<1, { i32::MAX }>> for u64 {
     }
 }
 
+/// A percentage value represented as a number.
+///
+/// This type wraps an underlying numeric type, and ensures that callers
+/// are clear whether they want a _fraction_, or a _percentage_.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct Percentage<T: Copy + Into<f64>> {
+    /// The underlying percentage value.
+    value: T,
+}
+
+impl<T: Copy + Into<f64>> Percentage<T> {
+    /// Create a new `IntPercentage` from the underlying percentage.
+    pub fn new(value: T) -> Self {
+        Self { value }
+    }
+
+    /// Return this value as a (possibly improper) fraction.
+    ///
+    /// ```
+    /// use tor_units::Percentage;
+    /// let pct_200 = Percentage::<u8>::new(200);
+    /// let pct_100 = Percentage::<u8>::new(100);
+    /// let pct_50 = Percentage::<u8>::new(50);
+    ///
+    /// assert_eq!(pct_200.as_fraction(), 2.0);
+    /// assert_eq!(pct_100.as_fraction(), 1.0);
+    /// assert_eq!(pct_50.as_fraction(), 0.5);
+    /// // Note: don't actually compare f64 with ==.
+    /// ```
+    pub fn as_fraction(self) -> f64 {
+        self.value.into() / 100.0
+    }
+
+    /// Return this value as a percentage.
+    ///
+    /// ```
+    /// use tor_units::Percentage;
+    /// let pct_200 = Percentage::<u8>::new(200);
+    /// let pct_100 = Percentage::<u8>::new(100);
+    /// let pct_50 = Percentage::<u8>::new(50);
+    ///
+    /// assert_eq!(pct_200.as_percent(), 200);
+    /// assert_eq!(pct_100.as_percent(), 100);
+    /// assert_eq!(pct_50.as_percent(), 50);
+    /// ```
+    pub fn as_percent(self) -> T {
+        self.value
+    }
+}
+
 #[derive(
     Add, Copy, Clone, Mul, Div, From, FromStr, Display, Debug, PartialEq, Eq, Ord, PartialOrd,
 )]
 /// This type represents an integer number of milliseconds.
+///
+/// The underlying type should implement TryInto<u64>.
 pub struct IntegerMilliseconds<T> {
     /// Interior Value. Should Implement TryInto<u64> to be useful.
     value: T,

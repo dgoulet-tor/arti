@@ -18,7 +18,7 @@
 //! in range, and provides default values for any parameters that are
 //! missing.
 
-use tor_units::{BoundedInt32, IntegerMilliseconds, SendMeVersion};
+use tor_units::{BoundedInt32, IntegerMilliseconds, Percentage, SendMeVersion};
 
 /// This structure holds recognised configuration parameters. All values are type-safe,
 /// and where applicable clamped to be within range.
@@ -34,7 +34,7 @@ pub struct NetParameters {
     /// Whether to perform circuit extenstions by Ed25519 ID
     pub extend_by_ed25519_id: BoundedInt32<0, 1>,
     /// The minimum threshold for circuit patch construction
-    pub min_circuit_path_threshold: BoundedInt32<25, 95>,
+    pub min_circuit_path_threshold: Percentage<BoundedInt32<25, 95>>,
     /// The minimum sendme version to accept.
     pub send_me_accept_min_version: SendMeVersion,
     /// The minimum sendme version to transmit.
@@ -50,7 +50,7 @@ impl Default for NetParameters {
                 BoundedInt32::checked_new(30000).unwrap(),
             ),
             extend_by_ed25519_id: BoundedInt32::checked_new(0).unwrap(),
-            min_circuit_path_threshold: BoundedInt32::checked_new(60).unwrap(),
+            min_circuit_path_threshold: Percentage::new(BoundedInt32::checked_new(60).unwrap()),
             send_me_accept_min_version: SendMeVersion::new(0),
             send_me_emit_min_version: SendMeVersion::new(0),
         }
@@ -78,8 +78,8 @@ impl NetParameters {
                 self.extend_by_ed25519_id = BoundedInt32::saturating_from(value);
             }
             "min_paths_for_circs_pct" => {
-                self.min_circuit_path_threshold = BoundedInt32::saturating_from(value);
-                // XXXXX This should be a percentage.
+                self.min_circuit_path_threshold =
+                    Percentage::new(BoundedInt32::saturating_from(value));
             }
             "sendme_accept_min_version" => {
                 self.send_me_accept_min_version =
@@ -151,7 +151,7 @@ mod test {
         y.push((k, v));
         let z = x.saturating_update(y.into_iter());
         assert!(z.is_empty());
-        assert_eq!(x.min_circuit_path_threshold.get(), 54);
+        assert_eq!(x.min_circuit_path_threshold.as_percent().get(), 54);
     }
 
     #[test]
@@ -166,7 +166,7 @@ mod test {
         y.push((k, v));
         let z = x.saturating_update(y.into_iter());
         assert!(z.is_empty());
-        assert_eq!(x.min_circuit_path_threshold.get(), 54);
+        assert_eq!(x.min_circuit_path_threshold.as_percent().get(), 54);
         assert_eq!(x.circuit_window.get(), 900);
     }
 
@@ -183,7 +183,7 @@ mod test {
         let z = x.saturating_update(y.into_iter());
         assert!(z.is_empty());
         assert_eq!(x.send_me_accept_min_version.get(), 30);
-        assert_eq!(x.min_circuit_path_threshold.get(), 95);
+        assert_eq!(x.min_circuit_path_threshold.as_percent().get(), 95);
     }
 
     #[test]
@@ -199,7 +199,7 @@ mod test {
         let z = x.saturating_update(y.into_iter());
         assert!(z.is_empty());
         assert_eq!(x.send_me_accept_min_version.get(), 30);
-        assert_eq!(x.min_circuit_path_threshold.get(), 95);
+        assert_eq!(x.min_circuit_path_threshold.as_percent().get(), 95);
     }
 
     // #[test]
@@ -233,7 +233,7 @@ mod test {
         assert_eq!(z, vec![&String::from("im_a_little_teapot")]);
 
         assert_eq!(p.bw_weight_scale.get(), 70);
-        assert_eq!(p.min_circuit_path_threshold.get(), 45);
+        assert_eq!(p.min_circuit_path_threshold.as_percent().get(), 45);
         let b_val: bool = p.extend_by_ed25519_id.into();
         assert_eq!(b_val, true);
     }
