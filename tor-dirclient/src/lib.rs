@@ -1,11 +1,19 @@
-//! Implements a directory client for Tor.
+//! `tor-dirclient`: Implements a minimal directory client for Tor.
 //!
-//! Tor makes directory requests as HTTP/1.0 requests tunneled over Tor circuits.
-//! For most objects, Tor uses a one-hop tunnel.
+//! # Overview
 //!
-//! # Limitations
+//! Tor makes its directory requests as HTTP/1.0 requests tunneled over
+//! Tor circuits.  For most objects, Tor uses a one-hop tunnel.  Tor
+//! also uses a few strange and ad-hoc HTTP headers to select
+//! particular functionality, such as asking for diffs, compression,
+//! or multiple documents.
 //!
-//! Multi-hop tunnels are not supported.
+//! This crate provides an API for downloading Tor directory resources
+//! over a Tor circuit.
+//!
+//! This crate is part of
+//! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
+//! implement [Tor](https://www.torproject.org/) in Rust.
 
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
