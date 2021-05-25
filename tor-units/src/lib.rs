@@ -1,6 +1,17 @@
-//! This crate provides safe wrappers for primitive types. In particular it provides
-//! a bounded i32 with both checked and clamping constructors, an integer milliseconds
-//! wrapper which must be converted to a std::duration and SendMeVersion which can be compared.
+//! `tor-units` -- Safe wrappers for primitive numeric types.
+//!
+//! # Overview
+//!
+//! This crate is part of
+//! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
+//! implement [Tor](https://www.torproject.org/) in Rust.
+//! It provides safe wrappers for primitive numeric wrappers used in
+//! other parts of Arti.
+
+//! In particular, it provides:
+//!   * a bounded i32 with both checked and clamping constructors,
+//!   * an integer milliseconds wrapper with conversion to [`Duration`]
+//!   * a SendMeVersion which can be compared only.
 
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
@@ -26,7 +37,7 @@ use derive_more::{Add, Display, Div, From, FromStr, Mul};
 
 use std::convert::{TryFrom, TryInto};
 
-/// Errors returned by bounded types
+/// Conversion errors from converting a value into a [`BoundedInt32`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {
@@ -34,7 +45,7 @@ pub enum Error {
     BelowLowerBound(i32, i32),
     /// A passed value was above the upper bound for the type.
     AboveUpperBound(i32, i32),
-    /// A passed value was could not be represented as an i32.
+    /// A passed value was could not be represented as the underlying type.
     Unrepresentable,
 }
 
@@ -60,38 +71,48 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// This type holds an i32 value such that LOWER <= value <= UPPER
+/// A 32-bit signed integer with a restricted range.
+///
+/// This type holds an i32 value such that `LOWER` <= value <= `UPPER`
+//
+// [TODO: If you need a Bounded* for some type other than i32, ask nickm:
+// he has an implementation kicking around.]
 #[derive(Debug, Clone, Copy)]
 pub struct BoundedInt32<const LOWER: i32, const UPPER: i32> {
     /// Interior Value
     value: i32,
 }
 
-#[allow(dead_code)]
 impl<const LOWER: i32, const UPPER: i32> BoundedInt32<LOWER, UPPER> {
     /// Lower bound
-    const LOWER: i32 = LOWER;
+    pub const LOWER: i32 = LOWER;
     /// Upper bound
-    const UPPER: i32 = UPPER;
+    pub const UPPER: i32 = UPPER;
 
     /// Private constructor function for this type.
     fn unchecked_new(value: i32) -> Self {
         assert!(LOWER <= UPPER); //The compiler optimises this out, no run-time cost.
+
         BoundedInt32 { value }
     }
 
-    /// Public getter for the underlying type.
+    /// Return the underlying i32 value.
+    ///
+    /// This value will always be betwen [`Self::LOWER`] and [`Self::UPPER`],
+    /// inclusive.
     pub fn get(&self) -> i32 {
         self.value
     }
-    /// This constructor returns a new value with type equal to the input value.
-    /// If the value lies outside the maximum range of the type, it is clamped to the
-    /// upper or lower bound as appropriate.
+
+    /// If `val` is within range, return a new `BoundedInt32` wrapping
+    /// it; othwerwise, clamp it to the upper or lower bound as
+    /// appropriate.
     pub fn saturating_new(val: i32) -> Self {
         Self::unchecked_new(Self::clamp(val))
     }
-    /// This constructor returns a result containing the new value or else
-    /// an error if the input lies outside the acceptable range.
+
+    /// If `val` is an acceptable value inside the range for this type,
+    /// return a new [`BoundedInt32`].  Otherwise return an error.
     pub fn checked_new(val: i32) -> std::result::Result<Self, Error> {
         if val > UPPER {
             Err(Error::AboveUpperBound(val, UPPER))
@@ -101,30 +122,42 @@ impl<const LOWER: i32, const UPPER: i32> BoundedInt32<LOWER, UPPER> {
             Ok(BoundedInt32::unchecked_new(val))
         }
     }
+
     /// This private function clamps an input to the acceptable range.
     fn clamp(val: i32) -> i32 {
-        val.clamp(LOWER, UPPER)
+        Ord::clamp(val, LOWER, UPPER)
     }
-    /// Convert from the underlying type, clamping to the upper or lower bound if needed.
+
+    /// Convert from the underlying type, clamping to the upper or
+    /// lower bound if needed.
     pub fn saturating_from(val: i32) -> Self {
         Self::unchecked_new(Self::clamp(val))
     }
+
     /// Convert from a string, clamping to the upper or lower bound if needed.
+    ///
+    /// # Limitations
+    ///
+    /// If the input is a number that cannot be represented as an i32,
+    /// then we return an error instead of clamping it.
     pub fn saturating_from_str(s: &str) -> std::result::Result<Self, Error> {
         let val: i32 = s.parse().map_err(|_| Error::Unrepresentable)?;
         Ok(Self::saturating_from(val))
     }
 }
+
 impl<const L: i32, const U: i32> std::fmt::Display for BoundedInt32<L, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
     }
 }
+
 impl<const L: i32, const U: i32> std::convert::From<BoundedInt32<L, U>> for i32 {
     fn from(val: BoundedInt32<L, U>) -> i32 {
         val.value
     }
 }
+
 impl<const L: i32, const H: i32> TryFrom<i32> for BoundedInt32<L, H> {
     type Error = Error;
     fn try_from(val: i32) -> Result<Self, Self::Error> {
@@ -181,6 +214,8 @@ impl<T: TryInto<u64>> TryFrom<IntegerMilliseconds<T>> for std::time::Duration {
 }
 
 /// A SendMe Version
+///
+/// DOCDOC: Explain why this needs to have its own type, or remove it.
 #[derive(Clone, Copy, From, FromStr, Display, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct SendMeVersion(u8);
 
