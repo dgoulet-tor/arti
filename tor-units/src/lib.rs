@@ -364,6 +364,12 @@ mod tests {
     }
 
     #[test]
+    fn display() {
+        let v = BoundedInt32::<99, 1000>::checked_new(345).unwrap();
+        assert_eq!(v.to_string(), "345".to_string());
+    }
+
+    #[test]
     #[should_panic]
     fn checked_too_high() {
         let _: TestBar = "1000".parse().unwrap();
