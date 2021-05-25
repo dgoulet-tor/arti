@@ -30,6 +30,7 @@ fn test_int_ops() {
     let t: Demo = 6.into();
     let tval: u16 = t.into();
     assert_eq!(tval, 6);
+    assert_eq!(t.get(), tval);
     assert!(!t.is_recognized());
 }
 
@@ -44,4 +45,7 @@ fn test_str_ops() {
     assert_eq!(other.to_str(), None);
     assert_eq!(format!("Hello {}", other), "Hello 33");
     assert_eq!(format!("Hello {:?}", other), "Hello Demo(33)");
+
+    assert_eq!(Demo::from_name("A"), Some(Demo::A));
+    assert_eq!(Demo::from_name("Apricot"), None);
 }

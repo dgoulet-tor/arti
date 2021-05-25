@@ -51,11 +51,14 @@
 #![deny(clippy::ref_option_ref)]
 #![warn(clippy::trait_duplication_in_bounds)]
 #![warn(clippy::unseparated_literal_suffix)]
+#![allow(clippy::upper_case_acronyms)]
+#![allow(non_upper_case_globals)]
 
-use caret::caret_enum;
+use caret::caret_int;
+
 use thiserror::Error;
 
-caret_enum! {
+caret_int! {
     /// A recognized subprotocol.
     ///
     /// These names are kept in sync with the names used in consensus
@@ -63,12 +66,7 @@ caret_enum! {
     /// cbor document format in the walking onions proposal.
     ///
     /// For the full semantics of each subprotocol, see tor-spec.txt.
-    #[non_exhaustive]
-    #[derive(Debug)]
-    #[allow(unknown_lints)]
-    #[allow(clippy::unknown_clippy_lints)]
-    #[allow(clippy::upper_case_acronyms)]
-    pub enum ProtoKind as u16 {
+    pub struct ProtoKind(u16) {
         /// Initiating and receiving channels, and getting cells on them.
         Link = 0,
         /// Different kinds of authenticate cells
@@ -120,7 +118,7 @@ impl Protocol {
     /// Return a string representation of this protocol.
     fn to_str(&self) -> &str {
         match self {
-            Protocol::Proto(k) => k.to_str(),
+            Protocol::Proto(k) => k.to_str().unwrap_or("<bug>"),
             Protocol::Unrecognized(s) => &s,
         }
     }
@@ -206,7 +204,7 @@ impl Protocols {
     /// assert!(! protos.supports_known_subver(ProtoKind::LinkAuth, 3));
     /// ```
     pub fn supports_known_subver(&self, proto: ProtoKind, ver: u8) -> bool {
-        self.supports_recognized_ver(proto as usize, ver)
+        self.supports_recognized_ver(proto.get() as usize, ver)
     }
     /// Check whether a protocol version identified by a string is supported.
     ///
@@ -221,8 +219,8 @@ impl Protocols {
     /// assert!(! protos.supports_subver("Wombat", 3));
     /// ```
     pub fn supports_subver(&self, proto: &str, ver: u8) -> bool {
-        match ProtoKind::from_string(proto) {
-            Some(p) => self.supports_recognized_ver(p as usize, ver),
+        match ProtoKind::from_name(proto) {
+            Some(p) => self.supports_recognized_ver(p.get() as usize, ver),
             None => self.supports_unrecognized_ver(proto, ver),
         }
     }
@@ -235,8 +233,8 @@ impl Protocols {
     fn add(&mut self, foundmask: &mut u64, ent: SubprotocolEntry) -> Result<(), ParseError> {
         match ent.proto {
             Protocol::Proto(k) => {
-                let idx = k as usize;
-                let bit = 1 << (k as u64);
+                let idx = k.get() as usize;
+                let bit = 1 << (k.get() as u64);
                 if (*foundmask & bit) != 0 {
                     return Err(ParseError::Duplicate);
                 }
@@ -320,7 +318,7 @@ impl std::str::FromStr for SubprotocolEntry {
             (&s[..eq_idx], &s[eq_idx + 1..])
         };
         // Look up the protocol by name.
-        let proto = match ProtoKind::from_string(name) {
+        let proto = match ProtoKind::from_name(name) {
             Some(p) => Protocol::Proto(p),
             None => Protocol::Unrecognized(name.to_string()),
         };
@@ -469,8 +467,8 @@ impl std::fmt::Display for Protocols {
         let mut entries = Vec::new();
         for (idx, mask) in self.recognized.iter().enumerate() {
             if *mask != 0 {
-                let pk = ProtoKind::from_int(idx as u16).unwrap();
-                entries.push(format!("{}={}", pk.to_str(), dumpmask(*mask)))
+                let pk: ProtoKind = (idx as u16).into();
+                entries.push(format!("{}={}", pk, dumpmask(*mask)))
             }
         }
         for ent in self.unrecognized.iter() {
@@ -561,15 +559,14 @@ mod test {
 
     #[test]
     fn test_supports() -> Result<(), ParseError> {
-        use ProtoKind::*;
         let p: Protocols = "Link=4,5-7 Padding=2 Lonk=1-3,5".parse()?;
 
-        assert_eq!(p.supports_known_subver(Padding, 2), true);
-        assert_eq!(p.supports_known_subver(Padding, 1), false);
-        assert_eq!(p.supports_known_subver(Link, 6), true);
-        assert_eq!(p.supports_known_subver(Link, 255), false);
-        assert_eq!(p.supports_known_subver(Cons, 1), false);
-        assert_eq!(p.supports_known_subver(Cons, 0), false);
+        assert_eq!(p.supports_known_subver(ProtoKind::Padding, 2), true);
+        assert_eq!(p.supports_known_subver(ProtoKind::Padding, 1), false);
+        assert_eq!(p.supports_known_subver(ProtoKind::Link, 6), true);
+        assert_eq!(p.supports_known_subver(ProtoKind::Link, 255), false);
+        assert_eq!(p.supports_known_subver(ProtoKind::Cons, 1), false);
+        assert_eq!(p.supports_known_subver(ProtoKind::Cons, 0), false);
         assert_eq!(p.supports_subver("Link", 6), true);
         assert_eq!(p.supports_subver("link", 6), false);
         assert_eq!(p.supports_subver("Cons", 0), false);
