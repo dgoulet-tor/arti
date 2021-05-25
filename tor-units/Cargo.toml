@@ -13,6 +13,7 @@ keywords = [ "tor", "arti" ]
 
 [dependencies]
 derive_more = "0.99.0"
+thiserror = "1.0.24"
 
 # [derive_more]
 # default-features = false

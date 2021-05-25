@@ -38,46 +38,26 @@ use derive_more::{Add, Display, Div, From, FromStr, Mul};
 
 use std::convert::{TryFrom, TryInto};
 use std::time::Duration;
+use thiserror::Error;
 
 /// Conversion errors from converting a value into a [`BoundedInt32`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
 pub enum Error {
     /// A passed value was below the lower bound for the type.
+    #[error("Value {0} was below the lower bound {1} for this type.")]
     BelowLowerBound(i32, i32),
     /// A passed value was above the upper bound for the type.
+    #[error("Value {0} was above the lower bound {1} for this type.")]
     AboveUpperBound(i32, i32),
     /// Tried to parse a value that was not representable as the
     /// underlying type.
+    #[error("Value could not be represented as an i32")]
     Unrepresentable,
     /// Tried to instantiate an uninhabited type.
+    #[error("No value is valid for this type")]
     Uninhabited,
 }
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Error::BelowLowerBound(x, y) => {
-                write!(f, "Value {} was below the lower bound {}", x, y)
-            }
-            Error::AboveUpperBound(x, y) => {
-                write!(
-                    f,
-                    "Value {} was above the upper bound {} for this type",
-                    x, y
-                )
-            }
-            Error::Unrepresentable => {
-                write!(f, "Value could not be represented as an i32")
-            }
-            Error::Uninhabited => {
-                write!(f, "Lower bound was above the upper bound on type")
-            }
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// A 32-bit signed integer with a restricted range.
 ///
