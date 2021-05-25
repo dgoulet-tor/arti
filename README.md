@@ -216,6 +216,8 @@ The current crates are:
 `caret`: A utility for generating enumerations with helpful trait
 implementations
 
+`tor-units`: Utilities for wrapping bounded and/or meaningful numeric types.
+
 `tor-llcrypto`: Wrappers and re-exports of cryptographic code that Tor needs in
 various ways.  Other crates should use this crate, and not actually
 use any crypto implementation crates directly.  (It's okay to use crates that
