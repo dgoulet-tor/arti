@@ -18,31 +18,6 @@
 //! in range, and provides default values for any parameters that are
 //! missing.
 
-/// The error type for this module.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum Error<'a> {
-    /// A string key wasn't recognised
-    KeyNotRecognized(&'a str),
-    /// Key recognised but invalid value provided
-    InvalidValue(&'a str, &'a str, tor_units::Error),
-}
-
-impl std::fmt::Display for Error<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::KeyNotRecognized(unknown_key) => {
-                write!(f, "A Key for NetParams was not recognised: {}", unknown_key)
-            }
-            Error::InvalidValue(x, y, z) => {
-                write!(f, "The key {} had an invalid value {} because {}", x, y, z)
-            }
-        }
-    }
-}
-
-impl std::error::Error for Error<'_> {}
-
 use tor_units::{BoundedInt32, IntegerMilliseconds, SendMeVersion};
 
 /// This structure holds recognised configuration parameters. All values are type-safe,
