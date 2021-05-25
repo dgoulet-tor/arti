@@ -11,13 +11,14 @@
 //! directory authorities.  These parameters are used to tune the
 //! behavior of numerous aspects of the network.
 //!
-//! This type differs from [`netstatus::NetParams`] in that it only
-//! exposes a set of parameters recognized by arti.  In return for
-//! this restriction, it makes sure that the values it gives are in
-//! range, and provides default values for any parameters that are
+//! This type differs from
+//! [`NetParams`](tor_netdoc::doc::netstatus::NetParams) in that it
+//! only exposes a set of parameters recognized by arti.  In return
+//! for this restriction, it makes sure that the values it gives are
+//! in range, and provides default values for any parameters that are
 //! missing.
 
-/// The error type for this crate.
+/// The error type for this module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error<'a> {
