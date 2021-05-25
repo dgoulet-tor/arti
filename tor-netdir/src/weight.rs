@@ -609,7 +609,7 @@ mod test {
         }
 
         let consensus = bld.testing_consensus().unwrap();
-        let params = NetParameters::new();
+        let params = NetParameters::default();
         let ws = WeightSet::from_consensus(&consensus, &params);
 
         assert_eq!(ws.bandwidth_fn, BandwidthFn::MeasuredOnly);

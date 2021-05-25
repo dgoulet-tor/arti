@@ -193,7 +193,7 @@ impl PartialNetDir {
     /// the consensus with those from `replacement_params`.
     pub fn new(
         consensus: MdConsensus,
-        replacement_params: Option<&netstatus::NetParams<std::string::String>>,
+        replacement_params: Option<&netstatus::NetParams<i32>>,
     ) -> Self {
         let mut params = NetParameters::default();
         match params.saturating_update(consensus.params().iter()) {
@@ -370,9 +370,12 @@ impl NetDir {
         // on the network.
 
         let min_frac_paths: f64 = self.params().min_circuit_path_threshold.get().into();
+        let min_frac_paths = min_frac_paths / 100.0; // XXXX isn't percentage a thing?
 
         // What fraction of paths can we build?
         let available = self.frac_usable_paths();
+
+        dbg!(available, min_frac_paths);
 
         // TODO: `available` could be NaN if the consensus is sufficiently
         // messed-up.  If so it's not 100% clear what to fall back on.
@@ -676,6 +679,8 @@ mod test {
             assert!(wanted);
         }
 
+        dbg!(&dir.netdir.params);
+
         let missing: HashSet<_> = dir.missing_microdescs().collect();
         assert!(missing.is_empty());
         assert!(dir.have_enough_paths());
@@ -693,14 +698,14 @@ mod test {
             .unwrap();
         let dir = PartialNetDir::new(consensus.clone(), Some(&override_p));
         let params = &dir.netdir.params;
-        assert_eq!(params.get(Param::BwWeightScale), 2);
-        assert_eq!(params.get(Param::CircWindow), 500);
+        assert_eq!(params.bw_weight_scale.get(), 2);
+        assert_eq!(params.circuit_window.get(), 500_i32);
 
         // try again without the override.
         let dir = PartialNetDir::new(consensus, None);
         let params = &dir.netdir.params;
-        assert_eq!(params.get(Param::BwWeightScale), 1);
-        assert_eq!(params.get(Param::CircWindow), 1000);
+        assert_eq!(params.bw_weight_scale.get(), 1_i32);
+        assert_eq!(params.circuit_window.get(), 1000_i32);
     }
 
     #[test]
