@@ -32,12 +32,7 @@ once_cell = "1.7.2"
 rand = "0.8.3"
 serde = { version = "1.0.124", features = ["derive"] }
 signature = "1.3.0"
-derive_more = "0.99.0"
 thiserror = "1.0.24"
-
-# [derive_more]
-# default-features = false
-# features = ["from"]
 
 [dev-dependencies]
 hex-literal = "0.3.1"
