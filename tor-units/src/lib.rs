@@ -38,6 +38,7 @@ extern crate derive_more;
 use derive_more::{Add, Display, Div, From, FromStr, Mul};
 
 use std::convert::{TryFrom, TryInto};
+use std::time::Duration;
 
 /// Conversion errors from converting a value into a [`BoundedInt32`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,7 +128,7 @@ impl<const LOWER: i32, const UPPER: i32> BoundedInt32<LOWER, UPPER> {
 
     /// If `val` is an acceptable value inside the range for this type,
     /// return a new [`BoundedInt32`].  Otherwise return an error.
-    pub fn checked_new(val: i32) -> std::result::Result<Self, Error> {
+    pub fn checked_new(val: i32) -> Result<Self, Error> {
         if val > UPPER {
             Err(Error::AboveUpperBound(val, UPPER))
         } else if val < LOWER {
@@ -158,7 +159,7 @@ impl<const LOWER: i32, const UPPER: i32> BoundedInt32<LOWER, UPPER> {
     ///
     /// If the input is a number that cannot be represented as an i32,
     /// then we return an error instead of clamping it.
-    pub fn saturating_from_str(s: &str) -> std::result::Result<Self, Error> {
+    pub fn saturating_from_str(s: &str) -> Result<Self, Error> {
         if UPPER < LOWER {
             // The compiler should optimize this block out at compile time.
             return Err(Error::Uninhabited);
@@ -174,7 +175,7 @@ impl<const L: i32, const U: i32> std::fmt::Display for BoundedInt32<L, U> {
     }
 }
 
-impl<const L: i32, const U: i32> std::convert::From<BoundedInt32<L, U>> for i32 {
+impl<const L: i32, const U: i32> From<BoundedInt32<L, U>> for i32 {
     fn from(val: BoundedInt32<L, U>) -> i32 {
         val.value
     }
@@ -200,19 +201,19 @@ impl<const L: i32, const H: i32> std::str::FromStr for BoundedInt32<L, H> {
     }
 }
 
-impl std::convert::From<BoundedInt32<0, 1>> for bool {
+impl From<BoundedInt32<0, 1>> for bool {
     fn from(val: BoundedInt32<0, 1>) -> bool {
         val.value == 1
     }
 }
 
-impl std::convert::From<BoundedInt32<0, 255>> for u8 {
+impl From<BoundedInt32<0, 255>> for u8 {
     fn from(val: BoundedInt32<0, 255>) -> u8 {
         val.value as u8
     }
 }
 
-impl std::convert::From<BoundedInt32<1, { i32::MAX }>> for u64 {
+impl From<BoundedInt32<1, { i32::MAX }>> for u64 {
     fn from(val: BoundedInt32<1, { i32::MAX }>) -> u64 {
         val.value as u64
     }
@@ -286,7 +287,7 @@ impl<T: TryInto<u64>> IntegerMilliseconds<T> {
     }
 }
 
-impl<T: TryInto<u64>> TryFrom<IntegerMilliseconds<T>> for std::time::Duration {
+impl<T: TryInto<u64>> TryFrom<IntegerMilliseconds<T>> for Duration {
     type Error = <T as TryInto<u64>>::Error;
     fn try_from(val: IntegerMilliseconds<T>) -> Result<Self, <T as TryInto<u64>>::Error> {
         Ok(Self::from_millis(val.value.try_into()?))
