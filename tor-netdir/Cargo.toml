@@ -16,7 +16,6 @@ default = []
 experimental-api = []
 
 [dependencies]
-caret = { path = "../caret", version= "*" }
 tor-checkable = { path="../tor-checkable", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
