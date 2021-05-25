@@ -20,8 +20,9 @@
 // We want to use the exact variable names from the rend-spec-v3.txt proposal.
 // This means that we allow variables to be named x (privkey) and X (pubkey).
 #![allow(non_snake_case)]
-// This crate is still unused so allow some dead code for now.
+// This module is still unused: so allow some dead code for now.
 #![allow(dead_code)]
+#![allow(unreachable_pub)]
 
 use crate::crypto::handshake::KeyGenerator;
 use crate::crypto::ll::kdf::{Kdf, ShakeKdf};
@@ -31,7 +32,8 @@ use tor_llcrypto::d::Sha3_256;
 use tor_llcrypto::pk::{curve25519, ed25519};
 use tor_llcrypto::util::rand_compat::RngCompatExt;
 
-use cipher::stream::{NewStreamCipher, StreamCipher};
+use cipher::{NewCipher, StreamCipher};
+
 use digest::Digest;
 use generic_array::GenericArray;
 use rand_core::{CryptoRng, RngCore};
@@ -122,7 +124,7 @@ fn encrypt_and_mac(
     // Encrypt the introduction data using 'enc_key'
     let zero_iv = GenericArray::default();
     let mut cipher = Aes256Ctr::new(&enc_key.into(), &zero_iv);
-    cipher.encrypt(&mut plaintext);
+    cipher.apply_keystream(&mut plaintext);
     let ciphertext = plaintext; // it's now encrypted
 
     // Now staple the other INTRODUCE1 data right before the ciphertext to
@@ -296,7 +298,7 @@ where
     // Decrypt the ENCRYPTED_DATA from the intro cell
     let zero_iv = GenericArray::default();
     let mut cipher = Aes256Ctr::new(&enc_key.into(), &zero_iv);
-    cipher.decrypt(ciphertext);
+    cipher.apply_keystream(ciphertext);
     let plaintext = ciphertext; // it's now decrypted
 
     // Generate ephemeral keys for this handshake
