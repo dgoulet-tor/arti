@@ -62,7 +62,7 @@ impl NetParameters {
     /// clamping the value to be within allowable bounds.
     ///
     /// Return true if the parameter was recognized; false otherwise.
-    fn saturating_update_override<'a>(&mut self, name: &'a str, value: i32) -> bool {
+    fn saturating_update_override(&mut self, name: &str, value: i32) -> bool {
         match name {
             "bwweightscale" => {
                 self.bw_weight_scale = BoundedInt32::saturating_from(value);
