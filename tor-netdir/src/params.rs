@@ -19,6 +19,7 @@
 
 /// The error type for this crate.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Error<'a> {
     /// A string key wasn't recognised
     KeyNotRecognized(&'a str),
@@ -43,9 +44,10 @@ impl std::error::Error for Error<'_> {}
 
 use tor_units::{BoundedInt32, IntegerMilliseconds, SendMeVersion};
 
-/// This structure holds recognised configuration parameters. All values are type safey
+/// This structure holds recognised configuration parameters. All values are type-safe,
 /// and where applicable clamped to be within range.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct NetParameters {
     /// A weighting factor for bandwidth calculations
     pub bw_weight_scale: BoundedInt32<0, { i32::MAX }>,
