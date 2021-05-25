@@ -4,306 +4,289 @@
 //! parameters', which are integer-valued items voted on by the
 //! directory authorities.  They are used to tune the behavior of
 //! numerous aspects of the network.
+//! A set of Tor network parameters
+//!
+//! The Tor consensus document contains a number of 'network
+//! parameters', which are integer-valued items voted on by the
+//! directory authorities.  These parameters are used to tune the
+//! behavior of numerous aspects of the network.
+//!
+//! This type differs from [`netstatus::NetParams`] in that it only
+//! exposes a set of parameters recognized by arti.  In return for
+//! this restriction, it makes sure that the values it gives are in
+//! range, and provides default values for any parameters that are
+//! missing.
 
-use caret::caret_enum;
-use tor_netdoc::doc::netstatus;
+/// The error type for this crate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Error<'a> {
+    /// A string key wasn't recognised
+    KeyNotRecognized(&'a str),
+    /// Key recognised but invalid value provided
+    InvalidValue(&'a str, &'a str, tor_units::Error),
+}
 
-use std::collections::HashMap;
-use std::ops::{Bound, RangeBounds, RangeInclusive};
+impl std::fmt::Display for Error<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::KeyNotRecognized(unknown_key) => {
+                write!(f, "A Key for NetParams was not recognised: {}", unknown_key)
+            }
+            Error::InvalidValue(x, y, z) => {
+                write!(f, "The key {} had an invalid value {} because {}", x, y, z)
+            }
+        }
+    }
+}
 
-/// A set of Tor network parameters.
-///
-/// The Tor consensus document contains a number of 'network
-/// parameters', which are integer-valued items voted on by the
-/// directory authorities.  These parameters are used to tune the
-/// behavior of numerous aspects of the network.
-///
-/// This type differs from [`netstatus::NetParams`] in that it only
-/// exposes a set of parameters recognized by arti.  In return for
-/// this restriction, it makes sure that the values it gives are in
-/// range, and provides default values for any parameters that are
-/// missing.
+impl std::error::Error for Error<'_> {}
+
+use tor_units::{BoundedInt32, IntegerMilliseconds, SendMeVersion};
+
+/// This structure holds recognised configuration parameters. All values are type safey
+/// and where applicable clamped to be within range.
 #[derive(Clone, Debug)]
 pub struct NetParameters {
-    /// A map from parameters to their values.  If a parameter is not
-    /// present in this map, its value is the default.
-    ///
-    /// All values in this map are clamped to be within the range for their
-    /// associated parameters.
-    params: HashMap<Param, i32>,
+    /// A weighting factor for bandwidth calculations
+    pub bw_weight_scale: BoundedInt32<0, { i32::MAX }>,
+    /// The maximum cell window size?
+    pub circuit_window: BoundedInt32<100, 1000>,
+    /// The decay parameter for circuit priority
+    pub circuit_priority_half_life: IntegerMilliseconds<BoundedInt32<1, { i32::MAX }>>,
+    /// Whether to perform circuit extenstions by Ed25519 ID
+    pub extend_by_ed25519_id: BoundedInt32<0, 1>,
+    /// The minimum threshold for circuit patch construction
+    pub min_circuit_path_threshold: BoundedInt32<25, 95>,
+    /// The minimum sendme version to accept.
+    pub send_me_accept_min_version: SendMeVersion,
+    /// The minimum sendme version to transmit.
+    pub send_me_emit_min_version: SendMeVersion,
 }
 
 impl Default for NetParameters {
-    fn default() -> NetParameters {
-        NetParameters::new()
+    fn default() -> Self {
+        NetParameters {
+            bw_weight_scale: BoundedInt32::checked_new(10000).unwrap(),
+            circuit_window: BoundedInt32::checked_new(1000).unwrap(),
+            circuit_priority_half_life: IntegerMilliseconds::new(
+                BoundedInt32::checked_new(30000).unwrap(),
+            ),
+            extend_by_ed25519_id: BoundedInt32::checked_new(0).unwrap(),
+            min_circuit_path_threshold: BoundedInt32::checked_new(60).unwrap(),
+            send_me_accept_min_version: SendMeVersion::new(0),
+            send_me_emit_min_version: SendMeVersion::new(0),
+        }
     }
 }
 
 impl NetParameters {
-    /// Construct a new NetParameters containing the default value for
-    /// each recognized parameter.
-    pub fn new() -> Self {
-        NetParameters {
-            params: HashMap::new(),
+    /// Given a name and value as strings, produce either a result or an error if the parsing fails.
+    /// The error may reflect a failure to parse a value of the correct type or withint the necessary bounds.
+    fn saturating_update_override<'a>(
+        &mut self,
+        name: &'a str,
+        value: &'a str,
+    ) -> std::result::Result<(), Error<'a>> {
+        let enrich = |x| Error::InvalidValue(name, value, x);
+        match name {
+            "bwweightscale" => {
+                self.bw_weight_scale = BoundedInt32::saturating_from_str(value).map_err(enrich)?
+            }
+            "circwindow" => {
+                self.circuit_window = BoundedInt32::saturating_from_str(value).map_err(enrich)?
+            }
+            "CircuitPriorityHalflifeMsec" => {
+                self.circuit_priority_half_life = IntegerMilliseconds::new(
+                    BoundedInt32::saturating_from_str(value).map_err(enrich)?,
+                )
+            }
+            "ExtendByEd25519ID" => {
+                self.extend_by_ed25519_id =
+                    BoundedInt32::saturating_from_str(value).map_err(enrich)?
+            }
+            "min_paths_for_circs_pct" => {
+                self.min_circuit_path_threshold =
+                    BoundedInt32::saturating_from_str(value).map_err(enrich)?
+            }
+            "sendme_accept_min_version" => {
+                self.send_me_accept_min_version = SendMeVersion::new(
+                    BoundedInt32::<0, 255>::saturating_from_str(value)
+                        .map_err(enrich)?
+                        .into(),
+                )
+            }
+            "sendme_emit_min_version" => {
+                self.send_me_emit_min_version = SendMeVersion::new(
+                    BoundedInt32::<0, 255>::saturating_from_str(value)
+                        .map_err(enrich)?
+                        .into(),
+                )
+            }
+            _ => return Err(Error::KeyNotRecognized(name)),
         }
+        Ok(())
     }
 
-    /// Return the value for the parameter `key`.
-    pub fn get(&self, key: Param) -> i32 {
-        match self.params.get(&key) {
-            Some(v) => *v,
-            None => key.default_val(),
-        }
-    }
-
-    /// Returns the value for the parameter `key` as a u16.
-    ///
-    /// Panics if any allowable value for `key` can't be represented as a u16.
-    pub fn get_u16(&self, key: Param) -> u16 {
-        let range = key.range();
-        assert!(range.min >= 0);
-        assert!(range.max <= 65535);
-        self.get(key) as u16
-    }
-
-    /// Returns the value for the parameter `key` as a u16.
-    ///
-    /// Panics if any allowable value for `key` can't be represented a
-    pub fn get_bool(&self, key: Param) -> bool {
-        let range = key.range();
-        assert!(range.min >= 0);
-        assert!(range.max <= 1);
-
-        self.get(key) != 0
-    }
-
-    /// Change the value for the parameter `key` to be `value`.
-    ///
-    /// If `value` is not in range, clamp it to the minimum or maximum
-    /// for `key`, depending on whether it is too low or too high.
-    pub fn set_clamped(&mut self, key: Param, value: i32) {
-        let value = key.clamp(value);
-        self.params.insert(key, value);
-    }
-
-    /// Replace any values in this NetParameters that are overridden in `new`.
-    ///
-    /// Return a vector of unrecognized keys.
-    pub fn update<'a>(&mut self, new: &'a netstatus::NetParams<i32>) -> Vec<&'a str> {
-        let mut unrecognized = Vec::new();
-        for (name, value) in new.iter() {
-            if let Ok(param) = name.parse() {
-                self.set_clamped(param, *value);
-            } else {
-                unrecognized.push(name.as_ref());
+    /// This function takes an iterator of string references and returns a result.
+    /// The result is either OK or a list of errors.
+    pub fn saturating_update<'a>(
+        &mut self,
+        iter: impl Iterator<Item = (&'a std::string::String, &'a std::string::String)>,
+    ) -> std::result::Result<(), Vec<Error<'a>>> {
+        let mut errors: Vec<Error<'a>> = Vec::new();
+        for (k, v) in iter {
+            let r = self.saturating_update_override(k, v);
+            match r {
+                Ok(()) => continue,
+                Err(x) => errors.push(x),
             }
         }
-        unrecognized
-    }
-}
-
-caret_enum! {
-    #[non_exhaustive]
-    #[derive(Hash,Debug)]
-    /// A recognized Tor consensus directory parameter.
-    ///
-    /// Each parameter has a corresponding string representation for use
-    /// in directory documents.
-    ///
-    /// This list does not (yet) include every parameter in Tor's
-    /// param-spec.txt.
-    pub enum Param as u16 {
-        /// A value that bandwidth-weights are divided by.
-        ///
-        /// This is mostly used by directory authorities, but clients
-        /// need it when computing how to weight directory-flagged
-        /// relays.
-        BwWeightScale ("bwweightscale"),
-        /// Default starting value for circuit SENDME windows.
-        CircWindow ("circwindow"),
-        /// Halflife for weighting circuits and deciding which should send
-        /// the next cell.
-        ///
-        /// XXXX Not yet implemented
-        CircuitPriorityHalflifeMsec ("CircuitPriorityHalflifeMsec"),
-        /// Whether clients should include Ed25519 identities for
-        /// relays when generating EXTEND2 cells.
-        ExtendByEd25519Id ("ExtendByEd25519ID"),
-        /// A percentage threshold that determines whether clients
-        /// believe they have enough directory information to build
-        /// circuits.
-        MinPathsForCircsPct ("min_paths_for_circs_pct"),
-        /// Minimum SENDME version to accept from others.
-        ///
-        /// XXXX not yet implemented
-        SendmeAcceptMinVersion ("sendme_accept_min_version"),
-        /// Minimum SENDME version to send.
-        ///
-        /// XXXX not yet implemented
-        SendmeEmitMinVersion ("sendme_emit_min_version"),
-    }
-}
-
-impl Param {
-    /// Return `val`, clamped to be within an appropriate range for
-    /// this parameter.
-    fn clamp(self, val: i32) -> i32 {
-        let ParamRange { min, max, .. } = self.range();
-        if val < min {
-            min
-        } else if val > max {
-            max
+        if errors.is_empty() {
+            Ok(())
         } else {
-            val
+            Err(errors)
         }
-    }
-    /// Return the default value for this perameter.
-    fn default_val(self) -> i32 {
-        self.range().default
-    }
-
-    /// Return a ParamRange representing the default value and
-    /// allowable range for this parameter.
-    fn range(self) -> ParamRange {
-        use Param::*;
-        use ParamRange as P;
-
-        /// Range for a value that can be 0 or 1.
-        const BOOLEAN: RangeInclusive<i32> = 0..=1;
-
-        match self {
-            BwWeightScale => P::new(10_000, 1..),
-            CircWindow => P::new(1_000, 100..=1000),
-            ExtendByEd25519Id => P::new(0, BOOLEAN),
-            CircuitPriorityHalflifeMsec => P::new(30_000, 1..),
-            MinPathsForCircsPct => P::new(60, 25..=95),
-            SendmeAcceptMinVersion => P::new(0, 0..=255),
-            SendmeEmitMinVersion => P::new(0, 0..=255),
-        }
-    }
-}
-
-/// Internal type: represents the default value and allowable range
-/// for this parameter.
-#[derive(Clone, Debug)]
-struct ParamRange {
-    /// Default value to assume when none is listed in the consensus.
-    default: i32,
-    /// Lowest allowable value
-    min: i32,
-    /// Highest allowable value
-    max: i32,
-}
-
-impl ParamRange {
-    /// Construct a new ParamRange from a default value and a RangeBounds.
-    fn new<B>(default: i32, range: B) -> Self
-    where
-        B: RangeBounds<i32>,
-    {
-        assert!(range.contains(&default));
-        let min = match range.start_bound() {
-            Bound::Included(n) => *n,
-            Bound::Excluded(n) => *n + 1,
-            Bound::Unbounded => std::i32::MIN,
-        };
-        let max = match range.end_bound() {
-            Bound::Included(n) => *n,
-            Bound::Excluded(n) => *n - 1,
-            Bound::Unbounded => std::i32::MAX,
-        };
-        assert!(min <= default);
-        assert!(default <= max);
-
-        ParamRange { default, min, max }
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::many_single_char_names)]
 mod test {
     use super::*;
+    use std::string::String;
 
     #[test]
-    fn param_range() {
-        let p = ParamRange::new(7, 1..1000);
-        assert_eq!(p.default, 7);
-        assert_eq!(p.min, 1);
-        assert_eq!(p.max, 999);
-
-        let p = ParamRange::new(1000, 1..=1000);
-        assert_eq!(p.default, 1000);
-        assert_eq!(p.min, 1);
-        assert_eq!(p.max, 1000);
-
-        let p = ParamRange::new(-10, ..);
-        assert_eq!(p.default, -10);
-        assert_eq!(p.min, std::i32::MIN);
-        assert_eq!(p.max, std::i32::MAX);
+    fn empty_list() {
+        let mut x = NetParameters::default();
+        let y = Vec::<(&String, &String)>::new();
+        let z = x.saturating_update(y.into_iter());
+        z.unwrap();
     }
 
     #[test]
-    #[should_panic]
-    fn param_range_oob() {
-        ParamRange::new(-7, 1..1000);
+    fn unknown_parameter() {
+        let mut x = NetParameters::default();
+        let mut y = Vec::<(&String, &String)>::new();
+        let k = &String::from("This_is_not_a_real_key");
+        let v = &String::from("456");
+        y.push((k, v));
+        let z = x.saturating_update(y.into_iter());
+        z.err().unwrap();
+    }
+    // #[test]
+    // fn duplicate_parameter() {}
+
+    #[test]
+    fn single_good_parameter() {
+        let mut x = NetParameters::default();
+        let mut y = Vec::<(&String, &String)>::new();
+        let k = &String::from("min_paths_for_circs_pct");
+        let v = &String::from("54");
+        y.push((k, v));
+        let z = x.saturating_update(y.into_iter());
+        z.ok().unwrap();
+        assert_eq!(x.min_circuit_path_threshold.get(), 54);
     }
 
     #[test]
-    fn defaults() {
-        let p = NetParameters::new();
-
-        assert_eq!(p.get(Param::BwWeightScale), 10_000);
-        assert_eq!(p.get(Param::CircWindow), 1_000);
+    fn single_bad_parameter() {
+        let mut x = NetParameters::default();
+        let mut y = Vec::<(&String, &String)>::new();
+        let k = &String::from("min_paths_for_circs_pct");
+        let v = &String::from("The_colour_red");
+        y.push((k, v));
+        let z = x.saturating_update(y.into_iter());
+        z.err().unwrap();
     }
 
     #[test]
-    fn set_clamped() {
-        let mut p = NetParameters::new();
-        p.set_clamped(Param::BwWeightScale, 6);
-        p.set_clamped(Param::CircWindow, 6);
-        p.set_clamped(Param::MinPathsForCircsPct, 1000);
+    fn multiple_good_parameters() {
+        let mut x = NetParameters::default();
+        let mut y = Vec::<(&String, &String)>::new();
+        let k = &String::from("min_paths_for_circs_pct");
+        let v = &String::from("54");
+        y.push((k, v));
+        let k = &String::from("circwindow");
+        let v = &String::from("900");
+        y.push((k, v));
+        let z = x.saturating_update(y.into_iter());
+        z.ok().unwrap();
+        assert_eq!(x.min_circuit_path_threshold.get(), 54);
+        assert_eq!(x.circuit_window.get(), 900);
+    }
 
-        assert_eq!(p.get(Param::BwWeightScale), 6);
-        assert_eq!(p.get(Param::CircWindow), 100);
-        assert_eq!(p.get(Param::MinPathsForCircsPct), 95);
+    #[test]
+    fn good_out_of_range() {
+        let mut x = NetParameters::default();
+        let mut y = Vec::<(&String, &String)>::new();
+        let k = &String::from("sendme_accept_min_version");
+        let v = &String::from("30");
+        y.push((k, v));
+        let k = &String::from("min_paths_for_circs_pct");
+        let v = &String::from("255");
+        y.push((k, v));
+        let z = x.saturating_update(y.into_iter());
+        z.ok().unwrap();
+        assert_eq!(x.send_me_accept_min_version.get(), 30);
+        assert_eq!(x.min_circuit_path_threshold.get(), 95);
+    }
+
+    #[test]
+    fn good_invalid_rep() {
+        let mut x = NetParameters::default();
+        let mut y = Vec::<(&String, &String)>::new();
+        let k = &String::from("sendme_accept_min_version");
+        let v = &String::from("30");
+        y.push((k, v));
+        let k = &String::from("min_paths_for_circs_pct");
+        let v = &String::from("9000");
+        y.push((k, v));
+        let z = x.saturating_update(y.into_iter());
+        z.unwrap();
+        assert_eq!(x.send_me_accept_min_version.get(), 30);
+        assert_eq!(x.min_circuit_path_threshold.get(), 95);
+    }
+
+    // #[test]
+    // fn good_duplicate() {}
+    #[test]
+    fn good_unknown() {
+        let mut x = NetParameters::default();
+        let mut y = Vec::<(&String, &String)>::new();
+        let k = &String::from("sendme_accept_min_version");
+        let v = &String::from("30");
+        y.push((k, v));
+        let k = &String::from("not_a_real_parameter");
+        let v = &String::from("9000");
+        y.push((k, v));
+        let z = x.saturating_update(y.into_iter());
+        z.err().unwrap();
+        assert_eq!(x.send_me_accept_min_version.get(), 30);
     }
 
     #[test]
     fn from_consensus() {
-        let mut p = NetParameters::new();
-        let np =
-            "bwweightscale=70 min_paths_for_circs_pct=45 im_a_little_teapot=1 circwindow=99999"
-                .parse()
-                .unwrap();
-        let unrec = p.update(&np);
+        let mut p = NetParameters::default();
+        let mut mp: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        mp.insert("bwweightscale".to_string(), "70".to_string());
+        mp.insert("min_paths_for_circs_pct".to_string(), "45".to_string());
+        mp.insert("im_a_little_teapot".to_string(), "1".to_string());
+        mp.insert("circwindow".to_string(), "99999".to_string());
+        mp.insert(
+            "sendme_accept_min_version".to_string(),
+            "potato".to_string(),
+        );
+        mp.insert("ExtendByEd25519ID".to_string(), "1".to_string());
 
-        assert_eq!(p.get(Param::BwWeightScale), 70);
-        assert_eq!(p.get(Param::CircWindow), 1000);
-        assert_eq!(p.get(Param::MinPathsForCircsPct), 45);
-        assert_eq!(p.get(Param::CircuitPriorityHalflifeMsec), 30_000);
-
-        assert_eq!(unrec.len(), 1);
-        assert_eq!(unrec[0], "im_a_little_teapot");
-    }
-
-    #[test]
-    fn get_casting_ok() {
-        let mut p = NetParameters::new();
-        assert_eq!(p.get_bool(Param::ExtendByEd25519Id), false);
-        assert_eq!(p.get_u16(Param::ExtendByEd25519Id), 0);
-
-        p.set_clamped(Param::MinPathsForCircsPct, 99);
-        assert_eq!(p.get_u16(Param::MinPathsForCircsPct), 95);
-    }
-
-    #[test]
-    #[should_panic]
-    fn get_bool_panics() {
-        NetParameters::new().get_bool(Param::MinPathsForCircsPct);
-    }
-
-    #[test]
-    #[should_panic]
-    fn get_u16_panics() {
-        NetParameters::new().get_u16(Param::BwWeightScale);
+        match p.saturating_update(mp.iter()) {
+            Ok(()) => assert_eq!(0, 1),
+            Err(results) => {
+                assert_eq!(results.len(), 2);
+            }
+        }
+        assert_eq!(p.bw_weight_scale.get(), 70);
+        assert_eq!(p.min_circuit_path_threshold.get(), 45);
+        let b_val: bool = p.extend_by_ed25519_id.into();
+        assert_eq!(b_val, true);
     }
 }

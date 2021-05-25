@@ -12,7 +12,7 @@
 //!   relay provides particularly scarce functionality, we might choose not to
 //!   use it for other roles, or to use it less commonly for them.
 
-use crate::params::{NetParameters, Param};
+use crate::params::NetParameters;
 use tor_netdoc::doc::netstatus::{self, MdConsensus, MdConsensusRouterStatus, NetParams};
 
 /// Helper: Calculate the function we should use to find initial relay
@@ -241,7 +241,8 @@ impl WeightSet {
     /// Compute the correct WeightSet for a provided MdConsensus.
     pub(crate) fn from_consensus(consensus: &MdConsensus, params: &NetParameters) -> Self {
         let bandwidth_fn = pick_bandwidth_fn(consensus.relays().iter().map(|rs| rs.weight()));
-        let weight_scale = params.get(Param::BwWeightScale);
+        let weight_scale = params.bw_weight_scale.get(); //TODO Escapes the type. XXXXXXX
+
         let total_bw = consensus
             .relays()
             .iter()

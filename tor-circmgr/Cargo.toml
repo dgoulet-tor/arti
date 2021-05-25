@@ -23,6 +23,7 @@ tor-retry = { path="../tor-retry", version= "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
 tor-llcrypto = { path="../tor-llcrypto", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
+tor-units = { path="../tor-units", version="*"}
 
 anyhow = "1.0.38"
 async-trait = "0.1.48"

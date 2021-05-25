@@ -276,7 +276,7 @@ pub struct DirMgrConfigBuilder {
 
     /// A map of network parameters that we're overriding from their
     /// setttings in the consensus.
-    override_net_params: netstatus::NetParams<i32>,
+    override_net_params: netstatus::NetParams<std::string::String>, //XXXXX REVERT
 }
 
 /// Configuration type for network directory operations.
@@ -298,7 +298,7 @@ pub struct DirMgrConfig {
 
     /// A map of network parameters that we're overriding from their
     /// setttings in the consensus.
-    override_net_params: netstatus::NetParams<i32>,
+    override_net_params: netstatus::NetParams<std::string::String>, //XXXXX REVERT
 }
 
 impl DirMgrConfigBuilder {
@@ -347,7 +347,7 @@ impl DirMgrConfigBuilder {
     ///
     /// By default no parameters will be overridden.
     pub fn override_net_param(&mut self, param: String, value: i32) -> &mut Self {
-        self.override_net_params.set(param, value);
+        self.override_net_params.set(param, value.to_string());
         self
     }
 
@@ -415,7 +415,7 @@ impl DirMgrConfig {
     }
 
     /// Return set of configured networkstatus parameter overrides.
-    pub fn override_net_params(&self) -> &netstatus::NetParams<i32> {
+    pub fn override_net_params(&self) -> &netstatus::NetParams<std::string::String> {
         &self.override_net_params
     }
 
