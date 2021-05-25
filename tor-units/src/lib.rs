@@ -45,8 +45,11 @@ pub enum Error {
     BelowLowerBound(i32, i32),
     /// A passed value was above the upper bound for the type.
     AboveUpperBound(i32, i32),
-    /// A passed value was could not be represented as the underlying type.
+    /// Tried to parse a value that was not representable as the
+    /// underlying type.
     Unrepresentable,
+    /// Tried to instantiate an uninhabited type.
+    Uninhabited,
 }
 
 impl std::fmt::Display for Error {
@@ -65,6 +68,9 @@ impl std::fmt::Display for Error {
             Error::Unrepresentable => {
                 write!(f, "Value could not be represented as an i32")
             }
+            Error::Uninhabited => {
+                write!(f, "Lower bound was above the upper bound on type")
+            }
         }
     }
 }
@@ -74,6 +80,12 @@ impl std::error::Error for Error {}
 /// A 32-bit signed integer with a restricted range.
 ///
 /// This type holds an i32 value such that `LOWER` <= value <= `UPPER`
+///
+/// # Limitations
+///
+/// If you try to instantiate this type with LOWER > UPPER, you will
+/// get an uninhabitable type.  It would be better if we could check that at
+/// compile time, and prevent such types from being named.
 //
 // [TODO: If you need a Bounded* for some type other than i32, ask nickm:
 // he has an implementation kicking around.]
@@ -130,6 +142,10 @@ impl<const LOWER: i32, const UPPER: i32> BoundedInt32<LOWER, UPPER> {
 
     /// Convert from the underlying type, clamping to the upper or
     /// lower bound if needed.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if UPPER < LOWER.
     pub fn saturating_from(val: i32) -> Self {
         Self::unchecked_new(Self::clamp(val))
     }
@@ -141,6 +157,10 @@ impl<const LOWER: i32, const UPPER: i32> BoundedInt32<LOWER, UPPER> {
     /// If the input is a number that cannot be represented as an i32,
     /// then we return an error instead of clamping it.
     pub fn saturating_from_str(s: &str) -> std::result::Result<Self, Error> {
+        if UPPER < LOWER {
+            // The compiler should optimize this block out at compile time.
+            return Err(Error::Uninhabited);
+        }
         let val: i32 = s.parse().map_err(|_| Error::Unrepresentable)?;
         Ok(Self::saturating_from(val))
     }
