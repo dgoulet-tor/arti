@@ -59,6 +59,7 @@
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
 #![deny(clippy::await_holding_lock)]
+#![deny(clippy::cargo_common_metadata)]
 #![warn(clippy::clone_on_ref_ptr)]
 #![warn(clippy::cognitive_complexity)]
 #![deny(clippy::debug_assert_with_mut_call)]

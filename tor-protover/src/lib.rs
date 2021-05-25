@@ -34,8 +34,10 @@
 //! protocols against the required list in the consensus.)
 
 #![deny(missing_docs)]
+#![allow(non_upper_case_globals)]
 #![deny(unreachable_pub)]
 #![deny(clippy::await_holding_lock)]
+#![deny(clippy::cargo_common_metadata)]
 #![warn(clippy::clone_on_ref_ptr)]
 #![warn(clippy::cognitive_complexity)]
 #![deny(clippy::debug_assert_with_mut_call)]
@@ -52,7 +54,6 @@
 #![warn(clippy::trait_duplication_in_bounds)]
 #![warn(clippy::unseparated_literal_suffix)]
 #![allow(clippy::upper_case_acronyms)]
-#![allow(non_upper_case_globals)]
 
 use caret::caret_int;
 

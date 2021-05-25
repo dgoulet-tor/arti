@@ -7,7 +7,6 @@
 //! implement [Tor](https://www.torproject.org/) in Rust.
 //! It provides safe wrappers for primitive numeric wrappers used in
 //! other parts of Arti.
-
 //! In particular, it provides:
 //!   * a bounded i32 with both checked and clamping constructors,
 //!   * an integer milliseconds wrapper with conversion to [`Duration`]
@@ -18,6 +17,7 @@
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
 #![deny(clippy::await_holding_lock)]
+#![deny(clippy::cargo_common_metadata)]
 #![warn(clippy::clone_on_ref_ptr)]
 #![warn(clippy::cognitive_complexity)]
 #![deny(clippy::debug_assert_with_mut_call)]

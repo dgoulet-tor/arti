@@ -11,6 +11,7 @@ WANT_LINTS = """
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
 #![deny(clippy::await_holding_lock)]
+#![deny(clippy::cargo_common_metadata)]
 #![deny(clippy::debug_assert_with_mut_call)]
 #![deny(clippy::exhaustive_enums)]
 #![deny(clippy::exhaustive_structs)]
@@ -31,7 +32,6 @@ WANT_LINTS = [ "%s\n" % w for w in WANT_LINTS.split() ]
 
 SOON="""
 #![deny(clippy::pub_enum_variant_names)]
-#![deny(clippy::cargo_common_metadata)]
 #![deny(clippy::future_not_send)]
 #![deny(clippy::redundant_closure_for_method_calls)]
 #![deny(clippy::unwrap_used)]
