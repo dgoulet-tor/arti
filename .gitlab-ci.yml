@@ -9,11 +9,11 @@ rust-latest:
   stage: build
   image: rust:latest
   script:
-    - cargo build --verbose --target x86_64-unknown-linux-gnu --all
-    - cargo test --verbose --all
+    - cargo build --verbose --target x86_64-unknown-linux-gnu
+    - cargo test --verbose
     - rustup component add clippy rustfmt
-    - cargo clippy -- -D warnings
-    - cargo fmt --all -- --check
+    - cargo clippy --all-features -- -D warnings
+    - cargo fmt -- --check
 
 rust-latest-async-std:
   stage: build
@@ -26,8 +26,9 @@ rust-nightly:
   image: rustlang/rust:nightly
   allow_failure: true
   script:
-    - cargo build --verbose --target x86_64-unknown-linux-gnu --all
-    - cargo test --verbose --all
+    - cargo build --verbose --target x86_64-unknown-linux-gnu --all-features
+    - cargo test --verbose --all-features
     - rustup component add clippy
-    - cargo clippy
+    - cargo clippy --all-features
+    - RUSTDOCFLAGS="-Dwarnings" cargo doc --all-features --document-private-items
 
