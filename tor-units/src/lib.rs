@@ -1,8 +1,25 @@
 //! This crate provides safe wrappers for primitive types. In particular it provides
 //! a bounded i32 with both checked and clamping constructors, an integer milliseconds
 //! wrapper which must be converted to a std::duration and SendMeVersion which can be compared.
+
 #![deny(missing_docs)]
+#![deny(unreachable_pub)]
+#![deny(clippy::await_holding_lock)]
+#![warn(clippy::clone_on_ref_ptr)]
+#![warn(clippy::cognitive_complexity)]
+#![deny(clippy::debug_assert_with_mut_call)]
+#![deny(clippy::exhaustive_enums)]
+#![deny(clippy::exhaustive_structs)]
+#![deny(clippy::expl_impl_clone_on_copy)]
+#![deny(clippy::fallible_impl_from)]
+#![deny(clippy::large_stack_arrays)]
+#![warn(clippy::manual_ok_or)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![warn(clippy::option_option)]
+#![warn(clippy::rc_buffer)]
+#![deny(clippy::ref_option_ref)]
+#![warn(clippy::trait_duplication_in_bounds)]
+#![warn(clippy::unseparated_literal_suffix)]
 
 extern crate derive_more;
 use derive_more::{Add, Display, Div, From, FromStr, Mul};
@@ -11,13 +28,14 @@ use std::convert::{TryFrom, TryInto};
 
 /// Errors returned by bounded types
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Error {
     /// A passed value was below the lower bound for the type.
     BelowLowerBound(i32, i32),
     /// A passed value was above the upper bound for the type.
     AboveUpperBound(i32, i32),
     /// A passed value was could not be represented as an i32.
-    Unrepresentable(),
+    Unrepresentable,
 }
 
 impl std::fmt::Display for Error {
@@ -33,7 +51,7 @@ impl std::fmt::Display for Error {
                     x, y
                 )
             }
-            Error::Unrepresentable() => {
+            Error::Unrepresentable => {
                 write!(f, "Value could not be represented as an i32")
             }
         }
@@ -93,7 +111,7 @@ impl<const LOWER: i32, const UPPER: i32> BoundedInt32<LOWER, UPPER> {
     }
     /// Convert from a string, clamping to the upper or lower bound if needed.
     pub fn saturating_from_str(s: &str) -> std::result::Result<Self, Error> {
-        let val: i32 = s.parse().map_err(|_| Error::Unrepresentable())?;
+        let val: i32 = s.parse().map_err(|_| Error::Unrepresentable)?;
         Ok(Self::saturating_from(val))
     }
 }
@@ -117,7 +135,7 @@ impl<const L: i32, const H: i32> TryFrom<i32> for BoundedInt32<L, H> {
 impl<const L: i32, const H: i32> std::str::FromStr for BoundedInt32<L, H> {
     type Err = Error;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        Self::checked_new(s.parse().map_err(|_| Error::Unrepresentable())?)
+        Self::checked_new(s.parse().map_err(|_| Error::Unrepresentable)?)
     }
 }
 
@@ -227,7 +245,7 @@ mod tests {
         let x: Result<TestBar, Error> = "-1000".parse();
         assert!(x.unwrap_err() == Error::BelowLowerBound(-1000, TestBar::LOWER));
         let x: Result<TestBar, Error> = "xyz".parse();
-        assert!(x.unwrap_err() == Error::Unrepresentable());
+        assert!(x.unwrap_err() == Error::Unrepresentable);
     }
 
     #[test]
