@@ -196,24 +196,18 @@ impl PartialNetDir {
         replacement_params: Option<&netstatus::NetParams<i32>>,
     ) -> Self {
         let mut params = NetParameters::default();
-        match params.saturating_update(consensus.params().iter()) {
-            Ok(()) => (),
-            Err(x) => {
-                for u in x {
-                    warn!("Unrecognized option: consensus_net_params.{}", u);
-                }
-            }
-        }
-        // We have to do this now, or else changes won't be reflected in our
-        // weights.
+
+        // (We ignore unrecognized options here, since they come from
+        // the consensus, and we don't expect to recognize everything
+        // there.)
+        let _ = params.saturating_update(consensus.params().iter());
+
+        // Now see if the user has any parameters to override.
+        // (We have to do this now, or else changes won't be reflected in our
+        // weights.)
         if let Some(replacement) = replacement_params {
-            match params.saturating_update(replacement.iter()) {
-                Ok(()) => (),
-                Err(x) => {
-                    for u in x {
-                        warn!("Unrecognized option: override_net_params.{}", u);
-                    }
-                }
+            for u in params.saturating_update(replacement.iter()) {
+                warn!("Unrecognized option: override_net_params.{}", u);
             }
         }
 
