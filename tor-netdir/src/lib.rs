@@ -369,8 +369,6 @@ impl NetDir {
         // What fraction of paths can we build?
         let available = self.frac_usable_paths();
 
-        dbg!(available, min_frac_paths);
-
         // TODO: `available` could be NaN if the consensus is sufficiently
         // messed-up.  If so it's not 100% clear what to fall back on.
         // What does C Tor do? XXXX-SPEC
@@ -672,8 +670,6 @@ mod test {
             let wanted = dir.add_microdesc(md);
             assert!(wanted);
         }
-
-        dbg!(&dir.netdir.params);
 
         let missing: HashSet<_> = dir.missing_microdescs().collect();
         assert!(missing.is_empty());
