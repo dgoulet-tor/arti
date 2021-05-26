@@ -52,7 +52,7 @@ pub(crate) trait ChannelFactory {
 /// pending channel requests, launching requests as needed, waiting
 /// for pending requests, and so forth.
 ///
-/// The actual job of launching conenctions is deferred to a ChannelFactory
+/// The actual job of launching connections is deferred to a ChannelFactory
 /// type.
 pub(crate) struct AbstractChanMgr<CF: ChannelFactory> {
     /// A 'connector' object that we use to create channels.

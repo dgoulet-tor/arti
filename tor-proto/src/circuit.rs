@@ -242,7 +242,7 @@ impl ClientCirc {
     /// It isn't suitable for SENDME cells, INTRODUCE2 cells, or TRUNCATED
     /// cells.
     ///
-    /// Only one handler can be registerd at a time; until it fires or is
+    /// Only one handler can be registered at a time; until it fires or is
     /// cancelled, you can't register another.
     ///
     /// Note that you should register a meta handler _before_ you send whatever
@@ -613,7 +613,7 @@ impl ClientCirc {
         }
     }
 
-    /// Called when a circuit-level protocol error has occured and the
+    /// Called when a circuit-level protocol error has occurred and the
     /// circuit needs to shut down.
     ///
     /// This is a separate function because we may eventually want to have
@@ -1021,7 +1021,7 @@ impl StreamTarget {
         self.circ.send_relay_cell(self.hop, false, cell).await
     }
 
-    /// Called when a circuit-level protocol error has occured and the
+    /// Called when a circuit-level protocol error has occurred and the
     /// circuit needs to shut down.
     pub(crate) async fn protocol_error(&mut self) {
         self.circ.protocol_error().await;

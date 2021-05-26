@@ -238,7 +238,7 @@ mod test {
         );
         assert!(matches!(map.get_mut(ids[1]), None));
 
-        // Try receving an end after a terminate.
+        // Try receiving an end after a terminate.
         assert!(map.end_received(ids[2]).is_ok());
         assert!(matches!(map.get_mut(ids[2]), None));
 

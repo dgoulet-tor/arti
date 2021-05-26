@@ -95,7 +95,7 @@ impl NetworkConfigBuilder {
 
     /// Add `authority` as a directory authority.
     ///
-    /// Directory authorites are a trusted set of servers that
+    /// Directory authorities are a trusted set of servers that
     /// periodically sign documents attesting to the state of the Tor
     /// network.
     ///

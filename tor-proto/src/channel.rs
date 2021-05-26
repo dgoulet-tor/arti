@@ -31,7 +31,7 @@
 //! One you have a running channel, you can create circuits on it with
 //! its [Channel::new_circ] method.  See
 //! [crate::circuit::PendingClientCirc] for information on how to
-//! procede from there.
+//! proceed from there.
 //!
 //! # Design
 //!

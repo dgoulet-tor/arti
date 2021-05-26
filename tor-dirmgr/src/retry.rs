@@ -41,7 +41,7 @@ const MIN_LOW_BOUND: u32 = 1000;
 /// Largest possible lower bound, in milliseconds.
 const MAX_LOW_BOUND: u32 = std::u32::MAX - 1;
 
-/// Maximum amount to mulitply the previous delay by.
+/// Maximum amount to multiply the previous delay by.
 const MAX_DELAY_MULT: u32 = 3;
 
 impl RetryDelay {

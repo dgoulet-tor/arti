@@ -349,7 +349,7 @@ pub struct End {
 }
 
 caret_int! {
-    /// A delcared reason for closing a stream
+    /// A declared reason for closing a stream
     pub struct EndReason(u8) {
         /// Closing a stream because of an unspecified reason.
         ///

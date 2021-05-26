@@ -372,7 +372,7 @@ bitflags! {
         const HSDIR = (1<<5);
         /// If set, there is no consensus for the ed25519 key for this relay.
         const NO_ED_CONSENSUS = (1<<6);
-        /// Is this relay considerd "stable" enough for long-lived circuits?
+        /// Is this relay considered "stable" enough for long-lived circuits?
         const STABLE = (1<<7);
         /// Set if the authorities are requesting a fresh descriptor for
         /// this relay.
@@ -1347,7 +1347,7 @@ impl<RS: RouterStatus + ParseRouterStatus> Consensus<RS> {
 /// A Microdesc consensus whose signatures have not yet been checked.
 ///
 /// To validate this object, call set_n_authorities() on it, then call
-/// check_siganture() on that result with the set of certs that you
+/// check_signature() on that result with the set of certs that you
 /// have.  Make sure only to provide authority certificates representing
 /// real authorities!
 #[derive(Debug, Clone)]

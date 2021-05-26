@@ -79,7 +79,7 @@ pub enum TimeValidityError {
     /// The object is expired
     #[error("has been expired for {0:?}")]
     Expired(time::Duration),
-    /// The object isn't timely, and we don't knwo why, or won't say.
+    /// The object isn't timely, and we don't know why, or won't say.
     #[error("is not currently valid")]
     Unspecified,
 }

@@ -1,5 +1,5 @@
 //!
-//! A "router descriptor" is a signed statment that a relay makes
+//! A "router descriptor" is a signed statement that a relay makes
 //! about itself, explaining its keys, its capabilities, its location,
 //! and its status.
 //!

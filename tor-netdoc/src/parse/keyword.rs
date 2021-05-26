@@ -7,7 +7,7 @@ use std::hash::Hash;
 ///
 /// These do not map one-to-one to Item strings: several Item strings
 /// may be placed in a single Keyword -- for example, when their order
-/// is signficant with respect to one another, like "accept" and
+/// is significant with respect to one another, like "accept" and
 /// "reject" in rotuer descriptors.
 ///
 /// Every keyword has an "index", which is a small number suitable for

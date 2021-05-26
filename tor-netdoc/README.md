@@ -36,7 +36,7 @@ TODO: This crate has several pieces that could probably be split out
 into other smaller cases, including handling for version numbers
 and exit policies.
 
-TODO: Many parts of this crate that should eventualy be public
+TODO: Many parts of this crate that should eventually be public
 aren't.
 
 TODO: this crate needs far more tests!

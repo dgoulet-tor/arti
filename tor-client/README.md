@@ -50,7 +50,7 @@ those in a user's guide at some point as Arti becomes more mature.
 ## Using `tor-client`
 
 The `tor-client` crate provides an async Rust API.  It is
-compatible with the `tokio` and `async_std` asyncronous backends.
+compatible with the `tokio` and `async_std` asynchronous backends.
 
 TODO: Good examples here once the crate setup API is more simple.
 

@@ -378,7 +378,7 @@ impl Reactor {
         }
 
         // If this has a reasonable streamID value of 0, it's a meta cell,
-        // not meant for a particualr stream.
+        // not meant for a particular stream.
         if streamid.is_zero() {
             if let Some(circ) = self.circuit.upgrade() {
                 let mut circ = circ.c.lock().await;

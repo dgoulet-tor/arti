@@ -1,4 +1,4 @@
-//! Simple implementaiton for the internal map state of a ChanMgr.
+//! Simple implementation for the internal map state of a ChanMgr.
 
 use super::{AbstractChannel, Pending};
 use crate::{Error, Result};

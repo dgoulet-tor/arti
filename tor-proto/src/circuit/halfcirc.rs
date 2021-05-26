@@ -6,7 +6,7 @@ use crate::{Error, Result};
 /// A HalfCirc represents the receive-only aspects of a circuit, for
 /// use to represent closed circuits and make sure that only
 /// acceptable data is received there.
-// TODO: This sould probably have an expiration time too.
+// TODO: This should probably have an expiration time too.
 #[derive(Debug, Clone)]
 pub(crate) struct HalfCirc {
     /// How many RELAY cells will we accept on this circuit before we

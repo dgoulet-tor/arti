@@ -2,7 +2,7 @@
 //! operations.
 //!
 //! When a client doesn't have directory information yet, it uses a
-//! "Fallback Directory" to retreive its initial information about the
+//! "Fallback Directory" to retrieve its initial information about the
 //! network.
 
 use crate::{Error, Result};

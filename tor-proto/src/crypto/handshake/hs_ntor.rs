@@ -53,7 +53,7 @@ type AuthInputMac = MacTag;
 pub type Subcredential = [u8; 32];
 
 /// The key generator used by the HS ntor handshake.  Implements the simple key
-/// expansion protocl specified in section "Key expansion" of rend-spec-v3.txt .
+/// expansion protocol specified in section "Key expansion" of rend-spec-v3.txt .
 pub struct HsNtorHkdfKeyGenerator {
     /// Secret data derived from the handshake, used as input to HKDF
     seed: SecretBytes,

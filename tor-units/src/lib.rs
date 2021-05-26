@@ -92,7 +92,7 @@ impl<const LOWER: i32, const UPPER: i32> BoundedInt32<LOWER, UPPER> {
 
     /// Return the underlying i32 value.
     ///
-    /// This value will always be betwen [`Self::LOWER`] and [`Self::UPPER`],
+    /// This value will always be between [`Self::LOWER`] and [`Self::UPPER`],
     /// inclusive.
     pub fn get(&self) -> i32 {
         self.value

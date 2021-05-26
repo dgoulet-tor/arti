@@ -160,7 +160,7 @@ mod test {
         if let Err(e) = "a few".parse::<u32>() {
             err.push(e);
         }
-        if let Err(e) = "teh_g1b50n".parse::<std::net::IpAddr>() {
+        if let Err(e) = "the_g1b50n".parse::<std::net::IpAddr>() {
             err.push(e);
         }
         let disp = format!("{}", err);
@@ -191,7 +191,7 @@ invalid IP address syntax
     #[test]
     fn one_problem() {
         let mut err = RetryError::while_doing("connect to torproject.org");
-        if let Err(e) = "teh_g1b50n".parse::<std::net::IpAddr>() {
+        if let Err(e) = "the_g1b50n".parse::<std::net::IpAddr>() {
             err.push(e);
         }
         let disp = format!("{}", err);

@@ -89,7 +89,7 @@ struct ListenerEntry {
 pub struct MockNetProvider {
     /// Actual implementation of this host's view of the network.
     ///
-    /// We have to use a separate type here and refrence count it,
+    /// We have to use a separate type here and reference count it,
     /// since the `next_port` counter needs to be shared.
     inner: Arc<MockNetProviderInner>,
 }
