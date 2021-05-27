@@ -116,31 +116,6 @@ impl TargetCircUsage {
             }
         }
     }
-
-    /// Return true if this usage "contains" `target` -- in other words,
-    /// if any circuit built for this purpose is also usable for the
-    /// purpose of `target`.
-    pub(crate) fn contains(&self, target: &TargetCircUsage) -> bool {
-        use TargetCircUsage::*;
-        match (self, target) {
-            (Dir, Dir) => true,
-            (Exit(p1), Exit(p2)) => p2.iter().all(|p| p1.contains(p)),
-            (_, _) => false,
-        }
-    }
-
-    /// Return true if this usage "is compatible with" `other`.
-    ///
-    /// Two usages are compatible if they can share a single circuit.
-    #[allow(unused)]
-    pub(crate) fn compatible(&self, other: &TargetCircUsage) -> bool {
-        use TargetCircUsage::*;
-        match (self, other) {
-            (Dir, Dir) => true,
-            (Exit(_), Exit(_)) => true,
-            (_, _) => false,
-        }
-    }
 }
 
 impl SupportedCircUsage {

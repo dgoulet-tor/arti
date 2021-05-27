@@ -110,7 +110,7 @@ where
     };
 
     if retire {
-        retire_circ(circ_mgr, &source, "Partial response").await;
+        retire_circ(circ_mgr, &source, "Partial response");
     }
 
     Ok(r?)
@@ -315,7 +315,7 @@ where
 }
 
 /// Retire a directory circuit because of an error we've encountered on it.
-async fn retire_circ<R, E>(circ_mgr: Arc<CircMgr<R>>, source_info: &SourceInfo, error: &E)
+fn retire_circ<R, E>(circ_mgr: Arc<CircMgr<R>>, source_info: &SourceInfo, error: &E)
 where
     R: Runtime,
     E: std::fmt::Display + ?Sized,
@@ -325,7 +325,7 @@ where
         "{}: Retiring circuit because of directory failure: {}",
         &id, &error
     );
-    circ_mgr.retire_circ(&id).await;
+    circ_mgr.retire_circ(&id);
 }
 
 /// As AsyncBufReadExt::read_until, but stops after reading `max` bytes.

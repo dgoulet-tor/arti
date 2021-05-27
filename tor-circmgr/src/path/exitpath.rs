@@ -55,7 +55,7 @@ impl<'a> ExitPathBuilder<'a> {
     pub fn pick_path<R: Rng>(&self, rng: &mut R, netdir: DirInfo<'a>) -> Result<TorPath<'a>> {
         // TODO: implement guards
         let netdir = match netdir {
-            DirInfo::Fallbacks(_) => return Err(Error::NeedConsensus.into()),
+            DirInfo::Fallbacks(_) => return Err(Error::NeedConsensus),
             DirInfo::Directory(d) => d,
         };
         let exit = self.pick_exit(rng, &netdir)?;

@@ -25,13 +25,15 @@ tor-llcrypto = { path="../tor-llcrypto", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
 tor-units = { path="../tor-units", version="*"}
 
-anyhow = "1.0.38"
 async-trait = "0.1.48"
 event-listener = "2.5.1"
 futures = "0.3.13"
 rand = "0.8.3"
 log = "0.4.14"
+pin-project = "1.0.5"
 thiserror = "1.0.24"
+weak-table = "0.3.0"
 
 [dev-dependencies]
 futures-await-test = "0.3.0"
+tor-rtmock = { path="../tor-rtmock", version="*" }

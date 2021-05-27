@@ -7,6 +7,7 @@ pub mod dirpath;
 pub mod exitpath;
 
 use tor_chanmgr::ChanMgr;
+use tor_linkspec::{ChanTarget, OwnedChanTarget, OwnedCircTarget};
 use tor_netdir::{fallback::FallbackDir, Relay};
 use tor_proto::channel::Channel;
 use tor_proto::circuit::{CircParameters, ClientCirc};
@@ -14,6 +15,7 @@ use tor_rtcompat::Runtime;
 
 use futures::task::SpawnExt;
 use rand::{CryptoRng, Rng};
+use std::convert::{TryFrom, TryInto};
 use std::sync::Arc;
 
 use crate::usage::ExitPolicy;
@@ -63,17 +65,6 @@ impl<'a> TorPath<'a> {
         }
     }
 
-    /// Internal: Get the first hop of the path as a ChanTarget.
-    fn first_hop(&self) -> Result<&(dyn tor_linkspec::ChanTarget + Sync)> {
-        use TorPathInner::*;
-        match &self.inner {
-            OneHop(r) => Ok(r),
-            FallbackOneHop(f) => Ok(*f),
-            Path(p) if p.is_empty() => Err(Error::NoRelays("Path with no entries!".into()).into()),
-            Path(p) => Ok(&p[0]),
-        }
-    }
-
     /// Return the final relay in this path, if this is a path for use
     /// with exit circuits.
     fn exit_relay(&self) -> Option<&Relay<'a>> {
@@ -89,13 +80,6 @@ impl<'a> TorPath<'a> {
         self.exit_relay().map(ExitPolicy::from_relay)
     }
 
-    /// Internal: get or create a channel for the first hop of a path.
-    async fn get_channel<R: Runtime>(&self, chanmgr: &ChanMgr<R>) -> Result<Arc<Channel>> {
-        let first_hop = self.first_hop()?;
-        let channel = chanmgr.get_or_launch(first_hop).await?;
-        Ok(channel)
-    }
-
     /// Try to build a circuit corresponding to this path.
     pub async fn build_circuit<RNG, RT>(
         &self,
@@ -108,27 +92,91 @@ impl<'a> TorPath<'a> {
         RNG: Rng + CryptoRng,
         RT: Runtime,
     {
+        let owned: OwnedPath = self.try_into()?;
+
+        owned.build_circuit(rng, runtime, chanmgr, params).await
+    }
+}
+
+/// A path composed entirely of owned components.
+pub(crate) enum OwnedPath {
+    /// A path where we only know how to make circuits via CREATE_FAST.
+    ChannelOnly(OwnedChanTarget),
+    /// A path of one or more hops created via normal Tor handshakes.
+    Normal(Vec<OwnedCircTarget>),
+}
+
+impl<'a> TryFrom<&TorPath<'a>> for OwnedPath {
+    type Error = crate::Error;
+    fn try_from(p: &TorPath<'a>) -> Result<OwnedPath> {
         use TorPathInner::*;
+
+        Ok(match &p.inner {
+            FallbackOneHop(h) => OwnedPath::ChannelOnly(OwnedChanTarget::from_chan_target(*h)),
+            OneHop(h) => OwnedPath::Normal(vec![OwnedCircTarget::from_circ_target(h)]),
+            Path(p) if !p.is_empty() => {
+                OwnedPath::Normal(p.iter().map(OwnedCircTarget::from_circ_target).collect())
+            }
+            Path(_) => {
+                return Err(Error::NoRelays("Path with no entries!".into()));
+            }
+        })
+    }
+}
+
+impl OwnedPath {
+    /// Construct a circuit for this path.
+    pub(crate) async fn build_circuit<RNG, RT>(
+        self,
+        rng: &mut RNG,
+        runtime: &RT,
+        chanmgr: &ChanMgr<RT>,
+        params: &CircParameters,
+    ) -> Result<Arc<ClientCirc>>
+    where
+        RNG: Rng + CryptoRng,
+        RT: Runtime,
+    {
         let chan = self.get_channel(chanmgr).await?;
-        let (pcirc, reactor) = chan.new_circ(rng).await?;
+        let (pending_circ, reactor) = chan.new_circ(rng).await?;
 
         runtime.spawn(async {
             let _ = reactor.run().await;
         })?;
 
-        match &self.inner {
-            OneHop(_) | FallbackOneHop(_) => {
-                let circ = pcirc.create_firsthop_fast(rng, &params).await?;
+        match self {
+            OwnedPath::ChannelOnly(_) => {
+                let circ = pending_circ.create_firsthop_fast(rng, &params).await?;
                 Ok(circ)
             }
-            Path(p) => {
-                // XXXX Can p be empty???
-                let circ = pcirc.create_firsthop_ntor(rng, &p[0], &params).await?;
+            OwnedPath::Normal(p) => {
+                assert!(!p.is_empty());
+                let circ = pending_circ
+                    .create_firsthop_ntor(rng, &p[0], &params)
+                    .await?;
                 for relay in p[1..].iter() {
                     circ.extend_ntor(rng, relay, params).await?;
                 }
                 Ok(circ)
             }
         }
+    }
+
+    /// Internal: Get the first hop of the path as a ChanTarget.
+    fn first_hop(&self) -> Result<&(dyn ChanTarget + Sync)> {
+        match self {
+            OwnedPath::ChannelOnly(c) => Ok(c),
+            OwnedPath::Normal(p) if p.is_empty() => {
+                Err(Error::NoRelays("Path with no entries!".into()))
+            }
+            OwnedPath::Normal(p) => Ok(&p[0]),
+        }
+    }
+
+    /// Internal: get or create a channel for the first hop of a path.
+    async fn get_channel<R: Runtime>(&self, chanmgr: &ChanMgr<R>) -> Result<Arc<Channel>> {
+        let first_hop = self.first_hop()?;
+        let channel = chanmgr.get_or_launch(first_hop).await?;
+        Ok(channel)
     }
 }

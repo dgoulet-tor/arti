@@ -39,6 +39,8 @@ impl DirPathBuilder {
                 }
             }
         }
-        Err(Error::NoRelays("No relays found for use as directory cache".into()).into())
+        Err(Error::NoRelays(
+            "No relays found for use as directory cache".into(),
+        ))
     }
 }
