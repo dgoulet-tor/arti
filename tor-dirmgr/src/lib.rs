@@ -15,6 +15,7 @@
 //! keeping a cache of it on disk.
 
 #![deny(missing_docs)]
+#![warn(noop_method_call)]
 #![deny(unreachable_pub)]
 #![deny(clippy::await_holding_lock)]
 #![deny(clippy::cargo_common_metadata)]

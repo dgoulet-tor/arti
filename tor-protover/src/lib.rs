@@ -35,6 +35,7 @@
 
 #![deny(missing_docs)]
 #![allow(non_upper_case_globals)]
+#![warn(noop_method_call)]
 #![deny(unreachable_pub)]
 #![deny(clippy::await_holding_lock)]
 #![deny(clippy::cargo_common_metadata)]
