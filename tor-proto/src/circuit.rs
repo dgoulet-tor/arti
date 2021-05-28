@@ -663,6 +663,11 @@ impl ClientCircImpl {
         if let RelayMsg::Truncated(_) = msg {
             // XXXX need to handle Truncated cells. This isn't the right
             // way, but at least it's safe.
+            // TODO: If we ever do handle Truncate cells more
+            // correctly, we will need to audit all our use of HopNum
+            // to identify a layer.  Otherwise we could confuse a
+            // message from the previous hop N with a message from the
+            // new hop N.
             return Err(Error::CircuitClosed);
         }
 
