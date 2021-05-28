@@ -195,7 +195,7 @@ impl Reactor {
             // TODO: should this call terminate?
             circ.closed.store(true, Ordering::SeqCst);
             let mut circ = circ.c.lock().await;
-            if let Some(sender) = circ.sendmeta.take() {
+            if let Some((_, sender)) = circ.sendmeta.take() {
                 let _ignore_err = sender.send(Err(Error::CircuitClosed));
             }
         }

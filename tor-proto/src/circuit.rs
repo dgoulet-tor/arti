@@ -143,7 +143,7 @@ impl CircParameters {
 
 /// A result type used to tell a circuit about some a "meta-cell"
 /// (like extended, intro_established, etc).
-type MetaResult = Result<(HopNum, RelayMsg)>;
+type MetaResult = Result<RelayMsg>;
 
 /// The implementation type for this circuit.
 struct ClientCircImpl {
@@ -170,9 +170,12 @@ struct ClientCircImpl {
     /// A oneshot sender that can be used by the reactor to report a
     /// meta-cell to an owning task.
     ///
+    /// This comes along with a hop number saying which hop we expect a
+    /// meta-cell from.  Cells from other hops won't go to this sender.
+    ///
     /// For the purposes of this implementation, a "meta" cell
     /// is a RELAY cell with a stream ID value of 0.
-    sendmeta: Option<oneshot::Sender<MetaResult>>,
+    sendmeta: Option<(HopNum, oneshot::Sender<MetaResult>)>,
 
     /// An identifier for this circuit, for logging purposes.
     /// TODO: Make this field go away in favor of the one in ClientCirc.
@@ -231,42 +234,6 @@ impl CircHop {
 }
 
 impl ClientCirc {
-    /// Helper: Register a handler that will be told about the RELAY message
-    /// with StreamId 0.
-    ///
-    /// This pattern is useful for parts of the protocol where the circuit
-    /// originator sends a single request, and waits for a single relay
-    /// message in response.  (For example, EXTEND/EXTENDED,
-    /// ESTABLISH_RENDEZVOUS/RENDEZVOUS_ESTABLISHED, and so on.)
-    ///
-    /// It isn't suitable for SENDME cells, INTRODUCE2 cells, or TRUNCATED
-    /// cells.
-    ///
-    /// Only one handler can be registered at a time; until it fires or is
-    /// cancelled, you can't register another.
-    ///
-    /// Note that you should register a meta handler _before_ you send whatever
-    /// cell you're waiting a response to, or you might miss the response.
-    // TODO: It would be cool for this to take a list of allowable
-    // cell types to get in response, so that any other cell types are
-    // treated as circuit protocol violations automatically.
-    async fn register_meta_handler(&self) -> Result<oneshot::Receiver<MetaResult>> {
-        let (sender, receiver) = oneshot::channel();
-
-        let mut circ = self.c.lock().await;
-        // Was there previously a handler?
-        if circ.sendmeta.is_some() {
-            return Err(Error::InternalError(
-                "Tried to register a second meta-cell handler".into(),
-            ));
-        }
-        circ.sendmeta = Some(sender);
-
-        trace!("{}: Registered a meta-cell handler", circ.unique_id);
-
-        Ok(receiver)
-    }
-
     /// Helper: return the number of hops for this circuit
     #[cfg(test)]
     async fn n_hops(&self) -> usize {
@@ -307,11 +274,8 @@ impl ClientCirc {
         let extend_msg = Extend2::new(linkspecs.clone(), handshake_id, msg);
         let cell = RelayCell::new(0.into(), extend_msg.into_message());
 
-        // We'll be waiting for an EXTENDED2 cell; install the handler.
-        let receiver = self.register_meta_handler().await?;
-
         // Now send the EXTEND2 cell to the the last hop...
-        let (unique_id, hop) = {
+        let (unique_id, _hop, receiver) = {
             let mut c = self.c.lock().await;
             let n_hops = c.crypto_out.n_layers();
             let hop = ((n_hops - 1) as u8).into();
@@ -322,6 +286,9 @@ impl ClientCirc {
                 linkspecs
             );
 
+            // We'll be waiting for an EXTENDED2 cell; install the handler.
+            let receiver = c.register_meta_handler(hop)?;
+
             // Send the message to the last hop...
             c.send_relay_cell(
                 hop, true, // use a RELAY_EARLY cell
@@ -329,15 +296,15 @@ impl ClientCirc {
             )
             .await?;
 
-            (c.unique_id, hop)
+            (c.unique_id, hop, receiver)
             // note that we're dropping the lock here, since we're going
             // to wait for a response.
         };
 
         trace!("{}: waiting for EXTENDED2 cell", unique_id);
         // ... and now we wait for a response.
-        let (from_hop, msg) = match receiver.await {
-            Ok(Ok((h, m))) => Ok((h, m)),
+        let msg = match receiver.await {
+            Ok(Ok(m)) => Ok(m),
             Err(_) => Err(Error::InternalError(
                 "Receiver cancelled while waiting for EXTENDED2".into(),
             )),
@@ -352,15 +319,16 @@ impl ClientCirc {
         // the function?  I don't _think_ so, but it might be a good idea
         // to have an "extending" bit that keeps two tasks from entering
         // extend_impl at the same time.
+        //
+        // Also we could enforce that `hop` is still what we expect it
+        // to be at this point.
 
         // Did we get the right response?
-        if from_hop != hop || msg.cmd() != RelayCmd::EXTENDED2 {
+        if msg.cmd() != RelayCmd::EXTENDED2 {
             self.protocol_error().await;
             return Err(Error::CircProto(format!(
-                "wanted EXTENDED2 from hop {}; got {} from hop {}",
-                hop,
+                "wanted EXTENDED2; got {}",
                 msg.cmd(),
-                from_hop
             )));
         }
 
@@ -631,6 +599,13 @@ impl ClientCirc {
     pub fn unique_id(&self) -> UniqId {
         self.unique_id
     }
+
+    /// Helper: register a meta-handler for this circuit.
+    #[cfg(test)]
+    async fn register_meta_handler(&self, hop: HopNum) -> Result<oneshot::Receiver<MetaResult>> {
+        let mut c = self.c.lock().await;
+        c.register_meta_handler(hop)
+    }
 }
 
 impl ClientCircImpl {
@@ -638,6 +613,45 @@ impl ClientCircImpl {
     /// exists.
     fn hop_mut(&mut self, hopnum: HopNum) -> Option<&mut CircHop> {
         self.hops.get_mut(Into::<usize>::into(hopnum))
+    }
+
+    /// Helper: Register a handler that will be told about the RELAY message
+    /// with StreamId 0.
+    ///
+    /// This pattern is useful for parts of the protocol where the circuit
+    /// originator sends a single request, and waits for a single relay
+    /// message in response.  (For example, EXTEND/EXTENDED,
+    /// ESTABLISH_RENDEZVOUS/RENDEZVOUS_ESTABLISHED, and so on.)
+    ///
+    /// It isn't suitable for SENDME cells, INTRODUCE2 cells, or TRUNCATED
+    /// cells.
+    ///
+    /// Only one handler can be registered at a time; until it fires or is
+    /// cancelled, you can't register another.
+    ///
+    /// Note that you should register a meta handler _before_ you send whatever
+    /// cell you're waiting a response to, or you might miss the response.
+    // TODO: It would be cool for this to take a list of allowable
+    // cell types to get in response, so that any other cell types are
+    // treated as circuit protocol violations automatically.
+    fn register_meta_handler(&mut self, hop: HopNum) -> Result<oneshot::Receiver<MetaResult>> {
+        // Was there previously a handler?
+        if self.sendmeta.is_some() {
+            return Err(Error::InternalError(
+                "Tried to register a second meta-cell handler".into(),
+            ));
+        }
+        let (sender, receiver) = oneshot::channel();
+
+        self.sendmeta = Some((hop, sender));
+
+        trace!(
+            "{}: Registered a meta-cell handler for hop {}",
+            self.unique_id,
+            hop
+        );
+
+        Ok(receiver)
     }
 
     /// Handle a RELAY cell on this circuit with stream ID 0.
@@ -660,12 +674,23 @@ impl ClientCircImpl {
         // TODO: that means that service-introduction circuits will need
         // a different implementation, but that should be okay. We'll work
         // something out.
-        if let Some(sender) = self.sendmeta.take() {
-            // Somebody was waiting for a message -- maybe this message
-            sender
-                .send(Ok((hopnum, msg)))
-                // I think this means that the channel got closed.
-                .map_err(|_| Error::CircuitClosed)
+        if let Some((expected_hop, sender)) = self.sendmeta.take() {
+            if expected_hop == hopnum {
+                // Somebody was waiting for a message -- maybe this message
+                sender
+                    .send(Ok(msg))
+                    // I think this means that the channel got closed.
+                    .map_err(|_| Error::CircuitClosed)
+            } else {
+                // Somebody wanted a message from a different hop!  Put this
+                // one back.
+                self.sendmeta = Some((expected_hop, sender));
+                Err(Error::CircProto(format!(
+                    "Unexpected {} cell from hop {} on client circuit",
+                    msg.cmd(),
+                    hopnum,
+                )))
+            }
         } else {
             // No need to call shutdown here, since this error will
             // propagate to the reactor shut it down.
@@ -1329,7 +1354,7 @@ mod test {
         let (circ, mut reactor, mut sink) = newcirc(chan).await;
 
         // 1: Try doing it via handle_meta_cell directly.
-        let meta_receiver = circ.register_meta_handler().await.unwrap();
+        let meta_receiver = circ.register_meta_handler(2.into()).await.unwrap();
         let extended: RelayMsg = relaymsg::Extended2::new((*b"123").into()).into();
         {
             circ.c
@@ -1339,16 +1364,14 @@ mod test {
                 .await
                 .unwrap();
         }
-        let (hop, msg) = meta_receiver.await.unwrap().unwrap();
-        assert_eq!(hop, 2.into());
+        let msg = meta_receiver.await.unwrap().unwrap();
         assert!(matches!(msg, RelayMsg::Extended2(_)));
 
         // 2: Try doing it via the reactor.
-        let meta_receiver = circ.register_meta_handler().await.unwrap();
+        let meta_receiver = circ.register_meta_handler(2.into()).await.unwrap();
         sink.send(rmsg_to_ccmsg(0, extended.clone())).await.unwrap();
         reactor.run_once().await.unwrap();
-        let (hop, msg) = meta_receiver.await.unwrap().unwrap();
-        assert_eq!(hop, 2.into());
+        let msg = meta_receiver.await.unwrap().unwrap();
         assert!(matches!(msg, RelayMsg::Extended2(_)));
 
         // 3: Try getting a meta cell that we didn't want.
@@ -1364,6 +1387,22 @@ mod test {
         assert_eq!(
             format!("{}", e),
             "circuit protocol violation: Unexpected EXTENDED2 cell on client circuit"
+        );
+
+        // 3: Try getting a meta from a hop that we didn't want.
+        let _receiver = circ.register_meta_handler(2.into()).await.unwrap();
+        let e = {
+            circ.c
+                .lock()
+                .await
+                .handle_meta_cell(1.into(), extended.clone())
+                .await
+                .err()
+                .unwrap()
+        };
+        assert_eq!(
+            format!("{}", e),
+            "circuit protocol violation: Unexpected EXTENDED2 cell from hop 1 on client circuit"
         );
     }
 
@@ -1413,8 +1452,6 @@ mod test {
     }
 
     async fn bad_extend_test_impl(reply_hop: HopNum, bad_reply: ClientCircChanMsg) -> Error {
-        // Test for getting an EXTENDED cell from the wrong hop. If that
-        // happens, we've gotta bail.
         let (chan, _ch) = fake_channel();
         let (circ, mut reactor, mut sink) = newcirc_ext(chan, reply_hop).await;
         let params = CircParameters::default();
@@ -1448,9 +1485,13 @@ mod test {
         let cc = rmsg_to_ccmsg(0, extended2);
 
         let error = bad_extend_test_impl(1.into(), cc).await;
+        // This case shows up as a CircDestroy, since a message sent
+        // from the wrong hop won't even be delivered to the extend
+        // code's meta-handler.  Instead the unexpected message will cause
+        // the circuit to get torn down.
         match error {
-            Error::CircProto(s) => {
-                assert_eq!(s, "wanted EXTENDED2 from hop 2; got EXTENDED2 from hop 1")
+            Error::CircDestroy(s) => {
+                assert_eq!(s, "Circuit closed while waiting for EXTENDED2");
             }
             _ => panic!(),
         }
@@ -1464,7 +1505,7 @@ mod test {
         let error = bad_extend_test_impl(2.into(), cc).await;
         match error {
             Error::CircProto(s) => {
-                assert_eq!(s, "wanted EXTENDED2 from hop 2; got EXTENDED from hop 2")
+                assert_eq!(s, "wanted EXTENDED2; got EXTENDED")
             }
             _ => panic!(),
         }
