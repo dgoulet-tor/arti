@@ -45,7 +45,6 @@
 
 use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackDir, NetDir};
-use tor_netdoc::types::policy::PortPolicy;
 use tor_proto::circuit::{CircParameters, ClientCirc, UniqId};
 use tor_retry::RetryError;
 use tor_rtcompat::{Runtime, SleepProviderExt};
@@ -54,7 +53,7 @@ use anyhow::Result;
 use futures::lock::Mutex;
 use log::debug;
 use rand::seq::SliceRandom;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -65,10 +64,12 @@ use rand::CryptoRng;
 
 mod err;
 pub mod path;
+mod usage;
 
 pub use err::Error;
+pub use usage::TargetPort;
 
-use crate::path::{dirpath::DirPathBuilder, exitpath::ExitPathBuilder, TorPath};
+use usage::{SupportedCircUsage, TargetCircUsage};
 
 /// How long do we let a circuit be dirty before we won't hand it out any
 /// more?
@@ -198,7 +199,7 @@ enum CircEntry {
 /// An entry for a completed circuit that we're managing.
 struct OpenCircEntry {
     /// The usage for which this circuit is suitable.
-    usage: CircUsage,
+    usage: SupportedCircUsage,
     /// When did we first yield this circuit as usable for a stream?
     ///
     /// (For now, this is always Some(_).  Later, we'll support building
@@ -242,132 +243,6 @@ impl CircEntry {
             }
         }
         false
-    }
-}
-
-/// An exit policy as supported by the last hop of a circuit.
-#[derive(Clone, Debug)]
-struct ExitPolicy {
-    /// Permitted IPv4 ports.
-    v4: Arc<PortPolicy>,
-    /// Permitted IPv6 ports.
-    v6: Arc<PortPolicy>,
-}
-
-/// A port that we want to connect to as a client.
-///
-/// Ordinarliy, this is a TCP port, plus a flag to indicate whether we
-/// must support IPv4 or IPv6.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct TargetPort {
-    /// True if this is a request to connect to an IPv6 address
-    ipv6: bool,
-    /// The port that the client wants to connect to
-    port: u16,
-}
-
-impl TargetPort {
-    /// Create a request to make sure that a circuit supports a given
-    /// ipv4 exit port.
-    pub fn ipv4(port: u16) -> TargetPort {
-        TargetPort { ipv6: false, port }
-    }
-
-    /// Create a request to make sure that a circuit supports a given
-    /// ipv6 exit port.
-    pub fn ipv6(port: u16) -> TargetPort {
-        TargetPort { ipv6: true, port }
-    }
-
-    /// Return true if this port is supported by the provided Relay.
-    pub fn is_supported_by(&self, r: &tor_netdir::Relay<'_>) -> bool {
-        if self.ipv6 {
-            r.supports_exit_port_ipv6(self.port)
-        } else {
-            r.supports_exit_port_ipv4(self.port)
-        }
-    }
-}
-
-impl ExitPolicy {
-    /// Return true if a given port is contained in an ExitPolicy.
-    fn allows_port(&self, p: TargetPort) -> bool {
-        let policy = if p.ipv6 { &self.v6 } else { &self.v4 };
-        policy.allows_port(p.port)
-    }
-}
-
-/// The purpose for which a circuit is being created.
-///
-/// This type should stay internal to the circmgr crate for now: we'll probably
-/// want to refactor it a lot.
-#[derive(Clone, Debug)]
-enum TargetCircUsage {
-    /// Use for BEGINDIR-based non-anonymous directory connections
-    Dir,
-    /// Use to exit to one or more ports.
-    Exit(Vec<TargetPort>),
-}
-
-/// The purposes for which a circuit is usable.
-///
-/// This type should stay internal to the circmgr crate for now: we'll probably
-/// want to refactor it a lot.
-#[derive(Clone, Debug)]
-enum CircUsage {
-    /// Useable for BEGINDIR-based non-anonymous directory connections
-    Dir,
-    /// Usable to exit to to a set of ports.
-    Exit(ExitPolicy),
-}
-
-impl TargetCircUsage {
-    /// Construct path for a given circuit purpose; return it and the
-    /// usage that it _actually_ supports.
-    fn build_path<'a, R: Rng>(
-        &self,
-        rng: &mut R,
-        netdir: DirInfo<'a>,
-    ) -> Result<(TorPath<'a>, CircUsage)> {
-        match self {
-            TargetCircUsage::Dir => {
-                let path = DirPathBuilder::new().pick_path(rng, netdir)?;
-                Ok((path, CircUsage::Dir))
-            }
-            TargetCircUsage::Exit(p) => {
-                let path = ExitPathBuilder::from_target_ports(p.clone()).pick_path(rng, netdir)?;
-                let policy = path
-                    .exit_policy()
-                    .expect("ExitPathBuilder gave us a one-hop circuit?");
-                Ok((path, CircUsage::Exit(policy)))
-            }
-        }
-    }
-
-    /// Return true if this usage "contains" other -- in other words,
-    /// if any circuit built for this purpose is also usable for the
-    /// purpose of other.
-    fn contains(&self, target: &TargetCircUsage) -> bool {
-        use TargetCircUsage::*;
-        match (self, target) {
-            (Dir, Dir) => true,
-            (Exit(p1), Exit(p2)) => p2.iter().all(|p| p1.contains(p)),
-            (_, _) => false,
-        }
-    }
-}
-
-impl CircUsage {
-    /// Return true if this usage "contains" other -- in other words,
-    /// if any circuit built for this purpose is also usable for the
-    /// purpose of other.
-    fn contains(&self, target: &TargetCircUsage) -> bool {
-        use CircUsage::*;
-        match (self, target) {
-            (Dir, TargetCircUsage::Dir) => true,
-            (Exit(p1), TargetCircUsage::Exit(p2)) => p2.iter().all(|port| p1.allows_port(*port)),
-            (_, _) => false,
-        }
     }
 }
 
@@ -542,7 +417,7 @@ impl<R: Runtime> CircMgr<R> {
         rng: &mut StdRng,
         netdir: DirInfo<'_>,
         target_usage: &TargetCircUsage,
-    ) -> Result<(Arc<ClientCirc>, CircUsage)> {
+    ) -> Result<(Arc<ClientCirc>, SupportedCircUsage)> {
         // TODO: This should probably be an option too.
         let n_tries: usize = 3;
         // TODO: This is way too long, AND it should be an option.
@@ -579,7 +454,7 @@ impl<R: Runtime> CircMgr<R> {
         rng: &mut StdRng,
         netdir: DirInfo<'_>,
         target_usage: &TargetCircUsage,
-    ) -> Result<(Arc<ClientCirc>, CircUsage)> {
+    ) -> Result<(Arc<ClientCirc>, SupportedCircUsage)> {
         let params = netdir.circ_params();
         let (path, usage) = target_usage.build_path(rng, netdir)?;
         let circ = path

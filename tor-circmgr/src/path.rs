@@ -16,6 +16,7 @@ use futures::task::SpawnExt;
 use rand::{CryptoRng, Rng};
 use std::sync::Arc;
 
+use crate::usage::ExitPolicy;
 use crate::{Error, Result};
 
 /// A list of Tor relays through the network.
@@ -84,11 +85,8 @@ impl<'a> TorPath<'a> {
 
     /// Return the exit policy of the final relay in this path, if this
     /// is a path for use with exit circuits.
-    pub(crate) fn exit_policy(&self) -> Option<super::ExitPolicy> {
-        self.exit_relay().map(|exit_relay| super::ExitPolicy {
-            v4: Arc::clone(exit_relay.ipv4_policy()),
-            v6: Arc::clone(exit_relay.ipv6_policy()),
-        })
+    pub(crate) fn exit_policy(&self) -> Option<ExitPolicy> {
+        self.exit_relay().map(ExitPolicy::from_relay)
     }
 
     /// Internal: get or create a channel for the first hop of a path.
