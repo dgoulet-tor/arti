@@ -60,7 +60,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "experimental-api")]
-use rand::CryptoRng;
+use path::TorPath;
+#[cfg(feature = "experimental-api")]
+use rand::{CryptoRng, Rng};
 
 mod err;
 pub mod path;
