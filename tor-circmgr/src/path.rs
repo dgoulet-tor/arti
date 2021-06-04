@@ -122,6 +122,7 @@ impl<'a> TorPath<'a> {
                 Ok(circ)
             }
             Path(p) => {
+                // XXXX Can p be empty???
                 let circ = pcirc.create_firsthop_ntor(rng, &p[0], &params).await?;
                 for relay in p[1..].iter() {
                     circ.extend_ntor(rng, relay, params).await?;
