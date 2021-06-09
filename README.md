@@ -7,6 +7,8 @@ router", and to the Latin dative singular for "art".  It is
 also short for "artifact".   It has nothing to do with the
 "rt" issue tracker or the "rt" media outlet.)
 
+[See here for API-level developer documentation.](https://tpo.pages.torproject.net/core/doc/rust/tor_client/index.html)
+
 ## Is this the future of Tor??!?11?!?
 
 It's not the future yet! ;)
