@@ -89,6 +89,15 @@ pub struct ClientCirc {
     c: Mutex<ClientCircImpl>,
 }
 
+impl std::fmt::Debug for ClientCirc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientCirc")
+            .field("unique_id", &self.unique_id)
+            .field("closed", &self.closed)
+            .finish()
+    }
+}
+
 /// A ClientCirc that needs to send a create cell and receive a created* cell.
 ///
 /// To use one of these, call create_firsthop_fast() or create_firsthop_ntor()

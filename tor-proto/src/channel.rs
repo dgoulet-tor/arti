@@ -106,6 +106,17 @@ pub struct Channel {
     inner: Mutex<ChannelImpl>,
 }
 
+impl std::fmt::Debug for Channel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Channel")
+            .field("unique_id", &self.unique_id)
+            .field("ed25519_id", &self.ed25519_id)
+            .field("rsa_id", &self.rsa_id)
+            .field("closed", &self.closed)
+            .finish()
+    }
+}
+
 /// Main implementation type for a channel.
 struct ChannelImpl {
     /// What link protocol is the channel using?
