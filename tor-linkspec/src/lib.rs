@@ -58,7 +58,9 @@
 #![warn(clippy::unseparated_literal_suffix)]
 
 mod ls;
+mod owned;
 mod traits;
 
 pub use ls::LinkSpec;
+pub use owned::{OwnedChanTarget, OwnedCircTarget};
 pub use traits::{ChanTarget, CircTarget};

@@ -79,7 +79,7 @@ impl<R: Runtime> ChanMgr<R> {
     /// or fail depending on its outcome.
     pub async fn get_or_launch<T: ChanTarget + ?Sized>(&self, target: &T) -> Result<Arc<Channel>> {
         let ed_identity = target.ed_identity();
-        let targetinfo = builder::TargetInfo::from_chan_target(target);
+        let targetinfo = target.to_owned();
 
         let chan = self.mgr.get_or_launch(*ed_identity, targetinfo).await?;
         // Double-check the match to make sure that the RSA identity is

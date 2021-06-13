@@ -27,6 +27,12 @@ pub trait ChanTarget {
     }
     /// Return the RSA identity for this relay.
     fn rsa_identity(&self) -> &pk::rsa::RsaIdentity;
+
+    /// Return a new [`crate::OwnedChanTarget`] containing a copy
+    /// of the information in this `ChanTarget`.
+    fn to_owned(&self) -> crate::OwnedChanTarget {
+        crate::OwnedChanTarget::from_chan_target(self)
+    }
 }
 
 /// Information about a Tor relay used to extend a circuit to it.

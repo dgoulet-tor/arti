@@ -2,13 +2,12 @@
 
 use crate::Error;
 
-use tor_linkspec::ChanTarget;
+use tor_linkspec::{ChanTarget, OwnedChanTarget};
 use tor_llcrypto::pk;
 use tor_rtcompat::{tls::TlsConnector, Runtime, TlsProvider};
 
 use async_trait::async_trait;
 use futures::task::SpawnExt;
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 /// TLS-based channel builder.
@@ -36,7 +35,7 @@ impl<R: Runtime> ChanBuilder<R> {
 #[async_trait]
 impl<R: Runtime> crate::mgr::ChannelFactory for ChanBuilder<R> {
     type Channel = tor_proto::channel::Channel;
-    type BuildSpec = TargetInfo;
+    type BuildSpec = OwnedChanTarget;
 
     async fn build_channel(&self, target: &Self::BuildSpec) -> crate::Result<Arc<Self::Channel>> {
         use tor_rtcompat::SleepProviderExt;
@@ -54,7 +53,7 @@ impl<R: Runtime> ChanBuilder<R> {
     /// As build_channel, but don't include a timeout.
     async fn build_channel_notimeout(
         &self,
-        target: &TargetInfo,
+        target: &OwnedChanTarget,
     ) -> crate::Result<Arc<tor_proto::channel::Channel>> {
         use tor_proto::channel::ChannelBuilder;
         use tor_rtcompat::tls::CertifiedConn;
@@ -107,47 +106,6 @@ impl crate::mgr::AbstractChannel for tor_proto::channel::Channel {
     }
 }
 
-/// TargetInfo is a summary of a [`ChanTarget`] that we can pass to
-/// [`ChanBuilder`].
-///
-/// This is a separate type since we can't declare ChanBuilder as having
-/// a parameterized method in today's Rust.
-#[derive(Debug, Clone)]
-pub(crate) struct TargetInfo {
-    /// Copy of the addresses from the underlying ChanTarget.
-    addrs: Vec<SocketAddr>,
-    /// Copy of the ed25519 id from the underlying ChanTarget.
-    ed_identity: pk::ed25519::Ed25519Identity,
-    /// Copy of the rsa id from the underlying ChanTarget.
-    rsa_identity: pk::rsa::RsaIdentity,
-}
-
-impl ChanTarget for TargetInfo {
-    fn addrs(&self) -> &[SocketAddr] {
-        &self.addrs[..]
-    }
-    fn ed_identity(&self) -> &pk::ed25519::Ed25519Identity {
-        &self.ed_identity
-    }
-    fn rsa_identity(&self) -> &pk::rsa::RsaIdentity {
-        &self.rsa_identity
-    }
-}
-
-impl TargetInfo {
-    /// Construct a TargetInfo from a given ChanTarget.
-    pub(crate) fn from_chan_target<C>(target: &C) -> Self
-    where
-        C: ChanTarget + ?Sized,
-    {
-        TargetInfo {
-            addrs: target.addrs().to_vec(),
-            ed_identity: *target.ed_identity(),
-            rsa_identity: *target.rsa_identity(),
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -157,24 +115,11 @@ mod test {
     };
     use pk::ed25519::Ed25519Identity;
     use pk::rsa::RsaIdentity;
+    use std::net::SocketAddr;
     use std::time::{Duration, SystemTime};
     use tor_proto::channel::Channel;
     use tor_rtcompat::{test_with_runtime, TcpListener};
     use tor_rtmock::{io::LocalStream, net::MockNetwork, MockSleepRuntime};
-
-    #[test]
-    fn targetinfo() {
-        let ti = TargetInfo {
-            addrs: vec!["127.0.0.1:11".parse().unwrap()],
-            ed_identity: [42; 32].into(),
-            rsa_identity: [45; 20].into(),
-        };
-
-        let ti2 = TargetInfo::from_chan_target(&ti);
-        assert_eq!(ti.addrs, ti2.addrs);
-        assert_eq!(ti.ed_identity, ti2.ed_identity);
-        assert_eq!(ti.rsa_identity, ti2.rsa_identity);
-    }
 
     // Make sure that the builder can build a real channel.  To test
     // this out, we set up a listener that pretends to have the right
@@ -188,11 +133,7 @@ mod test {
         let rsa: RsaIdentity = msgs::RSA_ID.into();
         let client_addr = "192.0.2.17".parse().unwrap();
         let tls_cert = msgs::X509_CERT.into();
-        let target = TargetInfo {
-            addrs: vec![orport],
-            ed_identity: ed,
-            rsa_identity: rsa,
-        };
+        let target = OwnedChanTarget::new(vec![orport], ed, rsa);
         let now = SystemTime::UNIX_EPOCH + Duration::new(msgs::NOW, 0);
 
         test_with_runtime(|rt| async move {
