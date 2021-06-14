@@ -174,6 +174,8 @@ impl<R: Runtime> CircMgr<R> {
         let _ = self.mgr.take_circ(circ_id);
     }
 
+    /* Removed for now: just use TorPath::build_circuit instead.
+
     /// Construct a client circuit using a given path.
     ///
     /// Note: The returned circuit is not managed by the circuit manager and
@@ -194,6 +196,7 @@ impl<R: Runtime> CircMgr<R> {
             .await?;
         Ok(circ)
     }
+     */
 
     /// Expire every circuit that has been dirty for too long.
     ///
