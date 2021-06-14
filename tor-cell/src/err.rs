@@ -1,4 +1,5 @@
 //! Define an error type for the tor-proto crate.
+use std::sync::Arc;
 use thiserror::Error;
 
 /// An error type for the tor-proto crate.
@@ -6,7 +7,7 @@ use thiserror::Error;
 /// This type should probably be split into several.  There's more
 /// than one kind of error that can occur while doing something with
 /// the Tor protocol.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 #[non_exhaustive]
 pub enum Error {
     /// An error that occurred in the tor_bytes crate while decoding an
@@ -15,7 +16,7 @@ pub enum Error {
     BytesErr(#[from] tor_bytes::Error),
     /// An error that occurred from the io system.
     #[error("io error: {0}")]
-    IoErr(#[from] std::io::Error),
+    IoErr(#[source] Arc<std::io::Error>),
     /// There was a programming error somewhere in the code.
     #[error("Internal programming error: {0}")]
     InternalError(String),
@@ -25,4 +26,10 @@ pub enum Error {
     /// Tried to make or use a stream to an invalid destination address.
     #[error("invalid stream target address")]
     BadStreamAddress,
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Error {
+        Error::IoErr(Arc::new(e))
+    }
 }

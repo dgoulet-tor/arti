@@ -1,9 +1,10 @@
 //! Declare error types for tor-chanmgr
 
+use std::sync::Arc;
 use thiserror::Error;
 
 /// An error returned by a channel manager.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 #[non_exhaustive]
 pub enum Error {
     /// A ChanTarget was given for which no channel could be built.
@@ -24,7 +25,7 @@ pub enum Error {
 
     /// A protocol error while making a channel
     #[error("I/O error while opening a channel: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[source] Arc<std::io::Error>),
 
     /// An internal error of some kind that should never occur.
     #[error("Internal error: {0}")]
@@ -50,6 +51,12 @@ impl From<tor_rtcompat::TimeoutError> for Error {
 impl<T> From<std::sync::PoisonError<T>> for Error {
     fn from(_: std::sync::PoisonError<T>) -> Error {
         Error::Internal("Thread failed while holding lock")
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Error {
+        Error::Io(Arc::new(e))
     }
 }
 

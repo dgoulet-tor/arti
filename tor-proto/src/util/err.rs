@@ -1,4 +1,5 @@
 //! Define an error type for the tor-proto crate.
+use std::sync::Arc;
 use thiserror::Error;
 use tor_cell::relaycell::msg::EndReason;
 
@@ -7,7 +8,7 @@ use tor_cell::relaycell::msg::EndReason;
 /// This type should probably be split into several.  There's more
 /// than one kind of error that can occur while doing something with
 /// the Tor protocol.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 #[non_exhaustive]
 pub enum Error {
     /// An error that occurred in the tor_bytes crate while decoding an
@@ -16,7 +17,7 @@ pub enum Error {
     BytesErr(#[from] tor_bytes::Error),
     /// An error that occurred from the io system.
     #[error("io error: {0}")]
-    IoErr(#[from] std::io::Error),
+    IoErr(#[source] Arc<std::io::Error>),
     /// An error occurred in the cell-handling layer.
     #[error("cell encoding error: {0}")]
     CellErr(#[source] tor_cell::Error),
@@ -86,12 +87,21 @@ impl From<tor_cell::Error> for Error {
     }
 }
 
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Error {
+        Error::IoErr(Arc::new(err))
+    }
+}
+
 impl From<Error> for std::io::Error {
     fn from(err: Error) -> std::io::Error {
         use std::io::ErrorKind;
         use Error::*;
         let kind = match err {
-            IoErr(e) => return e,
+            IoErr(e) => match Arc::try_unwrap(e) {
+                Ok(e) => return e,
+                Err(arc) => return std::io::Error::new(arc.kind(), arc),
+            },
 
             InvalidOutputLength | NoSuchHop | BadStreamAddress => ErrorKind::InvalidInput,
 
