@@ -79,9 +79,8 @@ pub(super) type CtrlResult = std::result::Result<CtrlMsg, oneshot::Canceled>;
 ///
 /// We use oneshot channels to handle stream shutdowns, since oneshot
 /// senders can be sent from within a non-async function.  We wrap
-/// them in stream::Once so we can treat them as streams, and wrap
-/// _those_ in a SelectAll so we can learn about them as they fire.
-type OneshotStream = stream::SelectAll<stream::Once<oneshot::Receiver<CtrlMsg>>>;
+/// them in a stream so we can learn about them as they fire.
+type OneshotStream = stream::FuturesUnordered<oneshot::Receiver<CtrlMsg>>;
 
 /// Represents the reactor's view of a single hop.
 pub(super) struct InboundHop {
@@ -150,8 +149,8 @@ impl Reactor {
         input: mpsc::Receiver<ClientCircChanMsg>,
         unique_id: UniqId,
     ) -> Self {
-        let mut oneshots = stream::SelectAll::new();
-        oneshots.push(stream::once(closeflag));
+        let oneshots = stream::FuturesUnordered::new();
+        oneshots.push(closeflag);
         let control = stream::select(control, oneshots);
         Reactor {
             input: input.fuse(),
@@ -299,8 +298,8 @@ impl Reactor {
 
     /// Ensure that we get a message on self.control when `ch` fires.
     fn register(&mut self, ch: oneshot::Receiver<CtrlMsg>) {
-        let (_, select_all) = self.control.get_mut().get_mut();
-        select_all.push(stream::once(ch));
+        let (_, stream) = self.control.get_mut().get_mut();
+        stream.push(ch);
     }
 
     /// Helper: process a cell on a channel.  Most cells get ignored

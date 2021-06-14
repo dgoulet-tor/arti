@@ -48,7 +48,7 @@ pub(super) type CtrlResult = std::result::Result<CtrlMsg, oneshot::Canceled>;
 ///
 /// TODO: copy documentation from circuit::reactor if we don't unify
 /// these types somehow.
-type OneshotStream = stream::SelectAll<stream::Once<oneshot::Receiver<CtrlMsg>>>;
+type OneshotStream = stream::FuturesUnordered<oneshot::Receiver<CtrlMsg>>;
 
 /// Object to handle incoming cells and background tasks on a channel.
 ///
@@ -100,8 +100,8 @@ where
         input: T,
         unique_id: UniqId,
     ) -> Self {
-        let mut oneshots = stream::SelectAll::new();
-        oneshots.push(stream::once(closeflag));
+        let oneshots = stream::FuturesUnordered::new();
+        oneshots.push(closeflag);
         let control = stream::select(control, oneshots);
         Reactor {
             control: control.fuse(),
@@ -184,8 +184,8 @@ where
 
     /// Ensure that we get a message on self.control when `ch` fires.
     fn register(&mut self, ch: oneshot::Receiver<CtrlMsg>) {
-        let (_, select_all) = self.control.get_mut().get_mut();
-        select_all.push(stream::once(ch));
+        let (_, stream) = self.control.get_mut().get_mut();
+        stream.push(ch);
     }
 
     /// Helper: process a cell on a channel.  Most cell types get ignored
