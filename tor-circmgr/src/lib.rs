@@ -51,11 +51,6 @@ use tor_rtcompat::Runtime;
 use std::sync::Arc;
 use std::time::Duration;
 
-#[cfg(feature = "experimental-api")]
-use path::TorPath;
-#[cfg(feature = "experimental-api")]
-use rand::{CryptoRng, Rng};
-
 mod err;
 mod impls;
 mod mgr;
