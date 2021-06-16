@@ -52,6 +52,9 @@ pub mod params;
 mod pick;
 mod weight;
 
+#[cfg(any(test, feature = "testing"))]
+pub mod testnet;
+
 use tor_llcrypto as ll;
 use tor_llcrypto::pk::{ed25519::Ed25519Identity, rsa::RsaIdentity};
 use tor_netdoc::doc::microdesc::{MdDigest, Microdesc};
@@ -556,84 +559,9 @@ impl<'a> tor_linkspec::CircTarget for Relay<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use hex_literal::hex;
+    use crate::testnet::construct_network;
     use std::collections::HashSet;
-    use std::time::{Duration, SystemTime};
-    use tor_llcrypto::pk::rsa;
-    use tor_netdoc::doc::netstatus::{Lifetime, RelayFlags, RelayWeight};
-
-    fn rsa_example() -> rsa::PublicKey {
-        let der = hex!("30818902818100d527b6c63d6e81d39c328a94ce157dccdc044eb1ad8c210c9c9e22487b4cfade6d4041bd10469a657e3d82bc00cf62ac3b6a99247e573b54c10c47f5dc849b0accda031eca6f6e5dc85677f76dec49ff24d2fcb2b5887fb125aa204744119bb6417f45ee696f8dfc1c2fc21b2bae8e9e37a19dc2518a2c24e7d8fd7fac0f46950203010001");
-        rsa::PublicKey::from_der(&der).unwrap()
-    }
-
-    // Build a fake network with enough information to enable some basic
-    // tests.
-    fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
-        let f = RelayFlags::RUNNING | RelayFlags::VALID | RelayFlags::V2DIR;
-        // define 4 groups of flags
-        let flags = [
-            f,
-            f | RelayFlags::EXIT,
-            f | RelayFlags::GUARD,
-            f | RelayFlags::EXIT | RelayFlags::GUARD,
-        ];
-
-        let now = SystemTime::now();
-        let one_day = Duration::new(86400, 0);
-        let mut bld = MdConsensus::builder();
-        bld.consensus_method(34)
-            .lifetime(Lifetime::new(now, now + one_day / 2, now + one_day).unwrap())
-            .param("bwweightscale", 1)
-            .weights("".parse().unwrap());
-
-        let mut microdescs = Vec::new();
-        for idx in 0..40_u8 {
-            // Each relay gets a couple of no-good onion keys.
-            // Its identity fingerprints are set to `idx`, repeating.
-            // They all get the same address.
-            let flags = flags[(idx / 10) as usize];
-            let policy = if flags.contains(RelayFlags::EXIT) {
-                "accept 80,443"
-            } else {
-                "reject 1-65535"
-            };
-            // everybody is family with the adjacent relay.
-            let fam_id = [idx ^ 1; 20];
-            let family = hex::encode(&fam_id);
-
-            let md = Microdesc::builder()
-                .tap_key(rsa_example())
-                .ntor_key((*b"----nothing in dirmgr uses this-").into())
-                .ed25519_id([idx; 32].into())
-                .family(family.parse().unwrap())
-                .parse_ipv4_policy(policy)
-                .unwrap()
-                .testing_md()
-                .unwrap();
-            let protocols = if idx % 2 == 0 {
-                // even-numbered relays are dircaches.
-                "DirCache=2".parse().unwrap()
-            } else {
-                "".parse().unwrap()
-            };
-            let weight = RelayWeight::Measured(1000 * (idx % 10 + 1) as u32);
-            bld.rs()
-                .identity([idx; 20].into())
-                .add_or_port("127.0.0.1:9001".parse().unwrap())
-                .doc_digest(*md.digest())
-                .protos(protocols)
-                .set_flags(flags)
-                .weight(weight)
-                .build_into(&mut bld)
-                .unwrap();
-            microdescs.push(md);
-        }
-
-        let consensus = bld.testing_consensus().unwrap();
-
-        (consensus, microdescs)
-    }
+    use std::time::Duration;
 
     // Basic functionality for a partial netdir: Add microdescriptors,
     // then you have a netdir.
