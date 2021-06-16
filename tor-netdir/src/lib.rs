@@ -504,11 +504,15 @@ impl<'a> Relay<'a> {
 
     /// Return the IPv4 exit policy for this relay.
     pub fn ipv4_policy(&self) -> &Arc<PortPolicy> {
+        // XXXX: Return Reject * if the BadExit flag is present.  Possibly
+        // add an accessor to give the declared policy, but it shouldn't
+        // be this one.
         self.md.ipv4_policy()
     }
 
     /// Return the IPv6 exit policy for this relay.
     pub fn ipv6_policy(&self) -> &Arc<PortPolicy> {
+        // XXXX: Return Reject * if the BadExit flag is present.
         self.md.ipv6_policy()
     }
     /// Return a reference to this relay's "router status" entry in
