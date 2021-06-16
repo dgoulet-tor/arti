@@ -80,6 +80,16 @@ impl<'a> TorPath<'a> {
         self.exit_relay().map(ExitPolicy::from_relay)
     }
 
+    /// Return the number of relays in this path.
+    pub fn len(&self) -> usize {
+        use TorPathInner::*;
+        match &self.inner {
+            OneHop(_) => 1,
+            FallbackOneHop(_) => 1,
+            Path(p) => p.len(),
+        }
+    }
+
     /// Try to build a circuit corresponding to this path.
     pub async fn build_circuit<RNG, RT>(
         &self,

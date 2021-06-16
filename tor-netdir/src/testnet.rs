@@ -20,6 +20,17 @@ fn rsa_example() -> rsa::PublicKey {
     rsa::PublicKey::from_der(&der).unwrap()
 }
 
+/// As [`construct_network()`], but return a [`NetDir`].
+pub fn construct_netdir() -> NetDir {
+    let (consensus, microdescs) = construct_network();
+    let mut dir = PartialNetDir::new(consensus, None);
+    for md in microdescs {
+        dir.add_microdesc(md);
+    }
+
+    dir.unwrap_if_sufficient().unwrap()
+}
+
 /// Build a fake network with enough information to enable some basic
 /// tests.
 ///
@@ -35,8 +46,9 @@ fn rsa_example() -> rsa::PublicKey {
 ///
 /// TAP and Ntor onion keys are present, but unusable.
 ///
-/// Odd-numbered exit relays are set to allow ports 80 and 443.  Even-
-/// numbered exit relays are set to allow ports 1-65535.
+/// Odd-numbered exit relays are set to allow ports 80 and 443 on
+/// IPv4.  Even-numbered exit relays are set to allow ports 1-65535
+/// on IPv4.  No exit relays are marked to support IPv6.
 ///
 /// Even-numbered relays support the `DirCache=2` protocol.
 ///

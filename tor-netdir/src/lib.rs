@@ -310,10 +310,14 @@ impl NetDir {
     }
     /// Return a relay matching a given Ed25519 identity, if we have a
     /// usable relay with that key.
-    #[cfg(test)]
+    ///
+    /// # Limitations
+    ///
+    /// This function is O(n) in the number of relays; we will
+    /// probably want to fix that if we use this function for anything
+    /// besides testing. (TODO)
+    #[cfg(any(test, feature = "testing"))]
     pub fn by_id(&self, id: &Ed25519Identity) -> Option<Relay<'_>> {
-        // TODO This is O(n); we will probably want to fix that if we use
-        // this function for anything besides testing.
         self.relays().find(|r| r.id() == id)
     }
     /// Return the parameters from the consensus, clamped to the
