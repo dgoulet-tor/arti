@@ -19,7 +19,8 @@
 
 // TODO:
 // - Testing
-//    - Ensuring that a circuit exists.
+//    - Error from pick_action()
+//    - Error reported by restrict_mut?
 
 use crate::{DirInfo, Error, Result};
 
@@ -1122,6 +1123,20 @@ mod test {
             let c4 = c4.unwrap();
             assert!(!Arc::ptr_eq(&c1, &c3));
             assert!(Arc::ptr_eq(&c3, &c4));
+            assert_eq!(c3.id(), c4.id());
+
+            // Now we're going to remove c3 from consideration.  It's the
+            // same as c4, so removing c4 will give us None.
+            let c3_taken = mgr.take_circ(&c3.id()).unwrap();
+            let now_its_gone = mgr.take_circ(&c4.id());
+            assert!(Arc::ptr_eq(&c3_taken, &c3));
+            assert!(now_its_gone.is_none());
+            // Having removed them, let's launch another dnsport and make
+            // sure we get a different circuit.
+            let c5 = wait_for(&rt, mgr.get_or_launch(&dnsport, di())).await;
+            let c5 = c5.unwrap();
+            assert!(!Arc::ptr_eq(&c3, &c5));
+            assert!(!Arc::ptr_eq(&c4, &c5));
         });
     }
 
@@ -1248,26 +1263,38 @@ mod test {
             // The first request will time out completely, but we're
             // making a second request after we launch it.  That
             // request should succeed, and notify the first request.
-            let builder = FakeBuilder::new(&rt, vec![FakeOp::Timeout]);
 
-            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
-            // Note that ports2 will be wider than ports1, so the second
-            // request will have to launch a new circuit.
             let ports1 = FakeSpec::new(vec![80_u16]);
             let ports2 = FakeSpec::new(vec![80_u16, 443]);
-            let (c1, c2) = wait_for(
-                &rt,
-                futures::future::join(mgr.get_or_launch(&ports1, di()), async {
-                    rt.sleep(Duration::from_millis(2)).await;
-                    mgr.get_or_launch(&ports2, di()).await
-                }),
-            )
-            .await;
 
-            let c1 = c1.unwrap();
-            let c2 = c2.unwrap();
+            // XXXX Sometimes c2 gets launched before c1, even in spite of
+            // the call to sleep() here.  That's why I'm trying more than
+            // once.
+            for _ in 1_usize..30 {
+                let builder = FakeBuilder::new(&rt, vec![FakeOp::Timeout]);
 
-            assert!(Arc::ptr_eq(&c1, &c2));
+                let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+                // Note that ports2 will be wider than ports1, so the second
+                // request will have to launch a new circuit.
+
+                let (c1, c2) = wait_for(
+                    &rt,
+                    futures::future::join(mgr.get_or_launch(&ports1, di()), async {
+                        rt.sleep(Duration::from_millis(100)).await;
+                        mgr.get_or_launch(&ports2, di()).await
+                    }),
+                )
+                .await;
+
+                if c2.is_ok() {
+                    let c1 = c1.unwrap();
+                    let c2 = c2.unwrap();
+                    assert!(Arc::ptr_eq(&c1, &c2));
+                    return;
+                }
+            }
+
+            panic!("The circuits never finished in the order we wanted.");
         });
     }
 
@@ -1308,6 +1335,58 @@ mod test {
             // If we had launched these separately, they wouldn't share
             // a circuit.
             assert!(Arc::ptr_eq(&c1, &c2));
+        });
+    }
+
+    #[test]
+    fn expiration() {
+        tor_rtcompat::test_with_runtime(|rt| async {
+            // Now let's make some circuits -- one dirty, one clean, and
+            // make sure that one expires and one doesn't.
+            let rt = MockSleepRuntime::new(rt);
+            let builder = FakeBuilder::new(&rt, vec![]);
+            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+
+            let imap = FakeSpec::new(vec![993_u16]);
+            let pop = FakeSpec::new(vec![995_u16]);
+
+            let (ok, pop1) = wait_for(
+                &rt,
+                futures::future::join(
+                    mgr.ensure_circuit(&imap, di()),
+                    mgr.get_or_launch(&pop, di()),
+                ),
+            )
+            .await;
+
+            assert!(ok.is_ok());
+            let pop1 = pop1.unwrap();
+
+            rt.advance(Duration::from_secs(15)).await;
+            let expiration_cutoff = mgr.peek_runtime().now();
+            rt.advance(Duration::from_secs(15)).await;
+            let imap1 = wait_for(&rt, mgr.get_or_launch(&imap, di())).await.unwrap();
+
+            // This should expire the pop circuit, since it came from
+            // get_or_launch() [which marks the circuit as being
+            // used].  It should not expire the imap circuit, since
+            // it was not dity until 15 seconds after the cutoff.
+            mgr.expire_dirty_before(expiration_cutoff);
+
+            let (pop2, imap2) = wait_for(
+                &rt,
+                futures::future::join(
+                    mgr.get_or_launch(&pop, di()),
+                    mgr.get_or_launch(&imap, di()),
+                ),
+            )
+            .await;
+
+            let pop2 = pop2.unwrap();
+            let imap2 = imap2.unwrap();
+
+            assert!(!Arc::ptr_eq(&pop2, &pop1));
+            assert!(Arc::ptr_eq(&imap2, &imap1));
         });
     }
 }
