@@ -46,7 +46,7 @@ pub struct ConsensusBuilder<RS> {
     shared_rand_cur: Option<SharedRandVal>,
     /// See [`Consensus::voters`]
     voters: Vec<ConsensusVoterInfo>,
-    /// See [`Consensus::routers`]
+    /// See [`Consensus::relays`]
     relays: Vec<RS>,
     /// See [`Footer::weights`]
     weights: NetParams<i32>,
