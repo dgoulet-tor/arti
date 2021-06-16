@@ -109,6 +109,8 @@ mod test {
                 .pick_path(&mut rng, dirinfo)
                 .unwrap();
 
+            assert_same_path_when_owned(&path);
+
             if let TorPathInner::Path(p) = path.inner {
                 assert_exit_path_ok(&p[..]);
                 let exit = &p[2];
@@ -124,6 +126,7 @@ mod test {
             let path = ExitPathBuilder::from_chosen_exit(chosen.clone())
                 .pick_path(&mut rng, dirinfo)
                 .unwrap();
+            assert_same_path_when_owned(&path);
             if let TorPathInner::Path(p) = path.inner {
                 assert_exit_path_ok(&p[..]);
                 let exit = &p[2];

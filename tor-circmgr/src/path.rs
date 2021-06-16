@@ -194,7 +194,7 @@ impl OwnedPath {
 /// For testing: make sure that `path` is the same when it is an owned
 /// path.
 #[cfg(test)]
-fn assert_same_owned_path(path: &TorPath<'_>) {
+fn assert_same_path_when_owned(path: &TorPath<'_>) {
     let owned: OwnedPath = path.try_into().unwrap();
 
     match (owned, &path.inner) {

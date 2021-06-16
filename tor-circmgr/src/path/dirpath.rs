@@ -61,6 +61,7 @@ mod test {
             let p = p.unwrap();
             assert!(p.exit_relay().is_none());
             assert_eq!(p.len(), 1);
+            assert_same_path_when_owned(&p);
             if let crate::path::TorPathInner::OneHop(r) = p.inner {
                 assert!(r.is_dir_cache());
             } else {
@@ -93,7 +94,7 @@ mod test {
             let p = p.unwrap();
             assert!(p.exit_relay().is_none());
             assert_eq!(p.len(), 1);
-            assert_same_owned_path(&p);
+            assert_same_path_when_owned(&p);
 
             if let crate::path::TorPathInner::FallbackOneHop(f) = p.inner {
                 assert!(std::ptr::eq(f, &fb[0]) || std::ptr::eq(f, &fb[1]));
