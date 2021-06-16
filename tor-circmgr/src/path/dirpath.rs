@@ -85,7 +85,7 @@ mod test {
                 .build()
                 .unwrap(),
         ];
-        let dirinfo = DirInfo::Fallbacks(&fb[..]);
+        let dirinfo = (&fb[..]).into();
         let mut rng = rand::thread_rng();
 
         for _ in 0..10 {
@@ -93,6 +93,7 @@ mod test {
             let p = p.unwrap();
             assert!(p.exit_relay().is_none());
             assert_eq!(p.len(), 1);
+            assert_same_owned_path(&p);
 
             if let crate::path::TorPathInner::FallbackOneHop(f) = p.inner {
                 assert!(std::ptr::eq(f, &fb[0]) || std::ptr::eq(f, &fb[1]));

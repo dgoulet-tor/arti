@@ -190,3 +190,29 @@ impl OwnedPath {
         Ok(channel)
     }
 }
+
+/// For testing: make sure that `path` is the same when it is an owned
+/// path.
+#[cfg(test)]
+fn assert_same_owned_path(path: &TorPath<'_>) {
+    let owned: OwnedPath = path.try_into().unwrap();
+
+    match (owned, &path.inner) {
+        (OwnedPath::ChannelOnly(c), TorPathInner::FallbackOneHop(f)) => {
+            assert_eq!(c.ed_identity(), f.ed_identity());
+        }
+        (OwnedPath::Normal(p), TorPathInner::OneHop(h)) => {
+            assert_eq!(p.len(), 1);
+            assert_eq!(p[0].ed_identity(), h.ed_identity());
+        }
+        (OwnedPath::Normal(p1), TorPathInner::Path(p2)) => {
+            assert_eq!(p1.len(), p2.len());
+            for (n1, n2) in p1.iter().zip(p2.iter()) {
+                assert_eq!(n1.ed_identity(), n2.ed_identity());
+            }
+        }
+        (_, _) => {
+            panic!("Mismatched path types.")
+        }
+    }
+}

@@ -73,3 +73,64 @@ impl<'a> ExitPathBuilder<'a> {
         Ok(TorPath::new_multihop(vec![entry, middle, exit]))
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use tor_netdir::testnet;
+
+    fn assert_exit_path_ok<'a>(relays: &[Relay<'a>]) {
+        assert_eq!(relays.len(), 3);
+
+        // TODO: Eventually assert that r1 has Guard, once we enforce that.
+
+        let r1 = &relays[0];
+        let r2 = &relays[1];
+        let r3 = &relays[2];
+
+        assert!(r1.ed_identity() != r2.ed_identity());
+        assert!(r1.ed_identity() != r3.ed_identity());
+        assert!(r2.ed_identity() != r3.ed_identity());
+
+        assert!(!r1.in_same_family(r2));
+        assert!(!r1.in_same_family(r3));
+        assert!(!r2.in_same_family(r3));
+    }
+
+    #[test]
+    fn by_ports() {
+        let mut rng = rand::thread_rng();
+        let netdir = testnet::construct_netdir();
+        let ports = vec![TargetPort::ipv4(443), TargetPort::ipv4(1119)];
+        let dirinfo = (&netdir).into();
+
+        for _ in 0..1000 {
+            let path = ExitPathBuilder::from_target_ports(ports.clone())
+                .pick_path(&mut rng, dirinfo)
+                .unwrap();
+
+            if let TorPathInner::Path(p) = path.inner {
+                assert_exit_path_ok(&p[..]);
+                let exit = &p[2];
+                assert!(exit.ipv4_policy().allows_port(1119));
+            } else {
+                panic!("Generated the wrong kind of path");
+            }
+        }
+
+        let chosen = netdir.by_id(&[0x20; 32].into()).unwrap();
+
+        for _ in 0..1000 {
+            let path = ExitPathBuilder::from_chosen_exit(chosen.clone())
+                .pick_path(&mut rng, dirinfo)
+                .unwrap();
+            if let TorPathInner::Path(p) = path.inner {
+                assert_exit_path_ok(&p[..]);
+                let exit = &p[2];
+                assert_eq!(exit.ed_identity(), chosen.ed_identity());
+            } else {
+                panic!("Generated the wrong kind of path");
+            }
+        }
+    }
+}
