@@ -19,9 +19,6 @@
 
 // TODO:
 // - Testing
-//    o Successful straight-line cases.
-//    - Cases with side-circuit alerts.
-//    - Cases where isolation forces a new circuit
 //    - Ensuring that a circuit exists.
 
 use crate::{DirInfo, Error, Result};
@@ -902,6 +899,7 @@ mod test {
     use crate::Error;
     use std::collections::HashSet;
     use std::sync::atomic::{self, AtomicUsize};
+    use tor_rtcompat::SleepProvider;
     use tor_rtmock::MockSleepRuntime;
 
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Copy)]
@@ -1060,7 +1058,7 @@ mod test {
         fut: F,
     ) -> F::Output {
         let (send, mut recv) = oneshot::channel();
-        let increment = Duration::from_millis(5);
+        let increment = Duration::from_millis(1);
 
         let (output, _) = futures::join!(
             async {
@@ -1183,6 +1181,132 @@ mod test {
             let c1 = c1.unwrap();
             let c2 = c2.unwrap();
 
+            assert!(Arc::ptr_eq(&c1, &c2));
+        });
+    }
+
+    #[test]
+    fn isolated() {
+        tor_rtcompat::test_with_runtime(|rt| async {
+            let rt = MockSleepRuntime::new(rt);
+            let builder = FakeBuilder::new(&rt, vec![]);
+            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+
+            let ports = FakeSpec::new(vec![443_u16]);
+            // Set our isolation so that iso1 and iso2 can't share a cicuit,
+            // but no_iso can share a circuit with either.
+            let iso1 = ports.clone().isolated(1);
+            let iso2 = ports.clone().isolated(2);
+            let no_iso = ports.clone();
+
+            // We're going to try launching these circuits in 6 different
+            // orders, to make sure that the outcome is correct each time.
+            use itertools::Itertools;
+            let timeouts: Vec<_> = [0_u64, 5, 10]
+                .iter()
+                .map(|d| Duration::from_millis(*d))
+                .collect();
+
+            for delays in timeouts.iter().permutations(3) {
+                let d1 = delays[0];
+                let d2 = delays[1];
+                let d3 = delays[2];
+                let (c_iso1, c_iso2, c_none) = wait_for(
+                    &rt,
+                    futures::future::join3(
+                        async {
+                            rt.sleep(*d1).await;
+                            mgr.get_or_launch(&iso1, di()).await
+                        },
+                        async {
+                            rt.sleep(*d2).await;
+                            mgr.get_or_launch(&iso2, di()).await
+                        },
+                        async {
+                            rt.sleep(*d3).await;
+                            mgr.get_or_launch(&no_iso, di()).await
+                        },
+                    ),
+                )
+                .await;
+
+                let c_iso1 = c_iso1.unwrap();
+                let c_iso2 = c_iso2.unwrap();
+                let c_none = c_none.unwrap();
+
+                assert!(!Arc::ptr_eq(&c_iso1, &c_iso2));
+                assert!(Arc::ptr_eq(&c_iso1, &c_none) || Arc::ptr_eq(&c_iso2, &c_none));
+            }
+        });
+    }
+
+    #[test]
+    fn opportunistic() {
+        tor_rtcompat::test_with_runtime(|rt| async {
+            let rt = MockSleepRuntime::new(rt);
+
+            // The first request will time out completely, but we're
+            // making a second request after we launch it.  That
+            // request should succeed, and notify the first request.
+            let builder = FakeBuilder::new(&rt, vec![FakeOp::Timeout]);
+
+            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            // Note that ports2 will be wider than ports1, so the second
+            // request will have to launch a new circuit.
+            let ports1 = FakeSpec::new(vec![80_u16]);
+            let ports2 = FakeSpec::new(vec![80_u16, 443]);
+            let (c1, c2) = wait_for(
+                &rt,
+                futures::future::join(mgr.get_or_launch(&ports1, di()), async {
+                    rt.sleep(Duration::from_millis(2)).await;
+                    mgr.get_or_launch(&ports2, di()).await
+                }),
+            )
+            .await;
+
+            let c1 = c1.unwrap();
+            let c2 = c2.unwrap();
+
+            assert!(Arc::ptr_eq(&c1, &c2));
+        });
+    }
+
+    #[test]
+    fn prebuild() {
+        tor_rtcompat::test_with_runtime(|rt| async {
+            // This time we're going to use ensure_circuit() to make
+            // sure that a circuit gets built, and then launch two
+            // other circuits that will use it.
+            let rt = MockSleepRuntime::new(rt);
+            let builder = FakeBuilder::new(&rt, vec![]);
+            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+
+            let ports1 = FakeSpec::new(vec![80_u16, 443]);
+            let ports2 = FakeSpec::new(vec![80_u16]);
+            let ports3 = FakeSpec::new(vec![443_u16]);
+            let (ok, c1, c2) = wait_for(
+                &rt,
+                futures::future::join3(
+                    mgr.ensure_circuit(&ports1, di()),
+                    async {
+                        rt.sleep(Duration::from_millis(10)).await;
+                        mgr.get_or_launch(&ports2, di()).await
+                    },
+                    async {
+                        rt.sleep(Duration::from_millis(50)).await;
+                        mgr.get_or_launch(&ports3, di()).await
+                    },
+                ),
+            )
+            .await;
+
+            assert!(ok.is_ok());
+
+            let c1 = c1.unwrap();
+            let c2 = c2.unwrap();
+
+            // If we had launched these separately, they wouldn't share
+            // a circuit.
             assert!(Arc::ptr_eq(&c1, &c2));
         });
     }
