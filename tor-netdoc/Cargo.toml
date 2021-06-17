@@ -27,7 +27,7 @@ chrono = "0.4.19"
 digest = "0.9.0"
 hex = "0.4.3"
 once_cell = "1.7.2"
-phf = { version = "0.8.0", features = ["macros"] }
+phf = { version = "0.9.0", features = ["macros"] }
 serde = "1.0.124"
 signature = "1.3.0"
 thiserror = "1.0.24"
