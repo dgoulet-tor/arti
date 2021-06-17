@@ -70,7 +70,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 /// TODO: this should be an option.
 ///
-/// TODO: The rules should be different for differnt kinds of circuits.
+/// TODO: The rules should be different for different kinds of circuits.
 const MAX_CIRC_DIRTINESS: Duration = Duration::from_secs(60 * 15);
 
 /// Represents what we know about the Tor network.

@@ -136,7 +136,7 @@ impl<E> RetryError<E> {
         self.errors.is_empty()
     }
 
-    /// Group up consectutive errors of the same kind, for easier display.
+    /// Group up consecutive errors of the same kind, for easier display.
     ///
     /// Two errors have "the same kind" if they return `true` when passed
     /// to the provided `dedup` function.

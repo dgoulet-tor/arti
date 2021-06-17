@@ -41,7 +41,7 @@ modular, embeddable library that other applications can use.
 Arti is *cleaner than our C tor implementation*.  Although we've tried to
 develop C tor well, we've learned a lot since we started it back in 2002.
 There are lots of places in the current C codebase where complicated
-"spaghetti" relationships betwen different pieces of code make our software
+"spaghetti" relationships between different pieces of code make our software
 needlessly hard to understand and improve.
 
 
@@ -75,7 +75,7 @@ or stability.
 
 ## Helping out
 
-Have a look at our [contributer guidelines](./CONTRIBUTING.md).
+Have a look at our [contributor guidelines](./CONTRIBUTING.md).
 
 ## Roadmap
 

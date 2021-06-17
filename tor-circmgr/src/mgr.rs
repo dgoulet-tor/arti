@@ -344,7 +344,7 @@ impl<B: AbstractCircBuilder> PendingEntry<B> {
     }
 
     /// Try to change the tentative assignment of this circuit by
-    /// restricting it for use with `useage`.
+    /// restricting it for use with `usage`.
     ///
     /// Return an error if the current tentative assignment didn't
     /// support `usage` in the first place.
@@ -843,7 +843,7 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
                         {
                             let mut list = self.circs.lock().expect("poisoned lock");
                             list.add_open(open_ent);
-                            // We drop our refrence to 'pending' here:
+                            // We drop our reference to 'pending' here:
                             // this should make all the weak references to
                             // the `PendingEntry` become dangling.
                             drop(pending);
