@@ -1,5 +1,0 @@
-
-  - Directory consistency
-    - "-----BEGIN" should not be a valid keyword
-    - Whitespace at start of line, y/n?  Mixed whitespace, y/n? CR, y/n?
-    - UTF-8.
