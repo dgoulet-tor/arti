@@ -44,6 +44,8 @@ SOON="""
 #![deny(clippy::unnecessary_wraps)]
 #![deny(clippy::if_then_some_else_none)]
 #![deny(clippy::implicit_clone)]
+#![deny(missing_debug_implementations)]
+#![deny(unused_crate_dependencies)]
 """
 
 DECIDED_NOT = """
