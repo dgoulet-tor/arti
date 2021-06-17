@@ -68,7 +68,21 @@ pub struct RetryError<E> {
     /// The operation we were trying to do.
     doing: String,
     /// The errors that we encountered when doing the operation.
-    errors: Vec<E>,
+    errors: Vec<(Attempt, E)>,
+    /// The total number of errors we encountered.
+    ///
+    /// This can differ from errors.len() if the errors have been
+    /// deduplicated.
+    n_errors: usize,
+}
+
+/// Represents which attempts, in sequence, failed to complete.
+#[derive(Debug, Clone)]
+enum Attempt {
+    /// A single attempt that failed.
+    Single(usize),
+    /// A range of consecutive attempts that failed.
+    Range(usize, usize),
 }
 
 // TODO: Should we declare that some error is the 'source' of this one?
@@ -90,6 +104,7 @@ impl<E> RetryError<E> {
         RetryError {
             doing: doing.into(),
             errors: Vec::new(),
+            n_errors: 0,
         }
     }
     /// Add an error to this RetryError.
@@ -100,13 +115,15 @@ impl<E> RetryError<E> {
     where
         T: Into<E>,
     {
-        self.errors.push(err.into());
+        self.n_errors += 1;
+        let attempt = Attempt::Single(self.n_errors);
+        self.errors.push((attempt, err.into()));
     }
 
     /// Return an iterator over all of the reasons that the attempt
     /// behind this RetryError has failed.
     pub fn sources(&self) -> impl Iterator<Item = &E> {
-        self.errors.iter()
+        self.errors.iter().map(|(_, e)| e)
     }
 
     /// Return the number of underlying errors.
@@ -118,6 +135,48 @@ impl<E> RetryError<E> {
     pub fn is_empty(&self) -> bool {
         self.errors.is_empty()
     }
+
+    /// Group up consectutive errors of the same kind, for easier display.
+    ///
+    /// Two errors have "the same kind" if they return `true` when passed
+    /// to the provided `dedup` function.
+    pub fn dedup_by<F>(&mut self, same_err: F)
+    where
+        F: Fn(&E, &E) -> bool,
+    {
+        let mut old_errs = Vec::new();
+        std::mem::swap(&mut old_errs, &mut self.errors);
+
+        for (attempt, err) in old_errs {
+            if let Some((ref mut last_attempt, last_err)) = self.errors.last_mut() {
+                if same_err(last_err, &err) {
+                    last_attempt.grow();
+                } else {
+                    self.errors.push((attempt, err))
+                }
+            } else {
+                self.errors.push((attempt, err))
+            }
+        }
+    }
+}
+
+impl<E: PartialEq<E>> RetryError<E> {
+    /// Group up consecutive errors of the same kind, according to the
+    /// `PartialEq` implementation.
+    pub fn dedup(&mut self) {
+        self.dedup_by(PartialEq::eq)
+    }
+}
+
+impl Attempt {
+    /// Extend this attempt by a single additional failure.
+    fn grow(&mut self) {
+        *self = match *self {
+            Attempt::Single(idx) => Attempt::Range(idx, idx + 1),
+            Attempt::Range(first, last) => Attempt::Range(first, last + 1),
+        };
+    }
 }
 
 impl<E: Clone> Clone for RetryError<E> {
@@ -125,6 +184,7 @@ impl<E: Clone> Clone for RetryError<E> {
         RetryError {
             doing: self.doing.clone(),
             errors: self.errors.clone(),
+            n_errors: self.n_errors,
         }
     }
 }
@@ -143,11 +203,20 @@ where
     }
 }
 
+impl Display for Attempt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
+        match self {
+            Attempt::Single(idx) => write!(f, "Attempt {}", idx),
+            Attempt::Range(first, last) => write!(f, "Attempts {}..{}", first, last),
+        }
+    }
+}
+
 impl<E: Display> Display for RetryError<E> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
-        match self.errors.len() {
+        match self.n_errors {
             0 => write!(f, "Unable to {}. (No errors given)", self.doing),
-            1 => write!(f, "Unable to {}: {}", self.doing, self.errors[0]),
+            1 => write!(f, "Unable to {}: {}", self.doing, self.errors[0].1),
             n => {
                 write!(
                     f,
@@ -155,8 +224,8 @@ impl<E: Display> Display for RetryError<E> {
                     self.doing, n
                 )?;
 
-                for (idx, e) in self.sources().enumerate() {
-                    write!(f, "\nAttempt {}: {}", idx + 1, e)?;
+                for (attempt, e) in self.errors.iter() {
+                    write!(f, "\n{}: {}", attempt, e)?;
                 }
                 Ok(())
             }
@@ -234,5 +303,14 @@ Attempt 3: invalid IP address syntax"
         for (s1, s2) in err.sources().zip(cloned.sources()) {
             assert_eq!(s1, s2);
         }
+
+        err.dedup();
+        let disp = format!("{}", err);
+        assert_eq!(
+            disp,
+            "\
+Tried to parse some integers 3 times, but all attempts failed.
+Attempts 1..3: invalid digit found in string"
+        );
     }
 }
