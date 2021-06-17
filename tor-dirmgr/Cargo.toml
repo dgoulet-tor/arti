@@ -16,7 +16,6 @@ default = [ "mmap" ]
 mmap = [ "memmap" ]
 
 [dependencies]
-tor-chanmgr = { path="../tor-chanmgr", version= "*", default-features=false }
 tor-checkable = { path="../tor-checkable", version= "*" }
 tor-circmgr = { path="../tor-circmgr", version= "*" }
 tor-consdiff = { path="../tor-consdiff", version= "*" }
@@ -33,7 +32,6 @@ base64 = "0.13.0"
 chrono = "0.4.19"
 digest = "0.9.0"
 directories = "3.0.1"
-event-listener = "2.5.1"
 futures = "0.3.13"
 fslock = "0.1.6"
 hex = "0.4.3"

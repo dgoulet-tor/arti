@@ -18,13 +18,13 @@ impl rand::RngCore for BadRng {
             dest[i] = 0xf0;
         }
     }
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
         Ok(self.fill_bytes(dest))
     }
 }
 
 // I won't tell if you don't.
-impl rand_core::CryptoRng for BadRng {}
+impl rand::CryptoRng for BadRng {}
 
 fn decode(body: &str) -> [u8; CELL_BODY_LEN] {
     let mut body = body.to_string();

@@ -21,12 +21,9 @@ tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
 tor-retry = { path="../tor-retry", version= "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
-tor-llcrypto = { path="../tor-llcrypto", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
-tor-units = { path="../tor-units", version="*"}
 
 async-trait = "0.1.48"
-event-listener = "2.5.1"
 futures = "0.3.13"
 rand = "0.8.3"
 log = "0.4.14"

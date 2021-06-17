@@ -21,12 +21,8 @@ experimental-api = []
 tor-circmgr = { path="../tor-circmgr", version= "*" }
 tor-chanmgr = { path="../tor-chanmgr", version= "*" }
 tor-dirmgr = { path="../tor-dirmgr", version="*" }
-tor-netdir = { path="../tor-netdir", version= "*" }
-tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
-tor-dirclient = { path="../tor-dirclient", version = "*" }
-tor-linkspec = { path="../tor-linkspec", version = "*" }
 
 anyhow = "1.0.38"
 futures = "0.3.13"

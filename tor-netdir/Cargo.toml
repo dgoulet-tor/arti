@@ -14,7 +14,7 @@ repository="https://gitlab.torproject.org/tpo/core/arti.git/"
 [features]
 default = []
 experimental-api = []
-testing = [ "hex-literal", "tor-netdoc/build_docs" ]
+testing = [ "hex", "hex-literal", "tor-netdoc/build_docs" ]
 
 [dependencies]
 tor-checkable = { path="../tor-checkable", version= "*" }
@@ -24,18 +24,15 @@ tor-llcrypto = { path="../tor-llcrypto", version= "*" }
 tor-protover = { path="../tor-protover", version= "*" }
 tor-units = { path="../tor-units", version= "*" }
 
-base64 = "0.13.0"
-digest = "0.9.0"
-hex = "0.4.3"
 log = "0.4.14"
-once_cell = "1.7.2"
 rand = "0.8.3"
 serde = { version = "1.0.124", features = ["derive"] }
 signature = "1.3.0"
 thiserror = "1.0.24"
+hex = { version= "0.4.3", optional = true }
 hex-literal = { version= "0.3.1", optional = true }
 
 [dev-dependencies]
+hex = "0.4.3"
 hex-literal = "0.3.1"
-simple-logging = "2.0.2"
 tor-netdoc = { path="../tor-netdoc", version= "*", features=["build_docs"] }
