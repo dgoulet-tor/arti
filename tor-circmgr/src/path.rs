@@ -81,6 +81,7 @@ impl<'a> TorPath<'a> {
     }
 
     /// Return the number of relays in this path.
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         use TorPathInner::*;
         match &self.inner {
