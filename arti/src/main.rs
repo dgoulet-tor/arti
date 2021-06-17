@@ -126,7 +126,7 @@ pub struct ArtiConfig {
     /// Information about when and how often to download directory information
     download_schedule: DownloadScheduleConfig,
 
-    /// Facility to override network pparameters from the values set in the
+    /// Facility to override network parameters from the values set in the
     /// consensus.
     #[serde(default)]
     override_net_params: HashMap<String, i32>,
