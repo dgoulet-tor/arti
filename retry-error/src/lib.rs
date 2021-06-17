@@ -1,37 +1,25 @@
-//! Helpers to implement retry-related functionality.
+//! An error attempt to represent multiple failures.
 //!
-//! Right now, this crate only has an error type that we use when we
-//! retry something a few times, and they all fail.  Instead of
+//! This crate implements [`RetryError`], a type to use when you
+//! retry something a few times, and all those attempts.  Instead of
 //! returning only a single error, it records _all of the errors
-//! received, in case they are different.
+//! received_, in case they are different.
 //!
-//! This crate is part of
+//! This crate is developed as part of
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
 //! implement [Tor](https://www.torproject.org/) in Rust.
 //! It's used by higher-level crates that retry
 //! operations.
 //!
-//! ## Design notes
-//!
-//! XXXX We'll want to refactor this one.  It might be better in a
-//! crate called retry-error or something, since it isn't
-//! tor-specific.
-//!
-//! The [`RetryError`] type might be more generally useful in the
-//! future, if it gets a stable interface, and if we can make it stop
-//! depending on [`anyhow`].
-//!
-//! Maybe this error type should be parameterized on an input error type.
-//!
 //! # Example
 //!
 //! ```
 //! # fn some_operation() -> Result<(),anyhow::Error> {Ok(())}
-//! # fn demo() -> Result<(),tor_retry::RetryError> {
-//! use tor_retry::RetryError;
+//! # fn demo() -> Result<(),retry_error::RetryError<anyhow::Error>> {
+//! use retry_error::RetryError;
 //!
 //! const N_ATTEMPTS: usize = 10;
-//! let mut err = RetryError::while_doing("perform an example operation");
+//! let mut err = RetryError::in_attempt_to("perform an example operation");
 //! for _ in 0..N_ATTEMPTS {
 //!     match some_operation() {
 //!         Ok(val) => return Ok(val),
@@ -65,7 +53,7 @@
 #![warn(clippy::unseparated_literal_suffix)]
 
 use std::error::Error;
-use std::fmt::{Display, Error as FmtError, Formatter};
+use std::fmt::{Debug, Display, Error as FmtError, Formatter};
 
 /// An error type for use when we're going to do something a few times,
 /// and they might all fail.
@@ -75,21 +63,19 @@ use std::fmt::{Display, Error as FmtError, Formatter};
 /// fails, use [`RetryError::push()`] to add a new error to the list
 /// of errors.  If the operation fails too many times, you can use
 /// RetryError as an [`Error`] itself.
-#[derive(Debug, Default)]
-pub struct RetryError {
+#[derive(Debug)]
+pub struct RetryError<E> {
     /// The operation we were trying to do.
-    doing: &'static str,
+    doing: String,
     /// The errors that we encountered when doing the operation.
-    // TODO: It might be nice to have this crate not depend on anyhow.
-    // When I first tried to do that, though, I ran into a big pile of
-    // type errors and gave up.
-    errors: Vec<anyhow::Error>,
+    errors: Vec<E>,
 }
 
 // TODO: Should we declare that some error is the 'source' of this one?
-impl Error for RetryError {}
+// If so, should it be the first failure?  The last?
+impl<E: Debug + Display> Error for RetryError<E> {}
 
-impl RetryError {
+impl<E> RetryError<E> {
     /// Crate a new RetryError, with no failed attempts,
     ///
     /// The provided `doing` argument is a short string that describes
@@ -100,9 +86,9 @@ impl RetryError {
     /// This RetryError should not be used as-is, since when no
     /// [`Error`]s have been pushed into it, it doesn't represent an
     /// actual failure.
-    pub fn while_doing(doing: &'static str) -> Self {
+    pub fn in_attempt_to<T: Into<String>>(doing: T) -> Self {
         RetryError {
-            doing,
+            doing: doing.into(),
             errors: Vec::new(),
         }
     }
@@ -110,37 +96,67 @@ impl RetryError {
     ///
     /// You should call this method when an attempt at the underlying operation
     /// has failed.
-    pub fn push<E>(&mut self, err: E)
+    pub fn push<T>(&mut self, err: T)
     where
-        E: Into<anyhow::Error>,
+        T: Into<E>,
     {
-        let e: anyhow::Error = err.into();
-        self.errors.push(e);
+        self.errors.push(err.into());
     }
+
     /// Return an iterator over all of the reasons that the attempt
     /// behind this RetryError has failed.
-    pub fn sources(&self) -> impl Iterator<Item = &anyhow::Error> {
+    pub fn sources(&self) -> impl Iterator<Item = &E> {
         self.errors.iter()
+    }
+
+    /// Return the number of underlying errors.
+    pub fn len(&self) -> usize {
+        self.errors.len()
+    }
+
+    /// Return true if no underlying errors have been added.
+    pub fn is_empty(&self) -> bool {
+        self.errors.is_empty()
     }
 }
 
-impl Display for RetryError {
+impl<E: Clone> Clone for RetryError<E> {
+    fn clone(&self) -> RetryError<E> {
+        RetryError {
+            doing: self.doing.clone(),
+            errors: self.errors.clone(),
+        }
+    }
+}
+
+impl<E, T> Extend<T> for RetryError<E>
+where
+    T: Into<E>,
+{
+    fn extend<C>(&mut self, iter: C)
+    where
+        C: IntoIterator<Item = T>,
+    {
+        for item in iter.into_iter() {
+            self.push(item)
+        }
+    }
+}
+
+impl<E: Display> Display for RetryError<E> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
         match self.errors.len() {
-            0 => write!(
-                f,
-                "Programming error: somebody made a RetryError without any errors!"
-            ),
-            1 => self.errors[0].fmt(f),
+            0 => write!(f, "Unable to {}. (No errors given)", self.doing),
+            1 => write!(f, "Unable to {}: {}", self.doing, self.errors[0]),
             n => {
-                writeln!(
+                write!(
                     f,
                     "Tried to {} {} times, but all attempts failed.",
                     self.doing, n
                 )?;
 
                 for (idx, e) in self.sources().enumerate() {
-                    write!(f, "Attempt {}:\n{}\n", idx + 1, e)?;
+                    write!(f, "\nAttempt {}: {}", idx + 1, e)?;
                 }
                 Ok(())
             }
@@ -154,7 +170,7 @@ mod test {
 
     #[test]
     fn bad_parse1() {
-        let mut err = RetryError::while_doing("convert some things");
+        let mut err: RetryError<anyhow::Error> = RetryError::in_attempt_to("convert some things");
         if let Err(e) = "maybe".parse::<bool>() {
             err.push(e);
         }
@@ -169,33 +185,54 @@ mod test {
             disp,
             "\
 Tried to convert some things 3 times, but all attempts failed.
-Attempt 1:
-provided string was not `true` or `false`
-Attempt 2:
-invalid digit found in string
-Attempt 3:
-invalid IP address syntax
-"
+Attempt 1: provided string was not `true` or `false`
+Attempt 2: invalid digit found in string
+Attempt 3: invalid IP address syntax"
         );
     }
 
     #[test]
     fn no_problems() {
-        let empty = RetryError::while_doing("immanentize the eschaton");
+        let empty: RetryError<anyhow::Error> =
+            RetryError::in_attempt_to("immanentize the eschaton");
         let disp = format!("{}", empty);
         assert_eq!(
             disp,
-            "Programming error: somebody made a RetryError without any errors!"
+            "Unable to immanentize the eschaton. (No errors given)"
         );
     }
 
     #[test]
     fn one_problem() {
-        let mut err = RetryError::while_doing("connect to torproject.org");
+        let mut err: RetryError<anyhow::Error> =
+            RetryError::in_attempt_to("connect to torproject.org");
         if let Err(e) = "the_g1b50n".parse::<std::net::IpAddr>() {
             err.push(e);
         }
         let disp = format!("{}", err);
-        assert_eq!(disp, "invalid IP address syntax");
+        assert_eq!(
+            disp,
+            "Unable to connect to torproject.org: invalid IP address syntax"
+        );
+    }
+
+    #[test]
+    fn operations() {
+        use std::num::ParseIntError;
+        let mut err: RetryError<ParseIntError> = RetryError::in_attempt_to("parse some integers");
+        assert!(err.is_empty());
+        assert_eq!(err.len(), 0);
+        err.extend(
+            vec!["not", "your", "number"]
+                .iter()
+                .filter_map(|s| s.parse::<u16>().err()),
+        );
+        assert!(!err.is_empty());
+        assert_eq!(err.len(), 3);
+
+        let cloned = err.clone();
+        for (s1, s2) in err.sources().zip(cloned.sources()) {
+            assert_eq!(s1, s2);
+        }
     }
 }

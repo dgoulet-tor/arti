@@ -4,6 +4,7 @@
 # within it.
 members = [
     "caret",
+    "retry-error",
     "tor-rtcompat",
     "tor-rtmock",
     "tor-llcrypto",
@@ -15,7 +16,6 @@ members = [
     "tor-linkspec",
     "tor-cell",
     "tor-proto",
-    "tor-retry",
     "tor-netdoc",
     "tor-consdiff",
     "tor-netdir",

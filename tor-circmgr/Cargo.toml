@@ -19,7 +19,7 @@ tor-chanmgr = { path="../tor-chanmgr", version= "*", default-features=false }
 tor-netdir = { path="../tor-netdir", version= "*" }
 tor-netdoc = { path="../tor-netdoc", version= "*" }
 tor-proto = { path="../tor-proto", version= "*" }
-tor-retry = { path="../tor-retry", version= "*" }
+retry-error = { path="../retry-error", version= "*" }
 tor-linkspec = { path="../tor-linkspec", version= "*" }
 tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
 
