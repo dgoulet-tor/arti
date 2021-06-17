@@ -203,6 +203,15 @@ where
     }
 }
 
+impl<E> IntoIterator for RetryError<E> {
+    type Item = E;
+    type IntoIter = std::vec::IntoIter<E>;
+    fn into_iter(self) -> Self::IntoIter {
+        let v: Vec<_> = self.errors.into_iter().map(|x| x.1).collect();
+        v.into_iter()
+    }
+}
+
 impl Display for Attempt {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
         match self {

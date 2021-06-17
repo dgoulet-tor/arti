@@ -1,5 +1,6 @@
 //! Declare an error type for tor-circmgr
 
+use retry_error::RetryError;
 use thiserror::Error;
 
 /// An error returned while looking up or building a circuit
@@ -12,11 +13,11 @@ pub enum Error {
 
     /// We need to have a consensus directory to build this kind of
     /// circuits, and we only got a list of fallbacks.
-    #[error("consensus directory needed")]
+    #[error("Consensus directory needed")]
     NeedConsensus,
 
     /// We were waiting on a pending circuit, but it didn't succeed.
-    #[error("Pending circuit failed to launch")]
+    #[error("Pending circuit(s) failed to launch")]
     PendingFailed,
 
     /// A circuit build took too long to finish.
@@ -30,6 +31,10 @@ pub enum Error {
     /// A request spent too long waiting for a circuit
     #[error("Spent too long waiting for a circuit to build")]
     RequestTimeout,
+
+    /// Unable to get or build a circuit, despite retrying.
+    #[error("{0}")]
+    RequestFailed(RetryError<Box<Error>>),
 
     /// An error caused by a programming issue or a failure in another
     /// library that we can't work around.

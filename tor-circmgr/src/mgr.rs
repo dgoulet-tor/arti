@@ -24,6 +24,7 @@
 
 use crate::{DirInfo, Error, Result};
 
+use retry_error::RetryError;
 use tor_rtcompat::{Runtime, SleepProviderExt};
 
 use async_trait::async_trait;
@@ -567,14 +568,20 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         let timeout_at = self.runtime.now() + wait_for_circ;
         let max_tries: usize = 32;
 
-        for n in 0..max_tries {
+        let mut retry_err =
+            RetryError /* ::<Box<Error>> */::in_attempt_to("find or build a circuit");
+
+        for n in 1..(max_tries + 1) {
             // How much time is remaining?
             let remaining = match timeout_at.checked_duration_since(self.runtime.now()) {
-                None => return Err(Error::RequestTimeout),
+                None => {
+                    retry_err.push(Error::RequestTimeout);
+                    break;
+                }
                 Some(t) => t,
             };
 
-            let err = match self.pick_action(usage, dir, true) {
+            match self.pick_action(usage, dir, true) {
                 Ok(action) => {
                     // We successfully found an action: Take that action.
                     let outcome = self
@@ -584,26 +591,30 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
 
                     match outcome {
                         Ok(Ok(circ)) => return Ok(circ),
-                        Ok(Err(e)) => e,
-                        Err(_) => return Err(Error::RequestTimeout),
+                        Ok(Err(e)) => {
+                            info!("Circuit attempt {} failed.", n);
+                            retry_err.extend(e);
+                        }
+                        Err(_) => {
+                            retry_err.push(Error::RequestTimeout);
+                            break;
+                        }
                     }
                 }
                 Err(e) => {
-                    // We couldn't take the action! This is unusual; wait
+                    // We couldn't pick the action! This is unusual; wait
                     // a little while before we try again.
+                    info!("Couldn't pick action for circuit attempt {}: {}", n, &e);
+                    retry_err.push(e);
                     let wait_for_action = Duration::from_millis(50);
                     self.runtime
                         .sleep(std::cmp::min(remaining, wait_for_action))
                         .await;
-                    e
                 }
             };
-
-            info!("Build attempt {} failed: {:?}", n + 1, err);
         }
 
-        // TODO: remember the errors using tor_retry or similar.
-        Err(crate::Error::PendingFailed)
+        Err(Error::RequestFailed(retry_err))
     }
 
     /// Make sure a circuit exists, without actually asking for it.
@@ -701,7 +712,7 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         self: Arc<Self>,
         act: Action<B>,
         usage: &<B::Spec as AbstractSpec>::Usage,
-    ) -> Result<Arc<B::Circ>> {
+    ) -> std::result::Result<Arc<B::Circ>, RetryError<Box<Error>>> {
         // Get or make a stream of futures to wait on.
         let wait_on_stream = match act {
             Action::Open(c) => return Ok(c),
@@ -742,6 +753,8 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         //      meet our interests.
         let mut incoming = streams::select_biased(wait_on_stream, additional_stream.map(Ok));
 
+        let mut retry_error = RetryError::in_attempt_to("wait for circuits");
+
         while let Some((src, id)) = incoming.next().await {
             if let Ok(Ok(ref id)) = id {
                 // Great, we have a circuit.  See if we can use it!
@@ -767,8 +780,11 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
                                 "{:?} suggested we use {:?}, but restrictions failed: {:?}",
                                 src,
                                 id,
-                                e
+                                &e
                             );
+                            if src == streams::Source::Left {
+                                retry_error.push(e)
+                            }
                             continue;
                         }
                     }
@@ -785,8 +801,7 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         // implicitly, but that's a bit confusing.)
         drop(pending_request);
 
-        // TODO: Maybe use a tor_retry to collect all of these errors
-        Err(crate::Error::PendingFailed)
+        Err(retry_error)
     }
 
     /// Actually launch a circuit in a background task.
@@ -1153,7 +1168,7 @@ mod test {
             let ports = FakeSpec::new(vec![80_u16, 443]);
             let c1 = wait_for(&rt, mgr.get_or_launch(&ports, di())).await;
 
-            assert!(matches!(c1, Err(Error::RequestTimeout)));
+            assert!(matches!(c1, Err(Error::RequestFailed(_))));
         });
     }
 
@@ -1169,7 +1184,7 @@ mod test {
             let ports = FakeSpec::new(vec![80_u16, 443]);
             let c1 = wait_for(&rt, mgr.get_or_launch(&ports, di())).await;
 
-            assert!(matches!(c1, Err(Error::PendingFailed)));
+            assert!(matches!(c1, Err(Error::RequestFailed(_))));
         });
     }
 
