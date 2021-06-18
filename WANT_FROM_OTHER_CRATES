@@ -1,20 +1,12 @@
 rust itself:
- * specialization for u8.
- * generic arrays via associated consts or whatever it's called.
- * when an enum is c-like, implement try_into for numbers.  (but see num_enum and many similar crates.)
+ * specialization.
+ * existential types.
 
-curve25519-dalek:
-* let me go from a montogmery point to a compressed edwards point.
-
-*-dalek:
-* let me use the right rand trait kthx
+dalek-crypto:
+* Upgrade to latest version of rand crate.
 
 ed25519-dalek:
-* defer signature verification without prehash mode.  A signature
-  future would be great.
-
-base64:
-* multiline support.
+* defer signature verification without prehash mode.
 
 phf:
 * much cheaper hash function
@@ -23,13 +15,13 @@ rsa:
 * get raw signed data, to allow multiple signed formats.
 
 crypto:
-* key agreement trait
+* key agreement trait (Or do they have one already?)
 
 ed25519 trait:
-* batch support.
+* batch support. (or do they have one already?)
 
 native-tls:
-* Support for RFC5705 exporters
+* Support for RFC5705 exporters where available.
 
 
 
