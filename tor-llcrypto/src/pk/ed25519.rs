@@ -175,7 +175,7 @@ impl<'de> serde::Deserialize<'de> for Ed25519Identity {
                 where
                     E: serde::de::Error,
                 {
-                    Ed25519Identity::from_bytes(&bytes)
+                    Ed25519Identity::from_bytes(bytes)
                         .ok_or_else(|| E::custom("wrong length for ed25519 public key"))
                 }
             }

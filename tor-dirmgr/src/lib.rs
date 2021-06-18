@@ -450,7 +450,7 @@ impl<R: Runtime> DirMgr<R> {
             }
             AuthCert(ids) => result.extend(
                 store
-                    .authcerts(&ids)?
+                    .authcerts(ids)?
                     .into_iter()
                     .map(|(id, c)| (DocId::AuthCert(id), DocumentText::from_string(c))),
             ),

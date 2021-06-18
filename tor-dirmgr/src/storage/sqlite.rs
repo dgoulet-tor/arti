@@ -361,7 +361,7 @@ impl SqliteStore {
         let mut stmt = self.conn.prepare(FIND_LATEST_CONSENSUS_META)?;
         let mut rows = stmt.query(params![flavor.name()])?;
         if let Some(row) = rows.next()? {
-            Ok(Some(cmeta_from_row(&row)?))
+            Ok(Some(cmeta_from_row(row)?))
         } else {
             Ok(None)
         }
@@ -434,7 +434,7 @@ impl SqliteStore {
             .prepare(FIND_CONSENSUS_AND_META_BY_DIGEST_OF_SIGNED)?;
         let mut rows = stmt.query(params![digest])?;
         if let Some(row) = rows.next()? {
-            let meta = cmeta_from_row(&row)?;
+            let meta = cmeta_from_row(row)?;
             let fname: String = row.get(5)?;
             let text = self.read_blob(&fname)?;
             Ok(Some((text, meta)))

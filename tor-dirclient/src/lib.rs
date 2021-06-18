@@ -325,7 +325,7 @@ where
         "{}: Retiring circuit because of directory failure: {}",
         &id, &error
     );
-    circ_mgr.retire_circ(&id);
+    circ_mgr.retire_circ(id);
 }
 
 /// As AsyncBufReadExt::read_until, but stops after reading `max` bytes.

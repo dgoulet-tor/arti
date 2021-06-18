@@ -341,10 +341,10 @@ impl<DM: WriteNetDir> DirState for GetCertsState<DM> {
         };
 
         let mut newcerts = Vec::new();
-        for cert in AuthCert::parse_multiple(&text) {
+        for cert in AuthCert::parse_multiple(text) {
             if let Ok(parsed) = cert {
                 let s = parsed
-                    .within(&text)
+                    .within(text)
                     .expect("Certificate was not in input as expected");
                 if let Ok(wellsigned) = parsed.check_signature() {
                     if let Ok(timely) = wellsigned.check_valid_now() {
@@ -583,7 +583,7 @@ impl<DM: WriteNetDir> DirState for GetMicrodescsState<DM> {
         let mut new_mds = Vec::new();
         for anno in MicrodescReader::new(text, AllowAnnotations::AnnotationsNotAllowed).flatten() {
             let txt = anno
-                .within(&text)
+                .within(text)
                 .expect("annotation not from within text as expected");
             let md = anno.into_microdesc();
             if !requested.contains(md.digest()) {

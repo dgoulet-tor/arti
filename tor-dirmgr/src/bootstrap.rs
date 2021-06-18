@@ -93,7 +93,7 @@ async fn load_once<R: Runtime>(
     if missing.is_empty() {
         Ok(false)
     } else {
-        let documents = load_all(&dirmgr, missing).await?;
+        let documents = load_all(dirmgr, missing).await?;
         state.add_from_cache(documents)
     }
 }

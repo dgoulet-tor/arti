@@ -279,7 +279,7 @@ impl MdReceiver for PartialNetDir {
 impl NetDir {
     /// Return the declared lifetime of this NetDir.
     pub fn lifetime(&self) -> &netstatus::Lifetime {
-        &self.consensus.lifetime()
+        self.consensus.lifetime()
     }
 
     /// Construct a (possibly invalid) Relay object from a routerstatus and its
@@ -346,7 +346,7 @@ impl NetDir {
             if !usable(&r) {
                 continue;
             }
-            let w = self.weights.weight_rs_for_role(&r.rs, role);
+            let w = self.weights.weight_rs_for_role(r.rs, role);
             total_weight += w;
             if r.is_usable() {
                 have_weight += w
@@ -404,7 +404,7 @@ impl NetDir {
     {
         pick::pick_weighted(rng, self.relays(), |r| {
             if usable(r) {
-                self.weights.weight_rs_for_role(&r.rs, role)
+                self.weights.weight_rs_for_role(r.rs, role)
             } else {
                 0
             }

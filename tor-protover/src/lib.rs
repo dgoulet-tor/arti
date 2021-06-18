@@ -121,7 +121,7 @@ impl Protocol {
     fn to_str(&self) -> &str {
         match self {
             Protocol::Proto(k) => k.to_str().unwrap_or("<bug>"),
-            Protocol::Unrecognized(s) => &s,
+            Protocol::Unrecognized(s) => s,
         }
     }
 }
@@ -247,7 +247,7 @@ impl Protocols {
                 if self
                     .unrecognized
                     .iter()
-                    .any(|ent| ent.proto.is_unrecognized(&s))
+                    .any(|ent| ent.proto.is_unrecognized(s))
                 {
                     return Err(ParseError::Duplicate);
                 }

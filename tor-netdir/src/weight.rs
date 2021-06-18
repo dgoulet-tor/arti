@@ -216,7 +216,7 @@ impl WeightSet {
     /// actually matches the given role.  For example, if `role` is Guard
     /// we don't check whether or not `rs` actually has the Guard flag.
     pub(crate) fn weight_rs_for_role(&self, rs: &MdConsensusRouterStatus, role: WeightRole) -> u64 {
-        self.weight_bw_for_role(WeightKind::for_rs(&rs), rs.weight(), role)
+        self.weight_bw_for_role(WeightKind::for_rs(rs), rs.weight(), role)
     }
 
     /// Find the 64-bit weight to report for a relay of `kind` whose weight in

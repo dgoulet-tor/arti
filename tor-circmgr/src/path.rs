@@ -157,13 +157,13 @@ impl OwnedPath {
 
         match self {
             OwnedPath::ChannelOnly(_) => {
-                let circ = pending_circ.create_firsthop_fast(rng, &params).await?;
+                let circ = pending_circ.create_firsthop_fast(rng, params).await?;
                 Ok(circ)
             }
             OwnedPath::Normal(p) => {
                 assert!(!p.is_empty());
                 let circ = pending_circ
-                    .create_firsthop_ntor(rng, &p[0], &params)
+                    .create_firsthop_ntor(rng, &p[0], params)
                     .await?;
                 for relay in p[1..].iter() {
                     circ.extend_ntor(rng, relay, params).await?;

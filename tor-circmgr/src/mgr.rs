@@ -586,7 +586,7 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
                     // We successfully found an action: Take that action.
                     let outcome = self
                         .runtime
-                        .timeout(remaining, Arc::clone(&self).take_action(action, usage))
+                        .timeout(remaining, Arc::clone(self).take_action(action, usage))
                         .await;
 
                     match outcome {
@@ -759,7 +759,7 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
             if let Ok(Ok(ref id)) = id {
                 // Great, we have a circuit.  See if we can use it!
                 let mut list = self.circs.lock().expect("poisoned lock");
-                if let Some(ent) = list.get_open_mut(&id) {
+                if let Some(ent) = list.get_open_mut(id) {
                     let now = self.runtime.now();
                     match ent.restrict_mut(usage, now) {
                         Ok(()) => {

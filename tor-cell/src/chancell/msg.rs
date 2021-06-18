@@ -640,7 +640,7 @@ impl Body for Netinfo {
         assert!(self.my_addr.len() <= u8::MAX as usize);
         w.write_u8(self.my_addr.len() as u8);
         for addr in self.my_addr.iter() {
-            enc_one_netinfo_addr(w, &addr);
+            enc_one_netinfo_addr(w, addr);
         }
     }
 }
@@ -876,7 +876,7 @@ impl Body for Certs {
         assert!(self.certs.len() <= u8::MAX as usize);
         w.write_u8(self.certs.len() as u8);
         for c in self.certs.iter() {
-            enc_one_tor_cert(w, &c)
+            enc_one_tor_cert(w, c)
         }
     }
 }

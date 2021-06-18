@@ -58,7 +58,7 @@ impl<'a> ExitPathBuilder<'a> {
             DirInfo::Fallbacks(_) => return Err(Error::NeedConsensus),
             DirInfo::Directory(d) => d,
         };
-        let exit = self.pick_exit(rng, &netdir)?;
+        let exit = self.pick_exit(rng, netdir)?;
 
         let middle = netdir
             .pick_relay(rng, WeightRole::Middle, |r| !r.in_same_family(&exit))

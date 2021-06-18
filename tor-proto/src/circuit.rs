@@ -277,7 +277,7 @@ impl ClientCirc {
     {
         use tor_cell::relaycell::msg::{Body, Extend2};
         // Perform the first part of the cryptographic handshake
-        let (state, msg) = H::client1(rng, &key)?;
+        let (state, msg) = H::client1(rng, key)?;
         // Cloning linkspecs is only necessary because of the log
         // below. Would be nice to fix that.
         let extend_msg = Extend2::new(linkspecs.clone(), handshake_id, msg);
@@ -779,7 +779,7 @@ impl ClientCircImpl {
             // This blocks if the send window is empty.
             self.hops[Into::<usize>::into(hop)]
                 .sendwindow
-                .take(&tag)
+                .take(tag)
                 .await?;
         }
         self.send_msg(msg).await
@@ -886,7 +886,7 @@ impl PendingClientCirc {
         // a ClientCirc on success.
 
         let PendingClientCirc { circ, recvcreated } = self;
-        let (state, msg) = H::client1(rng, &key)?;
+        let (state, msg) = H::client1(rng, key)?;
         let create_cell = wrap.to_chanmsg(msg);
         let unique_id = {
             let mut c = circ.c.lock().await;

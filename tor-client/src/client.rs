@@ -155,7 +155,7 @@ impl<R: Runtime> TorClient<R> {
         // TODO: make this configurable.
         let stream_timeout = Duration::new(10, 0);
 
-        let stream_future = circ.begin_stream(&addr, port, Some(flags.begin_flags()));
+        let stream_future = circ.begin_stream(addr, port, Some(flags.begin_flags()));
         let stream = self
             .runtime
             .timeout(stream_timeout, stream_future)

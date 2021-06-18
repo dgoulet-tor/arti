@@ -85,7 +85,7 @@ impl<'a, K: Keyword> TokVal<'a, K> {
     fn last(&self) -> Option<&Item<'a, K>> {
         match self {
             TokVal::None => None,
-            TokVal::Some([t]) => Some(&t),
+            TokVal::Some([t]) => Some(t),
             TokVal::Multi(v) => Some(&v[v.len() - 1]),
         }
     }

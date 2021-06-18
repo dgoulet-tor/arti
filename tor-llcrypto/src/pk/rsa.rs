@@ -107,7 +107,7 @@ impl<'de> serde::Deserialize<'de> for RsaIdentity {
                 where
                     E: serde::de::Error,
                 {
-                    RsaIdentity::from_bytes(&bytes)
+                    RsaIdentity::from_bytes(bytes)
                         .ok_or_else(|| E::custom("wrong length for RSA identity"))
                 }
             }

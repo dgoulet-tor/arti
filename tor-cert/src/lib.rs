@@ -220,7 +220,7 @@ impl CertifiedKey {
     /// Otherwise, return None.
     pub fn as_ed25519(&self) -> Option<&ed25519::PublicKey> {
         match self {
-            CertifiedKey::Ed25519(k) => Some(&k),
+            CertifiedKey::Ed25519(k) => Some(k),
             _ => None,
         }
     }
