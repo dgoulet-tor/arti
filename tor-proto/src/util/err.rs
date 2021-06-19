@@ -76,6 +76,9 @@ pub enum Error {
     /// Channel does not match target
     #[error("channel mismatch: {0}")]
     ChanMismatch(String),
+    /// Tried to configure an impossible value
+    #[error("bad configuration value: {0}")]
+    BadConfig(String),
 }
 
 impl From<tor_cell::Error> for Error {
@@ -114,7 +117,7 @@ impl From<Error> for std::io::Error {
             BytesErr(_) | MissingKey | BadCellAuth | BadHandshake | ChanProto(_) | CircProto(_)
             | CellErr(_) | ChanMismatch(_) | StreamProto(_) => ErrorKind::InvalidData,
 
-            InternalError(_) | IdRangeFull | CircExtend(_) => ErrorKind::Other,
+            InternalError(_) | IdRangeFull | CircExtend(_) | BadConfig(_) => ErrorKind::Other,
         };
         std::io::Error::new(kind, err)
     }

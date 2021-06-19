@@ -252,21 +252,26 @@ impl Channel {
         &self.ed25519_id
     }
 
+    /// Return the (legacy) RSA identity for the peer of this channel.
+    pub fn peer_rsa_id(&self) -> &RsaIdentity {
+        &self.rsa_id
+    }
+
     /// Return an error if this channel is somehow mismatched with the
     /// given target.
     pub fn check_match<T: ChanTarget + ?Sized>(&self, target: &T) -> Result<()> {
-        if &self.ed25519_id != target.ed_identity() {
+        if self.peer_ed25519_id() != target.ed_identity() {
             return Err(Error::ChanMismatch(format!(
                 "Identity {} does not match target {}",
-                self.ed25519_id,
+                self.peer_ed25519_id(),
                 target.ed_identity()
             )));
         }
 
-        if &self.rsa_id != target.rsa_identity() {
+        if self.peer_rsa_id() != target.rsa_identity() {
             return Err(Error::ChanMismatch(format!(
                 "Identity {} does not match target {}",
-                self.rsa_id,
+                self.peer_rsa_id(),
                 target.rsa_identity()
             )));
         }
@@ -279,7 +284,8 @@ impl Channel {
         self.closed.load(Ordering::SeqCst)
     }
 
-    /// Check whether a cell type is acceptable on an open client channel.
+    /// Check whether a cell type is permissible to be _sent_ on an
+    /// open client channel.
     fn check_cell(&self, cell: &ChanCell) -> Result<()> {
         use msg::ChanMsg::*;
         let msg = cell.msg();
@@ -568,5 +574,12 @@ pub(crate) mod test {
         assert!(chan.check_match(&t1).is_ok());
         assert!(chan.check_match(&t2).is_err());
         assert!(chan.check_match(&t3).is_err());
+    }
+
+    #[test]
+    fn unique_id() {
+        let (ch1, _handle1) = fake_channel();
+        let (ch2, _handle2) = fake_channel();
+        assert!(ch1.unique_id() != ch2.unique_id());
     }
 }

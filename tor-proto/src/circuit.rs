@@ -75,7 +75,7 @@ use std::sync::Arc;
 
 use rand::{thread_rng, CryptoRng, Rng};
 
-use log::{debug, trace, warn};
+use log::{debug, trace};
 
 /// A circuit that we have constructed over the Tor network.
 pub struct ClientCirc {
@@ -131,14 +131,17 @@ impl Default for CircParameters {
 
 impl CircParameters {
     /// Override the default initial send window for these parameters.
-    /// Ignores any value over 1000.
+    /// Gives an error on any value above 1000.
     ///
     /// You should probably not call this.
-    pub fn set_initial_send_window(&mut self, v: u16) {
+    pub fn set_initial_send_window(&mut self, v: u16) -> Result<()> {
         if v <= 1000 {
             self.initial_send_window = v;
+            Ok(())
         } else {
-            warn!("internal error: bad value {}", v);
+            Err(Error::BadConfig(
+                "Tried to set an initial send window over 1000".into(),
+            ))
         }
     }
     /// Override the default decision about whether to use ed25519
@@ -1786,5 +1789,21 @@ mod test {
         let (_, _) = futures::join!(reply_with_sendme_fut, reactor_fut);
 
         // TODO: check that the circuit is shut down too
+    }
+
+    #[test]
+    fn basic_params() {
+        use super::CircParameters;
+        let mut p = CircParameters::default();
+        assert_eq!(p.initial_send_window, 1000);
+        assert!(p.extend_by_ed25519_id);
+
+        assert!(p.set_initial_send_window(500).is_ok());
+        p.set_extend_by_ed25519_id(false);
+        assert_eq!(p.initial_send_window, 500);
+        assert!(!p.extend_by_ed25519_id);
+
+        assert!(p.set_initial_send_window(9000).is_err());
+        assert_eq!(p.initial_send_window, 500);
     }
 }

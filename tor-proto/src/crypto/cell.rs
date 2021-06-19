@@ -427,6 +427,9 @@ mod test {
         let pair = Tor1RelayCrypto::construct(KGen::new(seed3.clone().into())).unwrap();
         add_layers(&mut cc_out, &mut cc_in, pair);
 
+        assert_eq!(cc_in.n_layers(), 3);
+        assert_eq!(cc_out.n_layers(), 3);
+
         let mut r1 = Tor1RelayCrypto::construct(KGen::new(seed1.into())).unwrap();
         let mut r2 = Tor1RelayCrypto::construct(KGen::new(seed2.into())).unwrap();
         let mut r3 = Tor1RelayCrypto::construct(KGen::new(seed3.into())).unwrap();
@@ -439,7 +442,7 @@ mod test {
             rng.fill_bytes(&mut cell_orig[..]);
             (&mut cell).copy_from_slice(&cell_orig[..]);
             let mut cell = cell.into();
-            let _tag = cc_out.encrypt(&mut cell, 2.into());
+            let _tag = cc_out.encrypt(&mut cell, 2.into()).unwrap();
             assert_ne!(&cell.as_ref()[9..], &cell_orig.as_ref()[9..]);
             assert_eq!(false, r1.decrypt_outbound(&mut cell));
             assert_eq!(false, r2.decrypt_outbound(&mut cell));
@@ -463,6 +466,20 @@ mod test {
             assert_eq!(&cell.as_ref()[9..], &cell_orig.as_ref()[9..]);
 
             // TODO: Test tag somehow.
+        }
+
+        // Try a failure: sending a cell to a nonexistent hop.
+        {
+            let mut cell = [0_u8; 509].into();
+            let err = cc_out.encrypt(&mut cell, 10.into());
+            assert!(matches!(err, Err(Error::NoSuchHop)));
+        }
+
+        // Try a failure: A junk cell with no correct auth from any layer.
+        {
+            let mut cell = [0_u8; 509].into();
+            let err = cc_in.decrypt(&mut cell);
+            assert!(matches!(err, Err(Error::BadCellAuth)));
         }
     }
 

@@ -48,6 +48,7 @@ use tor_netdir::{fallback::FallbackDir, NetDir};
 use tor_proto::circuit::{CircParameters, ClientCirc, UniqId};
 use tor_rtcompat::Runtime;
 
+use log::warn;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -109,7 +110,9 @@ impl<'a> DirInfo<'a> {
         /// code.
         fn from_netparams(inp: &NetParameters) -> CircParameters {
             let mut p = CircParameters::default();
-            p.set_initial_send_window(inp.circuit_window.get() as u16);
+            if let Err(e) = p.set_initial_send_window(inp.circuit_window.get() as u16) {
+                warn!("Invalid parameter in directory: {}", e);
+            }
             p.set_extend_by_ed25519_id(inp.extend_by_ed25519_id.into());
             p
         }
