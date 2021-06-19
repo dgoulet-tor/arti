@@ -144,12 +144,24 @@ impl CircParameters {
             ))
         }
     }
+
+    /// Return the initial send window as set in this parameter set.
+    pub fn initial_send_window(&self) -> u16 {
+        self.initial_send_window
+    }
+
     /// Override the default decision about whether to use ed25519
     /// identities in outgoing EXTEND2 cells.
     ///
     /// You should probably not call this.
     pub fn set_extend_by_ed25519_id(&mut self, v: bool) {
         self.extend_by_ed25519_id = v;
+    }
+
+    /// Return true if we're configured to extend by ed25519 ID; false
+    /// otherwise.
+    pub fn extend_by_ed25519_id(&self) -> bool {
+        self.extend_by_ed25519_id
     }
 }
 
@@ -407,7 +419,7 @@ impl ClientCirc {
 
         {
             let mut c = self.c.lock().await;
-            let hop = CircHop::new(supports_flowctrl_1, params.initial_send_window);
+            let hop = CircHop::new(supports_flowctrl_1, params.initial_send_window());
             c.hops.push(hop);
             c.crypto_out.add_layer(fwd);
         }
@@ -435,7 +447,7 @@ impl ClientCirc {
             pk: *target.ntor_onion_key(),
         };
         let mut linkspecs = target.linkspecs();
-        if !params.extend_by_ed25519_id {
+        if !params.extend_by_ed25519_id() {
             linkspecs.retain(|ls| !matches!(ls, LinkSpec::Ed25519Id(_)));
         }
         // FlowCtrl=1 means that this hop supports authenticated SENDMEs
@@ -1795,15 +1807,15 @@ mod test {
     fn basic_params() {
         use super::CircParameters;
         let mut p = CircParameters::default();
-        assert_eq!(p.initial_send_window, 1000);
-        assert!(p.extend_by_ed25519_id);
+        assert_eq!(p.initial_send_window(), 1000);
+        assert!(p.extend_by_ed25519_id());
 
         assert!(p.set_initial_send_window(500).is_ok());
         p.set_extend_by_ed25519_id(false);
-        assert_eq!(p.initial_send_window, 500);
-        assert!(!p.extend_by_ed25519_id);
+        assert_eq!(p.initial_send_window(), 500);
+        assert!(!p.extend_by_ed25519_id());
 
         assert!(p.set_initial_send_window(9000).is_err());
-        assert_eq!(p.initial_send_window, 500);
+        assert_eq!(p.initial_send_window(), 500);
     }
 }

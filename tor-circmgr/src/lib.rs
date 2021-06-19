@@ -205,3 +205,34 @@ impl<R: Runtime> CircMgr<R> {
         self.mgr.expire_dirty_before(cutoff);
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn get_params() {
+        use tor_netdir::{MdReceiver, PartialNetDir};
+        use tor_netdoc::doc::netstatus::NetParams;
+        // If it's just fallbackdir, we get the default parameters.
+        let di: DirInfo<'_> = (&[][..]).into();
+
+        let p1 = di.circ_params();
+        assert_eq!(p1.extend_by_ed25519_id(), false);
+        assert_eq!(p1.initial_send_window(), 1000);
+
+        let (consensus, microdescs) = tor_netdir::testnet::construct_network();
+        let mut params = NetParams::default();
+        params.set("circwindow".into(), 100);
+        params.set("ExtendByEd25519ID".into(), 1);
+        let mut dir = PartialNetDir::new(consensus, Some(&params));
+        for m in microdescs {
+            dir.add_microdesc(m);
+        }
+        let netdir = dir.unwrap_if_sufficient().unwrap();
+        let di: DirInfo<'_> = (&netdir).into();
+        let p2 = di.circ_params();
+        assert_eq!(p2.initial_send_window(), 100);
+        assert_eq!(p2.extend_by_ed25519_id(), true);
+    }
+}
