@@ -1,6 +1,7 @@
 rust itself:
  * specialization.
  * existential types.
+ * async functions in traits (without #[async_trait]).
 
 dalek-crypto:
 * Upgrade to latest version of rand crate.
