@@ -913,7 +913,7 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
 mod test {
     use super::*;
     use crate::Error;
-    use std::collections::HashSet;
+    use std::collections::BTreeSet;
     use std::sync::atomic::{self, AtomicUsize};
     use tor_rtcompat::SleepProvider;
     use tor_rtmock::MockSleepRuntime;
@@ -946,9 +946,9 @@ mod test {
         }
     }
 
-    #[derive(Clone, Debug, Eq, PartialEq)]
+    #[derive(Clone, Debug, Eq, PartialEq, Hash)]
     struct FakeSpec {
-        ports: HashSet<u16>,
+        ports: BTreeSet<u16>,
         isolation_group: Option<u8>,
     }
 
@@ -1002,19 +1002,23 @@ mod test {
     #[derive(Debug, Clone)]
     struct FakePlan {
         spec: FakeSpec,
+        op: FakeOp,
     }
 
     #[derive(Debug)]
     struct FakeBuilder<RT: Runtime> {
         runtime: RT,
-        script: sync::Mutex<Vec<FakeOp>>,
+        script: sync::Mutex<HashMap<FakeSpec, Vec<FakeOp>>>,
     }
 
     #[derive(Debug, Clone)]
     enum FakeOp {
         Succeed,
         Fail,
+        Delay(Duration),
         Timeout,
+        NoPlan,
+        WrongSpec(FakeSpec),
     }
 
     const FAKE_CIRC_DELAY: Duration = Duration::from_millis(30);
@@ -1032,37 +1036,62 @@ mod test {
         type Plan = FakePlan;
 
         fn plan_circuit(&self, spec: &FakeSpec, _dir: DirInfo<'_>) -> Result<(FakePlan, FakeSpec)> {
-            let plan = FakePlan { spec: spec.clone() };
+            let next_op = self.next_op(spec);
+            if matches!(next_op, FakeOp::NoPlan) {
+                return Err(Error::NoRelays("No relays for you".into()));
+            }
+            let plan = FakePlan {
+                spec: spec.clone(),
+                op: next_op,
+            };
             Ok((plan, spec.clone()))
         }
 
         async fn build_circuit(&self, plan: FakePlan) -> Result<(FakeSpec, Arc<FakeCirc>)> {
-            let op = {
-                let mut s = self.script.lock().unwrap();
-                s.pop().unwrap_or(FakeOp::Succeed)
-            };
+            let op = plan.op;
             self.runtime.sleep(FAKE_CIRC_DELAY).await;
             match op {
                 FakeOp::Succeed => Ok((plan.spec, Arc::new(FakeCirc { id: FakeId::next() }))),
+                FakeOp::WrongSpec(s) => Ok((s, Arc::new(FakeCirc { id: FakeId::next() }))),
                 FakeOp::Fail => Err(Error::PendingFailed),
+                FakeOp::Delay(d) => {
+                    self.runtime.sleep(d).await;
+                    Err(Error::PendingFailed)
+                }
                 FakeOp::Timeout => {
                     let () = futures::future::pending().await;
                     unreachable!()
                 }
+                FakeOp::NoPlan => unreachable!(),
             }
         }
     }
 
     impl<RT: Runtime> FakeBuilder<RT> {
-        fn new<I>(rt: &RT, v: I) -> Self
+        fn new(rt: &RT) -> Self {
+            FakeBuilder {
+                runtime: rt.clone(),
+                script: sync::Mutex::new(HashMap::new()),
+            }
+        }
+
+        /// set a plan for a given FakeSpec.
+        fn set<I>(&self, spec: FakeSpec, v: I)
         where
             I: IntoIterator<Item = FakeOp>,
         {
             let mut ops: Vec<_> = v.into_iter().collect();
             ops.reverse();
-            FakeBuilder {
-                runtime: rt.clone(),
-                script: sync::Mutex::new(ops),
+            let mut lst = self.script.lock().unwrap();
+            lst.insert(spec, ops);
+        }
+
+        fn next_op(&self, spec: &FakeSpec) -> FakeOp {
+            let mut script = self.script.lock().unwrap();
+            let mut s = script.get_mut(spec);
+            match s {
+                None => FakeOp::Succeed,
+                Some(ref mut lst) => lst.pop().unwrap_or(FakeOp::Succeed),
             }
         }
     }
@@ -1102,7 +1131,7 @@ mod test {
         tor_rtcompat::test_with_runtime(|rt| async {
             let rt = MockSleepRuntime::new(rt);
 
-            let builder = FakeBuilder::new(&rt, vec![]);
+            let builder = FakeBuilder::new(&rt);
 
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
 
@@ -1160,12 +1189,50 @@ mod test {
         tor_rtcompat::test_with_runtime(|rt| async {
             let rt = MockSleepRuntime::new(rt);
 
+            let ports = FakeSpec::new(vec![80_u16, 443]);
+
             // This will fail once, and then completely time out.  The
             // result will be a failure.
-            let builder = FakeBuilder::new(&rt, vec![FakeOp::Fail, FakeOp::Timeout]);
+            let builder = FakeBuilder::new(&rt);
+            builder.set(ports.clone(), vec![FakeOp::Fail, FakeOp::Timeout]);
 
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let c1 = wait_for(&rt, mgr.get_or_launch(&ports, di())).await;
+
+            assert!(matches!(c1, Err(Error::RequestFailed(_))));
+
+            // Now try a more complicated case: we'll try to get things so
+            // that we wait for a little over our predicted time because
+            // of our wait-for-next-action logic.
             let ports = FakeSpec::new(vec![80_u16, 443]);
+            let builder = FakeBuilder::new(&rt);
+            builder.set(
+                ports.clone(),
+                vec![
+                    FakeOp::Delay(Duration::from_millis(60_000 - 25)),
+                    FakeOp::NoPlan,
+                ],
+            );
+
+            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let c1 = wait_for(&rt, mgr.get_or_launch(&ports, di())).await;
+
+            assert!(matches!(c1, Err(Error::RequestFailed(_))));
+        });
+    }
+
+    #[test]
+    fn request_unplannable() {
+        tor_rtcompat::test_with_runtime(|rt| async {
+            let rt = MockSleepRuntime::new(rt);
+
+            let ports = FakeSpec::new(vec![80_u16, 443]);
+
+            // This will fail a the planning stages, a lot.
+            let builder = FakeBuilder::new(&rt);
+            builder.set(ports.clone(), vec![FakeOp::NoPlan; 2000]);
+
+            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
             let c1 = wait_for(&rt, mgr.get_or_launch(&ports, di())).await;
 
             assert!(matches!(c1, Err(Error::RequestFailed(_))));
@@ -1176,12 +1243,13 @@ mod test {
     fn request_fails_too_much() {
         tor_rtcompat::test_with_runtime(|rt| async {
             let rt = MockSleepRuntime::new(rt);
+            let ports = FakeSpec::new(vec![80_u16, 443]);
 
             // This will fail 1000 times, which is above the retry limit.
-            let builder = FakeBuilder::new(&rt, vec![FakeOp::Fail; 1000]);
+            let builder = FakeBuilder::new(&rt);
+            builder.set(ports.clone(), vec![FakeOp::Fail; 1000]);
 
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
-            let ports = FakeSpec::new(vec![80_u16, 443]);
             let c1 = wait_for(&rt, mgr.get_or_launch(&ports, di())).await;
 
             assert!(matches!(c1, Err(Error::RequestFailed(_))));
@@ -1189,16 +1257,40 @@ mod test {
     }
 
     #[test]
+    fn request_wrong_spec() {
+        tor_rtcompat::test_with_runtime(|rt| async {
+            let rt = MockSleepRuntime::new(rt);
+            let ports = FakeSpec::new(vec![80_u16, 443]);
+
+            // The first time this is called, it will build a circuit
+            // with the wrong spec.  (A circuit biudler should never
+            // actually _do_ that, but it's something we code for.)
+            let builder = FakeBuilder::new(&rt);
+            builder.set(
+                ports.clone(),
+                vec![FakeOp::WrongSpec(FakeSpec::new(vec![22_u16]))],
+            );
+
+            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let c1 = wait_for(&rt, mgr.get_or_launch(&ports, di())).await;
+
+            assert!(matches!(c1, Ok(_)));
+        });
+    }
+
+    #[test]
     fn request_retried() {
         tor_rtcompat::test_with_runtime(|rt| async {
             let rt = MockSleepRuntime::new(rt);
+            let ports = FakeSpec::new(vec![80_u16, 443]);
 
             // This will fail twice, and then succeed. The result will be
             // a success.
-            let builder = FakeBuilder::new(&rt, vec![FakeOp::Fail, FakeOp::Fail]);
+            let builder = FakeBuilder::new(&rt);
+            builder.set(ports.clone(), vec![FakeOp::Fail, FakeOp::Fail]);
 
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
-            let ports = FakeSpec::new(vec![80_u16, 443]);
+
             let (c1, c2) = wait_for(
                 &rt,
                 futures::future::join(
@@ -1219,7 +1311,7 @@ mod test {
     fn isolated() {
         tor_rtcompat::test_with_runtime(|rt| async {
             let rt = MockSleepRuntime::new(rt);
-            let builder = FakeBuilder::new(&rt, vec![]);
+            let builder = FakeBuilder::new(&rt);
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
 
             let ports = FakeSpec::new(vec![443_u16]);
@@ -1282,34 +1374,28 @@ mod test {
             let ports1 = FakeSpec::new(vec![80_u16]);
             let ports2 = FakeSpec::new(vec![80_u16, 443]);
 
-            // XXXX Sometimes c2 gets launched before c1, even in spite of
-            // the call to sleep() here.  That's why I'm trying more than
-            // once.
-            for _ in 1_usize..30 {
-                let builder = FakeBuilder::new(&rt, vec![FakeOp::Timeout]);
+            let builder = FakeBuilder::new(&rt);
+            builder.set(ports1.clone(), vec![FakeOp::Timeout]);
 
-                let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
-                // Note that ports2 will be wider than ports1, so the second
-                // request will have to launch a new circuit.
+            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            // Note that ports2 will be wider than ports1, so the second
+            // request will have to launch a new circuit.
 
-                let (c1, c2) = wait_for(
-                    &rt,
-                    futures::future::join(mgr.get_or_launch(&ports1, di()), async {
-                        rt.sleep(Duration::from_millis(100)).await;
-                        mgr.get_or_launch(&ports2, di()).await
-                    }),
-                )
-                .await;
+            let (c1, c2) = wait_for(
+                &rt,
+                futures::future::join(mgr.get_or_launch(&ports1, di()), async {
+                    rt.sleep(Duration::from_millis(100)).await;
+                    mgr.get_or_launch(&ports2, di()).await
+                }),
+            )
+            .await;
 
-                if c2.is_ok() {
-                    let c1 = c1.unwrap();
-                    let c2 = c2.unwrap();
-                    assert!(Arc::ptr_eq(&c1, &c2));
-                    return;
-                }
+            if c2.is_ok() {
+                let c1 = c1.unwrap();
+                let c2 = c2.unwrap();
+                assert!(Arc::ptr_eq(&c1, &c2));
+                return;
             }
-
-            panic!("The circuits never finished in the order we wanted.");
         });
     }
 
@@ -1320,7 +1406,7 @@ mod test {
             // sure that a circuit gets built, and then launch two
             // other circuits that will use it.
             let rt = MockSleepRuntime::new(rt);
-            let builder = FakeBuilder::new(&rt, vec![]);
+            let builder = FakeBuilder::new(&rt);
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
 
             let ports1 = FakeSpec::new(vec![80_u16, 443]);
@@ -1359,7 +1445,7 @@ mod test {
             // Now let's make some circuits -- one dirty, one clean, and
             // make sure that one expires and one doesn't.
             let rt = MockSleepRuntime::new(rt);
-            let builder = FakeBuilder::new(&rt, vec![]);
+            let builder = FakeBuilder::new(&rt);
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
 
             let imap = FakeSpec::new(vec![993_u16]);
