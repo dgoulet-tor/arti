@@ -118,17 +118,20 @@ impl TargetCircUsage {
     }
 }
 
-impl SupportedCircUsage {
-    /// Return true if this usage "contains" `target` -- in other words,
-    /// if any circuit built for this purpose is also usable for the
-    /// purpose of `target`.
-    pub(crate) fn contains(&self, target: &TargetCircUsage) -> bool {
+impl crate::mgr::AbstractSpec for SupportedCircUsage {
+    type Usage = TargetCircUsage;
+
+    fn supports(&self, target: &TargetCircUsage) -> bool {
         use SupportedCircUsage::*;
         match (self, target) {
             (Dir, TargetCircUsage::Dir) => true,
             (Exit(p1), TargetCircUsage::Exit(p2)) => p2.iter().all(|port| p1.allows_port(*port)),
             (_, _) => false,
         }
+    }
+
+    fn restrict_mut(&mut self, _usage: &TargetCircUsage) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -180,6 +183,7 @@ mod test {
 
     #[test]
     fn usage_ops() {
+        use crate::mgr::AbstractSpec;
         // Make an exit-policy object that allows web on IPv4 and
         // smtp on IPv6.
         let policy = ExitPolicy {
@@ -196,17 +200,18 @@ mod test {
             TargetCircUsage::Exit(vec![TargetPort::ipv4(80), TargetPort::ipv6(23)]);
         let targ_999_v6 = TargetCircUsage::Exit(vec![TargetPort::ipv6(999)]);
 
-        assert!(supp_dir.contains(&targ_dir));
-        assert!(!supp_dir.contains(&targ_80_v4));
-        assert!(!supp_exit.contains(&targ_dir));
-        assert!(supp_exit.contains(&targ_80_v4));
-        assert!(supp_exit.contains(&targ_80_23_mixed));
-        assert!(!supp_exit.contains(&targ_80_23_v4));
-        assert!(!supp_exit.contains(&targ_999_v6));
+        assert!(supp_dir.supports(&targ_dir));
+        assert!(!supp_dir.supports(&targ_80_v4));
+        assert!(!supp_exit.supports(&targ_dir));
+        assert!(supp_exit.supports(&targ_80_v4));
+        assert!(supp_exit.supports(&targ_80_23_mixed));
+        assert!(!supp_exit.supports(&targ_80_23_v4));
+        assert!(!supp_exit.supports(&targ_999_v6));
     }
 
     #[test]
     fn buildpath() {
+        use crate::mgr::AbstractSpec;
         let mut rng = rand::thread_rng();
         let netdir = testnet::construct_netdir();
         let di = (&netdir).into();
@@ -221,7 +226,7 @@ mod test {
         let exit_usage = TargetCircUsage::Exit(vec![TargetPort::ipv4(995)]);
         let (p_exit, u_exit) = exit_usage.build_path(&mut rng, di).unwrap();
         assert!(matches!(u_exit, SupportedCircUsage::Exit(_)));
-        assert!(u_exit.contains(&exit_usage));
+        assert!(u_exit.supports(&exit_usage));
         assert_eq!(p_exit.len(), 3);
     }
 }

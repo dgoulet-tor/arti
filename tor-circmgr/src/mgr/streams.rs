@@ -183,10 +183,15 @@ mod test {
         snd_r.send(5_usize).await.unwrap();
         snd_l.send(3_usize).await.unwrap();
 
+        assert!(!s.is_terminated());
+        drop(snd_r);
+
         assert_eq!(s.next().await, Some((L, 3)));
         assert_eq!(s.next().await, Some((R, 5)));
 
         drop(snd_l);
         assert_eq!(s.next().await, None);
+
+        assert!(s.is_terminated());
     }
 }
