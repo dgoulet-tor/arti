@@ -46,12 +46,12 @@ pub(crate) enum ChannelState<C> {
 
 impl<C> ChannelState<C> {
     /// Create a new shallow copy of this ChannelState.
-    fn clone_ref(&self) -> Self {
+    fn clone_ref(&self) -> Result<Self> {
         use ChannelState::*;
         match self {
-            Open(chan) => Open(Arc::clone(chan)),
-            Building(pending) => Building(pending.clone()),
-            Poisoned(_) => panic!(),
+            Open(chan) => Ok(Open(Arc::clone(chan))),
+            Building(pending) => Ok(Building(pending.clone())),
+            Poisoned(_) => Err(Error::Internal("Poisoned state in channel map")),
         }
     }
 
@@ -95,7 +95,7 @@ impl<C: AbstractChannel> ChannelMap<C> {
     /// Return the channel state for the given identity, if any.
     pub(crate) fn get(&self, ident: &C::Ident) -> Result<Option<ChannelState<C>>> {
         let map = self.channels.lock()?;
-        Ok(map.get(ident).map(ChannelState::clone_ref))
+        map.get(ident).map(ChannelState::clone_ref).transpose()
     }
 
     /// Replace the channel state for `ident` with `newval`, and return the
@@ -120,7 +120,7 @@ impl<C: AbstractChannel> ChannelMap<C> {
     pub(crate) fn remove_unusable(&self) -> Result<()> {
         let mut map = self.channels.lock()?;
         map.retain(|_, state| match state {
-            ChannelState::Poisoned(_) => panic!(),
+            ChannelState::Poisoned(_) => false,
             ChannelState::Open(ch) => ch.is_usable(),
             ChannelState::Building(_) => true,
         });
@@ -138,8 +138,9 @@ impl<C: AbstractChannel> ChannelMap<C> {
     /// that it's running atomically with respect to other accessesors
     /// of this map.
     ///
-    /// If `func` panics, this map will become unusable and future
-    /// accesses will fail.
+    /// If `func` panics, or if it returns a channel with a different
+    /// identity, this position in the map will be become unusable and
+    /// future accesses to that position may fail.
     pub(crate) fn change_state<F, V>(&self, ident: &C::Ident, func: F) -> Result<V>
     where
         F: FnOnce(Option<ChannelState<C>>) -> (Option<ChannelState<C>>, V),
@@ -149,13 +150,14 @@ impl<C: AbstractChannel> ChannelMap<C> {
         let entry = map.entry(ident.clone());
         match entry {
             Occupied(mut occupied) => {
-                // DOCDOC explain what's up here.
+                // Temporarily replace the entry for this identity with
+                // a poisoned entry.
                 let mut oldent = ChannelState::Poisoned(Priv { _unused: () });
                 std::mem::swap(occupied.get_mut(), &mut oldent);
                 let (newval, output) = func(Some(oldent));
                 match newval {
                     Some(mut newent) => {
-                        newent.check_ident(ident)?; // XXX leaves it poisoned
+                        newent.check_ident(ident)?;
                         std::mem::swap(occupied.get_mut(), &mut newent);
                     }
                     None => {
@@ -293,5 +295,15 @@ mod test {
         assert!(old.is_none());
         assert_eq!(v, "---");
         assert!(map.get(&b'Q').unwrap().is_none());
+
+        // Try replacing None with invalid entry (with mismatched ID)
+        let e = map.change_state(&b'P', |state| (Some(ch("Geheimnisse")), (state, "Hi")));
+        assert!(matches!(e, Err(Error::Internal(_))));
+        assert!(matches!(map.get(&b'P'), Ok(None)));
+
+        // Try replacing Some with invalid entry (mismatched ID)
+        let e = map.change_state(&b'G', |state| (Some(ch("Wobbledy")), (state, "Hi")));
+        assert!(matches!(e, Err(Error::Internal(_))));
+        assert!(matches!(map.get(&b'G'), Err(Error::Internal(_))));
     }
 }
