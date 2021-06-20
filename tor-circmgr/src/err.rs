@@ -61,3 +61,9 @@ impl From<futures::task::SpawnError> for Error {
         Error::Internal("Unable to spawn new task in executor.".into())
     }
 }
+
+impl From<tor_rtcompat::TimeoutError> for Error {
+    fn from(_: tor_rtcompat::TimeoutError) -> Error {
+        Error::CircTimeout
+    }
+}

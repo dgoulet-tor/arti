@@ -2,7 +2,7 @@
 
 use crate::mgr::{self};
 use crate::usage::{SupportedCircUsage, TargetCircUsage};
-use crate::{DirInfo, Error, Result};
+use crate::{DirInfo, Result};
 use async_trait::async_trait;
 use rand::{rngs::StdRng, SeedableRng};
 use std::convert::TryInto;
@@ -77,8 +77,6 @@ impl<R: Runtime> crate::mgr::AbstractCircBuilder for Builder<R> {
     async fn build_circuit(&self, plan: Plan) -> Result<(SupportedCircUsage, Arc<ClientCirc>)> {
         let delay = Duration::from_secs(5); // TODO: make this configurable and inferred.
 
-        let chanmgr_copy = Arc::clone(&self.chanmgr);
-        let runtime_copy = self.runtime.clone();
         let Plan {
             final_spec,
             path,
@@ -87,19 +85,10 @@ impl<R: Runtime> crate::mgr::AbstractCircBuilder for Builder<R> {
         let mut rng =
             StdRng::from_rng(rand::thread_rng()).expect("couldn't construct temporary rng");
 
-        let outcome = self
-            .runtime
-            .timeout(
-                delay,
-                path.build_circuit(&mut rng, &runtime_copy, &chanmgr_copy, &params),
-            )
-            .await;
+        let build_future = path.build_circuit(&mut rng, &self.runtime, &self.chanmgr, &params);
+        let circuit = self.runtime.timeout(delay, build_future).await??;
 
-        match outcome {
-            Ok(Ok(circ)) => Ok((final_spec, circ)),
-            Ok(Err(e)) => Err(e),
-            Err(_timeout) => Err(Error::CircTimeout),
-        }
+        Ok((final_spec, circuit))
     }
 
     fn launch_parallelism(&self, spec: &TargetCircUsage) -> usize {
