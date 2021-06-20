@@ -221,6 +221,7 @@ mod test {
         assert_eq!(p1.extend_by_ed25519_id(), false);
         assert_eq!(p1.initial_send_window(), 1000);
 
+        // Now try with a directory and configured parameters.
         let (consensus, microdescs) = tor_netdir::testnet::construct_network();
         let mut params = NetParams::default();
         params.set("circwindow".into(), 100);
@@ -233,6 +234,21 @@ mod test {
         let di: DirInfo<'_> = (&netdir).into();
         let p2 = di.circ_params();
         assert_eq!(p2.initial_send_window(), 100);
+        assert_eq!(p2.extend_by_ed25519_id(), true);
+
+        // Now try with a bogus circwindow value.
+        let (consensus, microdescs) = tor_netdir::testnet::construct_network();
+        let mut params = NetParams::default();
+        params.set("circwindow".into(), 100_000);
+        params.set("ExtendByEd25519ID".into(), 1);
+        let mut dir = PartialNetDir::new(consensus, Some(&params));
+        for m in microdescs {
+            dir.add_microdesc(m);
+        }
+        let netdir = dir.unwrap_if_sufficient().unwrap();
+        let di: DirInfo<'_> = (&netdir).into();
+        let p2 = di.circ_params();
+        assert_eq!(p2.initial_send_window(), 1000); // Not 100_000
         assert_eq!(p2.extend_by_ed25519_id(), true);
     }
 }

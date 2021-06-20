@@ -37,7 +37,7 @@ enum TorPathInner<'a> {
     /// A single-hop path for use with a directory cache, when we don't have
     /// a consensus.
     FallbackOneHop(&'a FallbackDir),
-    /// A multi-hop path, containing one or more paths.
+    /// A multi-hop path, containing one or more relays.
     Path(Vec<Relay<'a>>),
 }
 
@@ -148,7 +148,7 @@ impl OwnedPath {
         RNG: Rng + CryptoRng,
         RT: Runtime,
     {
-        let chan = self.get_channel(chanmgr).await?;
+        let chan = chanmgr.get_or_launch(self.first_hop()?).await?;
         let (pending_circ, reactor) = chan.new_circ(rng).await?;
 
         runtime.spawn(async {
@@ -183,13 +183,6 @@ impl OwnedPath {
             OwnedPath::Normal(p) => Ok(&p[0]),
         }
     }
-
-    /// Internal: get or create a channel for the first hop of a path.
-    async fn get_channel<R: Runtime>(&self, chanmgr: &ChanMgr<R>) -> Result<Arc<Channel>> {
-        let first_hop = self.first_hop()?;
-        let channel = chanmgr.get_or_launch(first_hop).await?;
-        Ok(channel)
-    }
 }
 
 /// For testing: make sure that `path` is the same when it is an owned
@@ -198,19 +191,25 @@ impl OwnedPath {
 fn assert_same_path_when_owned(path: &TorPath<'_>) {
     let owned: OwnedPath = path.try_into().unwrap();
 
-    match (owned, &path.inner) {
+    match (&owned, &path.inner) {
         (OwnedPath::ChannelOnly(c), TorPathInner::FallbackOneHop(f)) => {
             assert_eq!(c.ed_identity(), f.ed_identity());
+            assert_eq!(c.ed_identity(), owned.first_hop().unwrap().ed_identity());
         }
         (OwnedPath::Normal(p), TorPathInner::OneHop(h)) => {
             assert_eq!(p.len(), 1);
             assert_eq!(p[0].ed_identity(), h.ed_identity());
+            assert_eq!(p[0].ed_identity(), owned.first_hop().unwrap().ed_identity());
         }
         (OwnedPath::Normal(p1), TorPathInner::Path(p2)) => {
             assert_eq!(p1.len(), p2.len());
             for (n1, n2) in p1.iter().zip(p2.iter()) {
                 assert_eq!(n1.ed_identity(), n2.ed_identity());
             }
+            assert_eq!(
+                p1[0].ed_identity(),
+                owned.first_hop().unwrap().ed_identity()
+            );
         }
         (_, _) => {
             panic!("Mismatched path types.")

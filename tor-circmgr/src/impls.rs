@@ -63,12 +63,10 @@ impl<R: Runtime> crate::mgr::AbstractCircBuilder for Builder<R> {
         let mut rng = rand::thread_rng();
         let (path, final_spec) = usage.build_path(&mut rng, dir)?;
 
-        let owned_path = (&path).try_into()?;
-        let params = dir.circ_params();
         let plan = Plan {
             final_spec: final_spec.clone(),
-            path: owned_path,
-            params,
+            path: (&path).try_into()?,
+            params: dir.circ_params(),
         };
 
         Ok((plan, final_spec))

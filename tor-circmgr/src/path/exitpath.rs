@@ -136,4 +136,24 @@ mod test {
             }
         }
     }
+
+    #[test]
+    fn empty_path() {
+        // This shouldn't actually be constructable IRL, but let's test to
+        // make sure our code can handle it.
+        let bogus_path = TorPath {
+            inner: TorPathInner::Path(vec![]),
+        };
+
+        assert!(bogus_path.exit_relay().is_none());
+        assert!(bogus_path.exit_policy().is_none());
+        assert_eq!(bogus_path.len(), 0);
+
+        let owned: Result<OwnedPath> = (&bogus_path).try_into();
+        assert!(owned.is_err());
+
+        // This should also be unconstructable.
+        let owned_bogus = OwnedPath::Normal(vec![]);
+        assert!(owned_bogus.first_hop().is_err());
+    }
 }
