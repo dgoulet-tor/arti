@@ -9,7 +9,6 @@ pub mod exitpath;
 use tor_chanmgr::ChanMgr;
 use tor_linkspec::{ChanTarget, OwnedChanTarget, OwnedCircTarget};
 use tor_netdir::{fallback::FallbackDir, Relay};
-use tor_proto::channel::Channel;
 use tor_proto::circuit::{CircParameters, ClientCirc};
 use tor_rtcompat::Runtime;
 
