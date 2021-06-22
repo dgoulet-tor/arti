@@ -855,7 +855,7 @@ impl PendingClientCirc {
             recvcreated: createdreceiver,
             circ: Arc::clone(&circuit),
         };
-        let reactor = reactor::Reactor::new(circuit, recvctrl, recvclosed, input, unique_id);
+        let reactor = reactor::Reactor::new(&circuit, recvctrl, recvclosed, input, unique_id);
         (pending, reactor)
     }
 

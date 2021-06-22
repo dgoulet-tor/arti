@@ -63,6 +63,7 @@
 #![warn(clippy::manual_ok_or)]
 #![deny(clippy::missing_docs_in_private_items)]
 #![warn(clippy::needless_borrow)]
+#![warn(clippy::needless_pass_by_value)]
 #![warn(clippy::option_option)]
 #![warn(clippy::rc_buffer)]
 #![deny(clippy::ref_option_ref)]
@@ -170,7 +171,7 @@ fn main() -> Result<()> {
         ARTI_DEFAULTS,
         config::FileFormat::Toml,
     ))?;
-    tor_config::load(&mut cfg, dflt_config, &args.rc, &args.cfg)?;
+    tor_config::load(&mut cfg, &dflt_config, &args.rc, &args.cfg)?;
 
     let config: ArtiConfig = cfg.try_into()?;
 

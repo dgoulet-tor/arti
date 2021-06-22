@@ -25,6 +25,7 @@
 #![warn(clippy::manual_ok_or)]
 #![deny(clippy::missing_docs_in_private_items)]
 #![warn(clippy::needless_borrow)]
+#![warn(clippy::needless_pass_by_value)]
 #![warn(clippy::option_option)]
 #![warn(clippy::rc_buffer)]
 #![deny(clippy::ref_option_ref)]
@@ -50,7 +51,7 @@ use std::path::{Path, PathBuf};
 // XXXX Add an error type for this crate.
 pub fn load<'a, P1, C1, P2, C2>(
     cfg: &mut config::Config,
-    default_path: Option<P1>,
+    default_path: &Option<P1>,
     files: C1,
     opts: C2,
 ) -> Result<(), config::ConfigError>
@@ -67,7 +68,7 @@ where
     }
     let mut missing_ok = false;
     if search_path.is_empty() {
-        if let Some(f) = &default_path {
+        if let Some(f) = default_path {
             // XXXX shouldn't be println, but no logs exist yet.
             println!("looking for default configuration in {:?}", f.as_ref());
             search_path.push(f.as_ref());
@@ -114,7 +115,7 @@ friends = 4242
         let mut c = config::Config::new();
         let v: Vec<&'static str> = Vec::new();
         std::fs::write(&dflt, EX_TOML).unwrap();
-        load(&mut c, Some(dflt), &v, &v).unwrap();
+        load(&mut c, &Some(dflt), &v, &v).unwrap();
 
         assert_eq!(c.get_str("hello.friends").unwrap(), "4242".to_string());
         assert_eq!(c.get_str("hello.world").unwrap(), "stuff".to_string());
@@ -135,7 +136,7 @@ world = \"nonsense\"
         std::fs::write(&cf, EX2_TOML).unwrap();
         let v = vec![cf];
         let v2: Vec<&'static str> = Vec::new();
-        load(&mut c, Some(dflt), &v, &v2).unwrap();
+        load(&mut c, &Some(dflt), &v, &v2).unwrap();
 
         assert!(c.get_str("hello.friends").is_err());
         assert_eq!(c.get_str("hello.world").unwrap(), "nonsense".to_string());
@@ -152,7 +153,7 @@ world = \"nonsense\"
         let v = vec![cf1, cf2];
         let v2 = vec!["other.var=present"];
         let d: Option<String> = None;
-        load(&mut c, d, &v, &v2).unwrap();
+        load(&mut c, &d, &v, &v2).unwrap();
 
         assert_eq!(c.get_str("hello.friends").unwrap(), "4242".to_string());
         assert_eq!(c.get_str("hello.world").unwrap(), "nonsense".to_string());

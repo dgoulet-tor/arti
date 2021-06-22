@@ -143,7 +143,7 @@ pub struct Reactor {
 impl Reactor {
     /// Construct a new Reactor.
     pub(super) fn new(
-        circuit: Arc<super::ClientCirc>,
+        circuit: &Arc<super::ClientCirc>,
         control: mpsc::Receiver<CtrlResult>,
         closeflag: oneshot::Receiver<CtrlMsg>,
         input: mpsc::Receiver<ClientCircChanMsg>,
@@ -155,7 +155,7 @@ impl Reactor {
         Reactor {
             input: input.fuse(),
             control: control.fuse(),
-            circuit: Arc::downgrade(&circuit),
+            circuit: Arc::downgrade(circuit),
             crypto_in: InboundClientCrypt::new(),
             hops: Vec::new(),
             unique_id,

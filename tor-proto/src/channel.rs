@@ -231,7 +231,7 @@ impl Channel {
         let channel = Arc::new(channel);
 
         let reactor = reactor::Reactor::new(
-            Arc::clone(&channel),
+            &Arc::clone(&channel),
             circmap,
             recvctrl,
             recvclosed,

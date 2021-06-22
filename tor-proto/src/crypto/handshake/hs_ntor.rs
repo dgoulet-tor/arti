@@ -198,7 +198,7 @@ where
 ///
 /// Handle it by computing and verifying the MAC, and if it's legit return a
 /// key generator based on the result of the key exchange.
-pub fn client_receive_rend<T>(state: HsNtorClientState, msg: T) -> Result<HsNtorHkdfKeyGenerator>
+pub fn client_receive_rend<T>(state: &HsNtorClientState, msg: T) -> Result<HsNtorHkdfKeyGenerator>
 where
     T: AsRef<[u8]>,
 {
@@ -260,7 +260,7 @@ pub struct HsNtorServiceInput {
 ///    AUTH        AUTH_INPUT_MAC            [MAC_LEN bytes]
 pub fn server_receive_intro<R, T>(
     rng: &mut R,
-    proto_input: HsNtorServiceInput,
+    proto_input: &HsNtorServiceInput,
     msg: T,
 ) -> Result<(HsNtorHkdfKeyGenerator, Vec<u8>, Vec<u8>)>
 where
@@ -494,14 +494,14 @@ mod test {
         let (state, cmsg) = client_send_intro(&mut rng, &client_keys)?;
 
         // Service: Decrypt INTRODUCE1 cell, and reply with RENDEZVOUS1 cell
-        let (skeygen, smsg, s_plaintext) = server_receive_intro(&mut rng, service_keys, cmsg)?;
+        let (skeygen, smsg, s_plaintext) = server_receive_intro(&mut rng, &service_keys, cmsg)?;
 
         // Check that the plaintext received by the service is the one that the
         // client sent
         assert_eq!(s_plaintext, vec![66; 10]);
 
         // Client: Receive RENDEZVOUS1 and create key material
-        let ckeygen = client_receive_rend(state, smsg)?;
+        let ckeygen = client_receive_rend(&state, smsg)?;
 
         // Test that RENDEZVOUS1 key material match
         let skeys = skeygen.expand(128)?;
