@@ -16,12 +16,12 @@ experimental-api = []
 testing = [ "hex", "hex-literal", "tor-netdoc/build_docs" ]
 
 [dependencies]
-tor-checkable = { path="../tor-checkable", version= "*" }
-tor-netdoc = { path="../tor-netdoc", version= "*" }
-tor-linkspec = { path="../tor-linkspec", version= "*" }
-tor-llcrypto = { path="../tor-llcrypto", version= "*" }
-tor-protover = { path="../tor-protover", version= "*" }
-tor-units = { path="../tor-units", version= "*" }
+tor-checkable = { path="../tor-checkable", version="0.0.0" }
+tor-netdoc = { path="../tor-netdoc", version="0.0.0" }
+tor-linkspec = { path="../tor-linkspec", version="0.0.0" }
+tor-llcrypto = { path="../tor-llcrypto", version="0.0.0" }
+tor-protover = { path="../tor-protover", version="0.0.0" }
+tor-units = { path="../tor-units", version="0.0.0" }
 
 log = "0.4.14"
 rand = "0.8.3"
@@ -34,4 +34,4 @@ hex-literal = { version= "0.3.1", optional = true }
 [dev-dependencies]
 hex = "0.4.3"
 hex-literal = "0.3.1"
-tor-netdoc = { path="../tor-netdoc", version= "*", features=["build_docs"] }
+tor-netdoc = { path="../tor-netdoc", version="0.0.0", features=["build_docs"] }

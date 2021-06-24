@@ -15,15 +15,15 @@ default = [ "mmap" ]
 mmap = [ "memmap" ]
 
 [dependencies]
-retry-error = { path="../retry-error", version= "*" }
-tor-checkable = { path="../tor-checkable", version= "*" }
-tor-circmgr = { path="../tor-circmgr", version= "*" }
-tor-consdiff = { path="../tor-consdiff", version= "*" }
-tor-dirclient = { path="../tor-dirclient", version= "*" }
-tor-netdir = { path="../tor-netdir", version= "*" }
-tor-netdoc = { path="../tor-netdoc", version= "*" }
-tor-llcrypto = { path="../tor-llcrypto", version= "*" }
-tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
+retry-error = { path="../retry-error", version="0.0.0" }
+tor-checkable = { path="../tor-checkable", version="0.0.0" }
+tor-circmgr = { path="../tor-circmgr", version="0.0.0" }
+tor-consdiff = { path="../tor-consdiff", version="0.0.0" }
+tor-dirclient = { path="../tor-dirclient", version="0.0.0" }
+tor-netdir = { path="../tor-netdir", version="0.0.0" }
+tor-netdoc = { path="../tor-netdoc", version="0.0.0" }
+tor-llcrypto = { path="../tor-llcrypto", version="0.0.0" }
+tor-rtcompat = { path="../tor-rtcompat", version="0.0.0", default-features=false }
 
 anyhow = "1.0.38"
 async-trait = "0.1.48"

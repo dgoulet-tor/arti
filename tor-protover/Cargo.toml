@@ -11,6 +11,6 @@ categories = [ "network-programming" ]
 repository="https://gitlab.torproject.org/tpo/core/arti.git/"
 
 [dependencies]
-caret = { path="../caret", version="*" }
+caret = { path="../caret", version="0.0.0" }
 
 thiserror = "1.0.24"

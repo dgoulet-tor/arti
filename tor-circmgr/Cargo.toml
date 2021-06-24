@@ -14,13 +14,13 @@ repository="https://gitlab.torproject.org/tpo/core/arti.git/"
 experimental-api = []
 
 [dependencies]
-tor-chanmgr = { path="../tor-chanmgr", version= "*", default-features=false }
-tor-netdir = { path="../tor-netdir", version= "*" }
-tor-netdoc = { path="../tor-netdoc", version= "*" }
-tor-proto = { path="../tor-proto", version= "*" }
-retry-error = { path="../retry-error", version= "*" }
-tor-linkspec = { path="../tor-linkspec", version= "*" }
-tor-rtcompat = { path="../tor-rtcompat", version= "*", default-features=false }
+tor-chanmgr = { path="../tor-chanmgr", version="0.0.0", default-features=false }
+tor-netdir = { path="../tor-netdir", version="0.0.0" }
+tor-netdoc = { path="../tor-netdoc", version="0.0.0" }
+tor-proto = { path="../tor-proto", version="0.0.0" }
+retry-error = { path="../retry-error", version="0.0.0" }
+tor-linkspec = { path="../tor-linkspec", version="0.0.0" }
+tor-rtcompat = { path="../tor-rtcompat", version="0.0.0", default-features=false }
 
 async-trait = "0.1.48"
 futures = "0.3.13"
@@ -33,5 +33,5 @@ weak-table = "0.3.0"
 [dev-dependencies]
 futures-await-test = "0.3.0"
 itertools = "0.10.1"
-tor-rtmock = { path="../tor-rtmock", version="*" }
-tor-netdir = { path="../tor-netdir", version="*", features=["testing"] }
+tor-rtmock = { path="../tor-rtmock", version="0.0.0" }
+tor-netdir = { path="../tor-netdir", version="0.0.0", features=["testing"] }
