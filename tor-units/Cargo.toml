@@ -4,7 +4,6 @@ version = "0.0.0"
 authors = ["Dennis Jackson <git@dennisjj.co.uk>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
-publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Provides macros for types which are constrained within a range, ensuring invalid values are unrepresentable."
 keywords = [ "tor", "arti" ]

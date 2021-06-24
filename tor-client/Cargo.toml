@@ -4,7 +4,6 @@ version = "0.0.0"
 authors = ["The Tor Project, Inc.", "Nick Mathewson <nickm@torproject.org>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
-publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "Library for connecting to the Tor network as an anonymous client"
 keywords = [ "tor", "arti", "privacy", "anonymity", "networking" ]

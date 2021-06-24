@@ -4,7 +4,6 @@ version = "0.0.0"
 authors = ["The Tor Project, Inc.", "Nick Mathewson <nickm@torproject.org>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
-publish = false
 homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
 description = "An error type for an operation that can fail more than once"
 keywords = [ "tor", "arti", "async", "retry" ]
