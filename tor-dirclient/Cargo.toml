@@ -20,7 +20,7 @@ tor-circmgr = { path="../tor-circmgr", version="0.0.0" }
 tor-llcrypto = { path="../tor-llcrypto", version="0.0.0" }
 tor-proto = { path="../tor-proto", version="0.0.0" }
 tor-netdoc = { path="../tor-netdoc", version="0.0.0" }
-tor-rtcompat = { path="../tor-rtcompat", version="0.0.0", default-features=false }
+tor-rtcompat = { path="../tor-rtcompat", version="0.0.0" }
 
 async-compression = { version = "0.3.7", features=["futures-io", "zlib"] }
 anyhow = "1.0.38"

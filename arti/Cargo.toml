@@ -16,7 +16,7 @@ async-std = [ "tor-client/async-std", "tor-rtcompat/async-std" ]
 tokio = [ "tor-client/tokio", "tor-rtcompat/tokio" ]
 
 [dependencies]
-tor-client = { path = "../tor-client", version="0.0.0", default-features=false }
+tor-client = { path = "../tor-client", version="0.0.0" }
 tor-dirmgr = { path="../tor-dirmgr", version="0.0.0" }
 tor-rtcompat = { path="../tor-rtcompat", version="0.0.0", default-features=false }
 tor-socksproto = { path="../tor-socksproto", version="0.0.0" }
