@@ -11,7 +11,7 @@ categories = [ "parsing", "encoding" ]
 repository="https://gitlab.torproject.org/tpo/core/arti.git/"
 
 [dependencies]
-tor-llcrypto = { path="../tor-llcrypto" }
+tor-llcrypto = { path="../tor-llcrypto", version="0.0.0" }
 
 arrayref = "0.3.6"
 bytes = "1.0.1"
