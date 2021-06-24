@@ -11,11 +11,11 @@ categories = [ "parser-implementations", "network-programming" ]
 repository="https://gitlab.torproject.org/tpo/core/arti.git/"
 
 [dependencies]
-caret = { path="../caret" }
-tor-llcrypto = { path="../tor-llcrypto" }
-tor-bytes = { path="../tor-bytes" }
-tor-cert = { path="../tor-cert" }
-tor-linkspec = { path="../tor-linkspec" }
+caret = { path="../caret", version="0.0.0" }
+tor-llcrypto = { path="../tor-llcrypto", version="0.0.0" }
+tor-bytes = { path="../tor-bytes", version="0.0.0" }
+tor-cert = { path="../tor-cert", version="0.0.0" }
+tor-linkspec = { path="../tor-linkspec", version="0.0.0" }
 
 arrayref = "0.3.6"
 bitflags = "1.2.1"

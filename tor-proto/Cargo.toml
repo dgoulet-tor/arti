@@ -15,13 +15,13 @@ default = []
 hs = []
 
 [dependencies]
-tor-llcrypto = { path="../tor-llcrypto" }
-tor-bytes = { path="../tor-bytes" }
-tor-cert = { path="../tor-cert" }
-tor-linkspec = { path="../tor-linkspec" }
-tor-checkable = { path="../tor-checkable" }
-tor-protover = { path="../tor-protover" }
-tor-cell = { path="../tor-cell" }
+tor-llcrypto = { path="../tor-llcrypto", version="0.0.0" }
+tor-bytes = { path="../tor-bytes", version="0.0.0" }
+tor-cert = { path="../tor-cert", version="0.0.0" }
+tor-linkspec = { path="../tor-linkspec", version="0.0.0" }
+tor-checkable = { path="../tor-checkable", version="0.0.0" }
+tor-protover = { path="../tor-protover", version="0.0.0" }
+tor-cell = { path="../tor-cell", version="0.0.0" }
 
 arrayref = "0.3.6"
 bytes = "1.0.1"
