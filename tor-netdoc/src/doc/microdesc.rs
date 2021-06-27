@@ -379,9 +379,9 @@ pub struct MicrodescReader<'a> {
 impl<'a> MicrodescReader<'a> {
     /// Construct a MicrodescReader to take microdescriptors from a string
     /// 's'.
-    pub fn new(s: &'a str, allow: AllowAnnotations) -> Self {
+    pub fn new(s: &'a str, allow: &AllowAnnotations) -> Self {
         let reader = NetDocReader::new(s);
-        let annotated = allow == AllowAnnotations::AnnotationsAllowed;
+        let annotated = allow == &AllowAnnotations::AnnotationsAllowed;
         MicrodescReader { annotated, reader }
     }
 
@@ -467,7 +467,7 @@ mod test {
     fn parse_multi() -> Result<()> {
         use std::time::{Duration, SystemTime};
         let mds: Result<Vec<_>> =
-            MicrodescReader::new(TESTDATA2, AllowAnnotations::AnnotationsAllowed).collect();
+            MicrodescReader::new(TESTDATA2, &AllowAnnotations::AnnotationsAllowed).collect();
         let mds = mds?;
         assert_eq!(mds.len(), 4);
 
@@ -522,7 +522,7 @@ mod test {
         data += TESTDATA;
 
         let res: Vec<Result<_>> =
-            MicrodescReader::new(&data, AllowAnnotations::AnnotationsAllowed).collect();
+            MicrodescReader::new(&data, &AllowAnnotations::AnnotationsAllowed).collect();
 
         assert_eq!(res.len(), 2);
         assert!(res[0].is_err());

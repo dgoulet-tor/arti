@@ -581,7 +581,7 @@ impl<DM: WriteNetDir> DirState for GetMicrodescsState<DM> {
             return Err(Error::BadArgument("Mismatched request").into());
         };
         let mut new_mds = Vec::new();
-        for anno in MicrodescReader::new(text, AllowAnnotations::AnnotationsNotAllowed).flatten() {
+        for anno in MicrodescReader::new(text, &AllowAnnotations::AnnotationsNotAllowed).flatten() {
             let txt = anno
                 .within(text)
                 .expect("annotation not from within text as expected");

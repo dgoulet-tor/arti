@@ -30,6 +30,8 @@
 #![deny(clippy::large_stack_arrays)]
 #![warn(clippy::manual_ok_or)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![warn(clippy::needless_borrow)]
+#![warn(clippy::needless_pass_by_value)]
 #![warn(clippy::option_option)]
 #![warn(clippy::rc_buffer)]
 #![deny(clippy::ref_option_ref)]
@@ -110,7 +112,7 @@ where
     };
 
     if retire {
-        retire_circ(circ_mgr, &source, "Partial response");
+        retire_circ(&circ_mgr, &source, "Partial response");
     }
 
     Ok(r?)
@@ -144,7 +146,7 @@ where
     let partial_ok = req.partial_docs_ok();
     let maxlen = req.max_response_len();
     let req = req.make_request()?;
-    let encoded = util::encode_request(req);
+    let encoded = util::encode_request(&req);
 
     // Write the request.
     stream.write_all(encoded.as_bytes()).await?;
@@ -315,7 +317,7 @@ where
 }
 
 /// Retire a directory circuit because of an error we've encountered on it.
-fn retire_circ<R, E>(circ_mgr: Arc<CircMgr<R>>, source_info: &SourceInfo, error: &E)
+fn retire_circ<R, E>(circ_mgr: &Arc<CircMgr<R>>, source_info: &SourceInfo, error: &E)
 where
     R: Runtime,
     E: std::fmt::Display + ?Sized,

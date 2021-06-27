@@ -93,7 +93,7 @@ where
     ///
     /// When closeflag fires, the reactor should shut down.
     pub(super) fn new(
-        channel: Arc<super::Channel>,
+        channel: &Arc<super::Channel>,
         circmap: Arc<Mutex<CircMap>>,
         control: mpsc::Receiver<CtrlResult>,
         closeflag: oneshot::Receiver<CtrlMsg>,
@@ -106,7 +106,7 @@ where
         Reactor {
             control: control.fuse(),
             input: input.fuse(),
-            channel: Arc::downgrade(&channel),
+            channel: Arc::downgrade(channel),
             circs: circmap,
             unique_id,
         }

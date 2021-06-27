@@ -686,9 +686,9 @@ fn advance_to_next_routerdesc(reader: &mut NetDocReader<'_, RouterKwd>, annotate
 
 impl<'a> RouterReader<'a> {
     /// Construct a RouterReader to take router descriptors from a string.
-    pub fn new(s: &'a str, allow: AllowAnnotations) -> Self {
+    pub fn new(s: &'a str, allow: &AllowAnnotations) -> Self {
         let reader = NetDocReader::new(s);
-        let annotated = allow == AllowAnnotations::AnnotationsAllowed;
+        let annotated = allow == &AllowAnnotations::AnnotationsAllowed;
         RouterReader { annotated, reader }
     }
 
@@ -833,7 +833,7 @@ mod test {
 ";
         s += &read_bad("mismatched-fp");
 
-        let rd = RouterReader::new(&s, AllowAnnotations::AnnotationsAllowed);
+        let rd = RouterReader::new(&s, &AllowAnnotations::AnnotationsAllowed);
         let v: Vec<_> = rd.collect();
         assert!(v[0].is_err());
         assert!(v[1].is_ok());

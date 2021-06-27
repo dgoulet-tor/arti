@@ -34,7 +34,7 @@ impl super::ClientHandshake for NtorClient {
     }
 
     fn client2<T: AsRef<[u8]>>(state: Self::StateType, msg: T) -> Result<Self::KeyGen> {
-        client_handshake2_ntor_v1(msg, state)
+        client_handshake2_ntor_v1(msg, &state)
     }
 }
 
@@ -169,7 +169,7 @@ fn client_handshake_ntor_v1_no_keygen(
 }
 
 /// Complete a client handshake, returning a key generator on success.
-fn client_handshake2_ntor_v1<T>(msg: T, state: NtorHandshakeState) -> Result<NtorHkdfKeyGenerator>
+fn client_handshake2_ntor_v1<T>(msg: T, state: &NtorHandshakeState) -> Result<NtorHkdfKeyGenerator>
 where
     T: AsRef<[u8]>,
 {
@@ -377,7 +377,7 @@ mod tests {
             server_handshake_ntor_v1_no_keygen(ephem_pub, ephem, &create_msg[..], &[relay_sk])?;
         assert_eq!(&created_msg[..], &server_handshake[..]);
 
-        let c_keygen = client_handshake2_ntor_v1(created_msg, state)?;
+        let c_keygen = client_handshake2_ntor_v1(created_msg, &state)?;
 
         let c_keys = c_keygen.expand(keys.len())?;
         let s_keys = s_keygen.expand(keys.len())?;

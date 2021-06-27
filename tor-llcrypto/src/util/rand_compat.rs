@@ -85,7 +85,7 @@ impl<T: RngCore> OldRngCore for RngWrapper<T> {
         self.0.fill_bytes(dest)
     }
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), OldError> {
-        self.0.try_fill_bytes(dest).map_err(err_to_old)
+        self.0.try_fill_bytes(dest).map_err(|e| err_to_old(&e))
     }
 }
 
@@ -109,7 +109,7 @@ impl<T: CryptoRng> CryptoRng for RngWrapper<T> {}
 
 /// Convert a new-ish Rng error into the error type that rng_core 0.5.1
 /// would deliver.
-fn err_to_old(e: Error) -> OldError {
+fn err_to_old(e: &Error) -> OldError {
     use std::num::NonZeroU32;
     if let Some(code) = e.code() {
         code.into()
