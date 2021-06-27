@@ -3,7 +3,7 @@
 //! For now, this module is just contains a couple of workarounds for the
 //! limitations of other libraries.
 
-use simple_asn1::{oid, ASN1Block, BigUint, OID};
+use simple_asn1::{oid, ASN1Block};
 pub mod rand_compat;
 
 /// Given an X.509 certificate in DER, return its SubjectPublicKey if that key
