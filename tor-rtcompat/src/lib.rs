@@ -16,8 +16,7 @@
 //!
 //! Additionally, the `AsyncRead` and `AsyncWrite` traits provide by
 //! [`futures`] are not the same as those provided by `tokio`, and
-//! require compatibility wrappers to use. (We re-export those of
-//! [`tokio_util`].
+//! require compatibility wrappers to use.
 //!
 //! To solve these problems, the `tor-rtcompat` crate provides a set
 //! of traits that represent a runtime's ability to perform these
@@ -62,10 +61,10 @@
 //!     using for anything besides Arti, you can use [`create_runtime()`].
 //!
 //!   * If you want to explicitly construct a runtime with a specific
-//!     backend, you can do so with `create_async_std_runtime` or
-//!     [`create_tokio_runtime`].  Or if you have already constructed a
+//!     backend, you can do so with [`async_std::create_async_std_runtime`] or
+//!     [`tokio::create_tokio_runtime`].  Or if you have already constructed a
 //!     tokio runtime that you want to use, you can wrap it as a
-//!     [`Runtime`] explicitly with [`TokioRuntimeHandle`].
+//!     [`Runtime`] explicitly with [`tokio::TokioRuntimeHandle`].
 //!
 //! # Cargo features
 //!
@@ -130,19 +129,14 @@
 #![warn(clippy::trait_duplication_in_bounds)]
 #![warn(clippy::unseparated_literal_suffix)]
 
-use std::io::{Error as IoError, ErrorKind, Result as IoResult};
-
 pub(crate) mod impls;
 pub mod task;
 
 mod timer;
 mod traits;
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "tokio", feature = "async-std")))]
 mod test;
-
-#[cfg(not(any(feature = "async-std", feature = "tokio")))]
-compile_error!("Sorry: At least one of the tor-rtcompat/async-std and tor-rtcompat/tokio features must be specified.");
 
 pub use traits::{
     CertifiedConn, Runtime, SleepProvider, SpawnBlocking, TcpListener, TcpProvider, TlsProvider,
@@ -156,22 +150,11 @@ pub mod tls {
     pub use crate::traits::{CertifiedConn, TlsConnector};
 }
 
+#[cfg(feature = "tokio")]
+pub mod tokio;
+
 #[cfg(feature = "async-std")]
-pub use impls::async_std::create_runtime as create_async_std_runtime;
-#[cfg(feature = "tokio")]
-pub use impls::tokio::create_runtime as create_tokio_runtime;
-#[cfg(feature = "tokio")]
-pub use impls::tokio::TokioRuntimeHandle;
-
-/// The default runtime type that we return from [`create_runtime()`] or
-/// [`test_with_runtime()`]
-#[cfg(feature = "tokio")]
-type DefaultRuntime = async_executors::TokioTp;
-
-/// The default runtime type that we return from [`create_runtime()`] or
-/// [`test_with_runtime()`]
-#[cfg(all(feature = "async-std", not(feature = "tokio")))]
-type DefaultRuntime = async_executors::AsyncStd;
+pub mod async_std;
 
 /// Try to return an instance of the currently running [`Runtime`].
 ///
@@ -190,92 +173,111 @@ type DefaultRuntime = async_executors::AsyncStd;
 ///
 /// Once you have a runtime returned by this function, you should
 /// just create more handles to it via [`Clone`].
-pub fn current_user_runtime() -> IoResult<impl Runtime> {
+#[cfg(any(feature = "async-std", feature = "tokio"))]
+pub fn current_user_runtime() -> std::io::Result<impl Runtime> {
     #[cfg(feature = "tokio")]
     {
-        let handle = tokio_crate::runtime::Handle::try_current()
-            .map_err(|e| IoError::new(ErrorKind::Other, e))?;
-        Ok(TokioRuntimeHandle::new(handle))
+        crate::tokio::current_runtime()
     }
     #[cfg(all(feature = "async-std", not(feature = "tokio")))]
     {
-        // In async_std, the runtime is a global singleton.
-        Ok(create_async_std_runtime())
-    }
-    #[cfg(not(any(feature = "async-std", feature = "tokio")))]
-    {
-        // This isn't reachable, since the crate won't actually compile
-        // unless some runtime is enabled.
-        panic!("tor-rtcompat was built with no supported runtimes.")
+        crate::async_std::current_runtime()
     }
 }
 
 /// Return a new instance of the default [`Runtime`].
 ///
-/// Generally you should call this function only once, and then use
+/// Generally you should call this function at most once, and then use
 /// [`Clone::clone()`] to create additional references to that
 /// runtime.
 ///
 /// Tokio users may want to avoid this function and instead make a
 /// runtime using [`current_user_runtime()`] or
-/// [`TokioRuntimeHandle::new()`]: this function always _builds_ a
+/// [`tokio::TokioRuntimeHandle::new()`]: this function always _builds_ a
 /// runtime, and if you already have a runtime, that isn't what you
 /// want with Tokio.
 ///
 /// If you need more fine-grained control over a runtime, you can
 /// create it using an appropriate builder type or function.
-pub fn create_runtime() -> IoResult<impl Runtime> {
-    create_default_runtime()
-}
-
-/// Helper: create and return a default runtime type.
-///
-/// This function is separate from `create_runtime()` because of its
-/// separate return type: we hide the actual type with
-/// `create_runtime()` to avoid writing code that relies on any
-/// particular runtimes.
-#[allow(clippy::unnecessary_wraps)]
-fn create_default_runtime() -> IoResult<DefaultRuntime> {
+#[cfg(any(feature = "async-std", feature = "tokio"))]
+pub fn create_runtime() -> std::io::Result<impl Runtime> {
     #[cfg(feature = "tokio")]
     {
-        create_tokio_runtime()
+        crate::tokio::create_runtime()
     }
     #[cfg(all(feature = "async-std", not(feature = "tokio")))]
     {
-        Ok(create_async_std_runtime())
-    }
-    #[cfg(not(any(feature = "async-std", feature = "tokio")))]
-    {
-        // This isn't reachable, since the crate won't actually compile
-        // unless some runtime is enabled.
-        panic!("tor-rtcompat was built with no supported runtimes.")
+        crate::async_std::create_runtime()
     }
 }
 
-/// Run a given asynchronous function, which takes a runtime as an argument,
-/// using the default runtime.
+/// Helpers for test_with_all_runtimes
+pub mod testing__ {
+    /// A trait for an object that might represent a test failure.
+    pub trait TestOutcome {
+        /// Abort if the test has failed.
+        fn check_ok(&self);
+    }
+    impl TestOutcome for () {
+        fn check_ok(&self) {}
+    }
+    impl<T, E> TestOutcome for Result<T, E> {
+        fn check_ok(&self) {
+            assert!(self.is_ok())
+        }
+    }
+}
+
+/// Run a test closure, passing as argument every supported runtime.
 ///
-/// This is intended for writing test cases that need a runtime.
+/// (This is a macro so that it can repeat the closure as two separate
+/// expressions, so it can take on two different types, if needed.)
+#[macro_export]
+#[cfg(all(feature = "tokio", feature = "async-std"))]
+macro_rules! test_with_all_runtimes {
+    ( $fn:expr ) => {{
+        use $crate::testing__::TestOutcome;
+        $crate::tokio::test_with_runtime($fn).check_ok();
+        $crate::async_std::test_with_runtime($fn)
+    }};
+}
+
+/// Run a test closure, passing as argument every supported runtime.
+#[macro_export]
+#[cfg(all(feature = "tokio", not(feature = "async-std")))]
+macro_rules! test_with_all_runtimes {
+    ( $fn:expr ) => {{
+        $crate::tokio::test_with_runtime($fn)
+    }};
+}
+
+/// Run a test closure, passing as argument every supported runtime.
+#[macro_export]
+#[cfg(all(not(feature = "tokio"), feature = "async-std"))]
+macro_rules! test_with_all_runtimes {
+    ( $fn:expr ) => {{
+        $crate::async_std::test_with_runtime($fn)
+    }};
+}
+
+/// Run a test closure, passing as argument one supported runtime.
 ///
-/// # Example
+/// (Always prefers tokio if present.)
+#[macro_export]
+#[cfg(feature = "tokio")]
+macro_rules! test_with_one_runtime {
+    ( $fn:expr ) => {{
+        $crate::tokio::test_with_runtime($fn)
+    }};
+}
+
+/// Run a test closure, passing as argument one supported runtime.
 ///
-/// ```
-/// # use std::time::Duration;
-/// use tor_rtcompat::SleepProviderExt;
-///
-/// // Run a simple test using a timeout.
-/// tor_rtcompat::test_with_runtime(|runtime| async move {
-///    async fn one_plus_two() -> u32 { 1 + 2 }
-///    let future = runtime.timeout(Duration::from_secs(5), one_plus_two());
-///    assert_eq!(future.await, Ok(3));
-/// });
-/// ```
-#[allow(clippy::clone_on_copy)]
-pub fn test_with_runtime<P, F, O>(func: P) -> O
-where
-    P: FnOnce(DefaultRuntime) -> F,
-    F: futures::Future<Output = O>,
-{
-    let runtime = create_default_runtime().unwrap();
-    runtime.block_on(func(runtime.clone()))
+/// (Always prefers tokio if present.)
+#[macro_export]
+#[cfg(all(not(feature = "tokio"), feature = "async-std"))]
+macro_rules! test_with_one_runtime {
+    ( $fn:expr ) => {{
+        $crate::async_std::test_with_runtime($fn)
+    }};
 }

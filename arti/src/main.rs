@@ -192,7 +192,11 @@ fn main() -> Result<()> {
         }
     };
 
-    let runtime = tor_rtcompat::create_runtime()?;
+    #[cfg(feature = "tokio")]
+    let runtime = tor_rtcompat::tokio::create_runtime()?;
+    #[cfg(all(feature = "async-std", not(feature = "tokio")))]
+    let runtime = tor_rtcompat::async_std::create_runtime()?;
+
     let rt_copy = runtime.clone();
     rt_copy.block_on(async {
         let client = Arc::new(TorClient::bootstrap(runtime.clone(), dircfg).await?);

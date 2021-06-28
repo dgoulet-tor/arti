@@ -1,6 +1,6 @@
 //! Example: tests for the timing features in tor-rtcompat.
 
-use tor_rtcompat::test_with_runtime;
+use tor_rtcompat::test_with_all_runtimes;
 use tor_rtcompat::{SleepProvider, SleepProviderExt, Timeout, TimeoutError};
 
 use tor_rtmock::time::MockSleepProvider;
@@ -26,33 +26,33 @@ fn timeouts() {
     }
 
     // The timeout occurs.
-    test_with_runtime(|_| async {
+    test_with_all_runtimes!(|_| async {
         let (mock_sp, _send, timeout_future) = setup();
         mock_sp.advance(Duration::new(3600, 0)).await;
         assert!(matches!(timeout_future.await, Err(TimeoutError)));
     });
     // The data is ready immediately.
-    test_with_runtime(|_| async {
+    test_with_all_runtimes!(|_| async {
         let (_, send, timeout_future) = setup();
         send.send(()).unwrap();
         assert_eq!(timeout_future.await, Ok(Ok(())));
     });
     // The data is ready after a little while
-    test_with_runtime(|_| async {
+    test_with_all_runtimes!(|_| async {
         let (mock_sp, send, timeout_future) = setup();
         mock_sp.advance(Duration::new(10, 0)).await;
         send.send(()).unwrap();
         assert_eq!(timeout_future.await, Ok(Ok(())));
     });
     // The data is ready _and_ the timout occurs.
-    test_with_runtime(|_| async {
+    test_with_all_runtimes!(|_| async {
         let (mock_sp, send, timeout_future) = setup();
         send.send(()).unwrap();
         mock_sp.advance(Duration::new(3600, 0)).await;
         assert_eq!(timeout_future.await, Ok(Ok(())));
     });
     // Make sure that nothing happens too early.
-    test_with_runtime(|_| async {
+    test_with_all_runtimes!(|_| async {
         let (mock_sp, _send, timeout_future) = setup();
         mock_sp.advance(Duration::new(300, 0)).await;
         assert_eq!(timeout_future.now_or_never(), None);
@@ -68,7 +68,7 @@ const ONE_DAY: Duration = Duration::from_secs(86400);
 #[test]
 fn wallclock_simple() {
     // Simple case: time goes by.
-    test_with_runtime(|_| async {
+    test_with_all_runtimes!(|_| async {
         let mock_sp = MockSleepProvider::new(start());
         let b = AtomicBool::new(false);
         futures::join!(
@@ -90,7 +90,7 @@ fn wallclock_simple() {
 #[test]
 fn wallclock_early() {
     // Simple case 2: time goes by, but not enough of it.
-    test_with_runtime(|_| async {
+    test_with_all_runtimes!(|_| async {
         let mock_sp = MockSleepProvider::new(start());
         let b = AtomicBool::new(false);
         let (send, mut recv) = oneshot::channel();
@@ -117,7 +117,7 @@ fn wallclock_early() {
 #[test]
 fn wallclock_jump_forward() {
     // Clock jumps forward, so event triggers.
-    test_with_runtime(|_| async {
+    test_with_all_runtimes!(|_| async {
         let mock_sp = MockSleepProvider::new(start());
         let b = AtomicBool::new(false);
         let i1 = mock_sp.now();
@@ -140,7 +140,7 @@ fn wallclock_jump_forward() {
 #[test]
 fn wallclock_jump_backwards() {
     // Clock jumps backward, so event does not trigger early.
-    test_with_runtime(|_| async {
+    test_with_all_runtimes!(|_| async {
         let mock_sp = MockSleepProvider::new(start());
         let b = AtomicBool::new(false);
         let (send, mut recv) = oneshot::channel();

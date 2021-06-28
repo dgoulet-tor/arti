@@ -198,7 +198,7 @@ impl Future for Sleeping {
 #[cfg(test)]
 mod test {
     use super::*;
-    use tor_rtcompat::test_with_runtime;
+    use tor_rtcompat::test_with_all_runtimes;
 
     #[test]
     fn basics_of_time_travel() {
@@ -218,8 +218,8 @@ mod test {
     }
 
     #[test]
-    fn time_moves_on() {
-        test_with_runtime(|_| async {
+    fn time_moves_on() -> std::io::Result<()> {
+        test_with_all_runtimes!(|_| async {
             use futures::channel::oneshot;
             use std::sync::atomic::AtomicBool;
             use std::sync::atomic::Ordering;
@@ -276,6 +276,7 @@ mod test {
                     assert!(real_end - real_start < one_hour);
                 }
             );
+            std::io::Result::Ok(())
         })
     }
 }

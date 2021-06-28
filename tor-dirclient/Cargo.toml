@@ -37,3 +37,5 @@ thiserror = "1.0.24"
 [dev-dependencies]
 futures-await-test = "0.3.0"
 tor-rtmock = { path="../tor-rtmock", version="0.0.0" }
+tor-rtcompat = { path="../tor-rtcompat", version="0.0.0", features=["tokio"] }
+

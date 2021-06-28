@@ -239,7 +239,7 @@ mod test {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
-    use tor_rtcompat::{task::yield_now, test_with_runtime, Runtime};
+    use tor_rtcompat::{task::yield_now, test_with_one_runtime, Runtime};
 
     struct FakeChannelFactory<RT> {
         runtime: RT,
@@ -301,7 +301,7 @@ mod test {
 
     #[test]
     fn connect_one_ok() {
-        test_with_runtime(|runtime| async {
+        test_with_one_runtime!(|runtime| async {
             let cf = FakeChannelFactory::new(runtime);
             let mgr = AbstractChanMgr::new(cf);
             let target = (413, '!');
@@ -317,7 +317,7 @@ mod test {
 
     #[test]
     fn connect_one_fail() {
-        test_with_runtime(|runtime| async {
+        test_with_one_runtime!(|runtime| async {
             let cf = FakeChannelFactory::new(runtime);
             let mgr = AbstractChanMgr::new(cf);
 
@@ -334,7 +334,7 @@ mod test {
 
     #[test]
     fn test_concurrent() {
-        test_with_runtime(|runtime| async {
+        test_with_one_runtime!(|runtime| async {
             let cf = FakeChannelFactory::new(runtime);
             let mgr = AbstractChanMgr::new(cf);
 
@@ -373,7 +373,7 @@ mod test {
 
     #[test]
     fn unusable_entries() {
-        test_with_runtime(|runtime| async {
+        test_with_one_runtime!(|runtime| async {
             let cf = FakeChannelFactory::new(runtime);
             let mgr = AbstractChanMgr::new(cf);
 

@@ -225,7 +225,7 @@ macro_rules! runtime_tests {
             $(
                 #[test]
                 fn $id() -> IoResult<()> {
-                    super::$id(crate::create_tokio_runtime()?)
+                    super::$id(crate::tokio::create_runtime()?)
                 }
             )*
         }
@@ -235,16 +235,7 @@ macro_rules! runtime_tests {
             $(
                 #[test]
                 fn $id() -> IoResult<()> {
-                    super::$id(crate::create_async_std_runtime())
-                }
-            )*
-        }
-        mod default_runtime_tests {
-            use std::io::Result as IoResult;
-            $(
-                #[test]
-                fn $id() -> IoResult<()> {
-                    super::$id(crate::create_runtime()?)
+                    super::$id(crate::async_std::create_runtime()?)
                 }
             )*
         }

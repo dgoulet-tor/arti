@@ -494,7 +494,7 @@ fn err(k: ErrorKind) -> IoError {
 mod test {
     use super::*;
     use futures::io::{AsyncReadExt, AsyncWriteExt};
-    use tor_rtcompat::test_with_runtime;
+    use tor_rtcompat::test_with_all_runtimes;
 
     fn client_pair() -> (MockNetProvider, MockNetProvider) {
         let net = MockNetwork::new();
@@ -512,9 +512,8 @@ mod test {
 
     #[test]
     fn end_to_end() -> IoResult<()> {
-        let (client1, client2) = client_pair();
-
-        test_with_runtime(|_rt| async {
+        test_with_all_runtimes!(|_rt| async {
+            let (client1, client2) = client_pair();
             let lis = client2.listen(&"0.0.0.0:99".parse().unwrap()).await?;
             let address = lis.local_addr()?;
 
@@ -541,7 +540,7 @@ mod test {
             );
             r1?;
             r2?;
-            Ok(())
+            IoResult::Ok(())
         })
     }
 
@@ -579,14 +578,14 @@ mod test {
         assert!(e1.is_err());
         assert!(e2.is_err());
 
-        Ok(())
+        IoResult::Ok(())
     }
 
     #[test]
     fn listener_stream() -> IoResult<()> {
-        let (client1, client2) = client_pair();
+        test_with_all_runtimes!(|_rt| async {
+            let (client1, client2) = client_pair();
 
-        test_with_runtime(|_rt| async {
             let lis = client2.listen(&"0.0.0.0:99".parse().unwrap()).await?;
             let address = lis.local_addr()?;
             let mut incoming = lis.incoming();
@@ -611,7 +610,7 @@ mod test {
             );
             r1?;
             r2?;
-            Ok(())
+            IoResult::Ok(())
         })
     }
 
@@ -623,7 +622,7 @@ mod test {
         let lis = client2.listen_tls(&"0.0.0.0:0".parse().unwrap(), cert[..].into())?;
         let address = lis.local_addr()?;
 
-        test_with_runtime(|_rt| async {
+        test_with_all_runtimes!(|_rt| async {
             let (r1, r2): (IoResult<()>, IoResult<()>) = futures::join!(
                 async {
                     let connector = client1.tls_connector();
@@ -654,7 +653,7 @@ mod test {
             );
             r1?;
             r2?;
-            Ok(())
+            IoResult::Ok(())
         })
     }
 }

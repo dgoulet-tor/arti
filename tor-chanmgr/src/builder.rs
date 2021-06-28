@@ -118,7 +118,7 @@ mod test {
     use std::net::SocketAddr;
     use std::time::{Duration, SystemTime};
     use tor_proto::channel::Channel;
-    use tor_rtcompat::{test_with_runtime, TcpListener};
+    use tor_rtcompat::{test_with_one_runtime, TcpListener};
     use tor_rtmock::{io::LocalStream, net::MockNetwork, MockSleepRuntime};
 
     // Make sure that the builder can build a real channel.  To test
@@ -136,7 +136,7 @@ mod test {
         let target = OwnedChanTarget::new(vec![orport], ed, rsa);
         let now = SystemTime::UNIX_EPOCH + Duration::new(msgs::NOW, 0);
 
-        test_with_runtime(|rt| async move {
+        test_with_one_runtime!(|rt| async move {
             // Stub out the internet so that this connection can work.
             let network = MockNetwork::new();
 
@@ -155,7 +155,7 @@ mod test {
                 .runtime(rt.clone());
 
             // open a fake TLS listener and be ready to handle a request.
-            let lis = relay_rt.mock_net().listen_tls(&orport, tls_cert)?;
+            let lis = relay_rt.mock_net().listen_tls(&orport, tls_cert).unwrap();
 
             // Tell the client to believe in a different timestamp.
             client_rt.jump_to(now);
@@ -178,10 +178,10 @@ mod test {
                 }
             );
 
-            let chan = r1?;
+            let chan = r1.unwrap();
             assert_eq!(chan.ident(), &ed);
             assert!(chan.is_usable());
-            r2?;
+            r2.unwrap();
             Ok(())
         })
     }

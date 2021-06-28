@@ -21,9 +21,12 @@ tor-circmgr = { path="../tor-circmgr", version="0.0.0" }
 tor-chanmgr = { path="../tor-chanmgr", version="0.0.0" }
 tor-dirmgr = { path="../tor-dirmgr", version="0.0.0" }
 tor-proto = { path="../tor-proto", version="0.0.0" }
-tor-rtcompat = { path="../tor-rtcompat", version="0.0.0", default-features=false }
+tor-rtcompat = { path="../tor-rtcompat", version="0.0.0" }
 
 anyhow = "1.0.38"
 futures = "0.3.13"
 log = "0.4.14"
 thiserror = "1.0.24"
+
+[dev-dependencies]
+tor-rtcompat = { path="../tor-rtcompat", version="0.0.0", features=["tokio"] }

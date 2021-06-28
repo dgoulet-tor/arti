@@ -38,16 +38,16 @@ impl Future for YieldFuture {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "tokio", feature = "async-std")))]
 mod test {
     use super::yield_now;
-    use crate::test_with_runtime;
+    use crate::test_with_all_runtimes;
 
     use std::sync::atomic::{AtomicBool, Ordering};
 
     #[test]
-    fn test_yield() {
-        test_with_runtime(|_| async {
+    fn test_yield() -> std::io::Result<()> {
+        test_with_all_runtimes!(|_| async {
             let b = AtomicBool::new(false);
             use Ordering::SeqCst;
 
@@ -76,6 +76,8 @@ mod test {
                     }
                 }
             );
-        })
+            std::io::Result::Ok(())
+        })?;
+        Ok(())
     }
 }

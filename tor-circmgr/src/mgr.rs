@@ -1128,7 +1128,7 @@ mod test {
 
     #[test]
     fn basic_tests() {
-        tor_rtcompat::test_with_runtime(|rt| async {
+        tor_rtcompat::test_with_one_runtime!(|rt| async {
             let rt = MockSleepRuntime::new(rt);
 
             let builder = FakeBuilder::new(&rt);
@@ -1186,7 +1186,7 @@ mod test {
 
     #[test]
     fn request_timeout() {
-        tor_rtcompat::test_with_runtime(|rt| async {
+        tor_rtcompat::test_with_one_runtime!(|rt| async {
             let rt = MockSleepRuntime::new(rt);
 
             let ports = FakeSpec::new(vec![80_u16, 443]);
@@ -1223,7 +1223,7 @@ mod test {
 
     #[test]
     fn request_unplannable() {
-        tor_rtcompat::test_with_runtime(|rt| async {
+        tor_rtcompat::test_with_one_runtime!(|rt| async {
             let rt = MockSleepRuntime::new(rt);
 
             let ports = FakeSpec::new(vec![80_u16, 443]);
@@ -1241,7 +1241,7 @@ mod test {
 
     #[test]
     fn request_fails_too_much() {
-        tor_rtcompat::test_with_runtime(|rt| async {
+        tor_rtcompat::test_with_one_runtime!(|rt| async {
             let rt = MockSleepRuntime::new(rt);
             let ports = FakeSpec::new(vec![80_u16, 443]);
 
@@ -1258,7 +1258,7 @@ mod test {
 
     #[test]
     fn request_wrong_spec() {
-        tor_rtcompat::test_with_runtime(|rt| async {
+        tor_rtcompat::test_with_one_runtime!(|rt| async {
             let rt = MockSleepRuntime::new(rt);
             let ports = FakeSpec::new(vec![80_u16, 443]);
 
@@ -1280,7 +1280,7 @@ mod test {
 
     #[test]
     fn request_retried() {
-        tor_rtcompat::test_with_runtime(|rt| async {
+        tor_rtcompat::test_with_one_runtime!(|rt| async {
             let rt = MockSleepRuntime::new(rt);
             let ports = FakeSpec::new(vec![80_u16, 443]);
 
@@ -1309,7 +1309,7 @@ mod test {
 
     #[test]
     fn isolated() {
-        tor_rtcompat::test_with_runtime(|rt| async {
+        tor_rtcompat::test_with_one_runtime!(|rt| async {
             let rt = MockSleepRuntime::new(rt);
             let builder = FakeBuilder::new(&rt);
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
@@ -1364,7 +1364,7 @@ mod test {
 
     #[test]
     fn opportunistic() {
-        tor_rtcompat::test_with_runtime(|rt| async {
+        tor_rtcompat::test_with_one_runtime!(|rt| async {
             let rt = MockSleepRuntime::new(rt);
 
             // The first request will time out completely, but we're
@@ -1401,7 +1401,7 @@ mod test {
 
     #[test]
     fn prebuild() {
-        tor_rtcompat::test_with_runtime(|rt| async {
+        tor_rtcompat::test_with_one_runtime!(|rt| async {
             // This time we're going to use ensure_circuit() to make
             // sure that a circuit gets built, and then launch two
             // other circuits that will use it.
@@ -1441,7 +1441,7 @@ mod test {
 
     #[test]
     fn expiration() {
-        tor_rtcompat::test_with_runtime(|rt| async {
+        tor_rtcompat::test_with_one_runtime!(|rt| async {
             // Now let's make some circuits -- one dirty, one clean, and
             // make sure that one expires and one doesn't.
             let rt = MockSleepRuntime::new(rt);

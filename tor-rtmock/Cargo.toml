@@ -20,3 +20,4 @@ tor-rtcompat = { version="0.0.0", path = "../tor-rtcompat" }
 [dev-dependencies]
 futures-await-test = "0.3.0"
 rand = "0.8.3"
+tor-rtcompat = { path="../tor-rtcompat", version="0.0.0", features=["tokio"] }
