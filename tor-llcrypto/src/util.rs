@@ -52,6 +52,10 @@ impl<'a> Asn1<'a> {
     /// (It's not a great API, but it lets us use the ? operator
     /// easily above.)
     fn must_be_rsa_oid(self) -> Option<()> {
+        // Current and nightly rust disagree about whether these imports
+        // are unused.
+        #[allow(unused_imports)]
+        use simple_asn1::{BigUint, OID};
         let oid = match self.0 {
             ASN1Block::ObjectIdentifier(_, ref oid) => Some(oid),
             _ => None,
