@@ -406,8 +406,8 @@ impl RouterDesc {
             let master_key_tok = body.required(MASTER_KEY_ED25519)?;
             let ed_id: Ed25519Public = master_key_tok.parse_arg(0)?;
             let ed_id: ll::pk::ed25519::Ed25519Identity = ed_id.into();
-            #[cfg(not(fuzzing))]
             if ed_id != identity_cert.peek_signing_key().into() {
+                #[cfg(not(fuzzing))]
                 return Err(Error::BadObjectVal(
                     master_key_tok.pos(),
                     "master-key-ed25519 does not match key in identity-ed25519".into(),
