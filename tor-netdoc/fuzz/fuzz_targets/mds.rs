@@ -11,7 +11,7 @@ fuzz_target!(|data: &[u8]| {
             AllowAnnotations::AnnotationsNotAllowed
         };
         if let Ok(s) = std::str::from_utf8(&data[1..]) {
-            let _ = MicrodescReader::new(s, allow).count();
+            let _ = MicrodescReader::new(s, &allow).count();
         }
     }
 });
