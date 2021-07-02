@@ -59,6 +59,7 @@ mod err;
 mod impls;
 mod mgr;
 pub mod path;
+mod timeouts;
 mod usage;
 
 pub use err::Error;

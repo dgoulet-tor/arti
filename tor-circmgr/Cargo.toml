@@ -23,16 +23,18 @@ tor-linkspec = { path="../tor-linkspec", version="0.0.0" }
 tor-rtcompat = { path="../tor-rtcompat", version="0.0.0" }
 
 async-trait = "0.1.48"
+bounded-vec-deque = "0.1.1"
 futures = "0.3.13"
+itertools = "0.10.1"
 rand = "0.8.3"
 log = "0.4.14"
 pin-project = "1.0.5"
+static_assertions = "1.1.0"
 thiserror = "1.0.24"
 weak-table = "0.3.0"
 
 [dev-dependencies]
 futures-await-test = "0.3.0"
-itertools = "0.10.1"
 tor-rtmock = { path="../tor-rtmock", version="0.0.0" }
 tor-netdir = { path="../tor-netdir", version="0.0.0", features=["testing"] }
 tor-rtcompat = { path="../tor-rtcompat", version="0.0.0", features=["tokio"] }
