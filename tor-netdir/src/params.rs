@@ -27,6 +27,36 @@ use tor_units::{BoundedInt32, IntegerMilliseconds, Percentage, SendMeVersion};
 pub struct NetParameters {
     /// A weighting factor for bandwidth calculations
     pub bw_weight_scale: BoundedInt32<0, { i32::MAX }>,
+
+    /// If true, do not attempt to learn circuit-build timeouts at all.
+    pub cbt_learning_disabled: BoundedInt32<0, 1>,
+    /// Number of histograms bins to consider when estimating Xm for a
+    /// Pareto-based circuit timeout estimator.
+    pub cbt_num_xm_modes: BoundedInt32<1, 20>,
+    /// How many recent circuit success/timeout statuses do we remember
+    /// when trying to tell if our circuit timeouts are too low?
+    pub cbt_success_count: BoundedInt32<3, 1000>,
+    /// How many timeouts (in the last `cbt_success_count` observations)
+    /// indicates that our circuit timeouts are too low?
+    pub cbt_max_timeouts: BoundedInt32<3, 10000>, // XXXX-SPEC 10000 is greater than 1000 for cbt_success_count.
+    /// Smallest number of circuit build times we have to view in order to use
+    /// our Pareto-based circuit timeout estimator.
+    pub cbt_min_circs_for_estimate: BoundedInt32<1, 10000>, // XXXX-SPEC 10000 disables this.
+    /// Quantile to use when determining the correct circuit timeout value
+    /// with our Pareto estimator.
+    ///
+    /// (We continue building circuits after this timetout, but only
+    /// for build-tim measurement purposes.)
+    pub cbt_timeout_quantile: Percentage<BoundedInt32<10, 99>>,
+    /// Quantile to use when determining when to abandon circuits completely
+    /// with our Pareto estimator.
+    pub cbt_abandon_quantile: Percentage<BoundedInt32<10, 99>>,
+    /// Lowest permissible timeout value for Pareto timeout estimator.
+    pub cbt_min_timeout: IntegerMilliseconds<BoundedInt32<10, { i32::MAX }>>,
+    /// Timeout value to use for our Pareto timeout estimator when we have
+    /// no initial estimate.
+    pub cbt_initial_timeout: IntegerMilliseconds<BoundedInt32<10, { i32::MAX }>>,
+
     /// The maximum cell window size?
     pub circuit_window: BoundedInt32<100, 1000>,
     /// The decay parameter for circuit priority
@@ -39,12 +69,27 @@ pub struct NetParameters {
     pub sendme_accept_min_version: SendMeVersion,
     /// The minimum sendme version to transmit.
     pub sendme_emit_min_version: SendMeVersion,
+    // TODO: We're not ready for these yet. See #145.
+    //pub cbt_testing_delay: BoundedInt32<1, i32::MAX>,
+    //pub cbt_idle_circuit_timeout_while_learning: BoundedInt32<10,60_000>,
+    //pub cbt_max_circuits_when_learning: BoundedInt32<0,14>,
 }
 
 impl Default for NetParameters {
     fn default() -> Self {
         NetParameters {
             bw_weight_scale: BoundedInt32::checked_new(10000).unwrap(),
+            cbt_abandon_quantile: Percentage::new(BoundedInt32::checked_new(99).unwrap()),
+            cbt_initial_timeout: IntegerMilliseconds::new(
+                BoundedInt32::checked_new(60_000).unwrap(),
+            ),
+            cbt_learning_disabled: BoundedInt32::checked_new(0).unwrap(),
+            cbt_max_timeouts: BoundedInt32::checked_new(18).unwrap(),
+            cbt_min_circs_for_estimate: BoundedInt32::checked_new(100).unwrap(),
+            cbt_min_timeout: IntegerMilliseconds::new(BoundedInt32::checked_new(10).unwrap()),
+            cbt_num_xm_modes: BoundedInt32::checked_new(10).unwrap(),
+            cbt_success_count: BoundedInt32::checked_new(20).unwrap(),
+            cbt_timeout_quantile: Percentage::new(BoundedInt32::checked_new(80).unwrap()),
             circuit_window: BoundedInt32::checked_new(1000).unwrap(),
             circuit_priority_half_life: IntegerMilliseconds::new(
                 BoundedInt32::checked_new(30000).unwrap(),
@@ -66,6 +111,35 @@ impl NetParameters {
         match name {
             "bwweightscale" => {
                 self.bw_weight_scale = BoundedInt32::saturating_from(value);
+            }
+            "cbtdisabled" => {
+                self.cbt_learning_disabled = BoundedInt32::saturating_from(value);
+            }
+            "cbtnummodes" => {
+                self.cbt_num_xm_modes = BoundedInt32::saturating_from(value);
+            }
+            "cbtrecentcount" => {
+                self.cbt_success_count = BoundedInt32::saturating_from(value);
+            }
+            "cbtmaxtimeouts" => {
+                self.cbt_max_timeouts = BoundedInt32::saturating_from(value);
+            }
+            "cbtmincircs" => {
+                self.cbt_min_circs_for_estimate = BoundedInt32::saturating_from(value);
+            }
+            "cbtquantile" => {
+                self.cbt_timeout_quantile = Percentage::new(BoundedInt32::saturating_from(value));
+            }
+            "cbtclosequantile" => {
+                self.cbt_abandon_quantile = Percentage::new(BoundedInt32::saturating_from(value));
+            }
+            "cbtmintimeout" => {
+                self.cbt_min_timeout =
+                    IntegerMilliseconds::new(BoundedInt32::saturating_from(value));
+            }
+            "cbtinitialtimeout" => {
+                self.cbt_initial_timeout =
+                    IntegerMilliseconds::new(BoundedInt32::saturating_from(value));
             }
             "circwindow" => {
                 self.circuit_window = BoundedInt32::saturating_from(value);
