@@ -36,9 +36,9 @@ pub struct NetParameters {
     /// The minimum threshold for circuit patch construction
     pub min_circuit_path_threshold: Percentage<BoundedInt32<25, 95>>,
     /// The minimum sendme version to accept.
-    pub send_me_accept_min_version: SendMeVersion,
+    pub sendme_accept_min_version: SendMeVersion,
     /// The minimum sendme version to transmit.
-    pub send_me_emit_min_version: SendMeVersion,
+    pub sendme_emit_min_version: SendMeVersion,
 }
 
 impl Default for NetParameters {
@@ -51,8 +51,8 @@ impl Default for NetParameters {
             ),
             extend_by_ed25519_id: BoundedInt32::checked_new(0).unwrap(),
             min_circuit_path_threshold: Percentage::new(BoundedInt32::checked_new(60).unwrap()),
-            send_me_accept_min_version: SendMeVersion::new(0),
-            send_me_emit_min_version: SendMeVersion::new(0),
+            sendme_accept_min_version: SendMeVersion::new(0),
+            sendme_emit_min_version: SendMeVersion::new(0),
         }
     }
 }
@@ -82,11 +82,11 @@ impl NetParameters {
                     Percentage::new(BoundedInt32::saturating_from(value));
             }
             "sendme_accept_min_version" => {
-                self.send_me_accept_min_version =
+                self.sendme_accept_min_version =
                     SendMeVersion::new(BoundedInt32::<0, 255>::saturating_from(value).into());
             }
             "sendme_emit_min_version" => {
-                self.send_me_emit_min_version =
+                self.sendme_emit_min_version =
                     SendMeVersion::new(BoundedInt32::<0, 255>::saturating_from(value).into());
             }
             _ => {
@@ -182,7 +182,7 @@ mod test {
         y.push((k, v));
         let z = x.saturating_update(y.into_iter());
         assert!(z.is_empty());
-        assert_eq!(x.send_me_accept_min_version.get(), 30);
+        assert_eq!(x.sendme_accept_min_version.get(), 30);
         assert_eq!(x.min_circuit_path_threshold.as_percent().get(), 95);
     }
 
@@ -198,7 +198,7 @@ mod test {
         y.push((k, v));
         let z = x.saturating_update(y.into_iter());
         assert!(z.is_empty());
-        assert_eq!(x.send_me_accept_min_version.get(), 30);
+        assert_eq!(x.sendme_accept_min_version.get(), 30);
         assert_eq!(x.min_circuit_path_threshold.as_percent().get(), 95);
     }
 
@@ -216,7 +216,7 @@ mod test {
         y.push((k, v));
         let z = x.saturating_update(y.into_iter());
         assert_eq!(z, vec![&String::from("not_a_real_parameter")]);
-        assert_eq!(x.send_me_accept_min_version.get(), 30);
+        assert_eq!(x.sendme_accept_min_version.get(), 30);
     }
 
     #[test]
