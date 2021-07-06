@@ -53,6 +53,9 @@ pub enum Error {
     /// A passed value was above the upper bound for the type.
     #[error("Value {0} was above the lower bound {1} for this type.")]
     AboveUpperBound(i32, i32),
+    /// Tried to convert a negative value to an unsigned type.
+    #[error("Tried to convert a negative value to an unsigned type")]
+    Negative,
     /// Tried to parse a value that was not representable as the
     /// underlying type.
     #[error("Value could not be represented as an i32")]
@@ -195,9 +198,14 @@ impl From<BoundedInt32<0, 255>> for u8 {
     }
 }
 
-impl From<BoundedInt32<1, { i32::MAX }>> for u64 {
-    fn from(val: BoundedInt32<1, { i32::MAX }>) -> u64 {
-        val.value as u64
+impl<const L: i32, const H: i32> TryFrom<BoundedInt32<L, H>> for u64 {
+    type Error = Error;
+    fn try_from(val: BoundedInt32<L, H>) -> Result<Self, Self::Error> {
+        if val.value < 0 {
+            Err(Error::Negative)
+        } else {
+            Ok(val.value as u64)
+        }
     }
 }
 
@@ -362,5 +370,17 @@ mod tests {
     #[should_panic]
     fn checked_too_low() {
         let _: TestBar = "-46".parse().unwrap();
+    }
+
+    #[test]
+    fn bounded_to_u64() {
+        use std::convert::TryInto;
+        let b: BoundedInt32<-100, 100> = BoundedInt32::checked_new(77).unwrap();
+        let u: u64 = b.try_into().unwrap();
+        assert_eq!(u, 77);
+
+        let b: BoundedInt32<-100, 100> = BoundedInt32::checked_new(-77).unwrap();
+        let u: Result<u64, Error> = b.try_into();
+        assert!(u.is_err());
     }
 }
