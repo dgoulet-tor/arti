@@ -1,16 +1,15 @@
 //! Implement traits from [`crate::mgr`] for the circuit types we use.
 
 use crate::mgr::{self};
+use crate::path::OwnedPath;
 use crate::usage::{SupportedCircUsage, TargetCircUsage};
 use crate::{DirInfo, Result};
 use async_trait::async_trait;
 use rand::{rngs::StdRng, SeedableRng};
 use std::convert::TryInto;
 use std::sync::Arc;
-use std::time::Duration;
-use tor_chanmgr::ChanMgr;
-use tor_proto::circuit::ClientCirc;
-use tor_rtcompat::{Runtime, SleepProviderExt};
+use tor_proto::circuit::{CircParameters, ClientCirc};
+use tor_rtcompat::Runtime;
 
 impl mgr::AbstractCirc for tor_proto::circuit::ClientCirc {
     type Id = tor_proto::circuit::UniqId;
@@ -29,28 +28,13 @@ pub(crate) struct Plan {
     final_spec: SupportedCircUsage,
     /// An owned copy of the path to build.
     // TODO: it would be nice if this weren't owned.
-    path: crate::path::OwnedPath,
+    path: OwnedPath,
     /// The protocol parameters to use when constructing the circuit.
-    params: tor_proto::circuit::CircParameters,
-}
-
-/// An object that knows how to build circuits.
-pub(crate) struct Builder<R: Runtime> {
-    /// The runtime used by this circuit builder.
-    runtime: R,
-    /// A channel manager that this circuit builder uses to make chanels.
-    chanmgr: Arc<ChanMgr<R>>,
-}
-
-impl<R: Runtime> Builder<R> {
-    /// Construct a new Builder
-    pub(crate) fn new(runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self {
-        Builder { runtime, chanmgr }
-    }
+    params: CircParameters,
 }
 
 #[async_trait]
-impl<R: Runtime> crate::mgr::AbstractCircBuilder for Builder<R> {
+impl<R: Runtime> crate::mgr::AbstractCircBuilder for crate::build::CircuitBuilder<R> {
     type Circ = ClientCirc;
     type Spec = SupportedCircUsage;
     type Plan = Plan;
@@ -73,8 +57,6 @@ impl<R: Runtime> crate::mgr::AbstractCircBuilder for Builder<R> {
     }
 
     async fn build_circuit(&self, plan: Plan) -> Result<(SupportedCircUsage, Arc<ClientCirc>)> {
-        let delay = Duration::from_secs(5); // TODO: make this configurable and inferred.
-
         let Plan {
             final_spec,
             path,
@@ -83,9 +65,7 @@ impl<R: Runtime> crate::mgr::AbstractCircBuilder for Builder<R> {
         let mut rng =
             StdRng::from_rng(rand::thread_rng()).expect("couldn't construct temporary rng");
 
-        let build_future = path.build_circuit(&mut rng, &self.runtime, &self.chanmgr, &params);
-        let circuit = self.runtime.timeout(delay, build_future).await??;
-
+        let circuit = self.build_owned(&path, &params, &mut rng).await?;
         Ok((final_spec, circuit))
     }
 

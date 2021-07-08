@@ -1,8 +1,9 @@
 //! Code for building paths to an exit relay.
 
-use super::*;
-use crate::{DirInfo, Error, TargetPort};
-use tor_netdir::{NetDir, WeightRole};
+use super::TorPath;
+use crate::{DirInfo, Error, Result, TargetPort};
+use rand::Rng;
+use tor_netdir::{NetDir, Relay, WeightRole};
 
 /// Internal representation of PathBuilder.
 enum ExitPathBuilderInner<'a> {
@@ -77,6 +78,9 @@ impl<'a> ExitPathBuilder<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::path::{assert_same_path_when_owned, OwnedPath, TorPathInner};
+    use std::convert::TryInto;
+    use tor_linkspec::ChanTarget;
     use tor_netdir::testnet;
 
     fn assert_exit_path_ok<'a>(relays: &[Relay<'a>]) {

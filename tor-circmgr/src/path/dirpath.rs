@@ -1,9 +1,9 @@
 //! Code to construct paths to a directory for non-anonymous downloads
-use super::*;
-use crate::{DirInfo, Error};
+use super::TorPath;
+use crate::{DirInfo, Error, Result};
 use tor_netdir::{Relay, WeightRole};
 
-use rand::seq::SliceRandom;
+use rand::{seq::SliceRandom, Rng};
 
 /// A PathBuilder that can connect to a directory.
 #[non_exhaustive]
@@ -48,6 +48,8 @@ impl DirPathBuilder {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::path::assert_same_path_when_owned;
+    use tor_netdir::fallback::FallbackDir;
     use tor_netdir::testnet;
 
     #[test]

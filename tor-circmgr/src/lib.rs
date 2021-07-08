@@ -54,6 +54,7 @@ use log::warn;
 use std::sync::Arc;
 use std::time::Duration;
 
+pub mod build;
 mod err;
 mod impls;
 mod mgr;
@@ -136,13 +137,13 @@ impl<'a> DirInfo<'a> {
 #[derive(Clone)]
 pub struct CircMgr<R: Runtime> {
     /// The underlying circuit manager object that implements our behavior.
-    mgr: Arc<mgr::AbstractCircMgr<impls::Builder<R>, R>>,
+    mgr: Arc<mgr::AbstractCircMgr<build::CircuitBuilder<R>, R>>,
 }
 
 impl<R: Runtime> CircMgr<R> {
     /// Construct a new circuit manager.
     pub fn new(runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self {
-        let builder = impls::Builder::new(runtime.clone(), chanmgr);
+        let builder = build::CircuitBuilder::new(runtime.clone(), chanmgr);
         let mgr = mgr::AbstractCircMgr::new(builder, runtime);
         CircMgr { mgr: Arc::new(mgr) }
     }
@@ -173,30 +174,6 @@ impl<R: Runtime> CircMgr<R> {
     pub fn retire_circ(&self, circ_id: &UniqId) {
         let _ = self.mgr.take_circ(circ_id);
     }
-
-    /* Removed for now: just use TorPath::build_circuit instead.
-
-    /// Construct a client circuit using a given path.
-    ///
-    /// Note: The returned circuit is not managed by the circuit manager and
-    /// therefore won't be used by anything else.
-    ///
-    /// This function is unstable. It is only enabled if the crate was
-    /// built with the `experimental-api` feature.
-    #[cfg(feature = "experimental-api")]
-    pub async fn build_path<RC: Rng + CryptoRng>(
-        &self,
-        rng: &mut RC,
-        netdir: DirInfo<'_>,
-        path: &TorPath<'_>,
-    ) -> Result<Arc<ClientCirc>> {
-        let params = netdir.circ_params();
-        let circ = path
-            .build_circuit(rng, &self.runtime, &self.chanmgr, &params)
-            .await?;
-        Ok(circ)
-    }
-     */
 
     /// Expire every circuit that has been dirty for too long.
     ///

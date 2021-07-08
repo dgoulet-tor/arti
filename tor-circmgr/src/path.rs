@@ -6,16 +6,10 @@
 pub mod dirpath;
 pub mod exitpath;
 
-use tor_chanmgr::ChanMgr;
 use tor_linkspec::{ChanTarget, OwnedChanTarget, OwnedCircTarget};
 use tor_netdir::{fallback::FallbackDir, Relay};
-use tor_proto::circuit::{CircParameters, ClientCirc};
-use tor_rtcompat::Runtime;
 
-use futures::task::SpawnExt;
-use rand::{CryptoRng, Rng};
-use std::convert::{TryFrom, TryInto};
-use std::sync::Arc;
+use std::convert::TryFrom;
 
 use crate::usage::ExitPolicy;
 use crate::{Error, Result};
@@ -89,23 +83,6 @@ impl<'a> TorPath<'a> {
             Path(p) => p.len(),
         }
     }
-
-    /// Try to build a circuit corresponding to this path.
-    pub async fn build_circuit<RNG, RT>(
-        &self,
-        rng: &mut RNG,
-        runtime: &RT,
-        chanmgr: &ChanMgr<RT>,
-        params: &CircParameters,
-    ) -> Result<Arc<ClientCirc>>
-    where
-        RNG: Rng + CryptoRng,
-        RT: Runtime,
-    {
-        let owned: OwnedPath = self.try_into()?;
-
-        owned.build_circuit(rng, runtime, chanmgr, params).await
-    }
 }
 
 /// A path composed entirely of owned components.
@@ -135,45 +112,8 @@ impl<'a> TryFrom<&TorPath<'a>> for OwnedPath {
 }
 
 impl OwnedPath {
-    /// Construct a circuit for this path.
-    pub(crate) async fn build_circuit<RNG, RT>(
-        self,
-        rng: &mut RNG,
-        runtime: &RT,
-        chanmgr: &ChanMgr<RT>,
-        params: &CircParameters,
-    ) -> Result<Arc<ClientCirc>>
-    where
-        RNG: Rng + CryptoRng,
-        RT: Runtime,
-    {
-        let chan = chanmgr.get_or_launch(self.first_hop()?).await?;
-        let (pending_circ, reactor) = chan.new_circ(rng).await?;
-
-        runtime.spawn(async {
-            let _ = reactor.run().await;
-        })?;
-
-        match self {
-            OwnedPath::ChannelOnly(_) => {
-                let circ = pending_circ.create_firsthop_fast(rng, params).await?;
-                Ok(circ)
-            }
-            OwnedPath::Normal(p) => {
-                assert!(!p.is_empty());
-                let circ = pending_circ
-                    .create_firsthop_ntor(rng, &p[0], params)
-                    .await?;
-                for relay in p[1..].iter() {
-                    circ.extend_ntor(rng, relay, params).await?;
-                }
-                Ok(circ)
-            }
-        }
-    }
-
     /// Internal: Get the first hop of the path as a ChanTarget.
-    fn first_hop(&self) -> Result<&(dyn ChanTarget + Sync)> {
+    pub(crate) fn first_hop(&self) -> Result<&(dyn ChanTarget + Sync)> {
         match self {
             OwnedPath::ChannelOnly(c) => Ok(c),
             OwnedPath::Normal(p) if p.is_empty() => {
@@ -188,6 +128,7 @@ impl OwnedPath {
 /// path.
 #[cfg(test)]
 fn assert_same_path_when_owned(path: &TorPath<'_>) {
+    use std::convert::TryInto;
     let owned: OwnedPath = path.try_into().unwrap();
 
     match (&owned, &path.inner) {
