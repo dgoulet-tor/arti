@@ -122,6 +122,15 @@ impl OwnedPath {
             OwnedPath::Normal(p) => Ok(&p[0]),
         }
     }
+
+    /// Return the number of hops in this path.
+    #[allow(clippy::len_without_is_empty)]
+    pub(crate) fn len(&self) -> usize {
+        match self {
+            OwnedPath::ChannelOnly(_) => 1,
+            OwnedPath::Normal(p) => p.len(),
+        }
+    }
 }
 
 /// For testing: make sure that `path` is the same when it is an owned

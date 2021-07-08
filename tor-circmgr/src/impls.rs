@@ -34,7 +34,7 @@ pub(crate) struct Plan {
 }
 
 #[async_trait]
-impl<R: Runtime> crate::mgr::AbstractCircBuilder for crate::build::CircuitBuilder<R> {
+impl<R: Runtime> crate::mgr::AbstractCircBuilder for Arc<crate::build::CircuitBuilder<R>> {
     type Circ = ClientCirc;
     type Spec = SupportedCircUsage;
     type Plan = Plan;
@@ -62,10 +62,9 @@ impl<R: Runtime> crate::mgr::AbstractCircBuilder for crate::build::CircuitBuilde
             path,
             params,
         } = plan;
-        let mut rng =
-            StdRng::from_rng(rand::thread_rng()).expect("couldn't construct temporary rng");
+        let rng = StdRng::from_rng(rand::thread_rng()).expect("couldn't construct temporary rng");
 
-        let circuit = self.build_owned(&path, &params, &mut rng).await?;
+        let circuit = self.build_owned(path, &params, rng).await?;
         Ok((final_spec, circuit))
     }
 

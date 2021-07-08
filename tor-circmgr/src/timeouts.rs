@@ -10,11 +10,11 @@
 
 use std::time::Duration;
 
-mod pareto;
+pub(crate) mod pareto;
 
 /// An object that calculates circuit timeout thresholds from the history
 /// of circuit build times.
-trait TimeoutEstimator {
+pub(crate) trait TimeoutEstimator {
     /// Record that a given circuit hop has completed.
     ///
     /// The `hop` number is a zero-indexed value for which hop just completed.
