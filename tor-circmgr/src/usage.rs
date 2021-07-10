@@ -58,8 +58,8 @@ impl ExitPolicy {
     /// Make a new exit policy from a given Relay.
     pub(crate) fn from_relay(relay: &Relay<'_>) -> Self {
         Self {
-            v4: Arc::clone(relay.ipv4_policy()),
-            v6: Arc::clone(relay.ipv6_policy()),
+            v4: relay.ipv4_policy(),
+            v6: relay.ipv6_policy(),
         }
     }
 

@@ -474,11 +474,11 @@ impl<'a> Relay<'a> {
     }
     /// Return true if this relay allows exiting to `port` on IPv4.
     pub fn supports_exit_port_ipv4(&self, port: u16) -> bool {
-        !self.rs.is_flagged_bad_exit() && self.md.ipv4_policy().allows_port(port)
+        self.ipv4_policy().allows_port(port)
     }
     /// Return true if this relay allows exiting to `port` on IPv6.
     pub fn supports_exit_port_ipv6(&self, port: u16) -> bool {
-        !self.rs.is_flagged_bad_exit() && self.md.ipv6_policy().allows_port(port)
+        self.ipv6_policy().allows_port(port)
     }
     /// Return true if this relay is suitable for use as a directory
     /// cache.
@@ -504,19 +504,39 @@ impl<'a> Relay<'a> {
         self.md.family().contains(other.rsa_id()) && other.md.family().contains(self.rsa_id())
     }
 
-    /// Return the IPv4 exit policy for this relay.
-    pub fn ipv4_policy(&self) -> &Arc<PortPolicy> {
-        // XXXX: Return Reject * if the BadExit flag is present.  Possibly
-        // add an accessor to give the declared policy, but it shouldn't
-        // be this one.
-        self.md.ipv4_policy()
+    /// Return the IPv4 exit policy for this relay. If the relay has been marked BadExit, return an
+    /// empty policy
+    pub fn ipv4_policy(&self) -> Arc<PortPolicy> {
+        if !self.rs.is_flagged_bad_exit() {
+            self.ipv4_declared_policy().clone()
+        } else {
+            Arc::new(PortPolicy::new_reject_all())
+        }
     }
 
-    /// Return the IPv6 exit policy for this relay.
-    pub fn ipv6_policy(&self) -> &Arc<PortPolicy> {
+    /// Return the IPv6 exit policy for this relay. If the relay has been marked BadExit, return an
+    /// empty policy
+    pub fn ipv6_policy(&self) -> Arc<PortPolicy> {
+        if !self.rs.is_flagged_bad_exit() {
+            self.md.ipv6_policy().clone()
+        } else {
+            Arc::new(PortPolicy::new_reject_all())
+        }
+    }
+
+    /// Return the IPv6 exit policy declared by this relay. Contrary to [`ipv6_policy`],
+    /// this does not verify if the relay is marked BadExit.
+    pub fn ipv6_declared_policy(&self) -> &Arc<PortPolicy> {
         // XXXX: Return Reject * if the BadExit flag is present.
         self.md.ipv6_policy()
     }
+
+    /// Return the IPv4 exit policy declared by this relay. Contrary to [`ipv4_policy`],
+    /// this does not verify if the relay is marked BadExit.
+    pub fn ipv4_declared_policy(&self) -> &Arc<PortPolicy> {
+        self.md.ipv4_policy()
+    }
+
     /// Return a reference to this relay's "router status" entry in
     /// the consensus.
     ///
