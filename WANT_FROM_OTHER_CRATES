@@ -8,18 +8,27 @@ dalek-crypto:
 
 ed25519-dalek:
 * defer signature verification without prehash mode.
+  (I want a way, given a document D and a signature S, to construct
+  a small object representing (SHA(D), S) so that I can check that
+  signature later on without having to hold on to all of D.)
 
 phf:
-* much cheaper hash function
+* A much cheaper hash function.
 
-rsa:
+rsa: (see arti#146 for discussion)
 * get raw signed data, to allow multiple signed formats.
+  (Tor has some places in the specification where we say "a valid signature
+  is a signature whose signed data _begins with_ the SHA256 of the document",
+  to allow the possibility of adding a second hash to the future. But `rsa`
+  has no way to say "check this signature and its padding, then give me
+  the signed data.")
 
-crypto:
-* key agreement trait (Or do they have one already?)
+crypto: (see arti#146 for discussion)
+* A key agreement trait, specifically for diffie-hellman operations.
+  (Or do they have one already?)
 
 ed25519 trait:
-* batch support. (or do they have one already?)
+* Batch support. (or do they have this already?)
 
 native-tls:
 * Support for RFC5705 exporters where available.
@@ -34,13 +43,10 @@ bitvec
 ring:
 * static curve25519
 
-pem:
-* should use multiline support or at least not copy when decoding
+pem: (see arti#146 for discussion)
+* should use multiline support, or at least not copy when decoding
   base64 multiline.
 * should be stricter?
-
-rsa-der:
-* Support for RSA key without OID
 
 webpki:
 * Support for cert without extensions and/or without alpn
