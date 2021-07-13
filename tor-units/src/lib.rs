@@ -307,16 +307,19 @@ impl IsolationToken {
     /// # Panics
     /// Panics after 2^64 calls to prevent looping
     pub fn new() -> Self {
+        /// Internal counter used to generate different tokens each time
         static COUNTER: AtomicU64 = AtomicU64::new(1);
+        // Ordering::Relaxed is fine because we don't care about causality, we just want a
+        // different number each time
         let token = COUNTER.fetch_add(1, Ordering::Relaxed);
         assert!(token < u64::MAX);
         token.into()
     }
 }
 
-impl Into<u64> for IsolationToken {
-    fn into(self) -> u64 {
-        self.0
+impl From<IsolationToken> for u64 {
+    fn from(token: IsolationToken) -> Self {
+        token.0
     }
 }
 

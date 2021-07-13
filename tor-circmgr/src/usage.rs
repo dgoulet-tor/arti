@@ -81,7 +81,9 @@ pub(crate) enum TargetCircUsage {
     Dir,
     /// Use to exit to one or more ports.
     Exit {
+        /// List of ports the circuit has to allow
         ports: Vec<TargetPort>,
+        /// Isolation group the circuit shall be part of
         isolation_group: IsolationToken,
     },
 }
@@ -96,7 +98,9 @@ pub(crate) enum SupportedCircUsage {
     Dir,
     /// Usable to exit to to a set of ports.
     Exit {
+        /// Exit policy of the circuit
         policy: ExitPolicy,
+        /// Isolation group the circuit shall be part of
         isolation_group: IsolationToken,
     },
 }

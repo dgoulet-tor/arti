@@ -38,13 +38,18 @@ fn stream_preference(req: &SocksRequest, addr: &str) -> ConnectPrefs {
     prefs
 }
 
+/// Key used to isolate connections.
+/// Composed of an usize representing the listener which accepted the connection,
+/// the IpAddr of the client, and the authentification provided by the client
+type IsoKey = (usize, IpAddr, SocksAuth);
+
 /// Given a just-received TCP connection on a SOCKS port, handle the
 /// SOCKS handshake and relay the connection over the Tor network.
 async fn handle_socks_conn<R, S>(
     runtime: R,
     client: Arc<TorClient<R>>,
     stream: S,
-    isolation_map: Arc<Mutex<HashMap<(usize, IpAddr, SocksAuth), IsolationToken>>>,
+    isolation_map: Arc<Mutex<HashMap<IsoKey, IsolationToken>>>,
     isolation_info: (usize, IpAddr),
 ) -> Result<()>
 where
