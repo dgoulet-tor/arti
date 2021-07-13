@@ -1,3 +1,16 @@
+This is a list of things we found ourselves wanting while we were
+using other crates.
+
+Some of these are probably a great idea; some of them are probably
+not.  Step one for every one of these is to make sure that it really
+is a good idea.  If it is, then let's carefully figure out what we
+need, THEN see whether that maintainers of the crate in question are
+open to having a feature that accomplishes what we want, and THEN
+offer to build it for them, if we know how.
+
+
+==================================================
+
 rust itself:
  * specialization.
  * existential types.
@@ -28,11 +41,13 @@ crypto: (see arti#146 for discussion)
   (Or do they have one already?)
 
 ed25519 trait:
-* Batch support. (or do they have this already?)
+* Batch signature verification support. (or do they have this already?)
 
 native-tls:
 * Support for RFC5705 exporters where available.
 
+coarsetime:
+* Officially supported conversion to/from u64, OR an AtomicInstant type.
 
 
 # Not actually using these crates:
