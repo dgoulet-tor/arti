@@ -49,6 +49,7 @@ use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackDir, NetDir};
 use tor_proto::circuit::{CircParameters, ClientCirc, UniqId};
 use tor_rtcompat::Runtime;
+use tor_units::IsolationToken;
 
 use log::warn;
 use std::sync::Arc;
@@ -162,10 +163,14 @@ impl<R: Runtime> CircMgr<R> {
         &self,
         netdir: DirInfo<'_>,
         ports: &[TargetPort],
+        isolation_group: IsolationToken,
     ) -> Result<Arc<ClientCirc>> {
         self.expire_dirty_circuits();
         let ports = ports.iter().map(Clone::clone).collect();
-        let usage = TargetCircUsage::Exit(ports);
+        let usage = TargetCircUsage::Exit {
+            ports,
+            isolation_group,
+        };
         self.mgr.get_or_launch(&usage, netdir).await
     }
 
