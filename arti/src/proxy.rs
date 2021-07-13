@@ -2,16 +2,19 @@
 
 use futures::future::FutureExt;
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use futures::lock::Mutex;
 use futures::stream::StreamExt;
 use futures::task::SpawnExt;
 use log::{error, info, warn};
+use std::collections::HashMap;
 use std::io::Result as IoResult;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
 use tor_client::{ConnectPrefs, TorClient};
 use tor_rtcompat::{Runtime, TcpListener, TimeoutError};
-use tor_socksproto::{SocksCmd, SocksRequest};
+use tor_socksproto::{SocksAuth, SocksCmd, SocksRequest};
+use tor_units::IsolationToken;
 
 use anyhow::{Context, Result};
 
@@ -37,7 +40,13 @@ fn stream_preference(req: &SocksRequest, addr: &str) -> ConnectPrefs {
 
 /// Given a just-received TCP connection on a SOCKS port, handle the
 /// SOCKS handshake and relay the connection over the Tor network.
-async fn handle_socks_conn<R, S>(runtime: R, client: Arc<TorClient<R>>, stream: S) -> Result<()>
+async fn handle_socks_conn<R, S>(
+    runtime: R,
+    client: Arc<TorClient<R>>,
+    stream: S,
+    isolation_map: Arc<Mutex<HashMap<(usize, IpAddr, SocksAuth), IsolationToken>>>,
+    isolation_info: (usize, IpAddr),
+) -> Result<()>
 where
     R: Runtime,
     S: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
@@ -91,7 +100,17 @@ where
         return Ok(());
     }
 
-    let prefs = stream_preference(&request, &addr);
+    let auth = request.auth().clone();
+    let (socket, ip) = isolation_info;
+
+    let mut prefs = stream_preference(&request, &addr);
+    prefs.set_isolation_group(
+        *isolation_map
+            .lock()
+            .await
+            .entry((socket, ip, auth))
+            .or_insert_with(IsolationToken::new),
+    );
     let stream = client.connect(&addr, port, Some(prefs)).await;
     let stream = match stream {
         Ok(s) => s,
@@ -212,14 +231,29 @@ pub(crate) async fn run_socks_proxy<R: Runtime>(
     }
 
     let mut incoming =
-        futures::stream::select_all(listeners.into_iter().map(TcpListener::incoming));
-
-    while let Some(stream) = incoming.next().await {
-        let (stream, _addr) = stream.context("Failed to receive incoming stream on SOCKS port")?;
+        futures::stream::select_all(listeners.into_iter().map(TcpListener::incoming).scan(
+            0,
+            |sock_id, stream| {
+                let id = *sock_id;
+                *sock_id += 1;
+                Some(stream.map(move |stream| (stream, id)))
+            },
+        ));
+    let isolation_map = Arc::new(Mutex::new(HashMap::new()));
+    while let Some((stream, sock_id)) = incoming.next().await {
+        let (stream, addr) = stream.context("Failed to receive incoming stream on SOCKS port")?;
         let client_ref = Arc::clone(&client);
         let runtime_copy = runtime.clone();
+        let isolation_map_ref = Arc::clone(&isolation_map);
         runtime.spawn(async move {
-            let res = handle_socks_conn(runtime_copy, client_ref, stream).await;
+            let res = handle_socks_conn(
+                runtime_copy,
+                client_ref,
+                stream,
+                isolation_map_ref,
+                (sock_id, addr.ip()),
+            )
+            .await;
             if let Err(e) = res {
                 warn!("connection exited with error: {}", e);
             }
