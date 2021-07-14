@@ -4,12 +4,11 @@
 //! Once the client is bootstrapped, you can make anonymous
 //! connections ("streams") over the Tor network using
 //! `TorClient::connect()`.
-use tor_circmgr::TargetPort;
+use tor_circmgr::{IsolationToken, TargetPort};
 use tor_dirmgr::DirMgrConfig;
 use tor_proto::circuit::IpVersionPreference;
 use tor_proto::stream::DataStream;
 use tor_rtcompat::{Runtime, SleepProviderExt};
-use tor_units::IsolationToken;
 
 use std::sync::Arc;
 use std::time::Duration;

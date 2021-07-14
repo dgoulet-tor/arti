@@ -1,11 +1,11 @@
 //! Code related to tracking what activities a circuit can be used for.
 
 use rand::Rng;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use tor_netdir::Relay;
 use tor_netdoc::types::policy::PortPolicy;
-use tor_units::IsolationToken;
 
 use crate::path::{dirpath::DirPathBuilder, exitpath::ExitPathBuilder, TorPath};
 
@@ -52,6 +52,32 @@ impl TargetPort {
         } else {
             r.supports_exit_port_ipv4(self.port)
         }
+    }
+}
+
+/// This type represent a token used to isolate unrelated streams on different circuits.
+///
+/// Tokens created with [`IsolationToken::new`] are all different from one another, and different
+/// from tokens created with [`IsolationToken::default`], however tokens created with [`IsolationToken::default`]
+/// are all equals.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct IsolationToken(u64);
+
+impl IsolationToken {
+    /// Create a new IsolationToken which is different from all other tokens this function created.
+    /// Note that it _can_ be equal to other tokens created using From/Into. You should not mix
+    /// usage of From/Into and this function to create new tokens.
+    ///
+    /// # Panics
+    /// Panics after 2^64 calls to prevent looping.
+    pub fn new() -> Self {
+        /// Internal counter used to generate different tokens each time
+        static COUNTER: AtomicU64 = AtomicU64::new(1);
+        // Ordering::Relaxed is fine because we don't care about causality, we just want a
+        // different number each time
+        let token = COUNTER.fetch_add(1, Ordering::Relaxed);
+        assert!(token < u64::MAX);
+        IsolationToken(token)
     }
 }
 

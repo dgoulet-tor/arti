@@ -40,7 +40,6 @@
 use derive_more::{Add, Display, Div, From, FromStr, Mul};
 
 use std::convert::{TryFrom, TryInto};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -292,34 +291,6 @@ impl SendMeVersion {
     /// Helper
     pub fn get(&self) -> u8 {
         self.0
-    }
-}
-
-/// This type represent a token used to isolate unrelated streams on different circuits.
-#[derive(Clone, Copy, From, Debug, PartialEq, Eq, Default)]
-pub struct IsolationToken(u64);
-
-impl IsolationToken {
-    /// Create a new IsolationToken which is different from all other tokens this function created.
-    /// Note that it _can_ be equal to other tokens created using From/Into. You should not mix
-    /// usage of From/Into and this function to create new tokens.
-    ///
-    /// # Panics
-    /// Panics after 2^64 calls to prevent looping
-    pub fn new() -> Self {
-        /// Internal counter used to generate different tokens each time
-        static COUNTER: AtomicU64 = AtomicU64::new(1);
-        // Ordering::Relaxed is fine because we don't care about causality, we just want a
-        // different number each time
-        let token = COUNTER.fetch_add(1, Ordering::Relaxed);
-        assert!(token < u64::MAX);
-        token.into()
-    }
-}
-
-impl From<IsolationToken> for u64 {
-    fn from(token: IsolationToken) -> Self {
-        token.0
     }
 }
 

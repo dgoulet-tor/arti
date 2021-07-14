@@ -49,7 +49,6 @@ use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackDir, NetDir};
 use tor_proto::circuit::{CircParameters, ClientCirc, UniqId};
 use tor_rtcompat::Runtime;
-use tor_units::IsolationToken;
 
 use log::warn;
 use std::sync::Arc;
@@ -63,7 +62,7 @@ pub mod path;
 mod usage;
 
 pub use err::Error;
-pub use usage::TargetPort;
+pub use usage::{IsolationToken, TargetPort};
 
 use usage::TargetCircUsage;
 

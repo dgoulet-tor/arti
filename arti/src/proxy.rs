@@ -11,10 +11,10 @@ use std::io::Result as IoResult;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
+use tor_circmgr::IsolationToken;
 use tor_client::{ConnectPrefs, TorClient};
 use tor_rtcompat::{Runtime, TcpListener, TimeoutError};
 use tor_socksproto::{SocksAuth, SocksCmd, SocksRequest};
-use tor_units::IsolationToken;
 
 use anyhow::{Context, Result};
 
