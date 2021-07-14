@@ -74,7 +74,7 @@ impl<R: Runtime> CircuitBuilder<R> {
             OwnedPath::ChannelOnly(_) => {
                 let circ = pending_circ.create_firsthop_fast(&mut rng, &params).await?;
                 self.timeouts
-                    .note_hop_completed(0, Instant::now() - start_time, true);
+                    .note_hop_completed(0, self.runtime.now() - start_time, true);
                 n_hops_built.fetch_add(1, Ordering::SeqCst);
                 Ok(circ)
             }
@@ -85,7 +85,7 @@ impl<R: Runtime> CircuitBuilder<R> {
                     .create_firsthop_ntor(&mut rng, &p[0], &params)
                     .await?;
                 self.timeouts
-                    .note_hop_completed(0, Instant::now() - start_time, n_hops == 0);
+                    .note_hop_completed(0, self.runtime.now() - start_time, n_hops == 0);
                 n_hops_built.fetch_add(1, Ordering::SeqCst);
                 let mut hop_num = 1;
                 for relay in p[1..].iter() {
@@ -93,7 +93,7 @@ impl<R: Runtime> CircuitBuilder<R> {
                     n_hops_built.fetch_add(1, Ordering::SeqCst);
                     self.timeouts.note_hop_completed(
                         hop_num,
-                        Instant::now() - start_time,
+                        self.runtime.now() - start_time,
                         hop_num == n_hops,
                     );
                     hop_num += 1;
@@ -112,7 +112,7 @@ impl<R: Runtime> CircuitBuilder<R> {
     ) -> Result<Arc<ClientCirc>> {
         let action = Action::BuildCircuit { length: path.len() };
         let (timeout, abandon_timeout) = self.timeouts.timeouts(&action);
-        let start_time = Instant::now();
+        let start_time = self.runtime.now();
 
         // TODO: This is probably not the best way for build_notimeout to
         // tell us how many hops it managed to build, but at least it is
@@ -130,7 +130,7 @@ impl<R: Runtime> CircuitBuilder<R> {
             Err(Error::CircTimeout) => {
                 let n_built = hops_built.load(Ordering::SeqCst);
                 self.timeouts
-                    .note_circ_timeout(n_built as u8, Instant::now() - start_time);
+                    .note_circ_timeout(n_built as u8, self.runtime.now() - start_time);
                 Err(Error::CircTimeout)
             }
             Err(e) => Err(e),
