@@ -907,6 +907,11 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
     pub(crate) fn peek_runtime(&self) -> &R {
         &self.runtime
     }
+
+    /// Get a reference to this manager's builder.
+    pub(crate) fn peek_builder(&self) -> &B {
+        &self.builder
+    }
 }
 
 #[cfg(test)]

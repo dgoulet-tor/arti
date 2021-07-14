@@ -44,6 +44,13 @@ impl<R: Runtime> CircuitBuilder<R> {
         }
     }
 
+    /// Reconfigure this builder using the latest set of network parameters.
+    ///
+    /// (NOTE: for now, this only affects circuit timeout estimation.)
+    pub fn update_network_parameters(&self, p: &tor_netdir::params::NetParameters) {
+        self.timeouts.update_params(p.into());
+    }
+
     /// Build a circuit, without performing any timeout operations.
     ///
     /// After each hop is built, increments n_hops_built. (TODO: Find

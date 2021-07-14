@@ -332,7 +332,7 @@ impl ParetoDist {
 ///
 /// These are typically derived from a set of consensus parameters.
 #[derive(Clone, Debug)]
-struct Params {
+pub(crate) struct Params {
     /// Should we use our estimates when deciding on circuit timeouts.
     ///
     /// When this is false, our timeouts are fixed to the default.
@@ -478,7 +478,7 @@ impl Default for ParetoTimeoutEstimator {
 
 impl ParetoTimeoutEstimator {
     /// Change the parameters used for this estimator.
-    fn update_params(&self, parameters: Params) {
+    pub(crate) fn update_params(&self, parameters: Params) {
         let mut this = self.est.lock().unwrap();
         this.p = parameters;
         let new_success_len = this.p.success_history_len;

@@ -149,6 +149,14 @@ impl<R: Runtime> CircMgr<R> {
         CircMgr { mgr: Arc::new(mgr) }
     }
 
+    /// Reconfigure this circuit manager using the latest set of
+    /// network parameters.
+    ///
+    /// (NOTE: for now, this only affects circuit timeout estimation.)
+    pub fn update_network_parameters(&self, p: &tor_netdir::params::NetParameters) {
+        self.mgr.peek_builder().update_network_parameters(p);
+    }
+
     /// Return a circuit suitable for sending one-hop BEGINDIR streams,
     /// launching it if necessary.
     pub async fn get_or_launch_dir(&self, netdir: DirInfo<'_>) -> Result<Arc<ClientCirc>> {
