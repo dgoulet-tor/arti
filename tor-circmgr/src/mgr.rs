@@ -1096,36 +1096,6 @@ mod test {
         }
     }
 
-    // TODO: If this is generally useful maybe it should be a method on
-    // MockSleepRuntime.
-    async fn wait_for<RT: Runtime, F: futures::Future>(
-        rt: &MockSleepRuntime<RT>,
-        fut: F,
-    ) -> F::Output {
-        let (send, mut recv) = oneshot::channel();
-        let increment = Duration::from_millis(1);
-
-        let (output, _) = futures::join!(
-            async {
-                let o = fut.await;
-                send.send(()).unwrap();
-                o
-            },
-            async {
-                loop {
-                    rt.advance(increment).await;
-                    match recv.try_recv() {
-                        Err(_) => break,
-                        Ok(Some(())) => break,
-                        _ => {}
-                    }
-                }
-            }
-        );
-
-        output
-    }
-
     #[test]
     fn basic_tests() {
         tor_rtcompat::test_with_one_runtime!(|rt| async {
@@ -1138,7 +1108,7 @@ mod test {
             let webports = FakeSpec::new(vec![80_u16, 443]);
 
             // Launch a circuit; make sure we get it.
-            let c1 = wait_for(&rt, mgr.get_or_launch(&webports, di())).await;
+            let c1 = rt.wait_for(mgr.get_or_launch(&webports, di())).await;
             let c1 = c1.unwrap();
 
             // Make sure we get the one we already made if we ask for it.
@@ -1154,14 +1124,12 @@ mod test {
             let dnsport = FakeSpec::new(vec![53_u16]);
             let dnsport_restrict = dnsport.clone().isolated(7);
 
-            let (c3, c4) = wait_for(
-                &rt,
-                futures::future::join(
+            let (c3, c4) = rt
+                .wait_for(futures::future::join(
                     mgr.get_or_launch(&dnsport, di()),
                     mgr.get_or_launch(&dnsport_restrict, di()),
-                ),
-            )
-            .await;
+                ))
+                .await;
 
             let c3 = c3.unwrap();
             let c4 = c4.unwrap();
@@ -1177,7 +1145,7 @@ mod test {
             assert!(now_its_gone.is_none());
             // Having removed them, let's launch another dnsport and make
             // sure we get a different circuit.
-            let c5 = wait_for(&rt, mgr.get_or_launch(&dnsport, di())).await;
+            let c5 = rt.wait_for(mgr.get_or_launch(&dnsport, di())).await;
             let c5 = c5.unwrap();
             assert!(!Arc::ptr_eq(&c3, &c5));
             assert!(!Arc::ptr_eq(&c4, &c5));
@@ -1197,7 +1165,7 @@ mod test {
             builder.set(ports.clone(), vec![FakeOp::Fail, FakeOp::Timeout]);
 
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
-            let c1 = wait_for(&rt, mgr.get_or_launch(&ports, di())).await;
+            let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
             assert!(matches!(c1, Err(Error::RequestFailed(_))));
 
@@ -1215,7 +1183,7 @@ mod test {
             );
 
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
-            let c1 = wait_for(&rt, mgr.get_or_launch(&ports, di())).await;
+            let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
             assert!(matches!(c1, Err(Error::RequestFailed(_))));
         });
@@ -1233,7 +1201,7 @@ mod test {
             builder.set(ports.clone(), vec![FakeOp::NoPlan; 2000]);
 
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
-            let c1 = wait_for(&rt, mgr.get_or_launch(&ports, di())).await;
+            let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
             assert!(matches!(c1, Err(Error::RequestFailed(_))));
         });
@@ -1250,7 +1218,7 @@ mod test {
             builder.set(ports.clone(), vec![FakeOp::Fail; 1000]);
 
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
-            let c1 = wait_for(&rt, mgr.get_or_launch(&ports, di())).await;
+            let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
             assert!(matches!(c1, Err(Error::RequestFailed(_))));
         });
@@ -1272,7 +1240,7 @@ mod test {
             );
 
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
-            let c1 = wait_for(&rt, mgr.get_or_launch(&ports, di())).await;
+            let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
             assert!(matches!(c1, Ok(_)));
         });
@@ -1291,14 +1259,12 @@ mod test {
 
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
 
-            let (c1, c2) = wait_for(
-                &rt,
-                futures::future::join(
+            let (c1, c2) = rt
+                .wait_for(futures::future::join(
                     mgr.get_or_launch(&ports, di()),
                     mgr.get_or_launch(&ports, di()),
-                ),
-            )
-            .await;
+                ))
+                .await;
 
             let c1 = c1.unwrap();
             let c2 = c2.unwrap();
@@ -1333,9 +1299,8 @@ mod test {
                 let d1 = delays[0];
                 let d2 = delays[1];
                 let d3 = delays[2];
-                let (c_iso1, c_iso2, c_none) = wait_for(
-                    &rt,
-                    futures::future::join3(
+                let (c_iso1, c_iso2, c_none) = rt
+                    .wait_for(futures::future::join3(
                         async {
                             rt.sleep(*d1).await;
                             mgr.get_or_launch(&iso1, di()).await
@@ -1348,9 +1313,8 @@ mod test {
                             rt.sleep(*d3).await;
                             mgr.get_or_launch(&no_iso, di()).await
                         },
-                    ),
-                )
-                .await;
+                    ))
+                    .await;
 
                 let c_iso1 = c_iso1.unwrap();
                 let c_iso2 = c_iso2.unwrap();
@@ -1381,14 +1345,15 @@ mod test {
             // Note that ports2 will be wider than ports1, so the second
             // request will have to launch a new circuit.
 
-            let (c1, c2) = wait_for(
-                &rt,
-                futures::future::join(mgr.get_or_launch(&ports1, di()), async {
-                    rt.sleep(Duration::from_millis(100)).await;
-                    mgr.get_or_launch(&ports2, di()).await
-                }),
-            )
-            .await;
+            let (c1, c2) = rt
+                .wait_for(futures::future::join(
+                    mgr.get_or_launch(&ports1, di()),
+                    async {
+                        rt.sleep(Duration::from_millis(100)).await;
+                        mgr.get_or_launch(&ports2, di()).await
+                    },
+                ))
+                .await;
 
             if c2.is_ok() {
                 let c1 = c1.unwrap();
@@ -1412,9 +1377,8 @@ mod test {
             let ports1 = FakeSpec::new(vec![80_u16, 443]);
             let ports2 = FakeSpec::new(vec![80_u16]);
             let ports3 = FakeSpec::new(vec![443_u16]);
-            let (ok, c1, c2) = wait_for(
-                &rt,
-                futures::future::join3(
+            let (ok, c1, c2) = rt
+                .wait_for(futures::future::join3(
                     mgr.ensure_circuit(&ports1, di()),
                     async {
                         rt.sleep(Duration::from_millis(10)).await;
@@ -1424,9 +1388,8 @@ mod test {
                         rt.sleep(Duration::from_millis(50)).await;
                         mgr.get_or_launch(&ports3, di()).await
                     },
-                ),
-            )
-            .await;
+                ))
+                .await;
 
             assert!(ok.is_ok());
 
@@ -1451,14 +1414,12 @@ mod test {
             let imap = FakeSpec::new(vec![993_u16]);
             let pop = FakeSpec::new(vec![995_u16]);
 
-            let (ok, pop1) = wait_for(
-                &rt,
-                futures::future::join(
+            let (ok, pop1) = rt
+                .wait_for(futures::future::join(
                     mgr.ensure_circuit(&imap, di()),
                     mgr.get_or_launch(&pop, di()),
-                ),
-            )
-            .await;
+                ))
+                .await;
 
             assert!(ok.is_ok());
             let pop1 = pop1.unwrap();
@@ -1466,7 +1427,7 @@ mod test {
             rt.advance(Duration::from_secs(15)).await;
             let expiration_cutoff = mgr.peek_runtime().now();
             rt.advance(Duration::from_secs(15)).await;
-            let imap1 = wait_for(&rt, mgr.get_or_launch(&imap, di())).await.unwrap();
+            let imap1 = rt.wait_for(mgr.get_or_launch(&imap, di())).await.unwrap();
 
             // This should expire the pop circuit, since it came from
             // get_or_launch() [which marks the circuit as being
@@ -1474,14 +1435,12 @@ mod test {
             // it was not dity until 15 seconds after the cutoff.
             mgr.expire_dirty_before(expiration_cutoff);
 
-            let (pop2, imap2) = wait_for(
-                &rt,
-                futures::future::join(
+            let (pop2, imap2) = rt
+                .wait_for(futures::future::join(
                     mgr.get_or_launch(&pop, di()),
                     mgr.get_or_launch(&imap, di()),
-                ),
-            )
-            .await;
+                ))
+                .await;
 
             let pop2 = pop2.unwrap();
             let imap2 = imap2.unwrap();

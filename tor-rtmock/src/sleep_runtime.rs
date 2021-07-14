@@ -46,6 +46,32 @@ impl<R: Runtime> MockSleepRuntime<R> {
     pub fn jump_to(&self, new_wallclock: SystemTime) {
         self.sleep.jump_to(new_wallclock);
     }
+    /// Advance time one millisecond at a time until the provided
+    /// future is ready.
+    pub async fn wait_for<F: futures::Future>(&self, fut: F) -> F::Output {
+        let (send, mut recv) = futures::channel::oneshot::channel();
+        let increment = Duration::from_millis(1);
+
+        let (output, _) = futures::join!(
+            async {
+                let o = fut.await;
+                send.send(()).unwrap();
+                o
+            },
+            async {
+                loop {
+                    self.advance(increment).await;
+                    match recv.try_recv() {
+                        Err(_) => break,
+                        Ok(Some(())) => break,
+                        _ => {}
+                    }
+                }
+            }
+        );
+
+        output
+    }
 }
 
 impl<R: Runtime> Spawn for MockSleepRuntime<R> {
