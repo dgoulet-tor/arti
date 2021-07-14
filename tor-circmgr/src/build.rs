@@ -194,3 +194,98 @@ where
     // collapsing all the layers into one.)
     Ok(outcome????)
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use futures::channel::oneshot;
+    use tor_rtcompat::{test_with_all_runtimes, SleepProvider};
+
+    #[test]
+    fn test_double_timeout() {
+        let t1 = Duration::from_secs(1);
+        let t10 = Duration::from_secs(10);
+        /// Return true if d1 is in range [d2...d2 + 0.5sec]
+        fn duration_close_to(d1: Duration, d2: Duration) -> bool {
+            d1 >= d2 && d1 <= d2 + Duration::from_millis(500)
+        }
+
+        test_with_all_runtimes!(|rt| async move {
+            let rt = tor_rtmock::MockSleepRuntime::new(rt);
+
+            // Try a future that's ready immediately.
+            let x = double_timeout(&rt, async { Ok(3_u32) }, t1, t10).await;
+            assert!(x.is_ok());
+            assert_eq!(x.unwrap(), 3_u32);
+
+            // Try a future that's ready after a short delay.
+            let rt_clone = rt.clone();
+            let x = rt
+                .wait_for(double_timeout(
+                    &rt,
+                    async move {
+                        dbg!("A");
+                        rt_clone.sleep(Duration::from_millis(0)).await;
+                        dbg!("B");
+                        Ok(4_u32)
+                    },
+                    t1,
+                    t10,
+                ))
+                .await;
+            dbg!(&x);
+            assert!(x.is_ok());
+            assert_eq!(x.unwrap(), 4_u32);
+
+            // Try a future that passes the first timeout, and make sure that
+            // it keeps running after it times out.
+            let rt_clone = rt.clone();
+            let (snd, rcv) = oneshot::channel();
+            let start = rt.now();
+            let x = rt
+                .wait_for(double_timeout(
+                    &rt,
+                    async move {
+                        rt_clone.sleep(Duration::from_secs(2)).await;
+                        snd.send(()).unwrap();
+                        Ok(4_u32)
+                    },
+                    t1,
+                    t10,
+                ))
+                .await;
+            assert!(matches!(x, Err(Error::CircTimeout)));
+            let end = rt.now();
+            assert!(duration_close_to(end - start, Duration::from_secs(1)));
+            let waited = rt.wait_for(rcv).await;
+            assert_eq!(waited, Ok(()));
+
+            // Try a future that times out and gets abandoned.
+            let rt_clone = rt.clone();
+            let (snd, rcv) = oneshot::channel();
+            let start = rt.now();
+            let x = rt
+                .wait_for(double_timeout(
+                    &rt,
+                    async move {
+                        rt_clone.sleep(Duration::from_secs(30)).await;
+                        snd.send(()).unwrap();
+                        Ok(4_u32)
+                    },
+                    t1,
+                    t10,
+                ))
+                .await;
+            assert!(matches!(x, Err(Error::CircTimeout)));
+            let end = rt.now();
+            let waited = rt.wait_for(rcv).await;
+            assert!(waited.is_err());
+            let end2 = rt.now();
+            assert!(duration_close_to(end - start, Duration::from_secs(1)));
+            dbg!(end2, start, end2 - start);
+            // This test is not reliable under test coverage; see arti#149.
+            #[cfg(not(tarpaulin))]
+            assert!(duration_close_to(end2 - start, Duration::from_secs(10)));
+        });
+    }
+}

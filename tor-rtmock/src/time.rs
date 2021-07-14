@@ -114,6 +114,20 @@ impl MockSleepProvider {
         let mut state = self.state.lock().unwrap();
         state.wallclock = new_wallclock;
     }
+
+    /// Return the amount of virtual time until the next timeout
+    /// should elapse.
+    ///
+    /// If there are no more timeouts, return None.  If the next
+    /// timeout should elapse right now, return Some(0).
+    pub(crate) fn time_until_next_timeout(&self) -> Option<Duration> {
+        let state = self.state.lock().unwrap();
+        let now = state.instant;
+        state
+            .sleepers
+            .peek()
+            .map(|sleepent| sleepent.when.saturating_duration_since(now))
+    }
 }
 
 impl SleepSchedule {

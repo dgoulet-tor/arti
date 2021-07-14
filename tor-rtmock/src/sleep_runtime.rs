@@ -141,7 +141,15 @@ impl<F: Future> Future for WaitFor<F> {
         // some of the tests in tor-circmgr give bad results.
         //
         // We should resolve this issue; see ticket #149.
-        this.sleep.advance_noyield(Duration::from_micros(10));
+        let high_bound = Duration::from_millis(1);
+        let low_bound = Duration::from_micros(10);
+        let duration = this
+            .sleep
+            .time_until_next_timeout()
+            .map(|dur| (dur / 10).clamp(low_bound, high_bound))
+            .unwrap_or(low_bound);
+
+        this.sleep.advance_noyield(duration);
         *this.yielding = true;
         cx.waker().wake_by_ref();
         Poll::Pending
