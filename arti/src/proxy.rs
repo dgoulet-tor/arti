@@ -12,8 +12,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use tor_circmgr::IsolationToken;
-use tor_client::{ConnectPrefs, TorClient};
+use tor_client::{ConnectPrefs, IsolationToken, TorClient};
 use tor_rtcompat::{Runtime, TcpListener, TimeoutError};
 use tor_socksproto::{SocksAuth, SocksCmd, SocksRequest};
 
