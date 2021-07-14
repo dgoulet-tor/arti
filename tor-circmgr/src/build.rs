@@ -30,14 +30,13 @@ pub struct CircuitBuilder<R: Runtime> {
     /// A channel manager that this circuit builder uses to make channels.
     chanmgr: Arc<ChanMgr<R>>,
     /// An estimator to determine the correct timeouts for circuit building.
-    timeouts: Box<dyn TimeoutEstimator + Send + Sync>,
+    timeouts: ParetoTimeoutEstimator,
 }
 
 impl<R: Runtime> CircuitBuilder<R> {
     /// Construct a new [`CircuitBuilder`].
     pub fn new(runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self {
-        // XXXX make this configurable and changeable.
-        let timeouts = Box::new(ParetoTimeoutEstimator::default());
+        let timeouts = ParetoTimeoutEstimator::default();
         CircuitBuilder {
             runtime,
             chanmgr,
