@@ -333,6 +333,10 @@ impl ParetoDist {
 /// These are typically derived from a set of consensus parameters.
 #[derive(Clone, Debug)]
 struct Params {
+    /// Should we use our estimates when deciding on circuit timeouts.
+    ///
+    /// When this is false, our timeouts are fixed to the default.
+    use_estimates: bool,
     /// How many observations must we have made before we can use our
     /// Pareto estimators to guess a good set of timeouts?
     min_observations: u16,
@@ -373,6 +377,7 @@ struct Params {
 impl Default for Params {
     fn default() -> Self {
         Params {
+            use_estimates: true,
             min_observations: 100,
             significant_hop: 2,
             timeout_quantile: 0.80,
@@ -397,7 +402,9 @@ impl From<&tor_netdir::params::NetParameters> for Params {
             .cbt_initial_timeout
             .try_into()
             .unwrap_or_else(|_| Duration::from_secs(60));
+        let learning_disabled: bool = p.cbt_learning_disabled.into();
         Params {
+            use_estimates: !learning_disabled,
             min_observations: p.cbt_min_circs_for_estimate.get() as u16,
             significant_hop: 2,
             timeout_quantile: p.cbt_timeout_quantile.as_fraction(),
@@ -517,8 +524,14 @@ impl super::TimeoutEstimator for ParetoTimeoutEstimator {
     fn timeouts(&self, action: &Action) -> (Duration, Duration) {
         let mut this = self.est.lock().unwrap();
 
-        let (base_t, base_a) = this.base_timeouts();
-        // This is the action that we have been computing base timeouts for.
+        let (base_t, base_a) = if this.p.use_estimates {
+            this.base_timeouts()
+        } else {
+            // If we aren't using this estimator, then just return the
+            // default thresholds from our parameters.
+            return this.p.default_thresholds;
+        };
+
         let reference_action = Action::BuildCircuit {
             length: this.p.significant_hop as usize + 1,
         };
