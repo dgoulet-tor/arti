@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::io::Result as IoResult;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use tor_circmgr::IsolationToken;
 use tor_client::{ConnectPrefs, TorClient};
@@ -41,7 +42,54 @@ fn stream_preference(req: &SocksRequest, addr: &str) -> ConnectPrefs {
 /// Key used to isolate connections.
 /// Composed of an usize representing the listener which accepted the connection,
 /// the IpAddr of the client, and the authentification provided by the client
-type IsoKey = (usize, IpAddr, SocksAuth);
+type IsolationKey = (usize, IpAddr, SocksAuth);
+
+/// Shared and garbage-collected Map used to isolate connections.
+struct IsolationMap {
+    /// Inner map guarded by a Mutex
+    inner: Mutex<IsolationMapInner>,
+}
+
+/// Inner map, generally guarded by a Mutex
+struct IsolationMapInner {
+    /// Map storing isolation token and last time they where used
+    map: HashMap<IsolationKey, (IsolationToken, Instant)>,
+    /// Instant after which the garbage collector will be run again
+    next_gc: Instant,
+}
+
+impl IsolationMap {
+    /// Create a new, empty, IsolationMap
+    fn new() -> Self {
+        IsolationMap {
+            inner: Mutex::new(IsolationMapInner {
+                map: HashMap::new(),
+                next_gc: Instant::now() + Duration::new(60 * 30, 0),
+            }),
+        }
+    }
+
+    /// Get the IsolationToken corresponding to the given key-tuple, creating a new IsolationToken
+    /// if none exists for this key.
+    ///
+    /// Every 30 minutes, on next call to this functions, entry older than 30 minutes are removed
+    async fn get_or_create(&self, key: IsolationKey) -> IsolationToken {
+        let now = Instant::now();
+        let mut inner = self.inner.lock().await;
+        if inner.next_gc < now {
+            inner.next_gc = now + Duration::new(60 * 30, 0);
+
+            let old_limit = now - Duration::new(60 * 30, 0);
+            inner.map.retain(|_, val| val.1 > old_limit);
+        }
+        let entry = inner
+            .map
+            .entry(key)
+            .or_insert_with(|| (IsolationToken::new(), now));
+        entry.1 = now;
+        entry.0
+    }
+}
 
 /// Given a just-received TCP connection on a SOCKS port, handle the
 /// SOCKS handshake and relay the connection over the Tor network.
@@ -49,7 +97,7 @@ async fn handle_socks_conn<R, S>(
     runtime: R,
     client: Arc<TorClient<R>>,
     stream: S,
-    isolation_map: Arc<Mutex<HashMap<IsoKey, IsolationToken>>>,
+    isolation_map: Arc<IsolationMap>,
     isolation_info: (usize, IpAddr),
 ) -> Result<()>
 where
@@ -107,15 +155,10 @@ where
 
     let auth = request.auth().clone();
     let (socket, ip) = isolation_info;
+    let isolation_token = isolation_map.get_or_create((socket, ip, auth)).await;
 
     let mut prefs = stream_preference(&request, &addr);
-    prefs.set_isolation_group(
-        *isolation_map
-            .lock()
-            .await
-            .entry((socket, ip, auth))
-            .or_insert_with(IsolationToken::new),
-    );
+    prefs.set_isolation_group(isolation_token);
     let stream = client.connect(&addr, port, Some(prefs)).await;
     let stream = match stream {
         Ok(s) => s,
@@ -244,7 +287,7 @@ pub(crate) async fn run_socks_proxy<R: Runtime>(
                 Some(stream.map(move |stream| (stream, id)))
             },
         ));
-    let isolation_map = Arc::new(Mutex::new(HashMap::new()));
+    let isolation_map = Arc::new(IsolationMap::new());
     while let Some((stream, sock_id)) = incoming.next().await {
         let (stream, addr) = stream.context("Failed to receive incoming stream on SOCKS port")?;
         let client_ref = Arc::clone(&client);
