@@ -57,6 +57,8 @@ struct SleepEntry {
 pub struct Sleeping {
     /// The instant when we should become ready.
     when: Instant,
+    /// True if we have pushed this into the queue.
+    inserted: bool,
     /// The schedule to queue ourselves in if we're polled before we're ready.
     provider: Weak<Mutex<SleepSchedule>>,
 }
@@ -143,6 +145,7 @@ impl SleepProvider for MockSleepProvider {
 
         Sleeping {
             when,
+            inserted: false,
             provider: Arc::downgrade(&self.state),
         }
     }
@@ -175,7 +178,7 @@ impl Ord for SleepEntry {
 
 impl Future for Sleeping {
     type Output = ();
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         if let Some(provider) = Weak::upgrade(&self.provider) {
             let mut provider = provider.lock().unwrap();
             let now = provider.instant;
@@ -183,13 +186,18 @@ impl Future for Sleeping {
             if now >= self.when {
                 return Poll::Ready(());
             }
+            // dbg!("sleep check with", self.when-now);
 
-            let entry = SleepEntry {
-                when: self.when,
-                waker: cx.waker().clone(),
-            };
+            if !self.inserted {
+                let entry = SleepEntry {
+                    when: self.when,
+                    waker: cx.waker().clone(),
+                };
 
-            provider.push(entry);
+                provider.push(entry);
+                self.inserted = true;
+            }
+            // dbg!(provider.sleepers.len());
         }
         Poll::Pending
     }
