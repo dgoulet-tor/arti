@@ -157,15 +157,10 @@ fn listener_stream<R: Runtime>(runtime: R) -> IoResult<()> {
 // Note that since we don't have async tls server support yet, I'm just
 // going to use a thread.
 fn simple_tls<R: Runtime>(runtime: R) -> IoResult<()> {
-    if cfg!(target_os = "macos") {
-        // XXXX The pfx file below is not readable on OSX.  I'm not sure why.
-        // XXXX See arti#111.
-        return Ok(());
-    }
     /*
      A simple expired self-signed rsa-2048 certificate.
 
-     Generated with:
+     Generated using OpenSSL 1.1.1k with:
 
      openssl genpkey -algorithm RSA > test.key
      openssl req -new -out - -key test.key > test.csr
@@ -173,12 +168,15 @@ fn simple_tls<R: Runtime>(runtime: R) -> IoResult<()> {
      openssl pkcs12 -export -out test.pfx -inkey test.key -in test.crt
     */
     static PFX_ID: &[u8] = include_bytes!("test.pfx");
+    // Note that we need to set a password on the pkcs12 file, since apparently
+    // OSX doesn't support pkcs12 with empty passwords. (That was arti#111).
+    static PFX_PASSWORD: &str = "abc";
 
     let localhost = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
     let listener = std::net::TcpListener::bind(localhost)?;
     let addr = listener.local_addr()?;
 
-    let identity = native_tls::Identity::from_pkcs12(PFX_ID, "").unwrap();
+    let identity = native_tls::Identity::from_pkcs12(PFX_ID, PFX_PASSWORD).unwrap();
 
     // See note on function for why we're using a thread here.
     let th = std::thread::spawn(move || {
