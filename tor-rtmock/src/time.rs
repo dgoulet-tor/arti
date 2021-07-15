@@ -99,7 +99,7 @@ impl MockSleepProvider {
     /// Calling this function will wake any pending futures as
     /// appropriate, but not yield to the scheduler.  Mostly you
     /// should call [`advance`](Self::advance) instead.
-    fn advance_noyield(&self, dur: Duration) {
+    pub(crate) fn advance_noyield(&self, dur: Duration) {
         // It's not so great to unwrap here in general, but since this is
         // only testing code we don't really care.
         let mut state = self.state.lock().unwrap();
