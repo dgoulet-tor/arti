@@ -93,6 +93,7 @@ mod client;
 
 pub use client::{ConnectPrefs, TorClient};
 
+pub use tor_circmgr::IsolationToken;
 /// An anonymized stream over the Tor network.
 ///
 /// For most purposes, you can think of this type as an anonymized

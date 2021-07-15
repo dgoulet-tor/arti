@@ -1,6 +1,7 @@
 //! Code related to tracking what activities a circuit can be used for.
 
 use rand::Rng;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use tor_netdir::Relay;
@@ -8,10 +9,10 @@ use tor_netdoc::types::policy::PortPolicy;
 
 use crate::path::{dirpath::DirPathBuilder, exitpath::ExitPathBuilder, TorPath};
 
-use crate::Result;
+use crate::{Error, Result};
 
 /// An exit policy, as supported by the last hop of a circuit.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ExitPolicy {
     /// Permitted IPv4 ports.
     v4: Arc<PortPolicy>,
@@ -54,6 +55,30 @@ impl TargetPort {
     }
 }
 
+/// This type represent a token used to isolate unrelated streams on different circuits.
+///
+/// Tokens created with [`IsolationToken::new`] are all different from one another, and different
+/// from tokens created with [`IsolationToken::default`], however tokens created with [`IsolationToken::default`]
+/// are all equals.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct IsolationToken(u64);
+
+impl IsolationToken {
+    /// Create a new IsolationToken which is different from all other tokens this function created.
+    ///
+    /// # Panics
+    /// Panics after 2^64 calls to prevent looping.
+    pub fn new() -> Self {
+        /// Internal counter used to generate different tokens each time
+        static COUNTER: AtomicU64 = AtomicU64::new(1);
+        // Ordering::Relaxed is fine because we don't care about causality, we just want a
+        // different number each time
+        let token = COUNTER.fetch_add(1, Ordering::Relaxed);
+        assert!(token < u64::MAX);
+        IsolationToken(token)
+    }
+}
+
 impl ExitPolicy {
     /// Make a new exit policy from a given Relay.
     pub(crate) fn from_relay(relay: &Relay<'_>) -> Self {
@@ -79,19 +104,30 @@ pub(crate) enum TargetCircUsage {
     /// Use for BEGINDIR-based non-anonymous directory connections
     Dir,
     /// Use to exit to one or more ports.
-    Exit(Vec<TargetPort>),
+    Exit {
+        /// List of ports the circuit has to allow
+        ports: Vec<TargetPort>,
+        /// Isolation group the circuit shall be part of
+        isolation_group: IsolationToken,
+    },
 }
 
 /// The purposes for which a circuit is usable.
 ///
 /// This type should stay internal to the circmgr crate for now: we'll probably
 /// want to refactor it a lot.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum SupportedCircUsage {
     /// Useable for BEGINDIR-based non-anonymous directory connections
     Dir,
-    /// Usable to exit to to a set of ports.
-    Exit(ExitPolicy),
+    /// Usable to exit to a set of ports.
+    Exit {
+        /// Exit policy of the circuit
+        policy: ExitPolicy,
+        /// Isolation group the circuit is part of. None when the circuit is not yet assigned to an
+        /// isolation group.
+        isolation_group: Option<IsolationToken>,
+    },
 }
 
 impl TargetCircUsage {
@@ -107,12 +143,21 @@ impl TargetCircUsage {
                 let path = DirPathBuilder::new().pick_path(rng, netdir)?;
                 Ok((path, SupportedCircUsage::Dir))
             }
-            TargetCircUsage::Exit(p) => {
+            TargetCircUsage::Exit {
+                ports: p,
+                isolation_group,
+            } => {
                 let path = ExitPathBuilder::from_target_ports(p.clone()).pick_path(rng, netdir)?;
                 let policy = path
                     .exit_policy()
                     .expect("ExitPathBuilder gave us a one-hop circuit?");
-                Ok((path, SupportedCircUsage::Exit(policy)))
+                Ok((
+                    path,
+                    SupportedCircUsage::Exit {
+                        policy,
+                        isolation_group: Some(*isolation_group),
+                    },
+                ))
             }
         }
     }
@@ -125,13 +170,46 @@ impl crate::mgr::AbstractSpec for SupportedCircUsage {
         use SupportedCircUsage::*;
         match (self, target) {
             (Dir, TargetCircUsage::Dir) => true,
-            (Exit(p1), TargetCircUsage::Exit(p2)) => p2.iter().all(|port| p1.allows_port(*port)),
+            (
+                Exit {
+                    policy: p1,
+                    isolation_group: i1,
+                },
+                TargetCircUsage::Exit {
+                    ports: p2,
+                    isolation_group: i2,
+                },
+            ) => {
+                i1.map(|i1| i1 == *i2).unwrap_or(true)
+                    && p2.iter().all(|port| p1.allows_port(*port))
+            }
             (_, _) => false,
         }
     }
 
-    fn restrict_mut(&mut self, _usage: &TargetCircUsage) -> Result<()> {
-        Ok(())
+    fn restrict_mut(&mut self, usage: &TargetCircUsage) -> Result<()> {
+        use SupportedCircUsage::*;
+
+        match (self, usage) {
+            (Dir, TargetCircUsage::Dir) => Ok(()),
+            (
+                Exit {
+                    isolation_group: ref mut i1,
+                    ..
+                },
+                TargetCircUsage::Exit {
+                    isolation_group: i2,
+                    ..
+                },
+            ) if i1.map(|i1| i1 == *i2).unwrap_or(true) => {
+                *i1 = Some(*i2);
+                Ok(())
+            }
+            (Exit { .. }, TargetCircUsage::Exit { .. }) => {
+                Err(Error::UsageNotSupported("Bad isolation".into()))
+            }
+            (_, _) => Err(Error::UsageNotSupported("Incompatible usage".into())),
+        }
     }
 }
 
@@ -190,23 +268,134 @@ mod test {
             v4: Arc::new("accept 80,443".parse().unwrap()),
             v6: Arc::new("accept 23".parse().unwrap()),
         };
+        let isolation_group = IsolationToken::new();
+        let isolation_group_2 = IsolationToken::new();
 
         let supp_dir = SupportedCircUsage::Dir;
         let targ_dir = TargetCircUsage::Dir;
-        let supp_exit = SupportedCircUsage::Exit(policy);
-        let targ_80_v4 = TargetCircUsage::Exit(vec![TargetPort::ipv4(80)]);
-        let targ_80_23_v4 = TargetCircUsage::Exit(vec![TargetPort::ipv4(80), TargetPort::ipv4(23)]);
-        let targ_80_23_mixed =
-            TargetCircUsage::Exit(vec![TargetPort::ipv4(80), TargetPort::ipv6(23)]);
-        let targ_999_v6 = TargetCircUsage::Exit(vec![TargetPort::ipv6(999)]);
+        let supp_exit = SupportedCircUsage::Exit {
+            policy: policy.clone(),
+            isolation_group: Some(isolation_group),
+        };
+        let supp_exit_iso2 = SupportedCircUsage::Exit {
+            policy: policy.clone(),
+            isolation_group: Some(isolation_group_2),
+        };
+        let supp_exit_no_iso = SupportedCircUsage::Exit {
+            policy,
+            isolation_group: None,
+        };
+        let targ_80_v4 = TargetCircUsage::Exit {
+            ports: vec![TargetPort::ipv4(80)],
+            isolation_group,
+        };
+        let targ_80_v4_iso2 = TargetCircUsage::Exit {
+            ports: vec![TargetPort::ipv4(80)],
+            isolation_group: isolation_group_2,
+        };
+        let targ_80_23_v4 = TargetCircUsage::Exit {
+            ports: vec![TargetPort::ipv4(80), TargetPort::ipv4(23)],
+            isolation_group,
+        };
+        let targ_80_23_mixed = TargetCircUsage::Exit {
+            ports: vec![TargetPort::ipv4(80), TargetPort::ipv6(23)],
+            isolation_group,
+        };
+        let targ_999_v6 = TargetCircUsage::Exit {
+            ports: vec![TargetPort::ipv6(999)],
+            isolation_group,
+        };
 
         assert!(supp_dir.supports(&targ_dir));
         assert!(!supp_dir.supports(&targ_80_v4));
         assert!(!supp_exit.supports(&targ_dir));
         assert!(supp_exit.supports(&targ_80_v4));
+        assert!(!supp_exit.supports(&targ_80_v4_iso2));
         assert!(supp_exit.supports(&targ_80_23_mixed));
         assert!(!supp_exit.supports(&targ_80_23_v4));
         assert!(!supp_exit.supports(&targ_999_v6));
+        assert!(!supp_exit_iso2.supports(&targ_80_v4));
+        assert!(supp_exit_iso2.supports(&targ_80_v4_iso2));
+        assert!(supp_exit_no_iso.supports(&targ_80_v4));
+        assert!(supp_exit_no_iso.supports(&targ_80_v4_iso2));
+        assert!(!supp_exit_no_iso.supports(&targ_80_23_v4));
+    }
+
+    #[test]
+    fn restrict_mut() {
+        use crate::mgr::AbstractSpec;
+
+        let policy = ExitPolicy {
+            v4: Arc::new("accept 80,443".parse().unwrap()),
+            v6: Arc::new("accept 23".parse().unwrap()),
+        };
+
+        let isolation_group = IsolationToken::new();
+        let isolation_group_2 = IsolationToken::new();
+
+        let supp_dir = SupportedCircUsage::Dir;
+        let targ_dir = TargetCircUsage::Dir;
+        let supp_exit = SupportedCircUsage::Exit {
+            policy: policy.clone(),
+            isolation_group: Some(isolation_group),
+        };
+        let supp_exit_iso2 = SupportedCircUsage::Exit {
+            policy: policy.clone(),
+            isolation_group: Some(isolation_group_2),
+        };
+        let supp_exit_no_iso = SupportedCircUsage::Exit {
+            policy,
+            isolation_group: None,
+        };
+        let targ_exit = TargetCircUsage::Exit {
+            ports: vec![TargetPort::ipv4(80)],
+            isolation_group,
+        };
+        let targ_exit_iso2 = TargetCircUsage::Exit {
+            ports: vec![TargetPort::ipv4(80)],
+            isolation_group: isolation_group_2,
+        };
+
+        // not allowed, do nothing
+        let mut supp_dir_c = supp_dir.clone();
+        assert!(supp_dir_c.restrict_mut(&targ_exit).is_err());
+        assert_eq!(supp_dir, supp_dir_c);
+
+        let mut supp_exit_c = supp_exit.clone();
+        assert!(supp_exit_c.restrict_mut(&targ_dir).is_err());
+        assert_eq!(supp_exit, supp_exit_c);
+
+        let mut supp_exit_c = supp_exit.clone();
+        assert!(supp_exit_c.restrict_mut(&targ_exit_iso2).is_err());
+        assert_eq!(supp_exit, supp_exit_c);
+
+        let mut supp_exit_iso2_c = supp_exit_iso2.clone();
+        assert!(supp_exit_iso2_c.restrict_mut(&targ_exit).is_err());
+        assert_eq!(supp_exit_iso2, supp_exit_iso2_c);
+
+        // allowed but nothing to do
+        let mut supp_dir_c = supp_dir.clone();
+        supp_dir_c.restrict_mut(&targ_dir).unwrap();
+        assert_eq!(supp_dir, supp_dir_c);
+
+        let mut supp_exit_c = supp_exit.clone();
+        supp_exit_c.restrict_mut(&targ_exit).unwrap();
+        assert_eq!(supp_exit, supp_exit_c);
+
+        let mut supp_exit_iso2_c = supp_exit_iso2.clone();
+        supp_exit_iso2_c.restrict_mut(&targ_exit_iso2).unwrap();
+        assert_eq!(supp_exit_iso2, supp_exit_iso2_c);
+
+        // allowed, do something
+        let mut supp_exit_no_iso_c = supp_exit_no_iso.clone();
+        supp_exit_no_iso_c.restrict_mut(&targ_exit).unwrap();
+        assert!(supp_exit_no_iso_c.supports(&targ_exit));
+        assert!(!supp_exit_no_iso_c.supports(&targ_exit_iso2));
+
+        let mut supp_exit_no_iso_c = supp_exit_no_iso.clone();
+        supp_exit_no_iso_c.restrict_mut(&targ_exit_iso2).unwrap();
+        assert!(!supp_exit_no_iso_c.supports(&targ_exit));
+        assert!(supp_exit_no_iso_c.supports(&targ_exit_iso2));
     }
 
     #[test]
@@ -223,9 +412,19 @@ mod test {
         assert!(matches!(u_dir, SupportedCircUsage::Dir));
         assert_eq!(p_dir.len(), 1);
 
-        let exit_usage = TargetCircUsage::Exit(vec![TargetPort::ipv4(995)]);
+        let isolation_group = IsolationToken::new();
+        let exit_usage = TargetCircUsage::Exit {
+            ports: vec![TargetPort::ipv4(995)],
+            isolation_group,
+        };
         let (p_exit, u_exit) = exit_usage.build_path(&mut rng, di).unwrap();
-        assert!(matches!(u_exit, SupportedCircUsage::Exit(_)));
+        assert!(matches!(
+            u_exit,
+            SupportedCircUsage::Exit {
+                isolation_group: iso,
+                ..
+            } if iso == Some(isolation_group)
+        ));
         assert!(u_exit.supports(&exit_usage));
         assert_eq!(p_exit.len(), 3);
     }

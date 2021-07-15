@@ -4,7 +4,7 @@
 //! Once the client is bootstrapped, you can make anonymous
 //! connections ("streams") over the Tor network using
 //! `TorClient::connect()`.
-use tor_circmgr::TargetPort;
+use tor_circmgr::{IsolationToken, TargetPort};
 use tor_dirmgr::DirMgrConfig;
 use tor_proto::circuit::IpVersionPreference;
 use tor_proto::stream::DataStream;
@@ -39,6 +39,8 @@ pub struct TorClient<R: Runtime> {
 pub struct ConnectPrefs {
     /// What kind of IPv6/IPv4 we'd prefer, and how strongly.
     ip_ver_pref: IpVersionPreference,
+    /// Id of the isolation group the connection should be part of
+    isolation_group: IsolationToken,
 }
 
 impl ConnectPrefs {
@@ -98,6 +100,19 @@ impl ConnectPrefs {
         }
     }
 
+    /// Indicate which other connections might use the same circuit
+    /// as this one.
+    pub fn set_isolation_group(&mut self, isolation_group: IsolationToken) -> &mut Self {
+        self.isolation_group = isolation_group;
+        self
+    }
+
+    /// Return a u64 to describe which connections might use
+    /// the same circuit as this one.
+    fn isolation_group(&self) -> IsolationToken {
+        self.isolation_group
+    }
+
     // TODO: Add some way to be IPFlexible, and require exit to suppport both.
 }
 
@@ -146,7 +161,7 @@ impl<R: Runtime> TorClient<R> {
         let dir = self.dirmgr.netdir();
         let circ = self
             .circmgr
-            .get_or_launch_exit(dir.as_ref().into(), &exit_ports)
+            .get_or_launch_exit(dir.as_ref().into(), &exit_ports, flags.isolation_group())
             .await
             .context("Unable to launch circuit")?;
         info!("Got a circuit for {}:{}", addr, port);

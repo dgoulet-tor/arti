@@ -62,7 +62,7 @@ pub mod path;
 mod usage;
 
 pub use err::Error;
-pub use usage::TargetPort;
+pub use usage::{IsolationToken, TargetPort};
 
 use usage::TargetCircUsage;
 
@@ -162,10 +162,14 @@ impl<R: Runtime> CircMgr<R> {
         &self,
         netdir: DirInfo<'_>,
         ports: &[TargetPort],
+        isolation_group: IsolationToken,
     ) -> Result<Arc<ClientCirc>> {
         self.expire_dirty_circuits();
         let ports = ports.iter().map(Clone::clone).collect();
-        let usage = TargetCircUsage::Exit(ports);
+        let usage = TargetCircUsage::Exit {
+            ports,
+            isolation_group,
+        };
         self.mgr.get_or_launch(&usage, netdir).await
     }
 

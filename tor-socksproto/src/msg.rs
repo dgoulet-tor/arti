@@ -46,7 +46,7 @@ pub enum SocksAddr {
 pub struct SocksHostname(String);
 
 /// Provided authentication from a SOCKS handshake
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum SocksAuth {
     /// No authentication was provided
