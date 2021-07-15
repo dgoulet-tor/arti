@@ -40,7 +40,7 @@ fn stream_preference(req: &SocksRequest, addr: &str) -> ConnectPrefs {
 
 /// Key used to isolate connections.
 /// Composed of an usize representing the listener which accepted the connection,
-/// the IpAddr of the client, and the authentification provided by the client
+/// the IpAddr of the client, and the authentication provided by the client.
 type IsolationKey = (usize, IpAddr, SocksAuth);
 
 /// Shared and garbage-collected Map used to isolate connections.
