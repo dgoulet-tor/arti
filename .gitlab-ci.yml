@@ -14,6 +14,8 @@ rust-latest:
     - rustup component add clippy rustfmt
     - cargo clippy --all-features -- -D warnings
     - cargo fmt -- --check
+    - cargo install cargo-audit
+    - cargo audit
 
 rust-latest-async-std:
   stage: build
