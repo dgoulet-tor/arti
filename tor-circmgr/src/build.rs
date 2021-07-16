@@ -3,6 +3,7 @@
 use crate::path::{OwnedPath, TorPath};
 use crate::timeouts::{pareto::ParetoTimeoutEstimator, Action, TimeoutEstimator};
 use crate::{Error, Result};
+use async_trait::async_trait;
 use futures::channel::oneshot;
 use futures::task::SpawnExt;
 use futures::Future;
@@ -14,65 +15,162 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 use tor_chanmgr::ChanMgr;
-use tor_proto::circuit::{CircParameters, ClientCirc};
+use tor_linkspec::{ChanTarget, OwnedChanTarget, OwnedCircTarget};
+use tor_proto::circuit::{CircParameters, ClientCirc, PendingClientCirc};
 use tor_rtcompat::{Runtime, SleepProviderExt};
 
-/// A factory object to build circuits.
+/// Represents an objects that can be constructed in a circuit-like way.
+///
+/// This is only a separate trait for testing purposes, so that we can swap
+/// our some other type when we're testing Builder.
+///
+/// TODO: I'd like to have a simpler testing strategy here; this one
+/// complicates things a bit.
+#[async_trait]
+pub(crate) trait Buildable: Sized {
+    /// Launch a new one-hop circuit to a given relay, given only a
+    /// channel target `ct` specifying that relay.
+    ///
+    /// (Since we don't have a CircTarget here, we can't extend the circuit
+    /// to be multihop later on.)
+    async fn create_chantarget<RNG: CryptoRng + Rng + Send, RT: Runtime>(
+        chanmgr: &ChanMgr<RT>,
+        rt: &RT,
+        rng: &mut RNG,
+        ct: &OwnedChanTarget,
+        params: &CircParameters,
+    ) -> Result<Self>;
+
+    /// Launch a new circuit through a given relay, given a circuit target
+    /// `ct` specifying that relay.
+    async fn create<RNG: CryptoRng + Rng + Send, RT: Runtime>(
+        chanmgr: &ChanMgr<RT>,
+        rt: &RT,
+        rng: &mut RNG,
+        ct: &OwnedCircTarget,
+        params: &CircParameters,
+    ) -> Result<Self>;
+
+    /// Extend this circuit-like object by one hop, to the location described
+    /// in `ct`.
+    async fn extend<RNG: CryptoRng + Rng + Send>(
+        &self,
+        rng: &mut RNG,
+        ct: &OwnedCircTarget,
+        params: &CircParameters,
+    ) -> Result<()>;
+}
+
+/// Try to make a [`PendingClientCirc`] to a given relay, and start its
+/// reactor.
+///
+/// This is common code, shared by all the first-hop functions in the
+/// implementation of `Buildable` for `Arc<ClientCirc>`.
+async fn create_common<RNG: CryptoRng + Rng + Send, RT: Runtime, CT: ChanTarget>(
+    chanmgr: &ChanMgr<RT>,
+    rt: &RT,
+    rng: &mut RNG,
+    target: &CT,
+) -> Result<PendingClientCirc> {
+    let chan = chanmgr.get_or_launch(target).await?;
+    let (pending_circ, reactor) = chan.new_circ(rng).await?;
+
+    rt.spawn(async {
+        let _ = reactor.run().await;
+    })?;
+
+    Ok(pending_circ)
+}
+
+#[async_trait]
+impl Buildable for Arc<ClientCirc> {
+    async fn create_chantarget<RNG: CryptoRng + Rng + Send, RT: Runtime>(
+        chanmgr: &ChanMgr<RT>,
+        rt: &RT,
+        rng: &mut RNG,
+        ct: &OwnedChanTarget,
+        params: &CircParameters,
+    ) -> Result<Self> {
+        let circ = create_common(chanmgr, rt, rng, ct).await?;
+        Ok(circ.create_firsthop_fast(rng, params).await?)
+    }
+    async fn create<RNG: CryptoRng + Rng + Send, RT: Runtime>(
+        chanmgr: &ChanMgr<RT>,
+        rt: &RT,
+        rng: &mut RNG,
+        ct: &OwnedCircTarget,
+        params: &CircParameters,
+    ) -> Result<Self> {
+        let circ = create_common(chanmgr, rt, rng, ct).await?;
+        Ok(circ.create_firsthop_ntor(rng, ct, params).await?)
+    }
+    async fn extend<RNG: CryptoRng + Rng + Send>(
+        &self,
+        rng: &mut RNG,
+        ct: &OwnedCircTarget,
+        params: &CircParameters,
+    ) -> Result<()> {
+        ClientCirc::extend_ntor(self, rng, ct, params).await?;
+        Ok(())
+    }
+}
+
+/// An implementation type for [`CircuitBuilder`].
 ///
 /// A `CircuitBuilder` holds references to all the objects that are needed
 /// to build circuits correctly.
 ///
 /// In general, you should not need to construct or use this object yourself,
 /// unless you are choosing your own paths.
-pub struct CircuitBuilder<R: Runtime> {
+struct Builder<
+    R: Runtime,
+    C: Buildable + Sync + Send + 'static,
+    T: TimeoutEstimator + Send + Sync + 'static,
+> {
     /// The runtime used by this circuit builder.
     runtime: R,
     /// A channel manager that this circuit builder uses to make channels.
     chanmgr: Arc<ChanMgr<R>>,
     /// An estimator to determine the correct timeouts for circuit building.
-    timeouts: ParetoTimeoutEstimator,
+    timeouts: T,
+    /// We don't actually hold any clientcircs, so we need to put this
+    /// type here so the compiler won't freak out.
+    _phantom: std::marker::PhantomData<C>,
 }
 
-impl<R: Runtime> CircuitBuilder<R> {
-    /// Construct a new [`CircuitBuilder`].
-    pub fn new(runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self {
-        let timeouts = ParetoTimeoutEstimator::default();
-        CircuitBuilder {
+impl<
+        R: Runtime,
+        C: Buildable + Sync + Send + 'static,
+        T: TimeoutEstimator + Send + Sync + 'static,
+    > Builder<R, C, T>
+{
+    /// Construct a new [`Builder`].
+    fn new(runtime: R, chanmgr: Arc<ChanMgr<R>>, timeouts: T) -> Self {
+        Builder {
             runtime,
             chanmgr,
             timeouts,
+            _phantom: std::marker::PhantomData,
         }
-    }
-
-    /// Reconfigure this builder using the latest set of network parameters.
-    ///
-    /// (NOTE: for now, this only affects circuit timeout estimation.)
-    pub fn update_network_parameters(&self, p: &tor_netdir::params::NetParameters) {
-        self.timeouts.update_params(p.into());
     }
 
     /// Build a circuit, without performing any timeout operations.
     ///
     /// After each hop is built, increments n_hops_built. (TODO: Find
     /// a better design there.)
-    async fn build_notimeout<RNG: CryptoRng + Rng>(
+    async fn build_notimeout<RNG: CryptoRng + Rng + Send>(
         self: Arc<Self>,
         path: OwnedPath,
         params: CircParameters,
         start_time: Instant,
         n_hops_built: Arc<AtomicU32>,
         mut rng: RNG,
-    ) -> Result<Arc<ClientCirc>> {
-        let chan = self.chanmgr.get_or_launch(path.first_hop()?).await?;
-        let (pending_circ, reactor) = chan.new_circ(&mut rng).await?;
-
-        self.runtime.spawn(async {
-            let _ = reactor.run().await;
-        })?;
-
+    ) -> Result<C> {
         match path {
-            OwnedPath::ChannelOnly(_) => {
-                let circ = pending_circ.create_firsthop_fast(&mut rng, &params).await?;
+            OwnedPath::ChannelOnly(target) => {
+                let circ =
+                    C::create_chantarget(&self.chanmgr, &self.runtime, &mut rng, &target, &params)
+                        .await?;
                 self.timeouts
                     .note_hop_completed(0, self.runtime.now() - start_time, true);
                 n_hops_built.fetch_add(1, Ordering::SeqCst);
@@ -81,15 +179,14 @@ impl<R: Runtime> CircuitBuilder<R> {
             OwnedPath::Normal(p) => {
                 assert!(!p.is_empty());
                 let n_hops = p.len() as u8;
-                let circ = pending_circ
-                    .create_firsthop_ntor(&mut rng, &p[0], &params)
-                    .await?;
+                let circ =
+                    C::create(&self.chanmgr, &self.runtime, &mut rng, &p[0], &params).await?;
                 self.timeouts
                     .note_hop_completed(0, self.runtime.now() - start_time, n_hops == 0);
                 n_hops_built.fetch_add(1, Ordering::SeqCst);
                 let mut hop_num = 1;
                 for relay in p[1..].iter() {
-                    circ.extend_ntor(&mut rng, relay, &params).await?;
+                    circ.extend(&mut rng, relay, &params).await?;
                     n_hops_built.fetch_add(1, Ordering::SeqCst);
                     self.timeouts.note_hop_completed(
                         hop_num,
@@ -104,12 +201,12 @@ impl<R: Runtime> CircuitBuilder<R> {
     }
 
     /// Build a circuit from an [`OwnedPath`].
-    pub(crate) async fn build_owned<RNG: CryptoRng + Rng + Send + 'static>(
+    async fn build_owned<RNG: CryptoRng + Rng + Send + 'static>(
         self: &Arc<Self>,
         path: OwnedPath,
         params: &CircParameters,
         rng: RNG,
-    ) -> Result<Arc<ClientCirc>> {
+    ) -> Result<C> {
         let action = Action::BuildCircuit { length: path.len() };
         let (timeout, abandon_timeout) = self.timeouts.timeouts(&action);
         let start_time = self.runtime.now();
@@ -136,6 +233,45 @@ impl<R: Runtime> CircuitBuilder<R> {
             Err(e) => Err(e),
         }
     }
+}
+
+/// A factory object to build circuits.
+///
+/// A `CircuitBuilder` holds references to all the objects that are needed
+/// to build circuits correctly.
+///
+/// In general, you should not need to construct or use this object yourself,
+/// unless you are choosing your own paths.
+pub struct CircuitBuilder<R: Runtime> {
+    /// The underlying [`Builder`] object
+    builder: Arc<Builder<R, Arc<ClientCirc>, ParetoTimeoutEstimator>>,
+}
+
+impl<R: Runtime> CircuitBuilder<R> {
+    /// Construct a new [`CircuitBuilder`].
+    pub fn new(runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self {
+        let timeouts = ParetoTimeoutEstimator::default();
+        CircuitBuilder {
+            builder: Arc::new(Builder::new(runtime, chanmgr, timeouts)),
+        }
+    }
+
+    /// Reconfigure this builder using the latest set of network parameters.
+    ///
+    /// (NOTE: for now, this only affects circuit timeout estimation.)
+    pub fn update_network_parameters(&self, p: &tor_netdir::params::NetParameters) {
+        self.builder.timeouts.update_params(p.into());
+    }
+
+    /// DOCDOC
+    pub(crate) async fn build_owned<RNG: CryptoRng + Rng + Send + 'static>(
+        &self,
+        path: OwnedPath,
+        params: &CircParameters,
+        rng: RNG,
+    ) -> Result<Arc<ClientCirc>> {
+        self.builder.build_owned(path, params, rng).await
+    }
 
     /// Try to construct a new circuit from a given path, using appropriate
     /// timeouts.
@@ -144,7 +280,7 @@ impl<R: Runtime> CircuitBuilder<R> {
     /// circuit manager; if you don't hang on it it, it will
     /// automatically go away when the last reference is dropped.
     pub async fn build<RNG: CryptoRng + Rng>(
-        self: &Arc<Self>,
+        &self,
         path: &TorPath<'_>,
         params: &CircParameters,
         rng: &mut RNG,

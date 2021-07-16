@@ -6,7 +6,7 @@
 pub mod dirpath;
 pub mod exitpath;
 
-use tor_linkspec::{ChanTarget, OwnedChanTarget, OwnedCircTarget};
+use tor_linkspec::{OwnedChanTarget, OwnedCircTarget};
 use tor_netdir::{fallback::FallbackDir, Relay};
 
 use std::convert::TryFrom;
@@ -112,17 +112,6 @@ impl<'a> TryFrom<&TorPath<'a>> for OwnedPath {
 }
 
 impl OwnedPath {
-    /// Internal: Get the first hop of the path as a ChanTarget.
-    pub(crate) fn first_hop(&self) -> Result<&(dyn ChanTarget + Sync)> {
-        match self {
-            OwnedPath::ChannelOnly(c) => Ok(c),
-            OwnedPath::Normal(p) if p.is_empty() => {
-                Err(Error::NoRelays("Path with no entries!".into()))
-            }
-            OwnedPath::Normal(p) => Ok(&p[0]),
-        }
-    }
-
     /// Return the number of hops in this path.
     #[allow(clippy::len_without_is_empty)]
     pub(crate) fn len(&self) -> usize {
@@ -138,27 +127,22 @@ impl OwnedPath {
 #[cfg(test)]
 fn assert_same_path_when_owned(path: &TorPath<'_>) {
     use std::convert::TryInto;
+    use tor_linkspec::ChanTarget;
     let owned: OwnedPath = path.try_into().unwrap();
 
     match (&owned, &path.inner) {
         (OwnedPath::ChannelOnly(c), TorPathInner::FallbackOneHop(f)) => {
             assert_eq!(c.ed_identity(), f.ed_identity());
-            assert_eq!(c.ed_identity(), owned.first_hop().unwrap().ed_identity());
         }
         (OwnedPath::Normal(p), TorPathInner::OneHop(h)) => {
             assert_eq!(p.len(), 1);
             assert_eq!(p[0].ed_identity(), h.ed_identity());
-            assert_eq!(p[0].ed_identity(), owned.first_hop().unwrap().ed_identity());
         }
         (OwnedPath::Normal(p1), TorPathInner::Path(p2)) => {
             assert_eq!(p1.len(), p2.len());
             for (n1, n2) in p1.iter().zip(p2.iter()) {
                 assert_eq!(n1.ed_identity(), n2.ed_identity());
             }
-            assert_eq!(
-                p1[0].ed_identity(),
-                owned.first_hop().unwrap().ed_identity()
-            );
         }
         (_, _) => {
             panic!("Mismatched path types.")

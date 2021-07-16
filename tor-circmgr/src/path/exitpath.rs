@@ -155,9 +155,5 @@ mod test {
 
         let owned: Result<OwnedPath> = (&bogus_path).try_into();
         assert!(owned.is_err());
-
-        // This should also be unconstructable.
-        let owned_bogus = OwnedPath::Normal(vec![]);
-        assert!(owned_bogus.first_hop().is_err());
     }
 }

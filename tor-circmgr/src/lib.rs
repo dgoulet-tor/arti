@@ -138,14 +138,14 @@ impl<'a> DirInfo<'a> {
 #[derive(Clone)]
 pub struct CircMgr<R: Runtime> {
     /// The underlying circuit manager object that implements our behavior.
-    mgr: Arc<mgr::AbstractCircMgr<Arc<build::CircuitBuilder<R>>, R>>,
+    mgr: Arc<mgr::AbstractCircMgr<build::CircuitBuilder<R>, R>>,
 }
 
 impl<R: Runtime> CircMgr<R> {
     /// Construct a new circuit manager.
     pub fn new(runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self {
         let builder = build::CircuitBuilder::new(runtime.clone(), chanmgr);
-        let mgr = mgr::AbstractCircMgr::new(Arc::new(builder), runtime);
+        let mgr = mgr::AbstractCircMgr::new(builder, runtime);
         CircMgr { mgr: Arc::new(mgr) }
     }
 

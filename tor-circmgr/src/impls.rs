@@ -34,7 +34,7 @@ pub(crate) struct Plan {
 }
 
 #[async_trait]
-impl<R: Runtime> crate::mgr::AbstractCircBuilder for Arc<crate::build::CircuitBuilder<R>> {
+impl<R: Runtime> crate::mgr::AbstractCircBuilder for crate::build::CircuitBuilder<R> {
     type Circ = ClientCirc;
     type Spec = SupportedCircUsage;
     type Plan = Plan;
