@@ -58,7 +58,7 @@ pub(crate) enum InputString {
     UncheckedBytes(Vec<u8>),
     #[cfg(feature = "mmap")]
     /// A set of memory-mapped bytes (not yet validated as UTF-8).
-    MappedBytes(memmap::Mmap),
+    MappedBytes(memmap2::Mmap),
 }
 
 impl InputString {
@@ -91,7 +91,7 @@ impl InputString {
                 // I'd rather have a safe option, but that's not possible
                 // with mmap, since other processes could in theory replace
                 // the contents of the file while we're using it.
-                memmap::Mmap::map(&f)
+                memmap2::Mmap::map(&f)
             };
             if let Ok(m) = mapping {
                 return Ok(InputString::MappedBytes(m));
@@ -131,7 +131,7 @@ impl From<Vec<u8>> for InputString {
 #[cfg(test)]
 mod test {
     use super::*;
-    use tempdir::TempDir;
+    use tempfile::tempdir;
 
     #[test]
     fn strings() {
@@ -151,7 +151,7 @@ mod test {
 
     #[test]
     fn files() {
-        let td = TempDir::new("arti-nd").unwrap();
+        let td = tempdir().unwrap();
 
         let absent = td.path().join("absent");
         let s = InputString::load(&absent);
