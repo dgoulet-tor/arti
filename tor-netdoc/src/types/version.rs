@@ -39,7 +39,6 @@
 //! its own.  I'm not 100% sure though -- does anything need versions
 //! but not network docs?
 
-use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
@@ -81,7 +80,7 @@ impl TorVerStatus {
 }
 
 /// A parsed Tor version number.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct TorVersion {
     /// Major version number.  This has been zero since Tor was created.
     major: u8,
@@ -172,30 +171,6 @@ impl FromStr for TorVersion {
             status,
             dev,
         })
-    }
-}
-
-impl TorVersion {
-    /// Helper: used to implement Ord.
-    fn as_tuple(&self) -> (u8, u8, u8, u8, TorVerStatus, bool) {
-        (
-            self.major,
-            self.minor,
-            self.micro,
-            self.patch,
-            self.status,
-            self.dev,
-        )
-    }
-}
-impl PartialOrd for TorVersion {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for TorVersion {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.as_tuple().cmp(&other.as_tuple())
     }
 }
 

@@ -92,27 +92,13 @@ pub struct AuthCert {
 }
 
 /// A pair of key identities that identifies a certificate.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 #[allow(clippy::exhaustive_structs)]
 pub struct AuthCertKeyIds {
     /// Fingerprint of identity key
     pub id_fingerprint: rsa::RsaIdentity,
     /// Fingerprint of signing key
     pub sk_fingerprint: rsa::RsaIdentity,
-}
-
-impl Ord for AuthCertKeyIds {
-    fn cmp(&self, other: &AuthCertKeyIds) -> std::cmp::Ordering {
-        self.id_fingerprint
-            .cmp(&other.id_fingerprint)
-            .then_with(|| self.sk_fingerprint.cmp(&other.sk_fingerprint))
-    }
-}
-
-impl PartialOrd for AuthCertKeyIds {
-    fn partial_cmp(&self, other: &AuthCertKeyIds) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
 }
 
 /// An authority certificate whose signature and validity time we
