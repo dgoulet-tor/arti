@@ -53,8 +53,9 @@ pub(crate) trait Buildable: Sized {
 
     /// Extend this circuit-like object by one hop, to the location described
     /// in `ct`.
-    async fn extend<RNG: CryptoRng + Rng + Send>(
+    async fn extend<RNG: CryptoRng + Rng + Send, RT: Runtime>(
         &self,
+        rt: &RT,
         rng: &mut RNG,
         ct: &OwnedCircTarget,
         params: &CircParameters,
@@ -104,8 +105,9 @@ impl Buildable for Arc<ClientCirc> {
         let circ = create_common(chanmgr, rt, rng, ct).await?;
         Ok(circ.create_firsthop_ntor(rng, ct, params).await?)
     }
-    async fn extend<RNG: CryptoRng + Rng + Send>(
+    async fn extend<RNG: CryptoRng + Rng + Send, RT: Runtime>(
         &self,
+        _rt: &RT,
         rng: &mut RNG,
         ct: &OwnedCircTarget,
         params: &CircParameters,
@@ -186,7 +188,7 @@ impl<
                 n_hops_built.fetch_add(1, Ordering::SeqCst);
                 let mut hop_num = 1;
                 for relay in p[1..].iter() {
-                    circ.extend(&mut rng, relay, &params).await?;
+                    circ.extend(&self.runtime, &mut rng, relay, &params).await?;
                     n_hops_built.fetch_add(1, Ordering::SeqCst);
                     self.timeouts.note_hop_completed(
                         hop_num,
@@ -335,6 +337,9 @@ where
 mod test {
     use super::*;
     use futures::channel::oneshot;
+    use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
+    use std::sync::Mutex;
+    use tor_llcrypto::pk::ed25519::Ed25519Identity;
     use tor_rtcompat::{test_with_all_runtimes, SleepProvider};
 
     #[test]
@@ -423,5 +428,221 @@ mod test {
             #[cfg(not(tarpaulin))]
             assert!(duration_close_to(end2 - start, Duration::from_secs(10)));
         });
+    }
+
+    // Tells FakeCirc how much to delay, in milliseconds.
+    //
+    // (These are very foolish globals.)
+    static HOP1_DELAY: AtomicU64 = AtomicU64::new(100);
+    static HOP2_DELAY: AtomicU64 = AtomicU64::new(200);
+    static HOP3_DELAY: AtomicU64 = AtomicU64::new(300);
+
+    /// Replacement type for circuit, to implement buildable.
+    struct FakeCirc {
+        hops: Vec<Ed25519Identity>,
+        onehop: bool,
+    }
+    #[async_trait]
+    impl Buildable for Mutex<FakeCirc> {
+        async fn create_chantarget<RNG: CryptoRng + Rng + Send, RT: Runtime>(
+            _: &ChanMgr<RT>,
+            rt: &RT,
+            _: &mut RNG,
+            ct: &OwnedChanTarget,
+            _: &CircParameters,
+        ) -> Result<Self> {
+            rt.sleep(Duration::from_millis(HOP1_DELAY.load(SeqCst)))
+                .await;
+            let c = FakeCirc {
+                hops: vec![ct.ed_identity().clone()],
+                onehop: true,
+            };
+            Ok(Mutex::new(c))
+        }
+        async fn create<RNG: CryptoRng + Rng + Send, RT: Runtime>(
+            _: &ChanMgr<RT>,
+            rt: &RT,
+            _: &mut RNG,
+            ct: &OwnedCircTarget,
+            _: &CircParameters,
+        ) -> Result<Self> {
+            rt.sleep(Duration::from_millis(HOP1_DELAY.load(SeqCst)))
+                .await;
+            let c = FakeCirc {
+                hops: vec![ct.ed_identity().clone()],
+                onehop: false,
+            };
+            Ok(Mutex::new(c))
+        }
+        async fn extend<RNG: CryptoRng + Rng + Send, RT: Runtime>(
+            &self,
+            rt: &RT,
+            _: &mut RNG,
+            ct: &OwnedCircTarget,
+            _: &CircParameters,
+        ) -> Result<()> {
+            let d = {
+                let c = self.lock().unwrap();
+                assert!(!c.onehop);
+                match c.hops.len() {
+                    1 => HOP2_DELAY.load(SeqCst),
+                    2 => HOP3_DELAY.load(SeqCst),
+                    _ => 0,
+                }
+            };
+            rt.sleep(Duration::from_millis(d)).await;
+            {
+                let mut c = self.lock().unwrap();
+                c.hops.push(ct.ed_identity().clone());
+            }
+            Ok(())
+        }
+    }
+
+    /// Fake implementation of TimeoutEstimator that just records its inputs.
+    struct TimeoutRecorder {
+        hist: Vec<(bool, u8, Duration)>,
+    }
+    impl TimeoutRecorder {
+        fn new() -> Self {
+            Self { hist: Vec::new() }
+        }
+    }
+    impl TimeoutEstimator for Arc<Mutex<TimeoutRecorder>> {
+        fn note_hop_completed(&self, hop: u8, delay: Duration, is_last: bool) {
+            if !is_last {
+                return;
+            }
+
+            let mut h = self.lock().unwrap();
+            h.hist.push((true, hop, delay));
+        }
+        fn note_circ_timeout(&self, hop: u8, delay: Duration) {
+            let mut h = self.lock().unwrap();
+            h.hist.push((false, hop, delay));
+        }
+        fn timeouts(&self, _action: &Action) -> (Duration, Duration) {
+            (Duration::from_secs(3), Duration::from_secs(100))
+        }
+    }
+
+    /// Testing only: create a bogus circuit target
+    fn circ_t(id: Ed25519Identity) -> OwnedCircTarget {
+        OwnedCircTarget::new(chan_t(id), [0x33; 32].into(), "".parse().unwrap())
+    }
+    /// Testing only: create a bogus channel target
+    fn chan_t(id: Ed25519Identity) -> OwnedChanTarget {
+        OwnedChanTarget::new(vec![], id, [0x20; 20].into())
+    }
+
+    /// Try successful and failing building cases
+    #[test]
+    fn test_builder() {
+        test_with_all_runtimes!(|rt| async move {
+            HOP3_DELAY.store(300, SeqCst); // undo previous run.
+            let rt = tor_rtmock::MockSleepRuntime::new(rt);
+
+            let p1 = OwnedPath::ChannelOnly(chan_t([0x11; 32].into()));
+            let p2 = OwnedPath::Normal(vec![
+                circ_t([0x11; 32].into()),
+                circ_t([0x22; 32].into()),
+                circ_t([0x33; 32].into()),
+            ]);
+            let chanmgr = Arc::new(ChanMgr::new(rt.clone()));
+            let timeouts = Arc::new(Mutex::new(TimeoutRecorder::new()));
+            let builder: Builder<_, Mutex<FakeCirc>, _> =
+                Builder::new(rt.clone(), chanmgr, Arc::clone(&timeouts));
+            let builder = Arc::new(builder);
+            let rng =
+                StdRng::from_rng(rand::thread_rng()).expect("couldn't construct temporary rng");
+            let params = CircParameters::default();
+
+            let outcome = rt.wait_for(builder.build_owned(p1, &params, rng)).await;
+
+            let circ = outcome.unwrap().into_inner().unwrap();
+            assert_eq!(circ.onehop, true);
+            assert_eq!(circ.hops[..], [[0x11; 32].into()]);
+
+            let rng =
+                StdRng::from_rng(rand::thread_rng()).expect("couldn't construct temporary rng");
+            let outcome = rt
+                .wait_for(builder.build_owned(p2.clone(), &params, rng))
+                .await;
+            let circ = outcome.unwrap().into_inner().unwrap();
+            assert_eq!(circ.onehop, false);
+            assert_eq!(
+                circ.hops[..],
+                [[0x11; 32].into(), [0x22; 32].into(), [0x33; 32].into()]
+            );
+
+            {
+                let mut h = timeouts.lock().unwrap();
+                assert_eq!(h.hist.len(), 2);
+                assert_eq!(h.hist[0].0, true); // completed
+                assert_eq!(h.hist[0].1, 0); // last hop completed
+                                            // TODO: test time elapsed, once wait_for is more reliable.
+                assert_eq!(h.hist[1].0, true); // completed
+                assert_eq!(h.hist[1].1, 2); // last hop completed
+                                            // TODO: test time elapsed, once wait_for is more reliable.
+                h.hist.clear();
+            }
+
+            // Try a very long timeout.
+            // (one hour is super long and won't get recorded as a
+            // circuit: only as a timeout).
+            HOP3_DELAY.store(3_600_000, SeqCst);
+            let rng =
+                StdRng::from_rng(rand::thread_rng()).expect("couldn't construct temporary rng");
+            let outcome = rt
+                .wait_for(builder.build_owned(p2.clone(), &params, rng))
+                .await;
+            assert!(outcome.is_err());
+
+            {
+                let mut h = timeouts.lock().unwrap();
+                assert_eq!(h.hist.len(), 1);
+                assert_eq!(h.hist[0].0, false);
+                assert_eq!(h.hist[0].1, 2);
+                h.hist.clear();
+            }
+
+            // Now try a recordable timeout.
+            HOP3_DELAY.store(5_000, SeqCst); // five seconds is plausible.
+            let rng =
+                StdRng::from_rng(rand::thread_rng()).expect("couldn't construct temporary rng");
+            let outcome = rt
+                .wait_for(builder.build_owned(p2.clone(), &params, rng))
+                .await;
+            assert!(outcome.is_err());
+            // "wait" a while longer to make sure that we eventually
+            // notice the circuit completing.
+            for _ in 0..1000u16 {
+                rt.advance(Duration::from_millis(100)).await;
+            }
+            {
+                let h = timeouts.lock().unwrap();
+                dbg!(&h.hist);
+                // First we notice a circuit timeout after 2 hops
+                assert_eq!(h.hist[0].0, false);
+                assert_eq!(h.hist[0].1, 2);
+                // TODO: check timeout more closely.
+                assert!(h.hist[0].2 < Duration::from_secs(100));
+                assert!(h.hist[0].2 >= Duration::from_secs(3));
+
+                // This test is not reliable under test coverage; see arti#149.
+                #[cfg(not(tarpaulin))]
+                {
+                    assert_eq!(h.hist.len(), 2);
+                    // Then we notice a circuit completing at its third hop.
+                    assert_eq!(h.hist[1].0, true);
+                    assert_eq!(h.hist[1].1, 2);
+                    // TODO: check timeout more closely.
+                    assert!(h.hist[1].2 < Duration::from_secs(100));
+                    assert!(h.hist[1].2 >= Duration::from_secs(5));
+                    assert!(h.hist[0].2 < h.hist[1].2);
+                }
+            }
+            HOP3_DELAY.store(300, SeqCst); // undo previous run.
+        })
     }
 }

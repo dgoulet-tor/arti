@@ -52,7 +52,7 @@ impl<R: Runtime> MockSleepRuntime<R> {
     pub fn wait_for<F: futures::Future>(&self, fut: F) -> WaitFor<F> {
         WaitFor {
             sleep: self.sleep.clone(),
-            yielding: false,
+            yielding: 0,
             fut,
         }
     }
@@ -109,9 +109,9 @@ impl<R: Runtime> SleepProvider for MockSleepRuntime<R> {
 pub struct WaitFor<F: Future> {
     /// A reference to the sleep provider that's simulating time for us.
     sleep: MockSleepProvider,
-    /// True if we just found that this inner future is pending, and we
+    /// Nonzero if we just found that this inner future is pending, and we
     /// should yield to give other futures a chance to run.
-    yielding: bool,
+    yielding: u8,
     /// The future that we're waiting for.
     #[pin]
     fut: F,
@@ -126,8 +126,8 @@ impl<F: Future> Future for WaitFor<F> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
 
-        if *this.yielding {
-            *this.yielding = false;
+        if *this.yielding > 0 {
+            *this.yielding -= 1;
             cx.waker().wake_by_ref();
             return Poll::Pending;
         }
@@ -141,7 +141,15 @@ impl<F: Future> Future for WaitFor<F> {
         // some of the tests in tor-circmgr give bad results.
         //
         // We should resolve this issue; see ticket #149.
+        #[cfg(tarpaulin)]
+        let high_bound = Duration::from_micros(100);
+        #[cfg(tarpaulin)]
+        let yield_count = 100;
+        #[cfg(not(tarpaulin))]
         let high_bound = Duration::from_millis(1);
+        #[cfg(not(tarpaulin))]
+        let yield_count = 3;
+
         let low_bound = Duration::from_micros(10);
         let duration = this
             .sleep
@@ -150,7 +158,7 @@ impl<F: Future> Future for WaitFor<F> {
             .unwrap_or(low_bound);
 
         this.sleep.advance_noyield(duration);
-        *this.yielding = true;
+        *this.yielding = yield_count;
         cx.waker().wake_by_ref();
         Poll::Pending
     }

@@ -86,6 +86,7 @@ impl<'a> TorPath<'a> {
 }
 
 /// A path composed entirely of owned components.
+#[derive(Clone)]
 pub(crate) enum OwnedPath {
     /// A path where we only know how to make circuits via CREATE_FAST.
     ChannelOnly(OwnedChanTarget),

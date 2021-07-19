@@ -70,6 +70,20 @@ pub struct OwnedCircTarget {
 }
 
 impl OwnedCircTarget {
+    /// Construct a new OwnedCircTarget from its parts.
+    // TODO: Put this function behind a feature.
+    pub fn new(
+        chan_target: OwnedChanTarget,
+        ntor_onion_key: pk::curve25519::PublicKey,
+        protovers: tor_protover::Protocols,
+    ) -> OwnedCircTarget {
+        OwnedCircTarget {
+            chan_target,
+            ntor_onion_key,
+            protovers,
+        }
+    }
+
     /// Construct an OwnedCircTarget from a given CircTarget.
     pub fn from_circ_target<C>(target: &C) -> Self
     where
