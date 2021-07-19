@@ -191,7 +191,7 @@ impl<
                     self.timeouts.note_hop_completed(
                         hop_num,
                         self.runtime.now() - start_time,
-                        hop_num == n_hops,
+                        hop_num == (n_hops - 1),
                     );
                     hop_num += 1;
                 }
