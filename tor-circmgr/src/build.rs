@@ -343,6 +343,9 @@ mod test {
     use tor_rtcompat::{test_with_all_runtimes, SleepProvider};
 
     #[test]
+    #[ignore]
+    // TODO: re-enable this test after arti#149 is fixed. For now, it
+    // is not reliable enough.
     fn test_double_timeout() {
         let t1 = Duration::from_secs(1);
         let t10 = Duration::from_secs(10);
@@ -536,7 +539,10 @@ mod test {
     }
 
     /// Try successful and failing building cases
+    // TODO: re-enable this test after arti#149 is fixed. For now, it
+    // is not reliable enough.
     #[test]
+    #[ignore]
     fn test_builder() {
         test_with_all_runtimes!(|rt| async move {
             HOP3_DELAY.store(300, SeqCst); // undo previous run.
