@@ -392,7 +392,7 @@ mod test {
         assert!(supp_exit_no_iso_c.supports(&targ_exit));
         assert!(!supp_exit_no_iso_c.supports(&targ_exit_iso2));
 
-        let mut supp_exit_no_iso_c = supp_exit_no_iso.clone();
+        let mut supp_exit_no_iso_c = supp_exit_no_iso;
         supp_exit_no_iso_c.restrict_mut(&targ_exit_iso2).unwrap();
         assert!(!supp_exit_no_iso_c.supports(&targ_exit));
         assert!(supp_exit_no_iso_c.supports(&targ_exit_iso2));

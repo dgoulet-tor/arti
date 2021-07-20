@@ -85,7 +85,7 @@ mod test {
         )
         .into();
 
-        let valid = ValidatableEd25519Signature::new(pk.clone(), sig.clone(), &hex!("af82"));
+        let valid = ValidatableEd25519Signature::new(pk, sig, &hex!("af82"));
         let invalid = ValidatableEd25519Signature::new(pk, sig, &hex!("af83"));
 
         assert!(valid.is_valid());

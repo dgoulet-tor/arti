@@ -76,7 +76,6 @@ where
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
-    use rand;
 
     #[cfg(not(feature = "stochastic_tests"))]
     pub(crate) fn get_rng() -> impl rand::Rng {

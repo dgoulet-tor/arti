@@ -738,7 +738,7 @@ mod test {
         use tor_linkspec::ChanTarget;
 
         let (consensus, microdescs) = construct_network();
-        let mut dir = PartialNetDir::new(consensus.clone(), None);
+        let mut dir = PartialNetDir::new(consensus, None);
         for md in microdescs.into_iter() {
             let wanted = dir.add_microdesc(md.clone());
             assert!(wanted);
@@ -773,7 +773,7 @@ mod test {
     #[test]
     fn relay_funcs() {
         let (consensus, microdescs) = construct_network();
-        let mut dir = PartialNetDir::new(consensus.clone(), None);
+        let mut dir = PartialNetDir::new(consensus, None);
         for md in microdescs.into_iter() {
             let wanted = dir.add_microdesc(md.clone());
             assert!(wanted);

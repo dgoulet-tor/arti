@@ -420,19 +420,19 @@ mod test {
 
         let mut cc_out = OutboundClientCrypt::new();
         let mut cc_in = InboundClientCrypt::new();
-        let pair = Tor1RelayCrypto::construct(KGen::new(seed1.clone().into())).unwrap();
+        let pair = Tor1RelayCrypto::construct(KGen::new(seed1.clone())).unwrap();
         add_layers(&mut cc_out, &mut cc_in, pair);
-        let pair = Tor1RelayCrypto::construct(KGen::new(seed2.clone().into())).unwrap();
+        let pair = Tor1RelayCrypto::construct(KGen::new(seed2.clone())).unwrap();
         add_layers(&mut cc_out, &mut cc_in, pair);
-        let pair = Tor1RelayCrypto::construct(KGen::new(seed3.clone().into())).unwrap();
+        let pair = Tor1RelayCrypto::construct(KGen::new(seed3.clone())).unwrap();
         add_layers(&mut cc_out, &mut cc_in, pair);
 
         assert_eq!(cc_in.n_layers(), 3);
         assert_eq!(cc_out.n_layers(), 3);
 
-        let mut r1 = Tor1RelayCrypto::construct(KGen::new(seed1.into())).unwrap();
-        let mut r2 = Tor1RelayCrypto::construct(KGen::new(seed2.into())).unwrap();
-        let mut r3 = Tor1RelayCrypto::construct(KGen::new(seed3.into())).unwrap();
+        let mut r1 = Tor1RelayCrypto::construct(KGen::new(seed1)).unwrap();
+        let mut r2 = Tor1RelayCrypto::construct(KGen::new(seed2)).unwrap();
+        let mut r3 = Tor1RelayCrypto::construct(KGen::new(seed3)).unwrap();
 
         let mut rng = rand::thread_rng();
         for _ in 1..300 {

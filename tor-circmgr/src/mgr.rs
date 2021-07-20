@@ -998,7 +998,7 @@ mod test {
         }
         fn isolated(self, group: u8) -> Self {
             FakeSpec {
-                ports: self.ports.clone(),
+                ports: self.ports,
                 isolation_group: Some(group),
             }
         }

@@ -233,7 +233,7 @@ mod test {
         let a = SocksAddr::Ip(IpAddr::V6("f00::9999".parse().unwrap()));
         assert_eq!(a.to_string(), "f00::9999");
 
-        let a = SocksAddr::Hostname("www.torproject.org".to_string().clone().try_into().unwrap());
+        let a = SocksAddr::Hostname("www.torproject.org".to_string().try_into().unwrap());
         assert_eq!(a.to_string(), "www.torproject.org");
     }
 
@@ -276,13 +276,7 @@ mod test {
         );
         assert!(matches!(e, Err(Error::NoSupport)));
 
-        let e = SocksRequest::new(
-            4,
-            SocksCmd::CONNECT,
-            localhost_v4.clone(),
-            0,
-            SocksAuth::NoAuth,
-        );
+        let e = SocksRequest::new(4, SocksCmd::CONNECT, localhost_v4, 0, SocksAuth::NoAuth);
         assert!(matches!(e, Err(Error::Syntax)));
     }
 }

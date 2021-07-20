@@ -1571,10 +1571,7 @@ mod test {
         assert_eq!(2, missing.len());
 
         // here is a trick that had better not work.
-        let mut same_three_times = Vec::new();
-        same_three_times.push(certs[0].clone());
-        same_three_times.push(certs[0].clone());
-        same_three_times.push(certs[0].clone());
+        let same_three_times = vec![certs[0].clone(), certs[0].clone(), certs[0].clone()];
         let missing = consensus.key_is_correct(&same_three_times).err().unwrap();
 
         assert_eq!(2, missing.len());
@@ -1666,7 +1663,7 @@ mod test {
         check("wrong-order", Error::WrongSortOrder(Pos::from_line(52, 1)));
         check(
             "wrong-start",
-            Error::UnexpectedToken("vote-status".into(), Pos::from_line(1, 1)),
+            Error::UnexpectedToken("vote-status", Pos::from_line(1, 1)),
         );
         check("wrong-version", Error::BadDocumentVersion(10));
     }

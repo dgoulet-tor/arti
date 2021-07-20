@@ -233,7 +233,7 @@ mod test {
         );
         assert!(matches!(map.get_mut(ids[2]), Some(StreamEnt::EndSent(_))));
         assert_eq!(
-            map.terminate(ids[1], window.clone()).unwrap(),
+            map.terminate(ids[1], window).unwrap(),
             ShouldSendEnd::DontSend
         );
         assert!(matches!(map.get_mut(ids[1]), None));

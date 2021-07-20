@@ -60,12 +60,13 @@ mod test {
     fn test_lookup() {
         use super::lookup;
         use subtle::ConstantTimeEq;
-        let mut items = Vec::new();
-        items.push("One".to_string());
-        items.push("word".to_string());
-        items.push("of".to_string());
-        items.push("every".to_string());
-        items.push("length".to_string());
+        let items = vec![
+            "One".to_string(),
+            "word".to_string(),
+            "of".to_string(),
+            "every".to_string(),
+            "length".to_string(),
+        ];
         let of_word = lookup(&items[..], |i| i.len().ct_eq(&2));
         let every_word = lookup(&items[..], |i| i.len().ct_eq(&5));
         let no_word = lookup(&items[..], |i| i.len().ct_eq(&99));

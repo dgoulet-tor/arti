@@ -305,8 +305,8 @@ mod test {
             let cf = FakeChannelFactory::new(runtime);
             let mgr = AbstractChanMgr::new(cf);
             let target = (413, '!');
-            let chan1 = mgr.get_or_launch(413, target.clone()).await.unwrap();
-            let chan2 = mgr.get_or_launch(413, target.clone()).await.unwrap();
+            let chan1 = mgr.get_or_launch(413, target).await.unwrap();
+            let chan2 = mgr.get_or_launch(413, target).await.unwrap();
 
             assert!(Arc::ptr_eq(&chan1, &chan2));
 

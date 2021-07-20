@@ -1,5 +1,3 @@
-use rand_core;
-
 pub(crate) struct FakePRNG<'a> {
     bytes: &'a [u8],
 }
@@ -16,7 +14,8 @@ impl<'a> rand_core::RngCore for FakePRNG<'a> {
         rand_core::impls::next_u64_via_fill(self)
     }
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> std::result::Result<(), rand_core::Error> {
-        Ok(self.fill_bytes(dest))
+        self.fill_bytes(dest);
+        Ok(())
     }
     fn fill_bytes(&mut self, dest: &mut [u8]) {
         assert!(dest.len() <= self.bytes.len());

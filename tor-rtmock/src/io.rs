@@ -190,7 +190,7 @@ mod test {
                     text2.extend(&buf[..n]);
                 }
                 for ch in text2[..].chunks(text1.len()) {
-                    assert_eq!(&ch[..], &text1[..]);
+                    assert_eq!(ch, &text1[..]);
                 }
                 Ok(())
             }
