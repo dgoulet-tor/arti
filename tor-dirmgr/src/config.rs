@@ -490,11 +490,11 @@ mod fallbacks {
 #[cfg(test)]
 mod test {
     use super::*;
-    use tempdir::TempDir;
+    use tempfile::tempdir;
 
     #[test]
     fn simplest_config() -> Result<()> {
-        let tmp = TempDir::new("arti-config").unwrap();
+        let tmp = tempdir().unwrap();
 
         let dir = DirMgrConfigBuilder::new().cache_path(tmp.path()).build()?;
 
@@ -578,7 +578,7 @@ mod test {
     #[test]
     fn build_dirmgrcfg() -> Result<()> {
         let mut bld = DirMgrConfig::builder();
-        let tmp = TempDir::new("arti-config").unwrap();
+        let tmp = tempdir().unwrap();
 
         let cfg = bld
             .override_net_param("circwindow".into(), 999)

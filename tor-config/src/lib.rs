@@ -100,7 +100,7 @@ pub fn default_config_file() -> Option<PathBuf> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use tempdir::TempDir;
+    use tempfile::tempdir;
 
     static EX_TOML: &'static str = "
 [hello]
@@ -110,7 +110,7 @@ friends = 4242
 
     #[test]
     fn load_default() {
-        let td = TempDir::new("arti-cfg").unwrap();
+        let td = tempdir().unwrap();
         let dflt = td.path().join("a_file");
         let mut c = config::Config::new();
         let v: Vec<&'static str> = Vec::new();
@@ -128,7 +128,7 @@ world = \"nonsense\"
 
     #[test]
     fn load_one_file() {
-        let td = TempDir::new("arti-cfg").unwrap();
+        let td = tempdir().unwrap();
         let dflt = td.path().join("a_file");
         let cf = td.path().join("other_file");
         let mut c = config::Config::new();
@@ -144,7 +144,7 @@ world = \"nonsense\"
 
     #[test]
     fn load_two_files_with_cmdline() {
-        let td = TempDir::new("arti-cfg").unwrap();
+        let td = tempdir().unwrap();
         let cf1 = td.path().join("a_file");
         let cf2 = td.path().join("other_file");
         let mut c = config::Config::new();

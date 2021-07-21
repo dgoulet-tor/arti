@@ -921,10 +921,10 @@ const DROP_OLD_CONSENSUSES: &str = "
 mod test {
     use super::*;
     use hex_literal::hex;
-    use tempdir::TempDir;
+    use tempfile::{tempdir, TempDir};
 
     fn new_empty() -> Result<(TempDir, SqliteStore)> {
-        let tmp_dir = TempDir::new("arti-nd").unwrap();
+        let tmp_dir = tempdir().unwrap();
         let sql_path = tmp_dir.path().join("db.sql");
         let conn = rusqlite::Connection::open(&sql_path)?;
         let store = SqliteStore::from_conn(conn, &tmp_dir)?;
@@ -934,7 +934,7 @@ mod test {
 
     #[test]
     fn init() -> Result<()> {
-        let tmp_dir = TempDir::new("arti-nd").unwrap();
+        let tmp_dir = tempdir().unwrap();
         let sql_path = tmp_dir.path().join("db.sql");
         // Initial setup: everything should work.
         {
@@ -1242,7 +1242,7 @@ mod test {
 
     #[test]
     fn from_path_rw() -> Result<()> {
-        let tmp = TempDir::new("arti-from-path").unwrap();
+        let tmp = tempdir().unwrap();
 
         // Nothing there: can't open read-only
         let r = SqliteStore::from_path(tmp.path(), true);
