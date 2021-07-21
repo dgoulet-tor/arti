@@ -457,7 +457,7 @@ mod test {
             rt.sleep(Duration::from_millis(HOP1_DELAY.load(SeqCst)))
                 .await;
             let c = FakeCirc {
-                hops: vec![ct.ed_identity().clone()],
+                hops: vec![*ct.ed_identity()],
                 onehop: true,
             };
             Ok(Mutex::new(c))
@@ -472,7 +472,7 @@ mod test {
             rt.sleep(Duration::from_millis(HOP1_DELAY.load(SeqCst)))
                 .await;
             let c = FakeCirc {
-                hops: vec![ct.ed_identity().clone()],
+                hops: vec![*ct.ed_identity()],
                 onehop: false,
             };
             Ok(Mutex::new(c))
@@ -496,7 +496,7 @@ mod test {
             rt.sleep(Duration::from_millis(d)).await;
             {
                 let mut c = self.lock().unwrap();
-                c.hops.push(ct.ed_identity().clone());
+                c.hops.push(*ct.ed_identity());
             }
             Ok(())
         }

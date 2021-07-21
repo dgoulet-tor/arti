@@ -14,9 +14,7 @@ impl rand::RngCore for BadRng {
         0xf0f0f0f0f0f0f0f0
     }
     fn fill_bytes(&mut self, dest: &mut [u8]) {
-        for i in 0..dest.len() {
-            dest[i] = 0xf0;
-        }
+        dest.fill(0xf0);
     }
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
         self.fill_bytes(dest);

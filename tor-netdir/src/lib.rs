@@ -757,12 +757,9 @@ mod test {
             picked[id_byte as usize] += 1;
         }
         // non-exits should never get picked.
-        for idx in 0..10 {
-            assert_eq!(picked[idx], 0);
-        }
-        for idx in 20..30 {
-            assert_eq!(picked[idx], 0);
-        }
+        picked[0..10].iter().for_each(|x| assert_eq!(*x, 0));
+        picked[20..30].iter().for_each(|x| assert_eq!(*x, 0));
+
         // We didn't we any non-default weights, so the other relays get
         // weighted proportional to their bandwidth.
         check_close(picked[19], (total * 10) / 110);
