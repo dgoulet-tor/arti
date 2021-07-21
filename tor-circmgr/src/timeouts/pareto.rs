@@ -62,7 +62,7 @@ struct History {
     /// is completed.
     time_history: BoundedVecDeque<MsecDuration>,
 
-    /// A histogram representation of the values in [`time_history`].
+    /// A histogram representation of the values in [`History::time_history`].
     ///
     /// This histogram is implemented as a sparse map from the center
     /// value of each histogram bucket to the number of entries in
