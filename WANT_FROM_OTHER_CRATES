@@ -46,14 +46,18 @@ ed25519 trait:
 native-tls:
 * Support for RFC5705 exporters where available.
 
-coarsetime:
-* Officially supported conversion to/from u64, OR an AtomicInstant type.
-
+fslock:
+* Reliable behavior when locking file twice in the same process
+  (See https://github.com/brunoczim/fslock/pull/3)
+* Ability to get fd or handle for file, if above not implemented.
 
 # Not actually using these crates:
 
 bitvec
 * more efficient bitwise operations.
+
+coarsetime:
+* Officially supported conversion to/from u64, OR an AtomicInstant type.
 
 ring:
 * static curve25519
