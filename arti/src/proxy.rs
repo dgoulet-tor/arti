@@ -7,6 +7,7 @@ use futures::stream::StreamExt;
 use futures::task::SpawnExt;
 use log::{error, info, warn};
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::io::Result as IoResult;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
@@ -14,7 +15,7 @@ use std::time::{Duration, Instant};
 
 use tor_client::{ConnectPrefs, IsolationToken, TorClient};
 use tor_rtcompat::{Runtime, TcpListener, TimeoutError};
-use tor_socksproto::{SocksAuth, SocksCmd, SocksRequest};
+use tor_socksproto::{SocksAddr, SocksAuth, SocksCmd, SocksRequest};
 
 use anyhow::{Context, Result};
 
@@ -147,10 +148,6 @@ where
     let addr = request.addr().to_string();
     let port = request.port();
     info!("Got a socks request for {}:{}", addr, port);
-    if request.command() != SocksCmd::CONNECT {
-        warn!("Dropping request; {:?} is unsupported", request.command());
-        return Ok(());
-    }
 
     let auth = request.auth().clone();
     let (socket, ip) = isolation_info;
@@ -158,37 +155,70 @@ where
 
     let mut prefs = stream_preference(&request, &addr);
     prefs.set_isolation_group(isolation_token);
-    let stream = client.connect(&addr, port, Some(prefs)).await;
-    let stream = match stream {
-        Ok(s) => s,
-        // In the case of a stream timeout, send the right SOCKS reply.
-        Err(e) => {
-            // TODO: Using downcast_ref() here is ugly. maybe we shouldn't
-            // be using anyhow at this point?
-            match e.downcast_ref::<TimeoutError>() {
-                Some(_) => {
-                    let reply = request.reply(tor_socksproto::SocksStatus::TTL_EXPIRED, None);
-                    w.write(&reply[..])
-                        .await
-                        .context("Couldn't write SOCKS reply")?;
-                    return Err(e);
+
+    match request.command() {
+        SocksCmd::CONNECT => {
+            let stream = client.connect(&addr, port, Some(prefs)).await;
+            let stream = match stream {
+                Ok(s) => s,
+                // In the case of a stream timeout, send the right SOCKS reply.
+                Err(e) => {
+                    // TODO: Using downcast_ref() here is ugly. maybe we shouldn't
+                    // be using anyhow at this point?
+                    match e.downcast_ref::<TimeoutError>() {
+                        Some(_) => {
+                            let reply =
+                                request.reply(tor_socksproto::SocksStatus::TTL_EXPIRED, None);
+                            w.write(&reply[..])
+                                .await
+                                .context("Couldn't write SOCKS reply")?;
+                            return Err(e);
+                        }
+                        _ => return Err(e),
+                    }
                 }
-                _ => return Err(e),
+            };
+            info!("Got a stream for {}:{}", addr, port);
+            // TODO: XXXX-A1 Should send a SOCKS reply if something fails.
+
+            let reply = request.reply(tor_socksproto::SocksStatus::SUCCEEDED, None);
+            w.write(&reply[..])
+                .await
+                .context("Couldn't write SOCKS reply")?;
+
+            let (rstream, wstream) = stream.split();
+
+            runtime.spawn(copy_interactive(r, wstream).map(|_| ()))?;
+            runtime.spawn(copy_interactive(rstream, w).map(|_| ()))?;
+        }
+        SocksCmd::RESOLVE => {
+            let addrs = client.resolve(&addr, Some(prefs)).await?;
+            if let Some(addr) = addrs.first() {
+                let reply = request.reply(
+                    tor_socksproto::SocksStatus::SUCCEEDED,
+                    Some(&SocksAddr::Ip(*addr)),
+                );
+                w.write(&reply[..])
+                    .await
+                    .context("Couldn't write SOCKS reply")?;
             }
         }
+        SocksCmd::RESOLVE_PTR => {
+            let hosts = client.resolve_ptr(&addr, Some(prefs)).await?;
+            if let Some(host) = hosts.into_iter().next() {
+                let reply = request.reply(
+                    tor_socksproto::SocksStatus::SUCCEEDED,
+                    Some(&SocksAddr::Hostname(host.try_into()?)),
+                );
+                w.write(&reply[..])
+                    .await
+                    .context("Couldn't write SOCKS reply")?;
+            }
+        }
+        _ => {
+            warn!("Dropping request; {:?} is unsupported", request.command());
+        }
     };
-    info!("Got a stream for {}:{}", addr, port);
-    // TODO: XXXX-A1 Should send a SOCKS reply if something fails.
-
-    let reply = request.reply(tor_socksproto::SocksStatus::SUCCEEDED, None);
-    w.write(&reply[..])
-        .await
-        .context("Couldn't write SOCKS reply")?;
-
-    let (rstream, wstream) = stream.split();
-
-    runtime.spawn(copy_interactive(r, wstream).map(|_| ()))?;
-    runtime.spawn(copy_interactive(rstream, w).map(|_| ()))?;
 
     // TODO: XXXX-A1 we should close the TCP stream if either task fails. Do we?
     // TODO: XXXX-A1 should report the errors.
