@@ -191,7 +191,7 @@ fn simple_tls<R: Runtime>(runtime: R) -> IoResult<()> {
             if n == 0 {
                 break;
             }
-            con.write(&buf[..n])?;
+            con.write_all(&buf[..n])?;
         }
         IoResult::Ok(())
     });

@@ -348,7 +348,7 @@ mod test {
         assert_eq!(w.w.lock().await.tags.len(), 1);
 
         // Try putting a good tag.
-        let n = w.put(Some(&"and")).await;
+        let n = w.put(Some("and")).await;
         assert_eq!(n, Some(999));
         assert_eq!(w.w.lock().await.tags.len(), 0);
 
@@ -374,16 +374,16 @@ mod test {
 
         // wrong tag: won't work.
         assert_eq!(w.w.lock().await.window, 750);
-        let n = w.put(Some(&"incorrect")).await;
+        let n = w.put(Some("incorrect")).await;
         assert!(n.is_none());
 
-        let n = w.put(Some(&"correct")).await;
+        let n = w.put(Some("correct")).await;
         assert_eq!(n, Some(850));
-        let n = w.put(Some(&"correct")).await;
+        let n = w.put(Some("correct")).await;
         assert_eq!(n, Some(950));
 
         // no tag expected: won't work.
-        let n = w.put(Some(&"correct")).await;
+        let n = w.put(Some("correct")).await;
         assert_eq!(n, None);
         assert_eq!(w.w.lock().await.window, 950);
 

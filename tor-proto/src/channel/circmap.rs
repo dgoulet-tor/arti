@@ -193,7 +193,7 @@ mod test {
             let id_low = map_low.add_ent(&mut rng, csnd, snd).unwrap();
             assert!(u32::from(id_low) > 0);
             assert!(u32::from(id_low) < 0x80000000);
-            assert!(ids_low.iter().find(|x| **x == id_low).is_none());
+            assert!(!ids_low.iter().any(|x| *x == id_low));
             ids_low.push(id_low);
 
             assert!(matches!(
@@ -205,7 +205,7 @@ mod test {
             let (snd, _) = mpsc::channel(8);
             let id_high = map_high.add_ent(&mut rng, csnd, snd).unwrap();
             assert!(u32::from(id_high) >= 0x80000000);
-            assert!(ids_high.iter().find(|x| **x == id_high).is_none());
+            assert!(!ids_high.iter().any(|x| *x == id_high));
             ids_high.push(id_high);
         }
 

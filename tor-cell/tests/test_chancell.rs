@@ -140,8 +140,7 @@ fn bad_cell(body: &str, err: Error, pad_body: bool) {
         let mut bm = BytesMut::new();
         bm.extend_from_slice(&body[..]);
         bm.extend_from_slice(&b"next thing"[..]);
-        let decoded = codec.decode_cell(&mut bm).err().unwrap();
-        decoded
+        codec.decode_cell(&mut bm).err().unwrap()
     };
 
     assert_eq!(format!("{:?}", decoded), format!("{:?}", err));

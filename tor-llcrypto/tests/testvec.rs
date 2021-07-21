@@ -258,7 +258,7 @@ fn tv_sha1() {
             d.update(inp);
         }
         let res = d.finalize();
-        assert_eq!(&res[..], &expect[..]);
+        assert_eq!(&res[..], expect);
     }
 
     run_test(
@@ -383,7 +383,7 @@ fn xof_helper<X: ExtendableOutput + digest::Update>(mut x: X, input: &[u8], outp
     let mut r = x.finalize_xof();
     let mut buf = vec![0; output.len()];
     r.read(&mut buf);
-    assert_eq!(&buf[..], &output[..]);
+    assert_eq!(&buf[..], output);
 }
 
 #[test]

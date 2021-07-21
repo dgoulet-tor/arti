@@ -738,7 +738,7 @@ mod test {
         use tor_linkspec::ChanTarget;
 
         let (consensus, microdescs) = construct_network();
-        let mut dir = PartialNetDir::new(consensus.clone(), None);
+        let mut dir = PartialNetDir::new(consensus, None);
         for md in microdescs.into_iter() {
             let wanted = dir.add_microdesc(md.clone());
             assert!(wanted);
@@ -757,12 +757,9 @@ mod test {
             picked[id_byte as usize] += 1;
         }
         // non-exits should never get picked.
-        for idx in 0..10 {
-            assert_eq!(picked[idx], 0);
-        }
-        for idx in 20..30 {
-            assert_eq!(picked[idx], 0);
-        }
+        picked[0..10].iter().for_each(|x| assert_eq!(*x, 0));
+        picked[20..30].iter().for_each(|x| assert_eq!(*x, 0));
+
         // We didn't we any non-default weights, so the other relays get
         // weighted proportional to their bandwidth.
         check_close(picked[19], (total * 10) / 110);
@@ -773,7 +770,7 @@ mod test {
     #[test]
     fn relay_funcs() {
         let (consensus, microdescs) = construct_network();
-        let mut dir = PartialNetDir::new(consensus.clone(), None);
+        let mut dir = PartialNetDir::new(consensus, None);
         for md in microdescs.into_iter() {
             let wanted = dir.add_microdesc(md.clone());
             assert!(wanted);

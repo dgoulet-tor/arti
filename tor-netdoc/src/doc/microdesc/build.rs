@@ -180,8 +180,8 @@ mod test {
 
         let md = MicrodescBuilder::new()
             .tap_key(rsa.clone())
-            .ed25519_id(ed.clone())
-            .ntor_key(ntor.clone())
+            .ed25519_id(ed)
+            .ntor_key(ntor)
             .testing_md()
             .unwrap();
 
@@ -199,9 +199,9 @@ mod test {
         let ntor: curve25519::PublicKey = (*b"but fortunately nothing cares...").into();
 
         let md = Microdesc::builder()
-            .tap_key(rsa.clone())
-            .ed25519_id(ed.clone())
-            .ntor_key(ntor.clone())
+            .tap_key(rsa)
+            .ed25519_id(ed)
+            .ntor_key(ntor)
             .parse_ipv4_policy("accept 80,443")?
             .parse_ipv6_policy("accept 22-80")?
             .parse_family("$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa $bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")?
@@ -230,19 +230,19 @@ mod test {
 
         {
             let mut builder = Microdesc::builder();
-            builder.tap_key(rsa.clone()).ed25519_id(ed.clone());
+            builder.tap_key(rsa.clone()).ed25519_id(ed);
             assert!(builder.testing_md().is_err()); // no ntor
         }
 
         {
             let mut builder = Microdesc::builder();
-            builder.ntor_key(ntor.clone()).ed25519_id(ed.clone());
+            builder.ntor_key(ntor).ed25519_id(ed);
             assert!(builder.testing_md().is_err()); // no tap
         }
 
         {
             let mut builder = Microdesc::builder();
-            builder.tap_key(rsa.clone()).ntor_key(ntor.clone());
+            builder.tap_key(rsa).ntor_key(ntor);
             assert!(builder.testing_md().is_err()); // no ed id.
         }
     }

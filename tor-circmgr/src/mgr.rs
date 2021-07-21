@@ -998,7 +998,7 @@ mod test {
         }
         fn isolated(self, group: u8) -> Self {
             FakeSpec {
-                ports: self.ports.clone(),
+                ports: self.ports,
                 isolation_group: Some(group),
             }
         }
@@ -1360,12 +1360,11 @@ mod test {
                 ))
                 .await;
 
-            if c2.is_ok() {
-                let c1 = c1.unwrap();
-                let c2 = c2.unwrap();
+            if let (Ok(c1), Ok(c2)) = (c1, c2) {
                 assert!(Arc::ptr_eq(&c1, &c2));
-                return;
-            }
+            } else {
+                panic!()
+            };
         });
     }
 

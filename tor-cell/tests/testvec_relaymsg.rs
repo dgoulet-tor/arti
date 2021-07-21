@@ -141,9 +141,7 @@ fn test_extend2() {
             .unwrap();
     let addr = "127.0.0.1:5000".parse::<SocketAddr>().unwrap();
 
-    let mut ls = Vec::new();
-    ls.push(addr.into());
-    ls.push(rsa.into());
+    let ls = vec![addr.into(), rsa.into()];
     msg(cmd, body, &msg::Extend2::new(ls, 2, handshake).into());
 }
 

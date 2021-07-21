@@ -65,26 +65,20 @@ mod test {
     #[test]
     fn family() -> Result<()> {
         let f = "nickname1 nickname2 $ffffffffffffffffffffffffffffffffffffffff=foo eeeeeeeeeeeeeeeeeeeEEEeeeeeeeeeeeeeeeeee ddddddddddddddddddddddddddddddddd  $cccccccccccccccccccccccccccccccccccccccc~blarg ".parse::<RelayFamily>()?;
-        let mut v = Vec::new();
-        v.push(
+        let v = vec![
             RsaIdentity::from_bytes(
                 &hex::decode("ffffffffffffffffffffffffffffffffffffffff").unwrap()[..],
             )
             .unwrap(),
-        );
-        v.push(
             RsaIdentity::from_bytes(
                 &hex::decode("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee").unwrap()[..],
             )
             .unwrap(),
-        );
-        // "d" key is too short.
-        v.push(
             RsaIdentity::from_bytes(
                 &hex::decode("cccccccccccccccccccccccccccccccccccccccc").unwrap()[..],
             )
             .unwrap(),
-        );
+        ];
         assert_eq!(f.0, v);
         Ok(())
     }

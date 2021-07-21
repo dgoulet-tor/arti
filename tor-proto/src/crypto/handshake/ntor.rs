@@ -315,13 +315,13 @@ mod tests {
         let relay_identity = RsaIdentity::from_bytes(&[12; 20]).unwrap();
         let relay_ntpk = NtorPublicKey {
             id: relay_identity,
-            pk: relay_public.clone(),
+            pk: relay_public,
         };
         let (state, cmsg) = NtorClient::client1(&mut rng, &relay_ntpk)?;
 
         let relay_ntsk = NtorSecretKey {
             pk: relay_ntpk.clone(),
-            sk: relay_secret.clone(),
+            sk: relay_secret,
         };
         let relay_ntsks = [relay_ntsk];
 
@@ -399,8 +399,8 @@ mod tests {
         let relay_identity = RsaIdentity::from_bytes(&[12; 20]).unwrap();
         let wrong_identity = RsaIdentity::from_bytes(&[13; 20]).unwrap();
         let relay_ntpk = NtorPublicKey {
-            id: relay_identity.clone(),
-            pk: relay_public.clone(),
+            id: relay_identity,
+            pk: relay_public,
         };
         let relay_ntsk = NtorSecretKey {
             pk: relay_ntpk.clone(),
@@ -409,11 +409,11 @@ mod tests {
         let relay_ntsks = &[relay_ntsk];
         let wrong_ntpk1 = NtorPublicKey {
             id: wrong_identity,
-            pk: relay_public.clone(),
+            pk: relay_public,
         };
         let wrong_ntpk2 = NtorPublicKey {
             id: relay_identity,
-            pk: wrong_public.clone(),
+            pk: wrong_public,
         };
 
         // If the client uses the wrong keys, the relay should reject the

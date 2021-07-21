@@ -102,7 +102,7 @@ mod test {
     use super::*;
     use tempfile::tempdir;
 
-    static EX_TOML: &'static str = "
+    static EX_TOML: &str = "
 [hello]
 world = \"stuff\"
 friends = 4242
@@ -121,7 +121,7 @@ friends = 4242
         assert_eq!(c.get_str("hello.world").unwrap(), "stuff".to_string());
     }
 
-    static EX2_TOML: &'static str = "
+    static EX2_TOML: &str = "
 [hello]
 world = \"nonsense\"
 ";
