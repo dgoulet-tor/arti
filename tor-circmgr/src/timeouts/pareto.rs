@@ -730,8 +730,8 @@ mod test {
         let mut h = History::new_empty();
         assert_eq!(h.estimate_xm(2), None);
 
-        for n in [300, 500, 542, 305, 543, 307, 212, 203, 617, 413] {
-            h.add_time(n.into());
+        for n in &[300, 500, 542, 305, 543, 307, 212, 203, 617, 413] {
+            h.add_time(MsecDuration(*n));
         }
 
         let v = h.n_most_frequent_bins(2);
@@ -746,8 +746,8 @@ mod test {
         let mut h = History::new_empty();
         assert!(h.pareto_estimate(2).is_none());
 
-        for n in [300, 500, 542, 305, 543, 307, 212, 203, 617, 413] {
-            h.add_time(n.into());
+        for n in &[300, 500, 542, 305, 543, 307, 212, 203, 617, 413] {
+            h.add_time(MsecDuration(*n));
         }
         let expected_log_sum: f64 = [401, 500, 542, 401, 543, 401, 401, 401, 617, 413]
             .iter()
@@ -790,8 +790,8 @@ mod test {
             (Duration::from_secs(60), Duration::from_secs(90))
         );
 
-        for msec in [300, 500, 542, 305, 543, 307, 212, 203, 617, 413] {
-            let d = Duration::from_millis(msec);
+        for msec in &[300, 500, 542, 305, 543, 307, 212, 203, 617, 413] {
+            let d = Duration::from_millis(*msec);
             est.note_hop_completed(2, d, true);
         }
 
@@ -820,8 +820,8 @@ mod test {
         }
         assert_eq!(est.timeouts(&b3()).0.as_micros(), 60_000_000);
 
-        for msec in [300, 500, 542, 305, 543, 307, 212, 203, 617, 413] {
-            let d = Duration::from_millis(msec);
+        for msec in &[300, 500, 542, 305, 543, 307, 212, 203, 617, 413] {
+            let d = Duration::from_millis(*msec);
             est.note_hop_completed(2, d, true);
         }
         assert_ne!(est.timeouts(&b3()).0.as_micros(), 60_000_000);
