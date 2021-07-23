@@ -29,9 +29,22 @@ configuration parameters:
     $ ./target/release/arti -c "socks_port = 9150" -c "trace = false"
 
 This will ensure that arti sets its SOCKS port on 9150. Now we need to launch
-Tor Browser and instruct it to use that SOCKS port:
+Tor Browser and instruct it to use that SOCKS port.
+
+On Linux:
 
     $ TOR_SKIP_LAUNCH=1 TOR_SOCKS_PORT=9150 ./start-tor-browser.desktop
+
+On OSX:
+
+    $ TOR_SKIP_LAUNCH=1 TOR_SOCKS_PORT=9150 /path/to/Tor\ Browser/Contents/MacOS/firefox
+
+(You may need to adjust the actual path to wherever you have put your Tor
+Browser.)
+
+When you start Tor browser, it will give you a big red error page because
+Arti isn't offering it a control port interface.  But it will still work!
+Try [check.torproject.org](https://check.torproject.org/) to be sure.
 
 The resulting Tor Browser should be using arti.  Note that onion services
 won't work (Arti doesn't have them yet), and neither will any feature
