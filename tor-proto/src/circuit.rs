@@ -583,25 +583,16 @@ impl ClientCirc {
         let resolve_msg = Resolve::new(hostname);
 
         let resolved_msg = self.try_resolve(resolve_msg).await?;
-        let mut addrs = Vec::new();
 
-        for (val, _) in resolved_msg.into_answers() {
-            match val {
-                ResolvedVal::Ip(ip) => addrs.push(ip),
-                ResolvedVal::TransientError => {
-                    return Err(Error::ResolveError(
-                        "Received retriable transient error".into(),
-                    ))
-                }
-                ResolvedVal::NontransientError => {
-                    return Err(Error::ResolveError("Received not retriable error.".into()))
-                }
-                // Ignoring ResolvedVal::Hostname and ResolvedVal::Unrecognized
-                _ => (),
-            };
-        }
-
-        Ok(addrs)
+        resolved_msg
+            .into_answers()
+            .into_iter()
+            .filter_map(|(val, _)| match resolvedval_to_result(val) {
+                Ok(ResolvedVal::Ip(ip)) => Some(Ok(ip)),
+                Ok(_) => None,
+                Err(e) => Some(Err(e)),
+            })
+            .collect()
     }
 
     /// Perform a reverse DNS lookup, by sending a RESOLVE cell with
@@ -613,29 +604,19 @@ impl ClientCirc {
         let resolve_ptr_msg = Resolve::new_reverse(&addr);
 
         let resolved_msg = self.try_resolve(resolve_ptr_msg).await?;
-        let mut hostnames = Vec::new();
 
-        for (val, _) in resolved_msg.into_answers() {
-            match val {
-                ResolvedVal::Hostname(v) => {
-                    hostnames.push(String::from_utf8(v).map_err(|_| {
-                        Error::StreamProto("Error parsing resolved hostname.".into())
-                    })?)
-                }
-                ResolvedVal::TransientError => {
-                    return Err(Error::ResolveError(
-                        "Received retriable transient error".into(),
-                    ))
-                }
-                ResolvedVal::NontransientError => {
-                    return Err(Error::ResolveError("Received not retriable error.".into()))
-                }
-                // Ignoring ResolvedVal::Ip and ResolvedVal::Unrecognized
-                _ => (),
-            };
-        }
-
-        Ok(hostnames)
+        resolved_msg
+            .into_answers()
+            .into_iter()
+            .filter_map(|(val, _)| match resolvedval_to_result(val) {
+                Ok(ResolvedVal::Hostname(v)) => Some(
+                    String::from_utf8(v)
+                        .map_err(|_| Error::StreamProto("Resolved Hostname was not utf-8".into())),
+                ),
+                Ok(_) => None,
+                Err(e) => Some(Err(e)),
+            })
+            .collect()
     }
 
     /// Helper: Encode the relay cell `cell`, encrypt it, and send it to the
@@ -1172,6 +1153,20 @@ impl Drop for StreamTarget {
         }
         // If there's an error, no worries: it's hard-cancel, and we
         // can just ignore it. XXXX (I hope?)
+    }
+}
+
+/// Convert a [`ResolvedVal`] into a Result, based on whether or not
+/// it represents an error.
+fn resolvedval_to_result(val: ResolvedVal) -> Result<ResolvedVal> {
+    match val {
+        ResolvedVal::TransientError => Err(Error::ResolveError(
+            "Received retriable transient error".into(),
+        )),
+        ResolvedVal::NontransientError => {
+            Err(Error::ResolveError("Received not retriable error.".into()))
+        }
+        _ => Ok(val),
     }
 }
 
