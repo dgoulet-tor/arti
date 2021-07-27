@@ -574,7 +574,11 @@ impl ClientCirc {
         self.begin_data_stream(RelayMsg::BeginDir).await
     }
 
-    /// Start a DNS lookup by using a RESOLVE cell.
+    /// Perform a DNS lookup, using a RESOLVE cell with the last relay
+    /// in this circuit.
+    ///
+    /// Note that this function does not check for timeouts; that's
+    /// the caller's responsibility.
     pub async fn resolve(self: Arc<Self>, hostname: &str) -> Result<Vec<IpAddr>> {
         let resolve_msg = Resolve::new(hostname);
 
@@ -600,7 +604,11 @@ impl ClientCirc {
         Ok(addrs)
     }
 
-    /// Start a reverse DNS lookup by using a RESOLVE cell
+    /// Perform a reverse DNS lookup, by sending a RESOLVE cell with
+    /// the last relay on this circuit.
+    ///
+    /// Note that this function does not check for timeouts; that's
+    /// the caller's responsibility.
     pub async fn resolve_ptr(self: Arc<Self>, addr: IpAddr) -> Result<Vec<String>> {
         let resolve_ptr_msg = Resolve::new_reverse(&addr);
 
@@ -644,10 +652,7 @@ impl ClientCirc {
 
     /// Helper: Send the resolve message, and read resolved message from
     /// resolve stream.
-    async fn try_resolve(
-        self: &Arc<Self>,
-        msg: tor_cell::relaycell::msg::Resolve,
-    ) -> Result<Resolved> {
+    async fn try_resolve(self: &Arc<Self>, msg: Resolve) -> Result<Resolved> {
         let rc_stream = self.begin_stream_impl(msg.into()).await?;
         let mut resolve_stream = ResolveStream::new(rc_stream);
         resolve_stream.read_msg().await
