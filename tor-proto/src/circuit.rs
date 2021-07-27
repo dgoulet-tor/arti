@@ -585,7 +585,7 @@ impl ClientCirc {
         let resolved_msg = self.try_resolve(resolve_msg).await?;
         let mut addrs = Vec::new();
 
-        for (val, _) in resolved_msg.answers() {
+        for (val, _) in resolved_msg.into_answers() {
             match val {
                 ResolvedVal::Ip(ip) => addrs.push(ip),
                 ResolvedVal::TransientError => {
@@ -615,7 +615,7 @@ impl ClientCirc {
         let resolved_msg = self.try_resolve(resolve_ptr_msg).await?;
         let mut hostnames = Vec::new();
 
-        for (val, _) in resolved_msg.answers() {
+        for (val, _) in resolved_msg.into_answers() {
             match val {
                 ResolvedVal::Hostname(v) => {
                     hostnames.push(String::from_utf8(v).map_err(|_| {

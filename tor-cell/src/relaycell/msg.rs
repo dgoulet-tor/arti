@@ -1040,8 +1040,14 @@ impl Resolved {
         self.answers.push((answer, ttl));
     }
 
-    /// Return and move answers from this Resolved message
-    pub fn answers(self) -> Vec<(ResolvedVal, u32)> {
+    /// Consume this Resolved message, returning a vector of the
+    /// answers and TTL values that it contains.
+    ///
+    /// Note that actually relying on these TTL values can be
+    /// dangerous in practice, since the relay that sent the cell
+    /// could be lying in order to cause more lookups, or to get a
+    /// false answer cached for longer.
+    pub fn into_answers(self) -> Vec<(ResolvedVal, u32)> {
         self.answers
     }
 }
