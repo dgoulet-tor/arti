@@ -160,7 +160,7 @@ impl<R: Runtime> TorClient<R> {
 
         let flags = flags.unwrap_or_default();
         let exit_ports = [flags.wrap_target_port(port)];
-        let circ = self.circ(&exit_ports, &flags).await?;
+        let circ = self.get_or_launch_exit_circ(&exit_ports, &flags).await?;
         info!("Got a circuit for {}:{}", addr, port);
 
         // TODO: make this configurable.
@@ -184,7 +184,7 @@ impl<R: Runtime> TorClient<R> {
         flags: Option<ConnectPrefs>,
     ) -> Result<Vec<IpAddr>> {
         let flags = flags.unwrap_or_default();
-        let circ = self.circ(&[], &flags).await?;
+        let circ = self.get_or_launch_exit_circ(&[], &flags).await?;
 
         // TODO: make this configurable.
         let resolve_timeout = Duration::new(10, 0);
@@ -207,7 +207,7 @@ impl<R: Runtime> TorClient<R> {
         flags: Option<ConnectPrefs>,
     ) -> Result<Vec<String>> {
         let flags = flags.unwrap_or_default();
-        let circ = self.circ(&[], &flags).await?;
+        let circ = self.get_or_launch_exit_circ(&[], &flags).await?;
         let addr = IpAddr::from_str(addr)?;
 
         // TODO: make this configurable.
@@ -240,8 +240,9 @@ impl<R: Runtime> TorClient<R> {
         Arc::clone(&self.circmgr)
     }
 
-    /// Get or launch a circuit with given exit ports
-    async fn circ(
+    /// Get or launch an exit-suitable circuit with a given set of
+    /// exit ports.
+    async fn get_or_launch_exit_circ(
         &self,
         exit_ports: &[TargetPort],
         flags: &ConnectPrefs,
