@@ -79,6 +79,9 @@ pub enum Error {
     /// Tried to configure an impossible value
     #[error("bad configuration value: {0}")]
     BadConfig(String),
+    /// Remote DNS lookup failed.
+    #[error("remote resolve failed: {0}")]
+    ResolveError(String),
 }
 
 impl From<tor_cell::Error> for Error {
@@ -117,7 +120,9 @@ impl From<Error> for std::io::Error {
             BytesErr(_) | MissingKey | BadCellAuth | BadHandshake | ChanProto(_) | CircProto(_)
             | CellErr(_) | ChanMismatch(_) | StreamProto(_) => ErrorKind::InvalidData,
 
-            InternalError(_) | IdRangeFull | CircExtend(_) | BadConfig(_) => ErrorKind::Other,
+            InternalError(_) | IdRangeFull | CircExtend(_) | BadConfig(_) | ResolveError(_) => {
+                ErrorKind::Other
+            }
         };
         std::io::Error::new(kind, err)
     }

@@ -1039,6 +1039,11 @@ impl Resolved {
     pub fn add_answer(&mut self, answer: ResolvedVal, ttl: u32) {
         self.answers.push((answer, ttl));
     }
+
+    /// Return and move answers from this Resolved message
+    pub fn answers(self) -> Vec<(ResolvedVal, u32)> {
+        self.answers
+    }
 }
 impl Body for Resolved {
     fn into_message(self) -> RelayMsg {

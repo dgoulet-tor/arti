@@ -6,10 +6,12 @@
 //! `TorClient::connect()`.
 use tor_circmgr::{IsolationToken, TargetPort};
 use tor_dirmgr::DirMgrConfig;
-use tor_proto::circuit::IpVersionPreference;
+use tor_proto::circuit::{ClientCirc, IpVersionPreference};
 use tor_proto::stream::DataStream;
 use tor_rtcompat::{Runtime, SleepProviderExt};
 
+use std::net::IpAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -158,14 +160,8 @@ impl<R: Runtime> TorClient<R> {
 
         let flags = flags.unwrap_or_default();
         let exit_ports = [flags.wrap_target_port(port)];
-        let dir = self.dirmgr.netdir();
-        let circ = self
-            .circmgr
-            .get_or_launch_exit(dir.as_ref().into(), &exit_ports, flags.isolation_group())
-            .await
-            .context("Unable to launch circuit")?;
+        let circ = self.circ(&exit_ports, &flags).await?;
         info!("Got a circuit for {}:{}", addr, port);
-        drop(dir); // This decreases the refcount on the netdir.
 
         // TODO: make this configurable.
         let stream_timeout = Duration::new(10, 0);
@@ -177,6 +173,53 @@ impl<R: Runtime> TorClient<R> {
             .await??;
 
         Ok(stream)
+    }
+
+    /// Perform a remote DNS lookup with the provided hostname.
+    ///
+    /// On success, return a list of IP addresses.
+    pub async fn resolve(
+        &self,
+        hostname: &str,
+        flags: Option<ConnectPrefs>,
+    ) -> Result<Vec<IpAddr>> {
+        let flags = flags.unwrap_or_default();
+        let circ = self.circ(&[], &flags).await?;
+
+        // TODO: make this configurable.
+        let resolve_timeout = Duration::new(10, 0);
+
+        let resolve_future = circ.resolve(hostname);
+        let addrs = self
+            .runtime
+            .timeout(resolve_timeout, resolve_future)
+            .await??;
+
+        Ok(addrs)
+    }
+
+    /// Perform a remote DNS reverse lookup with the provided IP address.
+    ///
+    /// On success, return a list of hostnames.
+    pub async fn resolve_ptr(
+        &self,
+        addr: &str,
+        flags: Option<ConnectPrefs>,
+    ) -> Result<Vec<String>> {
+        let flags = flags.unwrap_or_default();
+        let circ = self.circ(&[], &flags).await?;
+        let addr = IpAddr::from_str(addr)?;
+
+        // TODO: make this configurable.
+        let resolve_ptr_timeout = Duration::new(10, 0);
+
+        let resolve_ptr_future = circ.resolve_ptr(addr);
+        let hostnames = self
+            .runtime
+            .timeout(resolve_ptr_timeout, resolve_ptr_future)
+            .await??;
+
+        Ok(hostnames)
     }
 
     /// Return a reference to this this client's directory manager.
@@ -195,5 +238,22 @@ impl<R: Runtime> TorClient<R> {
     #[cfg(feature = "experimental-api")]
     pub fn circmgr(&self) -> Arc<tor_circmgr::CircMgr<R>> {
         Arc::clone(&self.circmgr)
+    }
+
+    /// Get or launch a circuit with given exit ports
+    async fn circ(
+        &self,
+        exit_ports: &[TargetPort],
+        flags: &ConnectPrefs,
+    ) -> Result<Arc<ClientCirc>> {
+        let dir = self.dirmgr.netdir();
+        let circ = self
+            .circmgr
+            .get_or_launch_exit(dir.as_ref().into(), exit_ports, flags.isolation_group())
+            .await
+            .context("Unable to launch circuit")?;
+        drop(dir); // This decreases the refcount on the netdir.
+
+        Ok(circ)
     }
 }

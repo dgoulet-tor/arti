@@ -55,10 +55,10 @@ use crate::crypto::cell::{
     RelayCellBody,
 };
 use crate::crypto::handshake::{ClientHandshake, KeyGenerator};
-use crate::stream::{DataStream, RawCellStream};
+use crate::stream::{DataStream, RawCellStream, ResolveStream};
 use crate::{Error, Result};
 use tor_cell::chancell::{self, msg::ChanMsg, ChanCell, CircId};
-use tor_cell::relaycell::msg::{RelayMsg, Sendme};
+use tor_cell::relaycell::msg::{Begin, RelayMsg, Resolve, Resolved, ResolvedVal, Sendme};
 use tor_cell::relaycell::{RelayCell, RelayCmd, StreamId};
 
 use tor_linkspec::{ChanTarget, CircTarget, LinkSpec};
@@ -69,6 +69,7 @@ use futures::channel::{mpsc, oneshot};
 use futures::lock::Mutex;
 use futures::sink::SinkExt;
 
+use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 // use std::time::Duration;
@@ -563,7 +564,7 @@ impl ClientCirc {
         flags: Option<IpVersionPreference>,
     ) -> Result<DataStream> {
         let flags = flags.unwrap_or_default();
-        let beginmsg = tor_cell::relaycell::msg::Begin::new(target, port, flags)?;
+        let beginmsg = Begin::new(target, port, flags)?;
         self.begin_data_stream(beginmsg.into()).await
     }
 
@@ -572,7 +573,62 @@ impl ClientCirc {
     pub async fn begin_dir_stream(self: Arc<Self>) -> Result<DataStream> {
         self.begin_data_stream(RelayMsg::BeginDir).await
     }
-    // XXXX Add a RESOLVE implementation, it will be simple.
+
+    /// Start a DNS lookup by using a RESOLVE cell.
+    pub async fn resolve(self: Arc<Self>, hostname: &str) -> Result<Vec<IpAddr>> {
+        let resolve_msg = Resolve::new(hostname);
+
+        let resolved_msg = self.try_resolve(resolve_msg).await?;
+        let mut addrs = Vec::new();
+
+        for (val, _) in resolved_msg.answers() {
+            match val {
+                ResolvedVal::Ip(ip) => addrs.push(ip),
+                ResolvedVal::TransientError => {
+                    return Err(Error::ResolveError(
+                        "Received retriable transient error".into(),
+                    ))
+                }
+                ResolvedVal::NontransientError => {
+                    return Err(Error::ResolveError("Received not retriable error.".into()))
+                }
+                // Ignoring ResolvedVal::Hostname and ResolvedVal::Unrecognized
+                _ => (),
+            };
+        }
+
+        Ok(addrs)
+    }
+
+    /// Start a reverse DNS lookup by using a RESOLVE cell
+    pub async fn resolve_ptr(self: Arc<Self>, addr: IpAddr) -> Result<Vec<String>> {
+        let resolve_ptr_msg = Resolve::new_reverse(&addr);
+
+        let resolved_msg = self.try_resolve(resolve_ptr_msg).await?;
+        let mut hostnames = Vec::new();
+
+        for (val, _) in resolved_msg.answers() {
+            match val {
+                ResolvedVal::Hostname(v) => {
+                    hostnames.push(String::from_utf8(v).map_err(|_| {
+                        Error::StreamProto("Error parsing resolved hostname.".into())
+                    })?)
+                }
+                ResolvedVal::TransientError => {
+                    return Err(Error::ResolveError(
+                        "Received retriable transient error".into(),
+                    ))
+                }
+                ResolvedVal::NontransientError => {
+                    return Err(Error::ResolveError("Received not retriable error.".into()))
+                }
+                // Ignoring ResolvedVal::Ip and ResolvedVal::Unrecognized
+                _ => (),
+            };
+        }
+
+        Ok(hostnames)
+    }
 
     /// Helper: Encode the relay cell `cell`, encrypt it, and send it to the
     /// 'hop'th hop.
@@ -584,6 +640,17 @@ impl ClientCirc {
         }
         let mut c = self.c.lock().await;
         c.send_relay_cell(hop, early, cell).await
+    }
+
+    /// Helper: Send the resolve message, and read resolved message from
+    /// resolve stream.
+    async fn try_resolve(
+        self: &Arc<Self>,
+        msg: tor_cell::relaycell::msg::Resolve,
+    ) -> Result<Resolved> {
+        let rc_stream = self.begin_stream_impl(msg.into()).await?;
+        let mut resolve_stream = ResolveStream::new(rc_stream);
+        resolve_stream.read_msg().await
     }
 
     /// Shut down this circuit immediately, along with all streams that
