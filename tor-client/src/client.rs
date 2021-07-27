@@ -183,6 +183,10 @@ impl<R: Runtime> TorClient<R> {
         hostname: &str,
         flags: Option<ConnectPrefs>,
     ) -> Result<Vec<IpAddr>> {
+        if hostname.to_lowercase().ends_with(".onion") {
+            return Err(anyhow!("Rejecting .onion address as unsupported."));
+        }
+
         let flags = flags.unwrap_or_default();
         let circ = self.get_or_launch_exit_circ(&[], &flags).await?;
 
