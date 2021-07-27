@@ -147,7 +147,12 @@ where
 
     let addr = request.addr().to_string();
     let port = request.port();
-    info!("Got a socks request for {}:{}", addr, port);
+    info!(
+        "Got a socks request: {} {}:{}",
+        request.command(),
+        addr,
+        port
+    );
 
     let auth = request.auth().clone();
     let (socket, ip) = isolation_info;
