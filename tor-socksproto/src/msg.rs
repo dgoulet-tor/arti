@@ -115,6 +115,14 @@ impl SocksCmd {
             SocksCmd::CONNECT | SocksCmd::RESOLVE | SocksCmd::RESOLVE_PTR
         )
     }
+
+    /// Return true if this is a command for which we require a port.
+    fn requires_port(self) -> bool {
+        matches!(
+            self,
+            SocksCmd::CONNECT | SocksCmd::BIND | SocksCmd::UDP_ASSOCIATE
+        )
+    }
 }
 
 impl SocksStatus {
@@ -170,7 +178,7 @@ impl SocksRequest {
         if !cmd.recognized() {
             return Err(Error::NoSupport);
         }
-        if port == 0 {
+        if port == 0 && cmd.requires_port() {
             return Err(Error::Syntax);
         }
 
