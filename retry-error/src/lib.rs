@@ -208,6 +208,11 @@ where
 impl<E> IntoIterator for RetryError<E> {
     type Item = E;
     type IntoIter = std::vec::IntoIter<E>;
+    #[allow(clippy::needless_collect)]
+    // TODO We have to use collect/into_iter here for now, since
+    // the actual Map<> type can't be named.  Once Rust lets us say
+    // `type IntoIter = impl Iterator<Item=E>` then we fix the code
+    // and turn the Clippy warning back on.
     fn into_iter(self) -> Self::IntoIter {
         let v: Vec<_> = self.errors.into_iter().map(|x| x.1).collect();
         v.into_iter()
