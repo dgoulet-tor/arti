@@ -5,14 +5,16 @@
 //! connections ("streams") over the Tor network using
 //! `TorClient::connect()`.
 use tor_circmgr::{IsolationToken, TargetPort};
-use tor_dirmgr::DirMgrConfig;
+use tor_dirmgr::{DirEvent, DirMgrConfig};
 use tor_proto::circuit::{ClientCirc, IpVersionPreference};
 use tor_proto::stream::DataStream;
 use tor_rtcompat::{Runtime, SleepProviderExt};
 
+use futures::stream::StreamExt;
+use futures::task::SpawnExt;
 use std::net::IpAddr;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
@@ -135,6 +137,14 @@ impl<R: Runtime> TorClient<R> {
             Arc::clone(&circmgr),
         )
         .await?;
+
+        // Launch a daemon task to inform the circmgr about new
+        // network parameters.
+        runtime.spawn(keep_circmgr_params_updated(
+            dirmgr.events(),
+            Arc::downgrade(&circmgr),
+            Arc::downgrade(&dirmgr),
+        ))?;
 
         Ok(TorClient {
             runtime,
@@ -270,5 +280,34 @@ impl<R: Runtime> TorClient<R> {
         drop(dir); // This decreases the refcount on the netdir.
 
         Ok(circ)
+    }
+}
+
+/// Whenever a [`DirEvent::NewConsensus`] arrives on `events`, update
+/// `circmgr` with the consensus parameters from `dirmgr`.
+///
+/// Exit when `events` is closed, or one of `circmgr` or `dirmgr` becomes
+/// dangling.
+///
+/// This is a daemon task: it runs indefinitely in the background.
+async fn keep_circmgr_params_updated<R: Runtime>(
+    mut events: impl futures::Stream<Item = DirEvent> + Unpin,
+    circmgr: Weak<tor_circmgr::CircMgr<R>>,
+    dirmgr: Weak<tor_dirmgr::DirMgr<R>>,
+) {
+    while let Some(event) = events.next().await {
+        match event {
+            DirEvent::NewConsensus => {
+                if let (Some(cm), Some(dm)) = (Weak::upgrade(&circmgr), Weak::upgrade(&dirmgr)) {
+                    cm.update_network_parameters(dm.netdir().params());
+                } else {
+                    // A weak upgrade failed; time to break.
+                    break;
+                }
+            }
+            _ => {
+                // unrecognized event; ignore it.
+            }
+        }
     }
 }
