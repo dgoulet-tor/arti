@@ -60,7 +60,7 @@ pub(crate) trait WriteNetDir: 'static + Sync + Send {
     /// Return a reference where we can write or modify a NetDir.
     fn netdir(&self) -> &SharedMutArc<NetDir>;
 
-    /// Called to note that the consensus stored in the [`netdir()`] has been
+    /// Called to note that the consensus stored in [`Self::netdir()`] has been
     /// changed.
     fn netdir_consensus_changed(&self);
 }
