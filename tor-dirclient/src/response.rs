@@ -11,7 +11,7 @@ pub struct DirResponse {
     /// An HTTP status code.
     status: u16,
     /// The decompressed output that we got from the directory cache.
-    output: String,
+    output: Vec<u8>,
     /// The error, if any, that caused us to stop getting this response early.
     error: Option<Error>,
     /// Information about the directory cache we used.
@@ -36,7 +36,7 @@ impl DirResponse {
     pub(crate) fn new(
         status: u16,
         error: Option<Error>,
-        output: String,
+        output: Vec<u8>,
         source: Option<SourceInfo>,
     ) -> Self {
         DirResponse {
@@ -63,12 +63,12 @@ impl DirResponse {
     }
 
     /// Return the output from this response.
-    pub fn output(&self) -> &str {
+    pub fn output(&self) -> &[u8] {
         &self.output
     }
 
     /// Consume this DirResponse and return the output in it.
-    pub fn into_output(self) -> String {
+    pub fn into_output(self) -> Vec<u8> {
         self.output
     }
 
