@@ -296,17 +296,12 @@ async fn keep_circmgr_params_updated<R: Runtime>(
     dirmgr: Weak<tor_dirmgr::DirMgr<R>>,
 ) {
     while let Some(event) = events.next().await {
-        match event {
-            DirEvent::NewConsensus => {
-                if let (Some(cm), Some(dm)) = (Weak::upgrade(&circmgr), Weak::upgrade(&dirmgr)) {
-                    cm.update_network_parameters(dm.netdir().params());
-                } else {
-                    // A weak upgrade failed; time to break.
-                    break;
-                }
-            }
-            _ => {
-                // unrecognized event; ignore it.
+        if let DirEvent::NewConsensus = event {
+            if let (Some(cm), Some(dm)) = (Weak::upgrade(&circmgr), Weak::upgrade(&dirmgr)) {
+                cm.update_network_parameters(dm.netdir().params());
+            } else {
+                // A weak upgrade failed; time to break.
+                break;
             }
         }
     }
