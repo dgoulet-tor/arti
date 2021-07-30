@@ -90,12 +90,14 @@ async fn load_once<R: Runtime>(
     state: &mut Box<dyn DirState>,
 ) -> Result<bool> {
     let missing = state.missing_docs();
-    if missing.is_empty() {
+    let outcome = if missing.is_empty() {
         Ok(false)
     } else {
         let documents = load_all(dirmgr, missing).await?;
         state.add_from_cache(documents)
-    }
+    };
+    dirmgr.notify().await;
+    outcome
 }
 
 /// Try to load as much state as possible for a provided `state` from the
@@ -112,6 +114,7 @@ pub(crate) async fn load<R: Runtime>(
 
         if state.can_advance() {
             state = state.advance()?;
+            dirmgr.notify().await;
             safety_counter = 0;
         } else {
             if !changed {
@@ -149,6 +152,7 @@ async fn download_attempt<R: Runtime>(
                 let outcome = state
                     .add_from_download(&text, &client_req, Some(&dirmgr.store))
                     .await;
+                dirmgr.notify().await;
                 match outcome {
                     Ok(b) => changed |= b,
                     // TODO: in this case we might want to stop using this source.
@@ -224,7 +228,9 @@ pub(crate) async fn download<R: Runtime>(
                                 warn!("Error while downloading: {}", e);
                                 continue 'next_attempt;
                             }
-                            Ok(changed) => changed
+                            Ok(changed) => {
+                                changed
+                            }
                         }
                     }
                     _ = runtime.sleep_until_wallclock(reset_time).fuse() => {
@@ -251,6 +257,7 @@ pub(crate) async fn download<R: Runtime>(
             if state.can_advance() {
                 // We have enough info to advance to another state.
                 state = state.advance()?;
+                upgrade_weak_ref(&dirmgr)?.notify().await;
                 continue 'next_state;
             } else {
                 // We should wait a bit, and then retry.

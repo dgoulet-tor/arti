@@ -59,6 +59,10 @@ pub(crate) trait WriteNetDir: 'static + Sync + Send {
 
     /// Return a reference where we can write or modify a NetDir.
     fn netdir(&self) -> &SharedMutArc<NetDir>;
+
+    /// Called to note that the consensus stored in the [`netdir()`] has been
+    /// changed.
+    fn netdir_consensus_changed(&self);
 }
 
 impl<R: Runtime> WriteNetDir for crate::DirMgr<R> {
@@ -67,6 +71,10 @@ impl<R: Runtime> WriteNetDir for crate::DirMgr<R> {
     }
     fn netdir(&self) -> &SharedMutArc<NetDir> {
         &self.netdir
+    }
+    fn netdir_consensus_changed(&self) {
+        use std::sync::atomic::Ordering;
+        self.netdir_consensus_changed.store(true, Ordering::SeqCst);
     }
 }
 
@@ -506,6 +514,7 @@ impl<DM: WriteNetDir> GetMicrodescsState<DM> {
                     self.reset_time = pick_download_time(netdir.lifetime());
                     if let Some(wd) = Weak::upgrade(&self.writedir) {
                         wd.netdir().replace(netdir);
+                        wd.netdir_consensus_changed();
                         return true;
                     }
                 }

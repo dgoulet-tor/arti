@@ -43,6 +43,7 @@ mod config;
 mod docid;
 mod docmeta;
 mod err;
+mod event;
 mod retry;
 mod shared_ref;
 mod state;
@@ -62,6 +63,7 @@ use futures::{channel::oneshot, lock::Mutex, task::SpawnExt};
 use log::{info, warn};
 use tor_rtcompat::{Runtime, SleepProviderExt};
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::{collections::HashMap, sync::Weak};
 use std::{fmt::Debug, time::SystemTime};
@@ -73,6 +75,7 @@ pub use config::{
 };
 pub use docid::DocId;
 pub use err::Error;
+pub use event::DirEvent;
 pub use storage::DocumentText;
 
 /// A directory manager to download, fetch, and cache a Tor directory.
@@ -111,6 +114,14 @@ pub struct DirMgr<R: Runtime> {
     /// We use the RwLock so that we can give this out to a bunch of other
     /// users, and replace it once a new directory is bootstrapped.
     netdir: SharedMutArc<NetDir>,
+
+    /// A flag that gets set whenever the _consensus_ part of `netdir` has
+    /// changed.
+    netdir_consensus_changed: AtomicBool,
+
+    /// A publisher handle, used to inform others about changes in the
+    /// status of this directory handle.
+    publisher: event::Publisher,
 
     /// A circuit manager, if this DirMgr supports downloading.
     circmgr: Option<Arc<CircMgr<R>>>,
@@ -192,7 +203,7 @@ impl<R: Runtime> DirMgr<R> {
         runtime.spawn(async move {
             // TODO: don't warn when these are Error::ManagerDropped.
             if let Err(e) = Self::reload_until_owner(&dirmgr_weak, &mut sender).await {
-                warn!("Unrecoverd error while waiting for bootstrap: {}", e);
+                warn!("Unrecovered error while waiting for bootstrap: {}", e);
             } else if let Err(e) = Self::download_forever(dirmgr_weak, sender).await {
                 warn!("Unrecovered error while downloading: {}", e);
             }
@@ -358,10 +369,14 @@ impl<R: Runtime> DirMgr<R> {
         let readonly = circmgr.is_none();
         let store = Mutex::new(config.open_sqlite_store(readonly)?);
         let netdir = SharedMutArc::new();
+        let netdir_consensus_changed = AtomicBool::new(false);
+        let publisher = event::Publisher::new();
         Ok(DirMgr {
             config,
             store,
             netdir,
+            netdir_consensus_changed,
+            publisher,
             circmgr,
             runtime,
         })
@@ -395,6 +410,15 @@ impl<R: Runtime> DirMgr<R> {
         self.opt_netdir().expect("DirMgr was not bootstrapped!")
     }
 
+    /// Return a new asynchronous stream about events taking place with
+    /// this directory manager.
+    ///
+    /// The caller must regularly process events from this stream to
+    /// prevent it from blocking.
+    pub fn events(&self) -> impl futures::Stream<Item = DirEvent> {
+        self.publisher.subscribe()
+    }
+
     /// Try to load the text of a signle document described by `doc` from
     /// storage.
     pub async fn text(&self, doc: &DocId) -> Result<Option<DocumentText>> {
@@ -423,6 +447,17 @@ impl<R: Runtime> DirMgr<R> {
             self.load_documents_into(&query, &mut result).await?
         }
         Ok(result)
+    }
+
+    /// If the consensus has changed, notify any subscribers.
+    // TODO: I don't like all the different places in `bootstrap`
+    // where we have to call this function.  Can we simplify it or
+    // clean it up somehow?  Maybe we can build some kind of intelligence into
+    // shared_ref?
+    pub(crate) async fn notify(&self) {
+        if self.netdir_consensus_changed.swap(false, Ordering::SeqCst) {
+            self.publisher.send(DirEvent::NewConsensus).await;
+        }
     }
 
     /// Load all the documents for a single DocumentQuery from the store.
