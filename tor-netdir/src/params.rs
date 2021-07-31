@@ -20,7 +20,7 @@
 
 use tor_units::{BoundedInt32, IntegerMilliseconds, Percentage, SendMeVersion};
 
-/// This structure holds recognized configuration parameters. All values are type-safe,
+/// This structure holds recognised configuration parameters. All values are type-safe,
 /// and where applicable clamped to be within range.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
