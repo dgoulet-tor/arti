@@ -7,7 +7,7 @@
 This crate is part of
 [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
 implement [Tor](https://www.torproject.org/) in Rust.
-Tor uses a restricted vesion of the "ed-style" diff format to
+Tor uses a restricted version of the "ed-style" diff format to
 record the difference between a pair of consensus documents, so that
 clients can download only the changes since the last document they
 have.

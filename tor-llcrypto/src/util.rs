@@ -31,7 +31,7 @@ pub fn x509_extract_rsa_subject_kludge(der: &[u8]) -> Option<crate::pk::rsa::Pub
     crate::pk::rsa::PublicKey::from_der(key.to_bitstr()?)
 }
 
-/// Helper to wrap a simple_asn1::Asn1Blcok and add more methods to it.
+/// Helper to wrap a simple_asn1::Asn1Block and add more methods to it.
 struct Asn1<'a>(&'a ASN1Block);
 impl<'a> From<&'a ASN1Block> for Asn1<'a> {
     fn from(b: &'a ASN1Block) -> Asn1<'a> {

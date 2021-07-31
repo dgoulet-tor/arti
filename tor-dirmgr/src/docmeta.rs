@@ -44,7 +44,7 @@ impl ConsensusMeta {
         }
     }
     /// Derive a new ConsensusMeta from an UnvalidatedMdConsensus and the
-    /// text of its signed portino.
+    /// text of its signed portion.
     pub(crate) fn from_unvalidated(
         signed_part: &str,
         remainder: &str,

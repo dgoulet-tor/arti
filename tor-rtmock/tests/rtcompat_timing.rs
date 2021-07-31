@@ -44,7 +44,7 @@ fn timeouts() {
         send.send(()).unwrap();
         assert_eq!(timeout_future.await, Ok(Ok(())));
     });
-    // The data is ready _and_ the timout occurs.
+    // The data is ready _and_ the timeout occurs.
     test_with_all_runtimes!(|_| async {
         let (mock_sp, send, timeout_future) = setup();
         send.send(()).unwrap();

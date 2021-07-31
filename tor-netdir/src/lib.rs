@@ -16,7 +16,7 @@
 //!
 //! There are two intended users for this crate.  First, producers
 //! like [`tor-dirmgr`] create [`NetDir`] objects fill them with
-//! information from the Tor nettwork directory.  Later, consumers
+//! information from the Tor network directory.  Later, consumers
 //! like [`tor-circmgr`] use [`NetDir`]s to select relays for random
 //! paths through the Tor network.
 //!
@@ -83,7 +83,7 @@ use params::NetParameters;
 enum MdEntry {
     /// The digest for a microdescriptor that is wanted
     /// but not present.
-    // TODO: I'd like to make thtis a reference, but that's nontrivial.
+    // TODO: I'd like to make this a reference, but that's nontrivial.
     Absent(MdDigest),
     /// A microdescriptor that we have.
     Present(Arc<Microdesc>),
@@ -195,7 +195,7 @@ pub trait MdReceiver {
 
 impl PartialNetDir {
     /// Create a new PartialNetDir with a given consensus, and no
-    /// microdecriptors loaded.
+    /// microdescriptors loaded.
     ///
     /// If `replacement_params` is provided, override network parameters from
     /// the consensus with those from `replacement_params`.

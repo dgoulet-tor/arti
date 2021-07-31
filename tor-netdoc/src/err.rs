@@ -25,7 +25,7 @@ pub enum Pos {
     Invalid(usize),
     /// The error occurred at a particular byte within the string.
     ///
-    /// We try to conver these to a Pos before displaying them to the user.
+    /// We try to convert these to a Pos before displaying them to the user.
     Byte {
         /// Byte offset within a string.
         off: usize,
@@ -86,7 +86,7 @@ impl Pos {
         let ptr = s.as_ptr();
         Pos::Raw { ptr }
     }
-    /// Constructg Pos from the end of some other string.
+    /// Construct Pos from the end of some other string.
     pub fn at_end_of(s: &str) -> Self {
         let ending = &s[s.len()..];
         Pos::at(ending)
@@ -252,7 +252,7 @@ pub enum Error {
     #[error("decoding error{0}: {1}")]
     Undecodable(Pos, #[source] tor_bytes::Error),
     /// Versioned document with an unrecognized version.
-    #[error("unrecognied document version {0}")]
+    #[error("unrecognized document version {0}")]
     BadDocumentVersion(u32),
     /// Unexpected document type
     #[error("unexpected document type")]

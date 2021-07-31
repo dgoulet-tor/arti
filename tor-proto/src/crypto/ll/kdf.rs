@@ -11,7 +11,7 @@
 //! Ntor handshake.  It is based on RFC5869 and SHA256.
 //!
 //! The *SHAKE* KDF (implemented by `ShakeKdf` is used with v3 onion
-//! services, and is likley to be used by other places in the future.
+//! services, and is likely to be used by other places in the future.
 //! It is based on SHAKE-256.
 
 use crate::{Error, Result, SecretBytes};

@@ -21,7 +21,7 @@ use std::time::Duration;
 
 use super::Action;
 
-/// How many cicuit build time observations do we record?
+/// How many circuit build time observations do we record?
 const TIME_HISTORY_LEN: usize = 1000;
 
 /// How many circuit success-versus-timeout observations do we record
@@ -318,7 +318,7 @@ impl ParetoDist {
     /// Compute an inverse CDF for this distribution.
     ///
     /// Given a `q` value between 0 and 1, compute a distribution `v`
-    /// value such that `q` of the Pareto Distribution is expectd to
+    /// value such that `q` of the Pareto Distribution is expected to
     /// be less than `v`.
     ///
     /// If `q` is out of bounds, it is clamped to [0.0, 1.0].
@@ -328,7 +328,7 @@ impl ParetoDist {
     }
 }
 
-/// A set of paremeters determining the behavior of a ParetoTimeoutEstimator.
+/// A set of parameters determining the behavior of a ParetoTimeoutEstimator.
 ///
 /// These are typically derived from a set of consensus parameters.
 #[derive(Clone, Debug)]
@@ -443,7 +443,7 @@ struct ParetoEstimatorInner {
     /// depending on how many timeouts we've been seeing.
     fallback_timeouts: (Duration, Duration),
 
-    /// A set of paremeters to use in computing circuit build timeout
+    /// A set of parameters to use in computing circuit build timeout
     /// estimates.
     p: Params,
 }

@@ -55,7 +55,7 @@ impl<C> ChannelState<C> {
         }
     }
 
-    /// For testing: either give the Open channnel inside this state,
+    /// For testing: either give the Open channel inside this state,
     /// or panic if there is none.
     #[cfg(test)]
     fn unwrap_open(&self) -> Arc<C> {
@@ -135,7 +135,7 @@ impl<C: AbstractChannel> ChannelMap<C> {
     ///
     /// Because `func` is run while holding the lock on this object,
     /// it should be fast and nonblocking.  In return, you can be sure
-    /// that it's running atomically with respect to other accessesors
+    /// that it's running atomically with respect to other accessors
     /// of this map.
     ///
     /// If `func` panics, or if it returns a channel with a different

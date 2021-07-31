@@ -22,7 +22,7 @@ pub use ed25519_dalek::{ExpandedSecretKey, Keypair, PublicKey, SecretKey, Signat
 ///  * We're storing it in a compact format, whereas the public key
 ///    implementation might want an expanded form for more efficient key
 ///    validation.
-///  * This type hasn't checked whether the bytes herre actually _are_ a
+///  * This type hasn't checked whether the bytes here actually _are_ a
 ///    valid Ed25519 public key.
 #[derive(Clone, Copy, Hash)]
 #[allow(clippy::derive_hash_xor_eq)]

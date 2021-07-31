@@ -58,7 +58,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// A Type that remembers a set of live channels, and launches new
 /// ones on request.
 ///
-/// Use the [ChanMgr::get_or_launch] function to craete a new channel, or
+/// Use the [ChanMgr::get_or_launch] function to create a new channel, or
 /// get one if it exists.
 pub struct ChanMgr<R: Runtime> {
     /// Internal channel manager object that does the actual work.

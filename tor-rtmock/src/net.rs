@@ -116,7 +116,7 @@ struct MockNetProviderInner {
 pub struct MockNetListener {
     /// The address that we're listening on.
     addr: SocketAddr,
-    /// The incoming channnnel that tells us about new connections.
+    /// The incoming channel that tells us about new connections.
     // TODO: I'm not thrilled to have to use an AsyncMutex and a
     // std Mutex in the same module.
     receiver: AsyncMutex<ConnReceiver>,
@@ -196,7 +196,7 @@ impl MockNetwork {
     /// If tls_cert is provided, then the listener is a TLS listener
     /// and any only TLS connection attempts should succeed.
     ///
-    /// Returns an error if the address is alrady in use.
+    /// Returns an error if the address is already in use.
     fn add_listener(&self, addr: SocketAddr, tls_cert: Option<Vec<u8>>) -> IoResult<ConnReceiver> {
         let mut listener_map = self.listening.lock().unwrap();
         if listener_map.contains_key(&addr) {
@@ -215,7 +215,7 @@ impl MockNetwork {
 }
 
 impl ProviderBuilder {
-    /// Add `addr` as a new address for the prrovider we're building.
+    /// Add `addr` as a new address for the provider we're building.
     pub fn add_address(&mut self, addr: IpAddr) -> &mut Self {
         self.addrs.push(addr);
         self

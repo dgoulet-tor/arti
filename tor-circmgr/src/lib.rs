@@ -80,7 +80,7 @@ const MAX_CIRC_DIRTINESS: Duration = Duration::from_secs(60 * 15);
 
 /// Represents what we know about the Tor network.
 ///
-/// This can either be a comlete directory, or a list of fallbacks.
+/// This can either be a complete directory, or a list of fallbacks.
 ///
 /// Not every DirInfo can be used to build every kind of circuit:
 /// if you try to build a path with an inadequate DirInfo, you'll get a

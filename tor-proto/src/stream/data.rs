@@ -78,7 +78,7 @@ impl DataStream {
         DataStream { w, r }
     }
 
-    /// Divide this DataStream into its consituent parts.
+    /// Divide this DataStream into its constituent parts.
     pub fn split(self) -> (DataReader, DataWriter) {
         (self.r, self.w)
     }

@@ -80,7 +80,7 @@ impl AddrPolicy {
     /// Add a new rule to this policy.
     ///
     /// The newly added rule is applied _after_ all previous rules.
-    /// It matches all addresses and ports coverd by AddrPortPattern.
+    /// It matches all addresses and ports covered by AddrPortPattern.
     ///
     /// If accept is true, the rule is to accept addresses that match;
     /// if accept is false, the rule rejects such addresses.

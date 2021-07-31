@@ -1,4 +1,4 @@
-//! Declare helper function for chosing from a weighted iterator
+//! Declare helper function for choosing from a weighted iterator
 
 /// Choose a nonuniform random member of an iterator.
 ///
@@ -22,7 +22,7 @@ where
     R: rand::Rng,
 {
     // Correctness argument: at the end of each iteration of the loop,
-    // `result` holds a value chosen with weighted probabability from
+    // `result` holds a value chosen with weighted probability from
     // all of the items yielded so far.  The loop body preserves this
     // invariant.
 

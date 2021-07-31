@@ -143,7 +143,7 @@ struct SubprotocolEntry {
 /// A set of supported or required subprotocol versions.
 ///
 /// This type supports both recognized subprotocols (listed in ProtoKind),
-/// and unrecognized subprotcols (stored by name).
+/// and unrecognized subprotocols (stored by name).
 ///
 /// To construct an instance, use the FromStr trait:
 /// ```
@@ -154,7 +154,7 @@ struct SubprotocolEntry {
 pub struct Protocols {
     /// A mapping from protocols' integer encodings to bit-vectors.
     recognized: [u64; N_RECOGNIZED],
-    /// A vector of unrecognized protocol vesions.
+    /// A vector of unrecognized protocol versions.
     unrecognized: Vec<SubprotocolEntry>,
 }
 
@@ -270,7 +270,7 @@ impl Default for Protocols {
 #[derive(Error, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ParseError {
-    /// A protovol version was not in the range 0..=63.
+    /// A protocol version was not in the range 0..=63.
     #[error("protocol version out of range")]
     OutOfRange,
     /// Some subprotocol or protocol version appeared more than once.
@@ -405,7 +405,7 @@ impl std::str::FromStr for Protocols {
 }
 
 /// Given a bitmask, return a list of the bits set in the mask, as a
-/// String in the format expectd by Tor consensus documents.
+/// String in the format expected by Tor consensus documents.
 ///
 /// This implementation constructs ranges greedily.  For example, the
 /// bitmask `0b0111011` will be represented as `0-1,3-5`, and not

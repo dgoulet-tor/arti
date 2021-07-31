@@ -172,7 +172,7 @@ impl<RS> ConsensusBuilder<RS> {
     }
     /// Create a VoterInfoBuilder to add a voter to this builder.
     ///
-    /// In theory these are requied, but nothing asks for them.
+    /// In theory these are required, but nothing asks for them.
     pub fn voter(&self) -> VoterInfoBuilder {
         VoterInfoBuilder::new()
     }

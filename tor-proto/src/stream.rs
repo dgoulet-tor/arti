@@ -10,7 +10,7 @@
 //! TODO: This should eventually expose a bytes-oriented type rather than a
 //! cell-oriented type.
 //!
-//! XXXX TODO: There is no fariness, rate-limiting, or flow control.
+//! XXXX TODO: There is no fairness, rate-limiting, or flow control.
 
 mod data;
 mod raw;

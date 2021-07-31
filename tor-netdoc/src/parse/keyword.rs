@@ -8,7 +8,7 @@ use std::hash::Hash;
 /// These do not map one-to-one to Item strings: several Item strings
 /// may be placed in a single Keyword -- for example, when their order
 /// is significant with respect to one another, like "accept" and
-/// "reject" in rotuer descriptors.
+/// "reject" in router descriptors.
 ///
 /// Every keyword has an "index", which is a small number suitable for
 /// indexing an array.  These are used in Section and SectionRules.
@@ -30,7 +30,7 @@ pub trait Keyword: Hash + Eq + PartialEq + Copy + Clone {
     /// as used in Section and SectionRules.
     fn from_idx(i: usize) -> Option<Self>;
     /// Find a string corresponding to this keyword.  This may not be the
-    /// actual string from the document; it is indended for reporting errors.
+    /// actual string from the document; it is intended for reporting errors.
     fn to_str(self) -> &'static str;
     /// Return the index for this keyword.
     fn idx(self) -> usize;

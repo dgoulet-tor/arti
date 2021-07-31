@@ -98,7 +98,7 @@ done, we could just provide a single global `block_on` function.
 That simplification would come at a cost, however.  First of all,
 it would make it harder for us to use Rust's "feature" system
 correctly.  Current features are supposed to be _additive only_,
-but if had a single global runtime, then support for diffferent
+but if had a single global runtime, then support for different
 backends would be _mutually exclusive_.  (That is, you couldn't
 have both the tokio and async-std features building at the same
 time.)

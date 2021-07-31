@@ -45,7 +45,7 @@ enum TokVal<'a, K: Keyword> {
     /// We use a one-element array here so that we can return a slice
     /// of the array.
     Some([Item<'a, K>; 1]),
-    /// Multiple vlaues have been found; they go in a vector.
+    /// Multiple values have been found; they go in a vector.
     Multi(Vec<Item<'a, K>>),
 }
 impl<'a, K: Keyword> TokVal<'a, K> {

@@ -121,7 +121,7 @@ impl_u!(u128, write_u128, take_u128);
 
 // ----------------------------------------------------------------------
 
-/// Implement Readable and Writerable for IPv4 and IPv6 addresses.
+/// Implement Readable and Writeable for IPv4 and IPv6 addresses.
 ///
 /// These are encoded as a sequence of octets, not as strings.
 mod net_impls {

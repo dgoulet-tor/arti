@@ -2,8 +2,8 @@
 //!
 //! The Tor protocol centers around "RELAY cells", which are
 //! transmitted through the network along circuits.  The client that
-//! creates a circuitg shares two different set of keys and state with
-//! each of the relays on the circuit: one for "oubound" traffic, and
+//! creates a circuit shares two different set of keys and state with
+//! each of the relays on the circuit: one for "outbound" traffic, and
 //! one for "inbound" traffic.
 //!
 
@@ -96,7 +96,7 @@ pub(crate) trait OutboundClientLayer {
 /// A client's view of the crypto state shared with a single relay, as
 /// used for inbound cells.
 pub(crate) trait InboundClientLayer {
-    /// Decrypt a CellBopdy that passed through this layer.
+    /// Decrypt a CellBody that passed through this layer.
     ///
     /// Return an authentication tag if this layer is the originator.
     fn decrypt_inbound(&mut self, cell: &mut RelayCellBody) -> Option<&[u8]>;
@@ -181,7 +181,7 @@ impl OutboundClientCrypt {
         self.layers.push(layer);
     }
 
-    /// Return the number of layers configured on this OutoubndClientCrypt.
+    /// Return the number of layers configured on this OutboundClientCrypt.
     pub(crate) fn n_layers(&self) -> usize {
         self.layers.len()
     }

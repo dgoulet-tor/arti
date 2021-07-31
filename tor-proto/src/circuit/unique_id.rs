@@ -6,7 +6,7 @@ use std::fmt::{Display, Formatter};
 ///
 /// We could use channel_id.circid here, but the circid can be reused
 /// over time.  This won't ever repeat on a 64-bit architecture, and
-/// is super-unlikely to repeat on a 32-bit architectecture.  (If
+/// is super-unlikely to repeat on a 32-bit architecture.  (If
 /// we're about to return a repeat value, we assert instead.)
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct UniqId {

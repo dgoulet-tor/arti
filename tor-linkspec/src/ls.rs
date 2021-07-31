@@ -34,7 +34,7 @@ const LSTYPE_ED25519ID: u8 = 3;
 
 impl Readable for LinkSpec {
     fn take_from(r: &mut Reader<'_>) -> Result<Self> {
-        /// Return the expected length of the links pecifier whose type is tp.
+        /// Return the expected length of the link specifier whose type is tp.
         fn lstype_len(tp: u8) -> Option<usize> {
             match tp {
                 LSTYPE_ORPORT_V4 => Some(6),

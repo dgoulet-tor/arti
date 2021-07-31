@@ -18,7 +18,7 @@ use serde::Deserialize;
 ///
 /// The algorithm used here has several desirable properties:
 ///    * It is randomized, so that multiple timeouts don't have a
-///      danger of getting synchonized with each other and hammering the
+///      danger of getting synchronized with each other and hammering the
 ///      same directory servers all at once.
 ///    * It tends on average to wait longer and longer over time, so
 ///      that if the directory server is down, it won't get pummeled by
@@ -54,7 +54,7 @@ impl RetryDelay {
     /// # Limitations
     ///
     /// If the base delay is less than 1000, a base delay of 1000 is
-    /// used instead, since that's what the C tor implemenation does.
+    /// used instead, since that's what the C tor implementation does.
     pub fn from_msec(base_delay_msec: u32) -> Self {
         let low_bound_ms = base_delay_msec.clamp(MIN_LOW_BOUND, MAX_LOW_BOUND);
         RetryDelay {

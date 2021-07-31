@@ -1,4 +1,4 @@
-# Arti: Architectural notes and otutline.
+# Arti: Architectural notes and outline.
 
 ## Guidelines
 
@@ -41,7 +41,7 @@ this to safely parse cells, certs, and other byte-oriented things.
 
 `tor-cert`: Decoding and checking signatures on Tor's ed25519 certificates.
 
-`tor-protover`: Minimal implementation of the Tor subprotocol verisoning
+`tor-protover`: Minimal implementation of the Tor subprotocol versioning
 system.  Less complete than the one in Tor's current src/rust, but more
 simple.
 

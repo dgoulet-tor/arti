@@ -93,7 +93,7 @@ impl<'a, I: Iterator, F: FnMut(&I::Item) -> bool> Iterator for PauseAt<'a, I, F>
 pub(crate) mod private {
     /// A non-exported trait, used to prevent others from implementing a trait.
     ///
-    /// For more inforamation on this pattern, see [the Rust API
+    /// For more information on this pattern, see [the Rust API
     /// guidelines](https://rust-lang.github.io/api-guidelines/future-proofing.html#c-sealed).
     pub trait Sealed {}
 }

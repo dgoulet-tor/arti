@@ -87,7 +87,7 @@ caret_int! {
     /// Recognized values for Tor's certificate type field.
     ///
     /// In the names used here, "X_V_Y" means "key X verifying key Y",
-    /// whereas "X_CC_Y" means "key X cros-certifying key Y".  In both
+    /// whereas "X_CC_Y" means "key X cross-certifying key Y".  In both
     /// cases, X is the key that is doing the signing, and Y is the key
     /// or object that is getting signed.
     ///
@@ -249,7 +249,7 @@ enum CertExt {
     Unrecognized(UnrecognizedExt),
 }
 
-/// Any unrecongized extension on a Tor certificate.
+/// Any unrecognized extension on a Tor certificate.
 #[allow(unused)]
 struct UnrecognizedExt {
     /// True iff this extension must be understand in order to validate the

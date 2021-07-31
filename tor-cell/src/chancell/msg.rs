@@ -529,7 +529,7 @@ caret_int! {
         PROTOCOL = 1,
         /// Internal error.
         INTERNAL = 2,
-        /// Client sent a TRUNCATE commant.
+        /// Client sent a TRUNCATE command.
         REQUESTED = 3,
         /// Relay is hibernating and not accepting requests
         HIBERNATING = 4,

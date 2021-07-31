@@ -9,7 +9,7 @@ static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
 /// Unique identifier for a channel.
 ///
 /// These identifiers are unique per process.  On 32-bit architectures
-/// it's possible to exhast them if you do nothing but create channels
+/// it's possible to exhaust them if you do nothing but create channels
 /// for a very long time; if you do, we detect that and exit with an
 /// assertion failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -19,7 +19,7 @@ impl UniqId {
     /// Construct a new UniqId.
     pub(crate) fn new() -> Self {
         // Relaxed ordering is fine; we don't care about how this
-        // is instantiated with respoect to other channels.
+        // is instantiated with respect to other channels.
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         assert!(id != std::usize::MAX, "Exhausted the channel ID namespace");
         UniqId(id)
@@ -53,7 +53,7 @@ impl CircUniqIdContext {
         self.next_circ_id += 1;
         assert!(
             self.next_circ_id != 0,
-            "Exhaused the unique circuit ID namespace on a channel"
+            "Exhausted the unique circuit ID namespace on a channel"
         );
         crate::circuit::UniqId::new(unique_id.0, circ_unique_id)
     }

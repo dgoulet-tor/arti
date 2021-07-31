@@ -6,7 +6,7 @@
 //! that an object can only be used if a signature is valid, or if
 //! some timestamp is recent enough.
 //!
-//! As an example, consider a self-signed cretificate. You can parse
+//! As an example, consider a self-signed certificate. You can parse
 //! it cheaply enough (and find its key by doing so), but you probably
 //! want to make sure that nobody will use that certificate unless its
 //! signature is correct and its timestamps are not expired.

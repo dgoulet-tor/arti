@@ -17,7 +17,7 @@
 //!
 //! More complex documents can be divided into [parser::Section]s.  A
 //! Section might correspond to the header or footer of a longer
-//! doucment, or to a single stanza in a longer document.
+//! document, or to a single stanza in a longer document.
 //!
 //! To parse a document into a Section, the programmer defines a type
 //! of keyword that the document will use, using the

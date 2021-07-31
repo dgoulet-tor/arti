@@ -82,7 +82,7 @@ fn mismatched_signing_key() {
     );
     let cert = Ed25519Cert::decode(&c[..]).unwrap();
 
-    // We give no key to check_key, which will tell us that there wan't
+    // We give no key to check_key, which will tell us that there wasn't
     // a signing-key extension in the cert.
     assert_eq!(
         cert.check_key(&None).err().unwrap(),

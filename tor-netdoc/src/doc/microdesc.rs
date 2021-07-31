@@ -77,7 +77,7 @@ pub struct Microdesc {
 }
 
 impl Microdesc {
-    /// Create a new MicrodescBuilder that can be used to contruct
+    /// Create a new MicrodescBuilder that can be used to construct
     /// microdescriptors.
     ///
     /// This function is only available when the crate is built with the
@@ -366,7 +366,7 @@ fn advance_to_next_microdesc(reader: &mut NetDocReader<'_, MicrodescKwd>, annota
     }
 }
 
-/// An iterator that parses one or more (possible annnotated)
+/// An iterator that parses one or more (possible annotated)
 /// microdescriptors from a string.
 #[derive(Debug)]
 pub struct MicrodescReader<'a> {

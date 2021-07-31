@@ -48,7 +48,7 @@ pub struct ConnectPrefs {
 }
 
 impl ConnectPrefs {
-    /// Construct a new ConnnectPrefs.
+    /// Construct a new ConnectPrefs.
     pub fn new() -> Self {
         Self::default()
     }
@@ -63,7 +63,7 @@ impl ConnectPrefs {
     /// Indicate that a stream may only be made over IPv6.
     ///
     /// When this option is set, we will only pick exit relays that
-    /// suppport IPv6, and we will tell them to only give us IPv6
+    /// support IPv6, and we will tell them to only give us IPv6
     /// connections.
     pub fn ipv6_only(&mut self) -> &mut Self {
         self.ip_ver_pref = IpVersionPreference::Ipv6Only;
@@ -82,7 +82,7 @@ impl ConnectPrefs {
     /// Indicate that a stream may only be made over IPv4.
     ///
     /// When this option is set, we will only pick exit relays that
-    /// suppport IPv4, and we will tell them to only give us IPv4
+    /// support IPv4, and we will tell them to only give us IPv4
     /// connections.
     pub fn ipv4_only(&mut self) -> &mut Self {
         self.ip_ver_pref = IpVersionPreference::Ipv4Only;
@@ -117,7 +117,7 @@ impl ConnectPrefs {
         self.isolation_group
     }
 
-    // TODO: Add some way to be IPFlexible, and require exit to suppport both.
+    // TODO: Add some way to be IPFlexible, and require exit to support both.
 }
 
 impl<R: Runtime> TorClient<R> {
