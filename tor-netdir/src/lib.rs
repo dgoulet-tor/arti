@@ -64,7 +64,9 @@ use tor_netdoc::doc::netstatus::{self, MdConsensus, RouterStatus};
 use tor_netdoc::types::policy::PortPolicy;
 
 use log::warn;
+use serde::Deserialize;
 use std::collections::HashSet;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 pub use err::Error;
@@ -73,6 +75,25 @@ pub use weight::WeightRole;
 pub type Result<T> = std::result::Result<T, Error>;
 
 use params::NetParameters;
+
+/// The configuration for circuit creation.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct CircuitConfig {
+    /// Consider IPv4 nodes in the same /x to be the same family.
+    subnets_family_v4: u8,
+    /// Consider IPv6 nodes in the same /x to be the same family.
+    subnets_family_v6: u8,
+}
+
+impl Default for CircuitConfig {
+    fn default() -> Self {
+        Self {
+            subnets_family_v4: 16,
+            subnets_family_v6: 32,
+        }
+    }
+}
 
 /// Internal type: either a microdescriptor, or the digest for a
 /// microdescriptor that we want.
@@ -490,14 +511,59 @@ impl<'a> Relay<'a> {
                 .protovers()
                 .supports_known_subver(ProtoKind::DirCache, 2)
     }
+    /// Returns true if both relays can appear together in the same circuit.
+    pub fn can_be_in_same_circuit<'b>(
+        &self,
+        other: &Relay<'b>,
+        circuit_config: &CircuitConfig,
+    ) -> bool {
+        // XXX: features missing from original implementation:
+        // - option NodeFamilySets
+        // see: src/feature/nodelist/nodelist.c:nodes_in_same_family()
+        !self.in_same_family(other) && !self.same_subnet(other, circuit_config)
+    }
+    /// If two relays are on the same subnet.
+    pub fn same_subnet<'b>(&self, other: &Relay<'b>, circuit_config: &CircuitConfig) -> bool {
+        /// Do the two addresses share the same n leading bits?
+        fn addrs_equal(a: &SocketAddr, b: &SocketAddr, v4_bits: u8, v6_bits: u8) -> bool {
+            match (a.ip(), b.ip()) {
+                (IpAddr::V4(a), IpAddr::V4(b)) => {
+                    if v4_bits > 32 {
+                        return false;
+                    }
+                    let a = u32::from_be_bytes(a.octets());
+                    let b = u32::from_be_bytes(b.octets());
+                    (a >> (32 - v4_bits)) == (b >> (32 - v4_bits))
+                }
+                (IpAddr::V6(a), IpAddr::V6(b)) => {
+                    if v6_bits > 128 {
+                        return false;
+                    }
+                    let a = u128::from_be_bytes(a.octets());
+                    let b = u128::from_be_bytes(b.octets());
+                    (a >> (128 - v4_bits)) == (b >> (128 - v4_bits))
+                }
+                _ => false,
+            }
+        }
+        self.rs
+            .orport_addrs()
+            // TODO: get bit length from config
+            .any(|addr| {
+                other.rs.orport_addrs().any(|other| {
+                    addrs_equal(
+                        addr,
+                        other,
+                        circuit_config.subnets_family_v4,
+                        circuit_config.subnets_family_v6,
+                    )
+                })
+            })
+    }
     /// Return true if both relays are in the same family.
     ///
     /// (Every relay is considered to be in the same family as itself.)
     pub fn in_same_family<'b>(&self, other: &Relay<'b>) -> bool {
-        // XXX: features missing from original implementation:
-        // - option EnforceDistinctSubnets
-        // - option NodeFamilySets
-        // see: src/feature/nodelist/nodelist.c:nodes_in_same_family()
         if self.same_relay(other) {
             return true;
         }
@@ -770,6 +836,7 @@ mod test {
     #[test]
     fn relay_funcs() {
         let (consensus, microdescs) = construct_network();
+        let circuit_config = CircuitConfig::default();
         let mut dir = PartialNetDir::new(consensus, None);
         for md in microdescs.into_iter() {
             let wanted = dir.add_microdesc(md.clone());
@@ -782,6 +849,7 @@ mod test {
         let r1 = dir.by_id(&[1; 32].into()).unwrap();
         let r2 = dir.by_id(&[2; 32].into()).unwrap();
         let r3 = dir.by_id(&[3; 32].into()).unwrap();
+        let r10 = dir.by_id(&[10; 32].into()).unwrap();
 
         assert_eq!(r0.id(), &[0; 32].into());
         assert_eq!(r0.rsa_id(), &[0; 20].into());
@@ -810,5 +878,12 @@ mod test {
         assert!(!r2.in_same_family(&r0));
         assert!(r2.in_same_family(&r2));
         assert!(r2.in_same_family(&r3));
+
+        assert!(r0.same_subnet(&r10, &circuit_config));
+        assert!(r10.same_subnet(&r10, &circuit_config));
+        assert!(r0.same_subnet(&r0, &circuit_config));
+        assert!(r1.same_subnet(&r1, &circuit_config));
+        assert!(!r1.same_subnet(&r2, &circuit_config));
+        assert!(!r2.same_subnet(&r3, &circuit_config));
     }
 }
