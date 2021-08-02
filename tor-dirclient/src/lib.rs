@@ -276,7 +276,6 @@ where
     S: AsyncRead + Unpin,
     SP: SleepProvider,
 {
-    let mut buf = [0_u8; 1024];
     let mut written_total: usize = 0;
 
     // XXXX should be an option and is maybe too long.  Though for some
@@ -287,7 +286,7 @@ where
 
     loop {
         let status = futures::select! {
-            status = stream.read(&mut buf[..]).fuse() => status,
+            status = stream.read_to_end(result).fuse() => status,
             _ = timer => {
                 return Err(Error::DirTimeout);
             }
@@ -301,7 +300,6 @@ where
         if n == 0 {
             return Ok(());
         }
-        result.extend(&buf[..n]);
         written_total += n;
 
         // TODO: It would be good to detect compression bombs, but
