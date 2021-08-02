@@ -1,0 +1,22 @@
+[package]
+name = "tor-persist"
+version = "0.0.0"
+authors = ["The Tor Project, Inc.", "Nick Mathewson <nickm@torproject.org>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+homepage = "https://gitlab.torproject.org/tpo/core/arti/-/wikis/home"
+description = "Persistent state for the Arti Tor implementation"
+keywords = [ "tor", "arti" ]
+categories = [ "config" ]
+repository="https://gitlab.torproject.org/tpo/core/arti.git/"
+
+[dependencies]
+fslock = "0.1.6"
+serde = { version = "1.0.124" }
+toml = "0.5.8"
+sanitize-filename = "0.3.0"
+thiserror = "1.0.24"
+
+[dev-dependencies]
+dirs = "3.0.1"
+tempfile = "3.2.0"

@@ -23,6 +23,7 @@ members = [
     "tor-netdoc",
     "tor-consdiff",
     "tor-netdir",
+    "tor-persist",
     "tor-chanmgr",
     "tor-circmgr",
     "tor-dirclient",
