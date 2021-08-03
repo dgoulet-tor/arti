@@ -276,42 +276,36 @@ where
     S: AsyncRead + Unpin,
     SP: SleepProvider,
 {
-    let mut written_total: usize = 0;
-
     // XXXX should be an option and is maybe too long.  Though for some
     // users this may be too short?
     let read_timeout = Duration::from_secs(10);
     let timer = runtime.sleep(read_timeout).fuse();
     futures::pin_mut!(timer);
 
-    loop {
-        let status = futures::select! {
-            status = stream.read_to_end(result).fuse() => status,
-            _ = timer => {
-                return Err(Error::DirTimeout);
-            }
-        };
-        let n = match status {
-            Ok(n) => n,
-            Err(other) => {
-                return Err(other.into());
-            }
-        };
-        if n == 0 {
-            return Ok(());
+    let status = futures::select! {
+        status = stream.read_to_end(result).fuse() => status,
+        _ = timer => {
+            return Err(Error::DirTimeout);
         }
-        written_total += n;
+    };
+    let written = match status {
+        Ok(n) => n,
+        Err(other) => {
+            return Err(other.into());
+        }
+    };
 
-        // TODO: It would be good to detect compression bombs, but
-        // that would require access to the internal stream, which
-        // would in turn require some tricky programming.  For now, we
-        // use the maximum length here to prevent an attacker from
-        // filling our RAM.
-        if written_total > maxlen {
-            result.resize(maxlen, 0);
-            return Err(Error::ResponseTooLong(written_total));
-        }
+    // TODO: It would be good to detect compression bombs, but
+    // that would require access to the internal stream, which
+    // would in turn require some tricky programming.  For now, we
+    // use the maximum length here to prevent an attacker from
+    // filling our RAM.
+    if written > maxlen {
+        result.resize(maxlen, 0);
+        return Err(Error::ResponseTooLong(written));
     }
+
+    Ok(())
 }
 
 /// Retire a directory circuit because of an error we've encountered on it.
