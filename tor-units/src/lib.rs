@@ -105,7 +105,7 @@ impl<const LOWER: i32, const UPPER: i32> BoundedInt32<LOWER, UPPER> {
     }
 
     /// If `val` is within range, return a new `BoundedInt32` wrapping
-    /// it; othwerwise, clamp it to the upper or lower bound as
+    /// it; otherwise, clamp it to the upper or lower bound as
     /// appropriate.
     pub fn saturating_new(val: i32) -> Self {
         Self::unchecked_new(Self::clamp(val))

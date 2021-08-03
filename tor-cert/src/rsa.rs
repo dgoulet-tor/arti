@@ -14,7 +14,7 @@ use digest::Digest;
 /// This kind of certificate is used in the channel handshake to prove
 /// that the Ed25519 identity key speaks on behalf of the RSA identity key.
 ///
-/// (There is no coverse type for certifying Ed25519 identity keys with
+/// (There is no converse type for certifying Ed25519 identity keys with
 /// RSA identity keys, since the RSA identity keys are too weak to trust.)
 #[must_use]
 pub struct RsaCrosscert {
@@ -66,7 +66,7 @@ impl RsaCrosscert {
     }
 }
 
-/// An RsaCrosscert whos signature has not been checked.
+/// An RsaCrosscert whose signature has not been checked.
 pub struct UncheckedRsaCrosscert(RsaCrosscert);
 
 impl ExternallySigned<TimerangeBound<RsaCrosscert>> for UncheckedRsaCrosscert {

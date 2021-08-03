@@ -2,7 +2,7 @@
 
 /// Macro for declaring a keyword enumeration to help parse a document.
 ///
-/// A keyword enumber implements the Keyword trait.
+/// A keyword enumeration implements the Keyword trait.
 ///
 /// These enums are a bit different from those made by `caret`, in a
 /// few ways.  Notably, they are optimized for parsing, they are

@@ -54,7 +54,7 @@
 //! on the other hand, would allow multiple relay messages to be
 //! packed into a single RELAY cell.
 //!
-//! The distinction betweeen RelayCell and RelayMsg is meant in part
+//! The distinction between RelayCell and RelayMsg is meant in part
 //! to future-proof arti against these proposals if they are adopted.
 //!
 //! # Limitations
@@ -64,7 +64,7 @@
 //! There isn't enough documentation.
 //!
 //! This is the first part of the project I started working on, and
-//! probably reflects the most naive understranding of Rust.
+//! probably reflects the most naive understanding of Rust.
 
 #![deny(missing_docs)]
 #![warn(noop_method_call)]

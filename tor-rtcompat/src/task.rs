@@ -5,7 +5,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-/// Yield executation back to the runtime temporarily, so that other
+/// Yield execution back to the runtime temporarily, so that other
 /// tasks can run.
 #[must_use = "yield_now returns a future that must be .awaited on."]
 pub fn yield_now() -> YieldFuture {

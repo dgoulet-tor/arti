@@ -22,7 +22,7 @@
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
 //! implement [Tor](https://www.torproject.org/) in Rust.  Several
 //! other crates in Arti depend on it.  You will probably not need
-//! this crate yourselve unless you are ineracting with the Tor
+//! this crate yourself unless you are interacting with the Tor
 //! protocol at a fairly low level.
 //!
 //! `tor-linkspec` is a separate crate so that it can be used by other
@@ -34,7 +34,7 @@
 //! TODO: Possibly we should rename this crate.  "Linkspec" is a
 //! pretty esoteric term in the Tor protocols.
 //!
-//! TODO: Possibly the link specifiers and the `*Target` traitts belogn in different crates.
+//! TODO: Possibly the link specifiers and the `*Target` traits belong in different crates.
 
 #![deny(missing_docs)]
 #![warn(noop_method_call)]

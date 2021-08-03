@@ -20,7 +20,7 @@ pub struct TorPath<'a> {
     inner: TorPathInner<'a>,
 }
 
-/// Non-public helper type to repersent the different kinds of Tor path.
+/// Non-public helper type to represent the different kinds of Tor path.
 ///
 /// (This is a separate type to avoid exposing its details to the user.)
 enum TorPathInner<'a> {

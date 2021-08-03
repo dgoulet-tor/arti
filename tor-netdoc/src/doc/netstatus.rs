@@ -328,14 +328,14 @@ struct DirSource {
     nickname: String,
     /// DOCDOC -- I forget.  Is this the identity fingerprint for the
     /// authority identity key, or for the identity key of the authority
-    /// when it's runnign as a relay?
+    /// when it's running as a relay?
     identity: RsaIdentity,
     /// Address of the authority in string form.
     // XXXX why do we have this _and_ IP?
     address: String,
     /// IP address for the authority
     ip: net::IpAddr,
-    /// HTTP directory port for this authoirty
+    /// HTTP directory port for this authority
     dir_port: u16,
     /// OR port for this authority.
     or_port: u16,
@@ -1073,7 +1073,7 @@ enum SigCheckResult {
     /// The signature is invalid; no additional information could make it
     /// valid.
     Invalid,
-    /// We can't check the signatuer because we don't have a
+    /// We can't check the signature because we don't have a
     /// certificate with the right signing key.
     MissingCert,
 }

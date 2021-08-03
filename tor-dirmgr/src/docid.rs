@@ -121,9 +121,9 @@ impl CacheUsage {
 /// TODO: Perhaps this should be the same as ClientRequest?
 #[derive(Clone, Debug)]
 pub(crate) enum DocQuery {
-    /// A request for the lastet consensus
+    /// A request for the latest consensus
     LatestConsensus {
-        /// A desired flavor of consenus
+        /// A desired flavor of consensus
         flavor: ConsensusFlavor,
         /// Whether we can or must use the cache
         cache_usage: CacheUsage,

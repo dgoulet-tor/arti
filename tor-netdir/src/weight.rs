@@ -40,7 +40,7 @@ where
     } else {
         // This is a bit of an ugly case: We have measured values, but they're
         // all zero.  If this happens, the bandwidth authorities exist but they
-        // very confused: we should fall back to uniform wrighting.
+        // very confused: we should fall back to uniform weighting.
         BandwidthFn::Uniform
     }
 }
@@ -367,7 +367,7 @@ fn calculate_shift(a: u64, b: u64) -> u32 {
 
 /// Return an upper bound for the log2 of n.
 ///
-/// This function overestimates whenver n is a power of two, but that doesn't
+/// This function overestimates whenever n is a power of two, but that doesn't
 /// much matter for the uses we're giving it here.
 fn log2_upper(n: u64) -> u32 {
     64 - n.leading_zeros()

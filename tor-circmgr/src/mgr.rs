@@ -57,7 +57,7 @@ mod streams;
 /// If an `AbstractSpec` A allows every operation described in a
 /// `Usage` B, we say that A "supports" B.
 ///
-/// If one `AbstractSpec` A supports every opertion suppored by
+/// If one `AbstractSpec` A supports every operation supported by
 /// another `AbstractSpec` B, we say that A "contains" B.
 ///
 /// Some circuits can be used for either of two operations, but not both.
@@ -73,7 +73,7 @@ pub(crate) trait AbstractSpec: Clone + Debug {
     /// Return true if this spec permits the usage described by `other`.
     ///
     /// If this function returns `true`, then it is okay to use a circuit
-    /// with this spec for the target usage desribed by `other`.
+    /// with this spec for the target usage described by `other`.
     fn supports(&self, other: &Self::Usage) -> bool;
 
     /// Change the value of this spec based on the circuit having
@@ -729,7 +729,7 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         };
 
         // Insert ourself into the list of pending requests, and make a
-        // stream for us to listn on for notification from pending circuits
+        // stream for us to listen on for notification from pending circuits
         // other than those we are pending on.
         let (pending_request, additional_stream) = {
             let (send, recv) = mpsc::channel(8);
@@ -882,9 +882,9 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         wait_on_future
     }
 
-    /// Remove the cicuit with a given `id` from this manager.
+    /// Remove the circuit with a given `id` from this manager.
     ///
-    /// After this fnuction is called, that cicuit will no longer be handed
+    /// After this function is called, that circuit will no longer be handed
     /// out to any future requests.
     ///
     /// Return None if we have no circuit with the given ID.
@@ -1236,7 +1236,7 @@ mod test {
             let ports = FakeSpec::new(vec![80_u16, 443]);
 
             // The first time this is called, it will build a circuit
-            // with the wrong spec.  (A circuit biudler should never
+            // with the wrong spec.  (A circuit builder should never
             // actually _do_ that, but it's something we code for.)
             let builder = FakeBuilder::new(&rt);
             builder.set(
@@ -1286,7 +1286,7 @@ mod test {
             let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
 
             let ports = FakeSpec::new(vec![443_u16]);
-            // Set our isolation so that iso1 and iso2 can't share a cicuit,
+            // Set our isolation so that iso1 and iso2 can't share a circuit,
             // but no_iso can share a circuit with either.
             let iso1 = ports.clone().isolated(1);
             let iso2 = ports.clone().isolated(2);
@@ -1436,7 +1436,7 @@ mod test {
             // This should expire the pop circuit, since it came from
             // get_or_launch() [which marks the circuit as being
             // used].  It should not expire the imap circuit, since
-            // it was not dity until 15 seconds after the cutoff.
+            // it was not dirty until 15 seconds after the cutoff.
             mgr.expire_dirty_before(expiration_cutoff);
 
             let (pop2, imap2) = rt

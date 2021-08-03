@@ -423,7 +423,7 @@ impl<R: Runtime> DirMgr<R> {
         self.publisher.subscribe()
     }
 
-    /// Try to load the text of a signle document described by `doc` from
+    /// Try to load the text of a single document described by `doc` from
     /// storage.
     pub async fn text(&self, doc: &DocId) -> Result<Option<DocumentText>> {
         let mut result = HashMap::new();
@@ -641,7 +641,7 @@ trait DirState: Send {
     /// 'true' if there as any change in this state.
     ///
     /// This method receives a copy of the original request, and
-    /// should reject any documents that do not purtain to it.
+    /// should reject any documents that do not pertain to it.
     ///
     /// If `storage` is provided, then we should write any accepted documents
     /// into `storage` so they can be saved in a cache.

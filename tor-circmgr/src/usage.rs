@@ -254,7 +254,7 @@ mod test {
         assert!(!ep_full.allows_port(TargetPort::ipv6(80)));
 
         // Check is_supported_by while we're here.
-        // TODO: Make sure that if BadExit is set, this fnuction returns no
+        // TODO: Make sure that if BadExit is set, this function returns no
         assert!(TargetPort::ipv4(80).is_supported_by(&web_exit));
         assert!(!TargetPort::ipv6(80).is_supported_by(&web_exit));
     }

@@ -2,7 +2,7 @@
 //!
 //! We have code implemented for a flexible storage format based on sqlite.
 
-// (There was once a read-only format based on the C tor implemenentation's
+// (There was once a read-only format based on the C tor implementation's
 // storage: Search the git history for tor-dirmgr/src/storage/legacy.rs
 // if you ever need to reinstate it.)
 

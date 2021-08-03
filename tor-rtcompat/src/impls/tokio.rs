@@ -120,7 +120,7 @@ mod tls {
     /// Connection factory for building tls connections with tokio and
     /// native_tls.
     pub struct TlsConnector {
-        /// The inner connector objject
+        /// The inner connector object
         connector: tokio_native_tls::TlsConnector,
     }
 

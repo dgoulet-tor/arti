@@ -1,4 +1,4 @@
-//! Abstract implementation of a channel maanger
+//! Abstract implementation of a channel manager
 
 #![allow(dead_code)]
 use crate::err::PendingChanError;

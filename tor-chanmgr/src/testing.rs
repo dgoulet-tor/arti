@@ -7,7 +7,7 @@
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use std::io::Result as IoResult;
 
-/// Respond to a newly oppened channel using a canned set of certificates.
+/// Respond to a newly opened channel using a canned set of certificates.
 ///
 /// Note that this isn't a real responder-side handshake, and doesn't check
 /// whether the client is behaving correctly at all.

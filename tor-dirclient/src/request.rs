@@ -159,7 +159,7 @@ pub struct AuthCertRequest {
 }
 
 impl AuthCertRequest {
-    /// Create a new requst, asking for no authority certificates.
+    /// Create a new request, asking for no authority certificates.
     pub fn new() -> Self {
         AuthCertRequest { ids: Vec::new() }
     }

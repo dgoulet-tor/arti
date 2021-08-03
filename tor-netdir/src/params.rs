@@ -45,7 +45,7 @@ pub struct NetParameters {
     /// Quantile to use when determining the correct circuit timeout value
     /// with our Pareto estimator.
     ///
-    /// (We continue building circuits after this timetout, but only
+    /// (We continue building circuits after this timeout, but only
     /// for build-tim measurement purposes.)
     pub cbt_timeout_quantile: Percentage<BoundedInt32<10, 99>>,
     /// Quantile to use when determining when to abandon circuits completely
@@ -61,7 +61,7 @@ pub struct NetParameters {
     pub circuit_window: BoundedInt32<100, 1000>,
     /// The decay parameter for circuit priority
     pub circuit_priority_half_life: IntegerMilliseconds<BoundedInt32<1, { i32::MAX }>>,
-    /// Whether to perform circuit extenstions by Ed25519 ID
+    /// Whether to perform circuit extensions by Ed25519 ID
     pub extend_by_ed25519_id: BoundedInt32<0, 1>,
     /// The minimum threshold for circuit patch construction
     pub min_circuit_path_threshold: Percentage<BoundedInt32<25, 95>>,

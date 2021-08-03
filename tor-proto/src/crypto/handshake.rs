@@ -43,7 +43,7 @@ pub(crate) trait ClientHandshake {
     fn client2<T: AsRef<[u8]>>(state: Self::StateType, msg: T) -> Result<Self::KeyGen>;
 }
 
-/// A ServerHandshake is used to hanle a client onionskin and generate a
+/// A ServerHandshake is used to handle a client onionskin and generate a
 /// server onionskin.
 pub(crate) trait ServerHandshake {
     /// The type for the onion key.  This is a private key type.
@@ -70,7 +70,7 @@ pub(crate) trait ServerHandshake {
 ///
 /// It can only be used once.
 pub(crate) trait KeyGenerator {
-    /// Consumethe key
+    /// Consume the key
     fn expand(self, keylen: usize) -> Result<SecretBytes>;
 }
 

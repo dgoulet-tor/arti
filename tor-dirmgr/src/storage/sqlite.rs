@@ -132,7 +132,7 @@ impl SqliteStore {
 
     /// Try to upgrade from a read-only connection to a read-write connection.
     ///
-    /// Return true on succcess; false if another process had the lock.
+    /// Return true on success; false if another process had the lock.
     pub(crate) fn upgrade_to_readwrite(&mut self) -> Result<bool> {
         if self.is_readonly() && self.sql_path.is_some() {
             let lf = self.lockfile.as_mut().unwrap();
@@ -242,7 +242,7 @@ impl SqliteStore {
         Ok(result)
     }
 
-    /// Read a blob from disk, mmapping it if possible.
+    /// Read a blob from disk, mapping it if possible.
     fn read_blob<P>(&self, path: P) -> Result<InputString>
     where
         P: AsRef<Path>,
@@ -858,7 +858,7 @@ const INSERT_EXTDOC: &str = "
   VALUES ( ?, datetime('now'), ?, ?, ? );
 ";
 
-/// Qury: Add a new consensus.
+/// Query: Add a new consensus.
 const INSERT_CONSENSUS: &str = "
   INSERT OR REPLACE INTO Consensuses
     ( valid_after, fresh_until, valid_until, flavor, pending, sha3_of_signed_part, digest )

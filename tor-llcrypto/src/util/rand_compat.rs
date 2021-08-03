@@ -39,7 +39,7 @@ use rand_core::{CryptoRng, Error, RngCore};
 use std::convert::TryInto;
 
 /// Extension trait for the _current_ versions of [`RngCore`]; adds a
-/// compatibility-wrappper function.
+/// compatibility-wrapper function.
 pub trait RngCompatExt: RngCore {
     /// Wrapper type returned by this trait.
     type Wrapper: RngCore + OldRngCore;

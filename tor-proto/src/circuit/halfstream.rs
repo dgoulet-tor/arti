@@ -130,13 +130,13 @@ mod test {
     #[async_test]
     async fn halfstream_connected() {
         let mut hs = hs_new();
-        // We were told to accept a connected, so we'll acccept one
+        // We were told to accept a connected, so we'll accept one
         // and no more.
         let m = msg::Connected::new_empty().into();
         assert!(hs.handle_msg(&m).await.is_ok());
         assert!(hs.handle_msg(&m).await.is_err());
 
-        // If we try that again with connnected_ok == false, we won't
+        // If we try that again with connected_ok == false, we won't
         // accept any.
         let mut hs = HalfStream::new(StreamSendWindow::new(20), StreamRecvWindow::new(20), false);
         let e = hs.handle_msg(&m).await.err().unwrap();

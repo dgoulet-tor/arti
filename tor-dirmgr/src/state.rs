@@ -364,7 +364,7 @@ impl<DM: WriteNetDir> DirState for GetCertsState<DM> {
                 }
             } else {
                 // TODO: note the source.
-                warn!("Unparseable certificate received and discared.");
+                warn!("Unparseable certificate received and discarded.");
             }
         }
 
@@ -430,7 +430,7 @@ impl<DM: WriteNetDir> DirState for GetCertsState<DM> {
 /// Final state: we're fetching or loading microdescriptors
 #[derive(Debug, Clone)]
 struct GetMicrodescsState<DM: WriteNetDir> {
-    /// The digests of the microdesscriptors we are missing.
+    /// The digests of the microdescriptors we are missing.
     missing: HashSet<MdDigest>,
     /// The dirmgr to inform about a usable directory.
     writedir: Weak<DM>,

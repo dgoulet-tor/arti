@@ -39,7 +39,7 @@ mod net {
     /// Helper to implement [`IncomingStreams`]
     ///
     /// This function calls [`TcpListener::accept`] while owning the
-    /// listener.  Thus, it returns a future that itself owns the listner,
+    /// listener.  Thus, it returns a future that itself owns the listener,
     /// and we don't have lifetime troubles.
     async fn take_and_poll(lis: TcpListener) -> FResult {
         let result = lis.accept().await;

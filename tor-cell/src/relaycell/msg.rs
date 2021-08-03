@@ -200,7 +200,7 @@ impl Default for IpVersionPreference {
 /// If the exit decides to reject the Begin message, or if the TCP
 /// connection fails, the exit should send an End message.
 ///
-/// Clients should reject these messags.
+/// Clients should reject these messages.
 #[derive(Debug, Clone)]
 pub struct Begin {
     /// Ascii string describing target address
@@ -816,7 +816,7 @@ impl Body for Extended2 {
     }
 }
 
-/// A Truncated messsage is sent to the client when the remaining hops
+/// A Truncated message is sent to the client when the remaining hops
 /// of a circuit have gone away.
 ///
 /// NOTE: Current Tor implementations often treat Truncated messages and

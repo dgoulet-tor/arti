@@ -18,7 +18,7 @@ particular documents that describe the network and its properties.
 
 There are two intended users for this crate.  First, producers
 like [`tor-dirmgr`] create [`NetDir`] objects fill them with
-information from the Tor nettwork directory.  Later, consumers
+information from the Tor network directory.  Later, consumers
 like [`tor-circmgr`] use [`NetDir`]s to select relays for random
 paths through the Tor network.
 

@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-/// Configuration information about the Tor network iteslf; used as
+/// Configuration information about the Tor network itself; used as
 /// part of Arti's configuration.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -22,7 +22,7 @@ pub struct NetworkConfig {
     /// List of locations to look in when downloading directory information,
     /// if we don't actually have a directory yet.
     ///
-    /// (If we do have a chached directory, we use directory caches
+    /// (If we do have a cached directory, we use directory caches
     /// listed there instead.)
     #[serde(default = "fallbacks::default_fallbacks")]
     fallback_cache: Vec<FallbackDir>,
@@ -275,7 +275,7 @@ pub struct DirMgrConfigBuilder {
     schedule: DownloadScheduleConfig,
 
     /// A map of network parameters that we're overriding from their
-    /// setttings in the consensus.
+    /// settings in the consensus.
     override_net_params: netstatus::NetParams<i32>,
 }
 
@@ -297,7 +297,7 @@ pub struct DirMgrConfig {
     schedule: DownloadScheduleConfig,
 
     /// A map of network parameters that we're overriding from their
-    /// setttings in the consensus.
+    /// settings in the consensus.
     override_net_params: netstatus::NetParams<i32>,
 }
 
@@ -320,7 +320,7 @@ impl DirMgrConfigBuilder {
         self
     }
 
-    /// Set the timining information that we use for deciding when to
+    /// Set the timing information that we use for deciding when to
     /// attempt and retry downloads.
     ///
     /// (The defaults should be reasonable for most use cases.)

@@ -149,7 +149,7 @@ impl std::fmt::Display for SyntheticError {
 impl LocalStream {
     /// Send an error to the other linked local stream.
     ///
-    /// When the other stream reads this messager, it will generate a
+    /// When the other stream reads this message, it will generate a
     /// [`std::io::Error`] with the provided `ErrorKind`.
     pub async fn send_err(&mut self, kind: ErrorKind) {
         let _ignore = self.w.send(Err(IoError::new(kind, SyntheticError))).await;

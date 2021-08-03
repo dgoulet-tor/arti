@@ -188,7 +188,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
             (Some(_), None) => Err(Error::ChanProto("Missing netinfo or closed stream".into())),
             (None, _) => Err(Error::ChanProto("Missing certs cell".into())),
             (Some(certs_cell), Some(netinfo_cell)) => {
-                trace!("{}: receieved handshake, ready to verify.", self.unique_id);
+                trace!("{}: received handshake, ready to verify.", self.unique_id);
                 Ok(UnverifiedChannel {
                     link_protocol,
                     tls,

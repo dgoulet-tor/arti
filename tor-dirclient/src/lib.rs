@@ -122,7 +122,7 @@ where
 ///
 /// To do this, we send a simple HTTP/1.0 request for the described
 /// object in `req` over `stream`, and then wait for a response.  In
-/// log messatges, we describe the origin of the data as coming from
+/// log messages, we describe the origin of the data as coming from
 /// `source`.
 ///
 /// # Notes

@@ -65,7 +65,7 @@ pub(crate) struct Object<'a> {
 /// containing string.
 #[derive(Clone, Debug)]
 pub(crate) struct Item<'a, K: Keyword> {
-    /// The keyword that determinds the type of this item.
+    /// The keyword that determines the type of this item.
     kwd: K,
     /// A reference to the actual string that defines the keyword for
     /// this item.
@@ -74,7 +74,7 @@ pub(crate) struct Item<'a, K: Keyword> {
     /// keyword.  Does not include the terminating newline or the
     /// space that separates the keyword for its arguments.
     args: &'a str,
-    /// The arguments, split by whitespace.  This vector is contructed
+    /// The arguments, split by whitespace.  This vector is constructed
     /// as needed, using interior mutability.
     split_args: RefCell<Option<Vec<&'a str>>>,
     /// If present, a base-64-encoded object that appeared at the end
@@ -501,7 +501,7 @@ impl<'a, 'b, K: Keyword> MaybeItem<'a, 'b, K> {
             None => Ok(None),
         }
     }
-    /// If this item is present, return its arguments as a single stirng.
+    /// If this item is present, return its arguments as a single string.
     pub(crate) fn args_as_str(&self) -> Option<&str> {
         self.0.map(|item| item.args_as_str())
     }

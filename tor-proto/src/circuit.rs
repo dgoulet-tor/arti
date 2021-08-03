@@ -26,7 +26,7 @@
 //! DESTROY cells.  DESTROY cells are handled immediately.
 //! RELAY cells are either for a particular stream, in which case they
 //! get forwarded to a RawCellStream object, or for no particular stream,
-//! in which case they are considered "meta" cells (like EXTENEDED2)
+//! in which case they are considered "meta" cells (like EXTENDED2)
 //! that should only get accepted if something is waiting for them.
 //!
 //! # Limitations
@@ -536,7 +536,7 @@ impl ClientCirc {
     /// address and port, using a BEGIN cell.
     async fn begin_data_stream(self: Arc<Self>, msg: RelayMsg) -> Result<DataStream> {
         let stream = self.begin_stream_impl(msg).await?;
-        // TODO: waiting for a response here preculdes optimistic data.
+        // TODO: waiting for a response here precludes optimistic data.
 
         let response = stream.recv().await?;
         match response {
@@ -672,7 +672,7 @@ impl ClientCirc {
         self.closed.load(Ordering::SeqCst)
     }
 
-    /// Return a process-unique identifier for this circui.
+    /// Return a process-unique identifier for this circuit.
     pub fn unique_id(&self) -> UniqId {
         self.unique_id
     }
@@ -919,7 +919,7 @@ impl PendingClientCirc {
         c.channel.check_match(target)
     }
 
-    /// Testing only: extract the circuit ID for thid pending circuit.
+    /// Testing only: extract the circuit ID for third pending circuit.
     #[cfg(test)]
     pub(crate) async fn peek_circid(&self) -> CircId {
         let c = self.circ.c.lock().await;

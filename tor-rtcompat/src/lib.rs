@@ -95,7 +95,7 @@
 //! That simplification would come at a cost, however.  First of all,
 //! it would make it harder for us to use Rust's "feature" system
 //! correctly.  Current features are supposed to be _additive only_,
-//! but if had a single global runtime, then support for diffferent
+//! but if had a single global runtime, then support for different
 //! backends would be _mutually exclusive_.  (That is, you couldn't
 //! have both the tokio and async-std features building at the same
 //! time.)
@@ -166,7 +166,7 @@ pub mod async_std;
 /// # Usage note
 ///
 /// We should never call this from inside other Arti crates, or from
-/// library crates that want to supporet multiple runtimes!  This
+/// library crates that want to support multiple runtimes!  This
 /// function is for Arti _users_ who want to wrap some existing Tokio
 /// or Async_std runtime as a [`Runtime`].  It is not for library
 /// crates that want to work with multiple runtimes.
