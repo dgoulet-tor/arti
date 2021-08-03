@@ -366,7 +366,7 @@ fn advance_to_next_microdesc(reader: &mut NetDocReader<'_, MicrodescKwd>, annota
     }
 }
 
-/// An iterator that parses one or more (possible annotated)
+/// An iterator that parses one or more (possibly annotated)
 /// microdescriptors from a string.
 #[derive(Debug)]
 pub struct MicrodescReader<'a> {

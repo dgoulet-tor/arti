@@ -919,7 +919,7 @@ impl PendingClientCirc {
         c.channel.check_match(target)
     }
 
-    /// Testing only: extract the circuit ID for third pending circuit.
+    /// Testing only: extract the circuit ID for this pending circuit.
     #[cfg(test)]
     pub(crate) async fn peek_circid(&self) -> CircId {
         let c = self.circ.c.lock().await;
