@@ -16,8 +16,6 @@ done
 
 #JOBS=4
 
-exit 0
-
 while true; do
     for d in ./*/fuzz; do
 	pushd "$(dirname "$d")"
