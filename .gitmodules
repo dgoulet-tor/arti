@@ -1,0 +1,3 @@
+[submodule "arti-corpora"]
+	path = arti-corpora
+	url = git@gitlab.torproject.org:rls/arti-corpora.git
