@@ -276,36 +276,56 @@ where
     S: AsyncRead + Unpin,
     SP: SleepProvider,
 {
+    let buffer_window_size = 1024;
+    let mut written_total: usize = 0;
     // XXXX should be an option and is maybe too long.  Though for some
     // users this may be too short?
     let read_timeout = Duration::from_secs(10);
     let timer = runtime.sleep(read_timeout).fuse();
     futures::pin_mut!(timer);
 
-    let status = futures::select! {
-        status = stream.read_to_end(result).fuse() => status,
-        _ = timer => {
-            return Err(Error::DirTimeout);
-        }
-    };
-    let written = match status {
-        Ok(n) => n,
-        Err(other) => {
-            return Err(other.into());
-        }
-    };
+    loop {
+        // allocate buffer for next read
+        result.resize(written_total + buffer_window_size, 0);
+        let buf: &mut [u8] = &mut result[written_total..written_total + buffer_window_size];
 
-    // TODO: It would be good to detect compression bombs, but
-    // that would require access to the internal stream, which
-    // would in turn require some tricky programming.  For now, we
-    // use the maximum length here to prevent an attacker from
-    // filling our RAM.
-    if written > maxlen {
-        result.resize(maxlen, 0);
-        return Err(Error::ResponseTooLong(written));
+        let status = futures::select! {
+            status = stream.read(&mut buf[..]).fuse() => status,
+            _ = timer => {
+                return Err(Error::DirTimeout);
+            }
+        };
+        let written_in_this_loop = match status {
+            Ok(n) => n,
+            Err(other) => {
+                return Err(other.into());
+            }
+        };
+
+        written_total += written_in_this_loop;
+
+        // in case we read less than `buffer_window_size` we need to shrink result
+        // because otherwise we'll return those un-read 0s
+        if written_total < result.len() {
+            result.resize(written_total, 0);
+        }
+
+        // exit conditions below
+
+        if written_in_this_loop == 0 {
+            return Ok(());
+        }
+
+        // TODO: It would be good to detect compression bombs, but
+        // that would require access to the internal stream, which
+        // would in turn require some tricky programming.  For now, we
+        // use the maximum length here to prevent an attacker from
+        // filling our RAM.
+        if written_total > maxlen {
+            result.resize(maxlen, 0);
+            return Err(Error::ResponseTooLong(written_total));
+        }
     }
-
-    Ok(())
 }
 
 /// Retire a directory circuit because of an error we've encountered on it.
