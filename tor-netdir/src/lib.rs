@@ -76,17 +76,20 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 use params::NetParameters;
 
-/// The configuration for circuit creation.
+/// Configuration for determining when two relays have addresses "too close" in
+/// the network.
+///
+/// Used by [`Relay::in_same_subnet()`].
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct CircuitConfig {
+pub struct SubnetConfig {
     /// Consider IPv4 nodes in the same /x to be the same family.
     subnets_family_v4: u8,
     /// Consider IPv6 nodes in the same /x to be the same family.
     subnets_family_v6: u8,
 }
 
-impl Default for CircuitConfig {
+impl Default for SubnetConfig {
     fn default() -> Self {
         Self {
             subnets_family_v4: 16,
@@ -511,19 +514,14 @@ impl<'a> Relay<'a> {
                 .protovers()
                 .supports_known_subver(ProtoKind::DirCache, 2)
     }
-    /// Returns true if both relays can appear together in the same circuit.
-    pub fn can_be_in_same_circuit<'b>(
-        &self,
-        other: &Relay<'b>,
-        circuit_config: &CircuitConfig,
-    ) -> bool {
-        // XXX: features missing from original implementation:
-        // - option NodeFamilySets
-        // see: src/feature/nodelist/nodelist.c:nodes_in_same_family()
-        !self.in_same_family(other) && !self.same_subnet(other, circuit_config)
-    }
-    /// If two relays are on the same subnet.
-    pub fn same_subnet<'b>(&self, other: &Relay<'b>, circuit_config: &CircuitConfig) -> bool {
+    /// Return true if both relays are in the same subnet, as configured by
+    /// `subnet_config`.
+    ///
+    /// Two relays are considered to be in the same subnet if they
+    /// have IPv4 addresses with the same `subnets_family_v4`-bit
+    /// prefix, or if they have IPv6 addresses with the same
+    /// `subnets_family_v6`-bit prefix.
+    pub fn in_same_subnet<'b>(&self, other: &Relay<'b>, subnet_config: &SubnetConfig) -> bool {
         /// Do the two addresses share the same n leading bits?
         fn addrs_equal(a: &SocketAddr, b: &SocketAddr, v4_bits: u8, v6_bits: u8) -> bool {
             match (a.ip(), b.ip()) {
@@ -546,19 +544,16 @@ impl<'a> Relay<'a> {
                 _ => false,
             }
         }
-        self.rs
-            .orport_addrs()
-            // TODO: get bit length from config
-            .any(|addr| {
-                other.rs.orport_addrs().any(|other| {
-                    addrs_equal(
-                        addr,
-                        other,
-                        circuit_config.subnets_family_v4,
-                        circuit_config.subnets_family_v6,
-                    )
-                })
+        self.rs.orport_addrs().any(|addr| {
+            other.rs.orport_addrs().any(|other| {
+                addrs_equal(
+                    addr,
+                    other,
+                    subnet_config.subnets_family_v4,
+                    subnet_config.subnets_family_v6,
+                )
             })
+        })
     }
     /// Return true if both relays are in the same family.
     ///
@@ -836,7 +831,7 @@ mod test {
     #[test]
     fn relay_funcs() {
         let (consensus, microdescs) = construct_network();
-        let circuit_config = CircuitConfig::default();
+        let subnet_config = SubnetConfig::default();
         let mut dir = PartialNetDir::new(consensus, None);
         for md in microdescs.into_iter() {
             let wanted = dir.add_microdesc(md.clone());
@@ -879,11 +874,11 @@ mod test {
         assert!(r2.in_same_family(&r2));
         assert!(r2.in_same_family(&r3));
 
-        assert!(r0.same_subnet(&r10, &circuit_config));
-        assert!(r10.same_subnet(&r10, &circuit_config));
-        assert!(r0.same_subnet(&r0, &circuit_config));
-        assert!(r1.same_subnet(&r1, &circuit_config));
-        assert!(!r1.same_subnet(&r2, &circuit_config));
-        assert!(!r2.same_subnet(&r3, &circuit_config));
+        assert!(r0.in_same_subnet(&r10, &subnet_config));
+        assert!(r10.in_same_subnet(&r10, &subnet_config));
+        assert!(r0.in_same_subnet(&r0, &subnet_config));
+        assert!(r1.in_same_subnet(&r1, &subnet_config));
+        assert!(!r1.in_same_subnet(&r2, &subnet_config));
+        assert!(!r2.in_same_subnet(&r3, &subnet_config));
     }
 }

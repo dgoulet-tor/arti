@@ -3,7 +3,7 @@
 use super::TorPath;
 use crate::{DirInfo, Error, Result, TargetPort};
 use rand::Rng;
-use tor_netdir::{CircuitConfig, NetDir, Relay, WeightRole};
+use tor_netdir::{NetDir, Relay, SubnetConfig, WeightRole};
 
 /// Internal representation of PathBuilder.
 enum ExitPathBuilderInner<'a> {
@@ -60,24 +60,33 @@ impl<'a> ExitPathBuilder<'a> {
             DirInfo::Directory(d) => d,
         };
         // TODO: properly get circuit config
-        let circuit_config = CircuitConfig::default();
+        let subnet_config = SubnetConfig::default();
         let exit = self.pick_exit(rng, netdir)?;
 
         let middle = netdir
             .pick_relay(rng, WeightRole::Middle, |r| {
-                r.can_be_in_same_circuit(&exit, &circuit_config)
+                relays_can_share_circuit(r, &exit, &subnet_config)
             })
             .ok_or_else(|| Error::NoRelays("No middle relay found".into()))?;
 
         let entry = netdir
             .pick_relay(rng, WeightRole::Guard, |r| {
-                r.can_be_in_same_circuit(&middle, &circuit_config)
-                    && r.can_be_in_same_circuit(&exit, &circuit_config)
+                relays_can_share_circuit(r, &middle, &subnet_config)
+                    && relays_can_share_circuit(r, &exit, &subnet_config)
             })
             .ok_or_else(|| Error::NoRelays("No entry relay found".into()))?;
 
         Ok(TorPath::new_multihop(vec![entry, middle, exit]))
     }
+}
+
+/// Returns true if both relays can appear together in the same circuit.
+fn relays_can_share_circuit(a: &Relay<'_>, b: &Relay<'_>, subnet_config: &SubnetConfig) -> bool {
+    // XXX: features missing from original implementation:
+    // - option NodeFamilySets
+    // see: src/feature/nodelist/nodelist.c:nodes_in_same_family()
+
+    !a.in_same_family(b) && !a.in_same_subnet(b, subnet_config)
 }
 
 #[cfg(test)]
@@ -101,10 +110,10 @@ mod test {
         assert!(r1.ed_identity() != r3.ed_identity());
         assert!(r2.ed_identity() != r3.ed_identity());
 
-        let circuit_config = CircuitConfig::default();
-        assert!(r1.can_be_in_same_circuit(r2, &circuit_config));
-        assert!(r1.can_be_in_same_circuit(r3, &circuit_config));
-        assert!(r2.can_be_in_same_circuit(r3, &circuit_config));
+        let subnet_config = SubnetConfig::default();
+        assert!(relays_can_share_circuit(r1, r2, &subnet_config));
+        assert!(relays_can_share_circuit(r1, r3, &subnet_config));
+        assert!(relays_can_share_circuit(r2, r3, &subnet_config));
     }
 
     #[test]
