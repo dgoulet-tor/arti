@@ -290,7 +290,7 @@ where
         let buf: &mut [u8] = &mut result[written_total..written_total + buffer_window_size];
 
         let status = futures::select! {
-            status = stream.read(&mut buf[..]).fuse() => status,
+            status = stream.read(buf).fuse() => status,
             _ = timer => {
                 return Err(Error::DirTimeout);
             }
