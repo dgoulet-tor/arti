@@ -17,6 +17,7 @@
 //! XXXX This module should expose RustCrypto trait-based wrappers,
 //! but the [`rsa`] crate didn't support them as of initial writing.
 use arrayref::array_ref;
+use rsa::pkcs1::{FromRsaPrivateKey, FromRsaPublicKey};
 use std::fmt;
 use subtle::*;
 use zeroize::Zeroize;
@@ -158,14 +159,14 @@ impl From<[u8; 20]> for RsaIdentity {
 /// This implementation is a simple wrapper so that we can define new
 /// methods and traits on the type.
 #[derive(Clone, Debug)]
-pub struct PublicKey(rsa::RSAPublicKey);
+pub struct PublicKey(rsa::RsaPublicKey);
 
 /// An RSA private key.
 ///
 /// This is not so useful at present, since Arti currently only has
 /// client support, and Tor clients never actually need RSA private
 /// keys.
-pub struct PrivateKey(rsa::RSAPrivateKey);
+pub struct PrivateKey(rsa::RsaPrivateKey);
 
 impl PrivateKey {
     /// Return the public component of this key.
@@ -174,7 +175,7 @@ impl PrivateKey {
     }
     /// Construct a PrivateKey from DER pkcs1 encoding.
     pub fn from_der(der: &[u8]) -> Option<Self> {
-        Some(PrivateKey(rsa::RSAPrivateKey::from_pkcs1(der).ok()?))
+        Some(PrivateKey(rsa::RsaPrivateKey::from_pkcs1_der(der).ok()?))
     }
     // ....
 }
@@ -209,7 +210,7 @@ impl PublicKey {
     /// (This function expects an RsaPublicKey, as used by Tor.  It
     /// does not expect or accept a PublicKeyInfo.)
     pub fn from_der(der: &[u8]) -> Option<Self> {
-        Some(PublicKey(rsa::RSAPublicKey::from_pkcs1(der).ok()?))
+        Some(PublicKey(rsa::RsaPublicKey::from_pkcs1_der(der).ok()?))
     }
     /// Encode this public key into the DER format as used by Tor.
     ///
