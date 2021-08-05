@@ -4,7 +4,7 @@
 //! Once the client is bootstrapped, you can make anonymous
 //! connections ("streams") over the Tor network using
 //! `TorClient::connect()`.
-use tor_circmgr::{IsolationToken, TargetPort};
+use tor_circmgr::{CircMgrConfig, IsolationToken, TargetPort};
 use tor_dirmgr::{DirEvent, DirMgrConfig};
 use tor_proto::circuit::{ClientCirc, IpVersionPreference};
 use tor_proto::stream::DataStream;
@@ -121,18 +121,24 @@ impl ConnectPrefs {
 }
 
 impl<R: Runtime> TorClient<R> {
-    /// Bootstrap a network connection configured by `dircfg`.
+    /// Bootstrap a network connection configured by `dir_cfg` and `circ_cfg`.
     ///
     /// Return a client once there is enough directory material to
     /// connect safely over the Tor network.
-    pub async fn bootstrap(runtime: R, dircfg: DirMgrConfig) -> Result<TorClient<R>> {
+    // TODO: Make a ClientConfig to combine DirMgrConfig and circ_cfg.
+    pub async fn bootstrap(
+        runtime: R,
+        dir_cfg: DirMgrConfig,
+        circ_cfg: CircMgrConfig,
+    ) -> Result<TorClient<R>> {
         let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(runtime.clone()));
         let circmgr = Arc::new(tor_circmgr::CircMgr::new(
+            circ_cfg,
             runtime.clone(),
             Arc::clone(&chanmgr),
         ));
         let dirmgr = tor_dirmgr::DirMgr::bootstrap_from_config(
-            dircfg,
+            dir_cfg,
             runtime.clone(),
             Arc::clone(&circmgr),
         )

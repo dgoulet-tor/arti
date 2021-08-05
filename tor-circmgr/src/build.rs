@@ -247,14 +247,17 @@ impl<
 pub struct CircuitBuilder<R: Runtime> {
     /// The underlying [`Builder`] object
     builder: Arc<Builder<R, Arc<ClientCirc>, ParetoTimeoutEstimator>>,
+    /// Configuration for how to choose paths for circuits.
+    path_config: crate::PathConfig,
 }
 
 impl<R: Runtime> CircuitBuilder<R> {
     /// Construct a new [`CircuitBuilder`].
-    pub fn new(runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self {
+    pub fn new(runtime: R, chanmgr: Arc<ChanMgr<R>>, path_config: crate::PathConfig) -> Self {
         let timeouts = ParetoTimeoutEstimator::default();
         CircuitBuilder {
             builder: Arc::new(Builder::new(runtime, chanmgr, timeouts)),
+            path_config,
         }
     }
 
@@ -290,6 +293,11 @@ impl<R: Runtime> CircuitBuilder<R> {
         let rng = StdRng::from_rng(rng).expect("couldn't construct temporary rng");
         let owned = path.try_into()?;
         self.build_owned(owned, params, rng).await
+    }
+
+    /// Return the path configuration used by this builder.
+    pub(crate) fn path_config(&self) -> &crate::PathConfig {
+        &self.path_config
     }
 }
 

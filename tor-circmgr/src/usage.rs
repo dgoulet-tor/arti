@@ -137,6 +137,7 @@ impl TargetCircUsage {
         &self,
         rng: &mut R,
         netdir: crate::DirInfo<'a>,
+        config: &crate::PathConfig,
     ) -> Result<(TorPath<'a>, SupportedCircUsage)> {
         match self {
             TargetCircUsage::Dir => {
@@ -147,7 +148,8 @@ impl TargetCircUsage {
                 ports: p,
                 isolation_group,
             } => {
-                let path = ExitPathBuilder::from_target_ports(p.clone()).pick_path(rng, netdir)?;
+                let path =
+                    ExitPathBuilder::from_target_ports(p.clone()).pick_path(rng, netdir, config)?;
                 let policy = path
                     .exit_policy()
                     .expect("ExitPathBuilder gave us a one-hop circuit?");
@@ -404,11 +406,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let netdir = testnet::construct_netdir();
         let di = (&netdir).into();
+        let config = crate::PathConfig::default();
 
         // Only doing basic tests for now.  We'll test the path
         // building code a lot more closely in the tests for TorPath
         // and friends.
-        let (p_dir, u_dir) = TargetCircUsage::Dir.build_path(&mut rng, di).unwrap();
+        let (p_dir, u_dir) = TargetCircUsage::Dir
+            .build_path(&mut rng, di, &config)
+            .unwrap();
         assert!(matches!(u_dir, SupportedCircUsage::Dir));
         assert_eq!(p_dir.len(), 1);
 
@@ -417,7 +422,7 @@ mod test {
             ports: vec![TargetPort::ipv4(995)],
             isolation_group,
         };
-        let (p_exit, u_exit) = exit_usage.build_path(&mut rng, di).unwrap();
+        let (p_exit, u_exit) = exit_usage.build_path(&mut rng, di, &config).unwrap();
         assert!(matches!(
             u_exit,
             SupportedCircUsage::Exit {

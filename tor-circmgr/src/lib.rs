@@ -55,6 +55,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub mod build;
+mod config;
 mod err;
 mod impls;
 mod mgr;
@@ -64,6 +65,11 @@ mod usage;
 
 pub use err::Error;
 pub use usage::{IsolationToken, TargetPort};
+
+pub use config::{
+    CircMgrConfig, CircMgrConfigBuilder, PathConfig, PathConfigBuilder, RequestTiming,
+    RequestTimingBuilder,
+};
 
 use usage::TargetCircUsage;
 
@@ -143,9 +149,14 @@ pub struct CircMgr<R: Runtime> {
 
 impl<R: Runtime> CircMgr<R> {
     /// Construct a new circuit manager.
-    pub fn new(runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self {
-        let builder = build::CircuitBuilder::new(runtime.clone(), chanmgr);
-        let mgr = mgr::AbstractCircMgr::new(builder, runtime);
+    pub fn new(config: CircMgrConfig, runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self {
+        let CircMgrConfig {
+            path_config,
+            request_timing,
+        } = config;
+
+        let builder = build::CircuitBuilder::new(runtime.clone(), chanmgr, path_config);
+        let mgr = mgr::AbstractCircMgr::new(builder, runtime, request_timing);
         CircMgr { mgr: Arc::new(mgr) }
     }
 

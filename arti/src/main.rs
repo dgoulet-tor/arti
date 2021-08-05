@@ -184,6 +184,9 @@ fn main() -> Result<()> {
 
     let dircfg = config.get_dir_config()?;
 
+    // XXXX Make this part of our configuration.
+    let circcfg = tor_circmgr::CircMgrConfigBuilder::default().build()?;
+
     let socks_port = match config.socks_port {
         Some(s) => s,
         None => {
@@ -199,7 +202,7 @@ fn main() -> Result<()> {
 
     let rt_copy = runtime.clone();
     rt_copy.block_on(async {
-        let client = Arc::new(TorClient::bootstrap(runtime.clone(), dircfg).await?);
+        let client = Arc::new(TorClient::bootstrap(runtime.clone(), dircfg, circcfg).await?);
         proxy::run_socks_proxy(runtime, client, socks_port).await
     })
 }

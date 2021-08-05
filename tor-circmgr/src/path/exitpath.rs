@@ -1,7 +1,7 @@
 //! Code for building paths to an exit relay.
 
 use super::TorPath;
-use crate::{DirInfo, Error, Result, TargetPort};
+use crate::{DirInfo, Error, PathConfig, Result, TargetPort};
 use rand::Rng;
 use tor_netdir::{NetDir, Relay, SubnetConfig, WeightRole};
 
@@ -53,26 +53,30 @@ impl<'a> ExitPathBuilder<'a> {
 
     /// Try to create and return a path corresponding to the requirements of
     /// this builder.
-    pub fn pick_path<R: Rng>(&self, rng: &mut R, netdir: DirInfo<'a>) -> Result<TorPath<'a>> {
+    pub fn pick_path<R: Rng>(
+        &self,
+        rng: &mut R,
+        netdir: DirInfo<'a>,
+        config: &PathConfig,
+    ) -> Result<TorPath<'a>> {
         // TODO: implement guards
         let netdir = match netdir {
             DirInfo::Fallbacks(_) => return Err(Error::NeedConsensus),
             DirInfo::Directory(d) => d,
         };
-        // TODO: properly get circuit config
-        let subnet_config = SubnetConfig::default();
+        let subnet_config = &config.enforce_distance;
         let exit = self.pick_exit(rng, netdir)?;
 
         let middle = netdir
             .pick_relay(rng, WeightRole::Middle, |r| {
-                relays_can_share_circuit(r, &exit, &subnet_config)
+                relays_can_share_circuit(r, &exit, subnet_config)
             })
             .ok_or_else(|| Error::NoRelays("No middle relay found".into()))?;
 
         let entry = netdir
             .pick_relay(rng, WeightRole::Guard, |r| {
-                relays_can_share_circuit(r, &middle, &subnet_config)
-                    && relays_can_share_circuit(r, &exit, &subnet_config)
+                relays_can_share_circuit(r, &middle, subnet_config)
+                    && relays_can_share_circuit(r, &exit, subnet_config)
             })
             .ok_or_else(|| Error::NoRelays("No entry relay found".into()))?;
 
@@ -122,10 +126,11 @@ mod test {
         let netdir = testnet::construct_netdir();
         let ports = vec![TargetPort::ipv4(443), TargetPort::ipv4(1119)];
         let dirinfo = (&netdir).into();
+        let config = PathConfig::default();
 
         for _ in 0..1000 {
             let path = ExitPathBuilder::from_target_ports(ports.clone())
-                .pick_path(&mut rng, dirinfo)
+                .pick_path(&mut rng, dirinfo, &config)
                 .unwrap();
 
             assert_same_path_when_owned(&path);
@@ -141,9 +146,10 @@ mod test {
 
         let chosen = netdir.by_id(&[0x20; 32].into()).unwrap();
 
+        let config = PathConfig::default();
         for _ in 0..1000 {
             let path = ExitPathBuilder::from_chosen_exit(chosen.clone())
-                .pick_path(&mut rng, dirinfo)
+                .pick_path(&mut rng, dirinfo, &config)
                 .unwrap();
             assert_same_path_when_owned(&path);
             if let TorPathInner::Path(p) = path.inner {

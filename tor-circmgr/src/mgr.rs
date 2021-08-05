@@ -22,6 +22,7 @@
 //    - Error from pick_action()
 //    - Error reported by restrict_mut?
 
+use crate::config::RequestTiming;
 use crate::{DirInfo, Error, Result};
 
 use retry_error::RetryError;
@@ -525,6 +526,8 @@ pub(crate) struct AbstractCircMgr<B: AbstractCircBuilder, R: Runtime> {
     /// An asynchronous runtime to use for launching tasks and
     /// checking timeouts.
     runtime: R,
+    /// Timing and retry rules for attaching requests to circuits.
+    timing: RequestTiming,
     /// A CircList to manage our list of circuits, requests, and
     /// pending circuits.
     circs: sync::Mutex<CircList<B>>,
@@ -544,10 +547,11 @@ enum Action<B: AbstractCircBuilder> {
 
 impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
     /// Construct a new AbstractCircMgr.
-    pub(crate) fn new(builder: B, runtime: R) -> Self {
+    pub(crate) fn new(builder: B, runtime: R, timing: RequestTiming) -> Self {
         AbstractCircMgr {
             builder,
             runtime,
+            timing,
             circs: sync::Mutex::new(CircList::new()),
         }
     }
@@ -562,11 +566,9 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         usage: &<B::Spec as AbstractSpec>::Usage,
         dir: DirInfo<'_>,
     ) -> Result<Arc<B::Circ>> {
-        // TODO: Timeouts and retries should be configurable, and possibly
-        // even an argument to this function?
-        let wait_for_circ = Duration::from_secs(60);
+        let wait_for_circ = self.timing.request_timeout;
         let timeout_at = self.runtime.now() + wait_for_circ;
-        let max_tries: usize = 32;
+        let max_tries = self.timing.request_max_retries;
 
         let mut retry_err =
             RetryError /* ::<Box<Error>> */::in_attempt_to("find or build a circuit");
@@ -1108,7 +1110,11 @@ mod test {
 
             let builder = FakeBuilder::new(&rt);
 
-            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let mgr = Arc::new(AbstractCircMgr::new(
+                builder,
+                rt.clone(),
+                RequestTiming::default(),
+            ));
 
             let webports = FakeSpec::new(vec![80_u16, 443]);
 
@@ -1169,7 +1175,11 @@ mod test {
             let builder = FakeBuilder::new(&rt);
             builder.set(ports.clone(), vec![FakeOp::Fail, FakeOp::Timeout]);
 
-            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let mgr = Arc::new(AbstractCircMgr::new(
+                builder,
+                rt.clone(),
+                RequestTiming::default(),
+            ));
             let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
             assert!(matches!(c1, Err(Error::RequestFailed(_))));
@@ -1187,7 +1197,11 @@ mod test {
                 ],
             );
 
-            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let mgr = Arc::new(AbstractCircMgr::new(
+                builder,
+                rt.clone(),
+                RequestTiming::default(),
+            ));
             let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
             assert!(matches!(c1, Err(Error::RequestFailed(_))));
@@ -1205,7 +1219,11 @@ mod test {
             let builder = FakeBuilder::new(&rt);
             builder.set(ports.clone(), vec![FakeOp::NoPlan; 2000]);
 
-            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let mgr = Arc::new(AbstractCircMgr::new(
+                builder,
+                rt.clone(),
+                RequestTiming::default(),
+            ));
             let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
             assert!(matches!(c1, Err(Error::RequestFailed(_))));
@@ -1222,7 +1240,11 @@ mod test {
             let builder = FakeBuilder::new(&rt);
             builder.set(ports.clone(), vec![FakeOp::Fail; 1000]);
 
-            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let mgr = Arc::new(AbstractCircMgr::new(
+                builder,
+                rt.clone(),
+                RequestTiming::default(),
+            ));
             let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
             assert!(matches!(c1, Err(Error::RequestFailed(_))));
@@ -1244,7 +1266,11 @@ mod test {
                 vec![FakeOp::WrongSpec(FakeSpec::new(vec![22_u16]))],
             );
 
-            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let mgr = Arc::new(AbstractCircMgr::new(
+                builder,
+                rt.clone(),
+                RequestTiming::default(),
+            ));
             let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
             assert!(matches!(c1, Ok(_)));
@@ -1262,7 +1288,11 @@ mod test {
             let builder = FakeBuilder::new(&rt);
             builder.set(ports.clone(), vec![FakeOp::Fail, FakeOp::Fail]);
 
-            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let mgr = Arc::new(AbstractCircMgr::new(
+                builder,
+                rt.clone(),
+                RequestTiming::default(),
+            ));
 
             let (c1, c2) = rt
                 .wait_for(futures::future::join(
@@ -1283,7 +1313,11 @@ mod test {
         tor_rtcompat::test_with_one_runtime!(|rt| async {
             let rt = MockSleepRuntime::new(rt);
             let builder = FakeBuilder::new(&rt);
-            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let mgr = Arc::new(AbstractCircMgr::new(
+                builder,
+                rt.clone(),
+                RequestTiming::default(),
+            ));
 
             let ports = FakeSpec::new(vec![443_u16]);
             // Set our isolation so that iso1 and iso2 can't share a circuit,
@@ -1346,7 +1380,11 @@ mod test {
             let builder = FakeBuilder::new(&rt);
             builder.set(ports1.clone(), vec![FakeOp::Timeout]);
 
-            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let mgr = Arc::new(AbstractCircMgr::new(
+                builder,
+                rt.clone(),
+                RequestTiming::default(),
+            ));
             // Note that ports2 will be wider than ports1, so the second
             // request will have to launch a new circuit.
 
@@ -1376,7 +1414,11 @@ mod test {
             // other circuits that will use it.
             let rt = MockSleepRuntime::new(rt);
             let builder = FakeBuilder::new(&rt);
-            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let mgr = Arc::new(AbstractCircMgr::new(
+                builder,
+                rt.clone(),
+                RequestTiming::default(),
+            ));
 
             let ports1 = FakeSpec::new(vec![80_u16, 443]);
             let ports2 = FakeSpec::new(vec![80_u16]);
@@ -1413,7 +1455,11 @@ mod test {
             // make sure that one expires and one doesn't.
             let rt = MockSleepRuntime::new(rt);
             let builder = FakeBuilder::new(&rt);
-            let mgr = Arc::new(AbstractCircMgr::new(builder, rt.clone()));
+            let mgr = Arc::new(AbstractCircMgr::new(
+                builder,
+                rt.clone(),
+                RequestTiming::default(),
+            ));
 
             let imap = FakeSpec::new(vec![993_u16]);
             let pop = FakeSpec::new(vec![995_u16]);
