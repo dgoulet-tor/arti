@@ -3,7 +3,7 @@
 use super::TorPath;
 use crate::{DirInfo, Error, Result, TargetPort};
 use rand::Rng;
-use tor_netdir::{NetDir, Relay, WeightRole};
+use tor_netdir::{CircuitConfig, NetDir, Relay, WeightRole};
 
 /// Internal representation of PathBuilder.
 enum ExitPathBuilderInner<'a> {
@@ -59,15 +59,20 @@ impl<'a> ExitPathBuilder<'a> {
             DirInfo::Fallbacks(_) => return Err(Error::NeedConsensus),
             DirInfo::Directory(d) => d,
         };
+        // TODO: properly get circuit config
+        let circuit_config = CircuitConfig::default();
         let exit = self.pick_exit(rng, netdir)?;
 
         let middle = netdir
-            .pick_relay(rng, WeightRole::Middle, |r| !r.in_same_family(&exit))
+            .pick_relay(rng, WeightRole::Middle, |r| {
+                r.can_be_in_same_circuit(&exit, &circuit_config)
+            })
             .ok_or_else(|| Error::NoRelays("No middle relay found".into()))?;
 
         let entry = netdir
             .pick_relay(rng, WeightRole::Guard, |r| {
-                !r.in_same_family(&middle) && !r.in_same_family(&exit)
+                r.can_be_in_same_circuit(&middle, &circuit_config)
+                    && r.can_be_in_same_circuit(&exit, &circuit_config)
             })
             .ok_or_else(|| Error::NoRelays("No entry relay found".into()))?;
 
@@ -96,9 +101,10 @@ mod test {
         assert!(r1.ed_identity() != r3.ed_identity());
         assert!(r2.ed_identity() != r3.ed_identity());
 
-        assert!(!r1.in_same_family(r2));
-        assert!(!r1.in_same_family(r3));
-        assert!(!r2.in_same_family(r3));
+        let circuit_config = CircuitConfig::default();
+        assert!(r1.can_be_in_same_circuit(r2, &circuit_config));
+        assert!(r1.can_be_in_same_circuit(r3, &circuit_config));
+        assert!(r2.can_be_in_same_circuit(r3, &circuit_config));
     }
 
     #[test]

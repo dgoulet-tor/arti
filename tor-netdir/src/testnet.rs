@@ -127,7 +127,7 @@ pub fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
         let weight = RelayWeight::Measured(1000 * (idx % 10 + 1) as u32);
         bld.rs()
             .identity([idx; 20].into())
-            .add_or_port("127.0.0.1:9001".parse().unwrap())
+            .add_or_port(format!("{}.0.0.3:9001", idx % 5).parse().unwrap())
             .doc_digest(*md.digest())
             .protos(protocols)
             .set_flags(flags)
