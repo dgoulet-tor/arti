@@ -57,3 +57,28 @@ retry_certs = { num = 3, initial_delay = "1 sec" }
 retry_microdescs = { num = 3, initial_delay = "1 sec" }
 # How many microdescriptor fetches to launch at once.
 microdesc_parallelism = 4
+
+# Tells the circuit manager rule for constructing circuit paths
+[path_rules]
+
+# How far apart do relays need to be in IP-space before they can be
+# used in the same circuit?  For example, "subnets_family_v4"=16 below
+# means that two relays cannot appear in the same circuit if their
+# IPv4 addresses begin with the same 16 bits.
+enforce_distance = { "subnets_family_v4" = 16, "subnets_family_v6" = 32 }
+
+# Rules for how long pending requests should wait for a circuit.
+[request_timing]
+
+# When a circuit is requested, we keep trying to build circuits for up
+# to this long before the request gives up.
+request_timeout = "60 sec"
+
+# When a circuit is requested, we make up to this many attempts to build
+# circuits for it before the request gives up.
+request_max_retries = 32
+
+# If a circuit is finished that would satisfy a pending request, but the
+# request is still waiting for its own circuits to complete, the request
+# will wait this long before using the unexpectedly available circuit.
+request_loyalty = "50 msec"

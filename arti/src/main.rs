@@ -74,6 +74,7 @@ mod proxy;
 
 use std::sync::Arc;
 
+use tor_circmgr::CircMgrConfig;
 use tor_client::TorClient;
 use tor_config::CfgPath;
 use tor_dirmgr::{DirMgrConfig, DownloadScheduleConfig, NetworkConfig};
@@ -132,6 +133,12 @@ pub struct ArtiConfig {
     /// consensus.
     #[serde(default)]
     override_net_params: HashMap<String, i32>,
+
+    /// Information about how to build paths through the network.
+    path_rules: tor_circmgr::PathConfig,
+
+    /// Information about how to retry circuits.
+    request_timing: tor_circmgr::RequestTiming,
 }
 
 /// Configuration for where information should be stored on disk.
@@ -160,6 +167,16 @@ impl ArtiConfig {
         }
         dircfg.build()
     }
+
+    /// Return a [`CircMgrConfig`] object based on the user's selected
+    /// configuration.
+    fn get_circ_config(&self) -> Result<CircMgrConfig> {
+        let mut builder = tor_circmgr::CircMgrConfigBuilder::default();
+        Ok(builder
+            .set_path_config(self.path_rules.clone())
+            .set_request_timing(self.request_timing.clone())
+            .build()?)
+    }
 }
 
 fn main() -> Result<()> {
@@ -183,9 +200,7 @@ fn main() -> Result<()> {
     simple_logging::log_to_stderr(filt);
 
     let dircfg = config.get_dir_config()?;
-
-    // XXXX Make this part of our configuration.
-    let circcfg = tor_circmgr::CircMgrConfigBuilder::default().build()?;
+    let circcfg = config.get_circ_config()?;
 
     let socks_port = match config.socks_port {
         Some(s) => s,
