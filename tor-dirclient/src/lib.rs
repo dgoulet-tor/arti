@@ -304,15 +304,17 @@ where
 
         written_total += written_in_this_loop;
 
-        // in case we read less than `buffer_window_size` we need to shrink result
-        // because otherwise we'll return those un-read 0s
-        if written_total < result.len() {
-            result.resize(written_total, 0);
-        }
-
         // exit conditions below
 
         if written_in_this_loop == 0 {
+            /*
+            in case we read less than `buffer_window_size` in last `read`
+            we need to shrink result because otherwise we'll return those
+            un-read 0s
+            */
+            if written_total < result.len() {
+                result.resize(written_total, 0);
+            }
             return Ok(());
         }
 
