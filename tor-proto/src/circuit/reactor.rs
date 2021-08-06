@@ -440,6 +440,7 @@ impl Reactor {
     }
 
     /// Helper: process a destroy cell.
+    #[allow(clippy::unnecessary_wraps)]
     fn handle_destroy_cell(&mut self) -> Result<()> {
         // I think there is nothing more to do here.
         Ok(())

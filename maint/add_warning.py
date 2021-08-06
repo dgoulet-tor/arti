@@ -30,6 +30,7 @@ WANT_LINTS = """
 #![warn(clippy::rc_buffer)]
 #![warn(clippy::trait_duplication_in_bounds)]
 #![warn(clippy::unseparated_literal_suffix)]
+#![deny(clippy::unnecessary_wraps)]
 """
 WANT_LINTS = [ "%s\n" % w for w in WANT_LINTS.split() ]
 
@@ -41,7 +42,6 @@ SOON="""
 #![deny(clippy::panic)]
 #![deny(clippy::expect_used)]
 #![deny(clippy::checked_conversions)]
-#![deny(clippy::unnecessary_wraps)]
 #![deny(clippy::if_then_some_else_none)]
 #![deny(clippy::implicit_clone)]
 #![deny(missing_debug_implementations)]
