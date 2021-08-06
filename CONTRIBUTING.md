@@ -16,6 +16,69 @@ submitted for inclusion in the work by you, as defined in the Apache-2.0
 license, shall be dual licensed as above, without any additional terms or
 conditions.
 
+## Development Environment Setup Tips
+
+The following section is **not** an exhaustive guide, and only covers common
+setup and development tasks.
+
+**Install dependencies**
+
+- [Rust](https://www.rust-lang.org/tools/install) note, for Windows devices
+  check the
+  [Other Installation Methods](https://forge.rust-lang.org/infra/other-installation-methods.html)
+
+- [Git](https://git-scm.com/downloads) note, for Linux, MacOS, and some
+  Unix-like devices Git may be available via a package manager; `apt`, `brew`,
+  `yum`, `pacman`, etc.
+
+**Clone source code**
+
+    $ git clone --recurse-submodules https://gitlab.torproject.org/tpo/core/arti.git
+
+**Update source code**
+
+    $ git pull origin main
+    $ git submodule update --init --merge --recursive
+
+> Note, if working on a local feature/fix branch it may be wise to use `fetch`
+> and `merge` options instead
+>
+>     $ git fetch origin
+>     $ git merge origin/main
+>     $ git submodule update --init --merge --recursive
+
+**Run unit tests**
+
+    $ cargo test
+
+> Note, if errors similar to "Error: IO error: No such file or directory (os
+> error 2)" involving `cargo-husky`, then check that the `.git/hooks`
+> directory exists, eg.
+>
+>     $ [[ -d "${PWD}/.git/hooks" ]] || { mkdir "${PWD}/.git/hooks"; }
+
+**Add fork URL**
+
+    $ git remote add _name_ git@gitlab.torproject.org:_name_/arti.git
+    $ git fetch _name_
+
+> Tip, replace `_name_` in above, and following, commands to reflect your sign
+> in name.
+>
+> Note, to fork this repository, or contribute to Issues and Merge Requests
+> requires an account. Check the
+> [Sign In](https://gitlab.torproject.org/users/sign_in?redirect_to_referer=yes)
+> page for further instructions on requesting access.
+
+**Push to fork**
+
+    $ git push _name_ main
+
+> Tip, to open a Merge Request navigate to the Merge Request tab for your
+> account's fork; URL will be similar to the following
+>
+>      https://gitlab.torproject.org/_name_/arti/-/merge_requests
+
 ## Using Arti with Torbrowser
 
 A good first step to start hacking on arti might be to hook it up with your
