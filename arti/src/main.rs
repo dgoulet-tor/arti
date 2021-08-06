@@ -71,6 +71,7 @@
 #![deny(clippy::unnecessary_wraps)]
 #![warn(clippy::unseparated_literal_suffix)]
 
+mod exit;
 mod proxy;
 
 use std::sync::Arc;
@@ -79,13 +80,14 @@ use tor_circmgr::CircMgrConfig;
 use tor_client::TorClient;
 use tor_config::CfgPath;
 use tor_dirmgr::{DirMgrConfig, DownloadScheduleConfig, NetworkConfig};
-use tor_rtcompat::SpawnBlocking;
+use tor_rtcompat::{Runtime, SpawnBlocking};
 
 use anyhow::Result;
 use argh::FromArgs;
 use log::{info, warn, LevelFilter};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(FromArgs, Debug, Clone)]
 /// Connect to the Tor network, open a SOCKS port, and proxy
@@ -179,6 +181,25 @@ impl ArtiConfig {
     }
 }
 
+/// Run the main loop of the proxy.
+async fn run<R: Runtime>(
+    runtime: R,
+    socks_port: u16,
+    statecfg: PathBuf,
+    dircfg: DirMgrConfig,
+    circcfg: CircMgrConfig,
+) -> Result<()> {
+    use futures::FutureExt;
+    futures::select!(
+        r = exit::wait_for_ctrl_c().fuse() => r,
+        r = async {
+            let client =
+                Arc::new(TorClient::bootstrap(runtime.clone(), statecfg, dircfg, circcfg).await?);
+            proxy::run_socks_proxy(runtime, client, socks_port).await
+        }.fuse() => r,
+    )
+}
+
 fn main() -> Result<()> {
     let args: Args = argh::from_env();
     let dflt_config = tor_config::default_config_file();
@@ -217,11 +238,8 @@ fn main() -> Result<()> {
     let runtime = tor_rtcompat::async_std::create_runtime()?;
 
     let rt_copy = runtime.clone();
-    rt_copy.block_on(async {
-        let client =
-            Arc::new(TorClient::bootstrap(runtime.clone(), statecfg, dircfg, circcfg).await?);
-        proxy::run_socks_proxy(runtime, client, socks_port).await
-    })
+    rt_copy.block_on(run(runtime, socks_port, statecfg, dircfg, circcfg))?;
+    Ok(())
 }
 
 #[cfg(test)]

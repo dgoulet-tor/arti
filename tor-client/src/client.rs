@@ -19,7 +19,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
-use log::info;
+use log::{debug, error, info};
 
 /// An active client session on the Tor network.
 ///
@@ -157,6 +157,11 @@ impl<R: Runtime> TorClient<R> {
             Arc::downgrade(&dirmgr),
         ))?;
 
+        runtime.spawn(flush_state_to_disk(
+            runtime.clone(),
+            Arc::downgrade(&circmgr),
+        ))?;
+
         Ok(TorClient {
             runtime,
             circmgr,
@@ -292,6 +297,12 @@ impl<R: Runtime> TorClient<R> {
 
         Ok(circ)
     }
+
+    /// Try to flush persistent state into storage.
+    fn update_persistent_state(&self) -> Result<()> {
+        self.circmgr.update_persistent_state()?;
+        Ok(())
+    }
 }
 
 /// Whenever a [`DirEvent::NewConsensus`] arrives on `events`, update
@@ -311,9 +322,44 @@ async fn keep_circmgr_params_updated<R: Runtime>(
             if let (Some(cm), Some(dm)) = (Weak::upgrade(&circmgr), Weak::upgrade(&dirmgr)) {
                 cm.update_network_parameters(dm.netdir().params());
             } else {
-                // A weak upgrade failed; time to break.
+                debug!("Circmgr or dirmgr has disappeared; task exiting.");
                 break;
             }
+        }
+    }
+}
+
+/// Run forever, periodically telling `circmgr` to update its persistent
+/// state.
+///
+/// Exit when we notice that `circmgr` has been dropped.
+///
+/// This is a daemon task: it runs indefinitely in the background.
+async fn flush_state_to_disk<R: Runtime>(runtime: R, circmgr: Weak<tor_circmgr::CircMgr<R>>) {
+    loop {
+        if let Some(circmgr) = Weak::upgrade(&circmgr) {
+            if let Err(e) = circmgr.update_persistent_state() {
+                error!("Unable to flush circmgr state: {}", e);
+                break;
+            }
+        } else {
+            debug!("Circmgr has disappeared; task exiting.");
+            break;
+        }
+        // XXXX This delay is probably too small.
+        //
+        // Also, we probably don't even want a fixed delay here.  Instead,
+        // we should be updating more frequently when the data is volatile
+        // or has important info to save, and not at all when there are no
+        // changes.
+        runtime.sleep(Duration::from_secs(60)).await;
+    }
+}
+
+impl<R: Runtime> Drop for TorClient<R> {
+    fn drop(&mut self) {
+        if let Err(e) = self.update_persistent_state() {
+            error!("Unable to flush state on client exit: {}", e);
         }
     }
 }
