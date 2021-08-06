@@ -69,17 +69,11 @@ impl SqliteStore {
         let blobpath = path.join("dir_blobs/");
         let lockpath = path.join("dir.lock");
 
-        #[cfg(target_family = "unix")]
         if !readonly {
-            std::fs::DirBuilder::new()
-                .recursive(true)
-                .mode(0o700)
-                .create(&blobpath)
-                .with_context(|| format!("Creating directory at {:?}", &blobpath))?;
-        }
-        #[cfg(not(target_family = "unix"))]
-        if !readonly {
-            std::fs::DirBuilder::new()
+            let mut builder = std::fs::DirBuilder::new();
+            #[cfg(target_family = "unix")]
+            builder.mode(0o700);
+            builder
                 .recursive(true)
                 .create(&blobpath)
                 .with_context(|| format!("Creating directory at {:?}", &blobpath))?;
