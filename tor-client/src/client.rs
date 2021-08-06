@@ -13,6 +13,7 @@ use tor_rtcompat::{Runtime, SleepProviderExt};
 use futures::stream::StreamExt;
 use futures::task::SpawnExt;
 use std::net::IpAddr;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -125,15 +126,19 @@ impl<R: Runtime> TorClient<R> {
     ///
     /// Return a client once there is enough directory material to
     /// connect safely over the Tor network.
-    // TODO: Make a ClientConfig to combine DirMgrConfig and circ_cfg.
+    // TODO: Make a ClientConfig to combine DirMgrConfig and circ_cfg
+    // and state_cfg.
     pub async fn bootstrap(
         runtime: R,
+        state_cfg: PathBuf,
         dir_cfg: DirMgrConfig,
         circ_cfg: CircMgrConfig,
     ) -> Result<TorClient<R>> {
+        let statemgr = tor_persist::FsStateMgr::from_path(state_cfg)?;
         let chanmgr = Arc::new(tor_chanmgr::ChanMgr::new(runtime.clone()));
         let circmgr = Arc::new(tor_circmgr::CircMgr::new(
             circ_cfg,
+            statemgr,
             runtime.clone(),
             Arc::clone(&chanmgr),
         ));

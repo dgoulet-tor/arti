@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use futures::channel::oneshot;
 use futures::task::SpawnExt;
 use futures::Future;
+use log::warn;
 use rand::{rngs::StdRng, CryptoRng, Rng, SeedableRng};
 use std::convert::TryInto;
 use std::sync::{
@@ -249,16 +250,44 @@ pub struct CircuitBuilder<R: Runtime> {
     builder: Arc<Builder<R, Arc<ClientCirc>, ParetoTimeoutEstimator>>,
     /// Configuration for how to choose paths for circuits.
     path_config: crate::PathConfig,
+    /// State-manager object to use in storing current state.
+    #[allow(dead_code)]
+    storage: crate::state::DynStateMgr,
 }
 
 impl<R: Runtime> CircuitBuilder<R> {
     /// Construct a new [`CircuitBuilder`].
-    pub fn new(runtime: R, chanmgr: Arc<ChanMgr<R>>, path_config: crate::PathConfig) -> Self {
-        let timeouts = ParetoTimeoutEstimator::default();
+    // TODO: eventually I'd like to make this a public function, but
+    // DynStateMgr is private.
+    pub(crate) fn new(
+        runtime: R,
+        chanmgr: Arc<ChanMgr<R>>,
+        path_config: crate::PathConfig,
+        storage: crate::state::DynStateMgr,
+    ) -> Self {
+        let timeouts = match storage.load_timeout_data() {
+            Ok(Some(v)) => ParetoTimeoutEstimator::from_state(v),
+            Ok(None) => ParetoTimeoutEstimator::default(),
+            Err(e) => {
+                warn!("Unable to load timeout state: {}", e);
+                ParetoTimeoutEstimator::default()
+            }
+        };
+
         CircuitBuilder {
             builder: Arc::new(Builder::new(runtime, chanmgr, timeouts)),
             path_config,
+            storage,
         }
+    }
+
+    /// Flush state to the state manager.
+    pub fn save_state(&self) -> Result<()> {
+        // TODO: someday we'll want to only do this if there is something
+        // changed.
+        let _ignore = self.storage.try_lock()?; // XXXX don't ignore.
+        let state = self.builder.timeouts.build_state();
+        self.storage.save_timeout_data(&state)
     }
 
     /// Reconfigure this builder using the latest set of network parameters.

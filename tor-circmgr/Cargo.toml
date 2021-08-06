@@ -20,6 +20,7 @@ tor-netdoc = { path="../tor-netdoc", version="0.0.0" }
 tor-proto = { path="../tor-proto", version="0.0.0" }
 retry-error = { path="../retry-error", version="0.0.0" }
 tor-linkspec = { path="../tor-linkspec", version="0.0.0" }
+tor-persist = {  path="../tor-persist", version="0.0.0" }
 tor-rtcompat = { path="../tor-rtcompat", version="0.0.0" }
 
 async-trait = "0.1.48"

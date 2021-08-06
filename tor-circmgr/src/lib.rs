@@ -61,6 +61,7 @@ mod err;
 mod impls;
 mod mgr;
 pub mod path;
+mod state;
 mod timeouts;
 mod usage;
 
@@ -146,19 +147,40 @@ impl<'a> DirInfo<'a> {
 pub struct CircMgr<R: Runtime> {
     /// The underlying circuit manager object that implements our behavior.
     mgr: Arc<mgr::AbstractCircMgr<build::CircuitBuilder<R>, R>>,
+
+    /// A state manager for recording timeout history and guard information.
+    ///
+    /// (Right now there is only one implementation of CircStateMgr, but I
+    /// think we'll want to have more before too much time is up. In any
+    /// case I don't want to parameterize on this type.)
+    storage: state::DynStateMgr,
 }
 
 impl<R: Runtime> CircMgr<R> {
     /// Construct a new circuit manager.
-    pub fn new(config: CircMgrConfig, runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self {
+    pub fn new<SM>(config: CircMgrConfig, storage: SM, runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self
+    where
+        SM: tor_persist::StateMgr + Send + Sync + 'static,
+    {
         let CircMgrConfig {
             path_config,
             request_timing,
         } = config;
 
-        let builder = build::CircuitBuilder::new(runtime.clone(), chanmgr, path_config);
+        let storage: state::DynStateMgr = Arc::new(storage);
+
+        let builder =
+            build::CircuitBuilder::new(runtime.clone(), chanmgr, path_config, Arc::clone(&storage));
         let mgr = mgr::AbstractCircMgr::new(builder, runtime, request_timing);
-        CircMgr { mgr: Arc::new(mgr) }
+        CircMgr {
+            mgr: Arc::new(mgr),
+            storage,
+        }
+    }
+
+    /// Flush state to the state manager, if there is any unsaved state.
+    pub fn update_persistent_state(&self) -> Result<()> {
+        self.mgr.peek_builder().save_state()
     }
 
     /// Reconfigure this circuit manager using the latest set of

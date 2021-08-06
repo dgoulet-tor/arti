@@ -151,7 +151,6 @@ pub struct StorageConfig {
     /// Location on disk for cached directory information
     cache_dir: CfgPath,
     /// Location on disk for less-sensitive persistent state information.
-    #[allow(unused)]
     state_dir: CfgPath,
 }
 
@@ -200,6 +199,7 @@ fn main() -> Result<()> {
     };
     simple_logging::log_to_stderr(filt);
 
+    let statecfg = config.storage.state_dir.path()?;
     let dircfg = config.get_dir_config()?;
     let circcfg = config.get_circ_config()?;
 
@@ -218,7 +218,8 @@ fn main() -> Result<()> {
 
     let rt_copy = runtime.clone();
     rt_copy.block_on(async {
-        let client = Arc::new(TorClient::bootstrap(runtime.clone(), dircfg, circcfg).await?);
+        let client =
+            Arc::new(TorClient::bootstrap(runtime.clone(), statecfg, dircfg, circcfg).await?);
         proxy::run_socks_proxy(runtime, client, socks_port).await
     })
 }

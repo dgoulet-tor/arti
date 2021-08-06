@@ -48,6 +48,10 @@ pub enum Error {
     /// Protocol issue while building a circuit.
     #[error("Problem building a circuit: {0}")]
     Protocol(#[from] tor_proto::Error),
+
+    /// Problem loading or storing persistent state.
+    #[error("Problem loading or storing state: {0}")]
+    State(#[from] tor_persist::Error),
 }
 
 impl From<futures::channel::oneshot::Canceled> for Error {

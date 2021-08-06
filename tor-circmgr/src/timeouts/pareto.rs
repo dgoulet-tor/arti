@@ -13,6 +13,7 @@
 //! see [`path-spec.txt`](https://gitlab.torproject.org/tpo/core/torspec/-/blob/master/path-spec.txt).
 
 use bounded_vec_deque::BoundedVecDeque;
+use serde::{Deserialize, Serialize};
 use static_assertions::const_assert;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
@@ -35,7 +36,8 @@ const BUCKET_WIDTH_MSEC: u32 = 10;
 ///
 /// Requires that we don't care about tracking timeouts above u32::MAX
 /// milliseconds (about 49 days).
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[serde(transparent)]
 struct MsecDuration(u32);
 
 impl MsecDuration {
@@ -463,9 +465,34 @@ pub(crate) struct ParetoTimeoutEstimator {
 
 impl Default for ParetoTimeoutEstimator {
     fn default() -> Self {
+        Self::from_history(History::new_empty())
+    }
+}
+
+/// An object used to serialize our timeout history for persistent state.
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
+#[allow(dead_code)]
+pub(crate) struct ParetoTimeoutState {
+    /// A version field used to help encoding and decoding.
+    version: usize,
+    /// A record of observed timeouts, as returned by `sparse_histogram()`.
+    histogram: Vec<(MsecDuration, u16)>,
+    /// The current timeout estimate: kept for reference.
+    current_timeout: Option<MsecDuration>,
+    /// How many abandoned circuits have we seen "recently"
+    abandoned_circs: usize,
+    /// How many successful circuits have we seen "recently"
+    successful_circs: usize,
+}
+
+impl ParetoTimeoutEstimator {
+    /// Construct a new ParetoTimeoutEstimator from the provided history
+    /// object.
+    fn from_history(history: History) -> Self {
         let p = Params::default();
         let inner = ParetoEstimatorInner {
-            history: History::new_empty(),
+            history,
             timeouts: None,
             fallback_timeouts: p.default_thresholds,
             p,
@@ -474,9 +501,29 @@ impl Default for ParetoTimeoutEstimator {
             est: Mutex::new(inner),
         }
     }
-}
 
-impl ParetoTimeoutEstimator {
+    /// Create a new ParetoTimeoutEstimator based on a loaded
+    /// ParetoTimeoutState.
+    pub(crate) fn from_state(state: ParetoTimeoutState) -> Self {
+        let history = History::from_sparse_histogram(state.histogram.into_iter());
+        // TODO: For now, we just forget abandoned and successful circuits.
+        Self::from_history(history)
+    }
+
+    /// Construct a new ParetoTimeoutState to represent the current state
+    /// of this estimator.
+    pub(crate) fn build_state(&self) -> ParetoTimeoutState {
+        let mut this = self.est.lock().unwrap();
+        let cur_timeout = MsecDuration::new_saturating(&this.base_timeouts().0);
+        ParetoTimeoutState {
+            version: 1,
+            histogram: this.history.sparse_histogram().collect(),
+            current_timeout: Some(cur_timeout),
+            abandoned_circs: this.history.n_recent_timeouts(),
+            successful_circs: this.history.success_history.len() - this.history.n_recent_timeouts(),
+        }
+    }
+
     /// Change the parameters used for this estimator.
     pub(crate) fn update_params(&self, parameters: Params) {
         let mut this = self.est.lock().unwrap();

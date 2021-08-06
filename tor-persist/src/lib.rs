@@ -33,7 +33,7 @@
 
 use serde::{de::DeserializeOwned, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::DirBuilderExt;
@@ -69,6 +69,13 @@ pub trait StateMgr {
     /// If it returns false, then attempts to `store` will fail with
     /// [`Error::NoLock`]
     fn can_store(&self) -> bool;
+
+    /// Try to become a read-write state manager if possible, without
+    /// blocking.
+    ///
+    /// This function will return `Ok(true)` if we now hold the lock,
+    /// and `Ok(false)` if some other process holds the lock.
+    fn try_lock(&self) -> Result<bool>;
 }
 
 /// Implementation of StateMgr that stores state as Toml files on disk.
@@ -103,7 +110,15 @@ pub trait StateMgr {
 /// fs-safe on all systems.
 ///
 /// NEVER use user-controlled or remote-controlled data for your keys.
+#[derive(Clone, Debug)]
 pub struct FsStateMgr {
+    /// Inner reference-counted object.
+    inner: Arc<FsStateMgrInner>,
+}
+
+/// Inner reference-counted object, used by `FsStateMgr`.
+#[derive(Debug)]
+struct FsStateMgrInner {
     /// Directory in which we store state files.
     statepath: PathBuf,
     /// Lockfile to achieve exclusive access to state files.
@@ -130,35 +145,31 @@ impl FsStateMgr {
         let lockfile = Mutex::new(fslock::LockFile::open(&lockpath)?);
 
         Ok(FsStateMgr {
-            statepath,
-            lockfile,
+            inner: Arc::new(FsStateMgrInner {
+                statepath,
+                lockfile,
+            }),
         })
     }
-
-    /// Try to acquire the lock if possible, without blocking.
-    ///
-    /// This function will return `Ok(true)` if we now hold the lock,
-    /// and `Ok(false)` if some other process holds the lock.
-    pub fn try_lock(&self) -> Result<bool> {
-        let mut lockfile = self.lockfile.lock().unwrap();
-        Ok(lockfile.try_lock()?)
-    }
-
     /// Return a filename to use for storing data with `key`.
     ///
     /// See "Limitations" section on [`FsStateMgr`] for caveats.
     fn filename(&self, key: &str) -> PathBuf {
-        self.statepath
+        self.inner
+            .statepath
             .join(sanitize_filename::sanitize(key) + ".toml")
     }
 }
 
 impl StateMgr for FsStateMgr {
     fn can_store(&self) -> bool {
-        let lockfile = self.lockfile.lock().unwrap();
+        let lockfile = self.inner.lockfile.lock().unwrap();
         lockfile.owns_lock()
     }
-
+    fn try_lock(&self) -> Result<bool> {
+        let mut lockfile = self.inner.lockfile.lock().unwrap();
+        Ok(lockfile.try_lock()?)
+    }
     fn load<D>(&self, key: &str) -> Result<Option<D>>
     where
         D: DeserializeOwned,
@@ -201,12 +212,12 @@ impl StateMgr for FsStateMgr {
 }
 
 /// An error type returned from a persistent state manager.
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Clone)]
 #[non_exhaustive]
 pub enum Error {
     /// An IO error occurred.
     #[error("IO error")]
-    IoError(#[from] std::io::Error),
+    IoError(#[source] Arc<std::io::Error>),
 
     /// Tried to save without holding an exclusive lock.
     #[error("Storage not locked")]
@@ -219,6 +230,12 @@ pub enum Error {
     /// Unable to deserialize data from TOML
     #[error("Toml deserialization error")]
     TomlReadError(#[from] toml::de::Error),
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Error {
+        Error::IoError(Arc::new(e))
+    }
 }
 
 #[cfg(test)]
