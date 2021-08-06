@@ -64,11 +64,12 @@ use tor_rtmock::{MockSleepRuntime,MockNetRuntime,net::MockNetwork};
 use tor_rtcompat::{TcpProvider,TcpListener};
 use futures::io::AsyncReadExt;
 
-let addr1 = "198.51.100.7".parse().unwrap();
-let addr2 = "198.51.100.99".parse().unwrap();
-let sockaddr = "198.51.100.99:101".parse().unwrap();
+tor_rtcompat::test_with_all_runtimes!(|rt| async move {
 
-tor_rtcompat::test_with_runtime(|rt| async {
+   let addr1 = "198.51.100.7".parse().unwrap();
+   let addr2 = "198.51.100.99".parse().unwrap();
+   let sockaddr = "198.51.100.99:101".parse().unwrap();
+
    // Make a runtime that pretends that we are at the first address...
    let fake_internet = MockNetwork::new();
    let rt1 = fake_internet.builder().add_address(addr1).runtime(rt.clone());

@@ -18,8 +18,7 @@ yet exists, including:
 
 Additionally, the `AsyncRead` and `AsyncWrite` traits provide by
 [`futures`] are not the same as those provided by `tokio`, and
-require compatibility wrappers to use. (We re-export those of
-[`tokio_util`].
+require compatibility wrappers to use.
 
 To solve these problems, the `tor-rtcompat` crate provides a set
 of traits that represent a runtime's ability to perform these
@@ -64,10 +63,10 @@ You can get a [`Runtime`] in several ways:
     using for anything besides Arti, you can use [`create_runtime()`].
 
   * If you want to explicitly construct a runtime with a specific
-    backend, you can do so with `create_async_std_runtime` or
-    [`create_tokio_runtime`].  Or if you have already constructed a
+    backend, you can do so with [`async_std::create_async_std_runtime`] or
+    [`tokio::create_tokio_runtime`].  Or if you have already constructed a
     tokio runtime that you want to use, you can wrap it as a
-    [`Runtime`] explicitly with [`TokioRuntimeHandle`].
+    [`Runtime`] explicitly with [`tokio::TokioRuntimeHandle`].
 
 ## Cargo features
 

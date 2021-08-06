@@ -1,10 +1,14 @@
-# tor-client
+# arti-tor-client
 
 High-level functionality for accessing the Tor network as a client.
 
+(Note that this crate is called `tor-client` in some other places,
+since we didn't know about the conflict with `tor_client`. We will
+clean all of this up somehow before the next release.)
+
 ## Overview
 
-The `tor-client` crate aims to provide a safe, easy-to-use API for
+The `arti-tor-client` crate aims to provide a safe, easy-to-use API for
 applications that want to use Tor network to anonymize their
 traffic.  It hides most of the underlying detail, letting other
 crates decide how exactly to use the Tor crate.
