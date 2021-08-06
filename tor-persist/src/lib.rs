@@ -168,7 +168,11 @@ impl StateMgr for FsStateMgr {
     }
     fn try_lock(&self) -> Result<bool> {
         let mut lockfile = self.inner.lockfile.lock().unwrap();
-        Ok(lockfile.try_lock()?)
+        if lockfile.owns_lock() {
+            Ok(true)
+        } else {
+            Ok(lockfile.try_lock()?)
+        }
     }
     fn load<D>(&self, key: &str) -> Result<Option<D>>
     where
@@ -204,7 +208,6 @@ impl StateMgr for FsStateMgr {
 
         let fname_tmp = fname.with_extension("tmp");
         std::fs::write(&fname_tmp, (&output).as_bytes())?;
-        dbg!(&fname_tmp, &fname);
         std::fs::rename(fname_tmp, fname)?;
 
         Ok(())
