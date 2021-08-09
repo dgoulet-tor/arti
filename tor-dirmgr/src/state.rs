@@ -624,7 +624,7 @@ impl<DM: WriteNetDir> DirState for GetMicrodescsState<DM> {
             // oh hey, this is no longer pending.
             if let Some(store) = storage {
                 let mut store = store.lock().await;
-                info!("marked consensus usable.");
+                info!("Marked consensus usable.");
                 store.mark_consensus_usable(&self.meta)?;
                 // DOCDOC: explain why we're doing this here.
                 store.expire_all()?;
