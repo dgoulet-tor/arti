@@ -352,12 +352,17 @@ where
 {
     let (snd, rcv) = oneshot::channel();
     let rt = runtime.clone();
+    // We create these futures now, since we want them to look at the current
+    // time when they decide when to expire.
+    let inner_timeout_future = rt.timeout(abandon, fut);
+    let outer_timeout_future = rt.timeout(timeout, rcv);
+
     runtime.spawn(async move {
-        let result = rt.timeout(abandon, fut).await;
+        let result = inner_timeout_future.await;
         let _ignore_cancelled_error = snd.send(result);
     })?;
 
-    let outcome = runtime.timeout(timeout, rcv).await;
+    let outcome = outer_timeout_future.await;
     // 4 layers of error to collapse:
     //     One from the receiver being cancelled.
     //     One from the outer timeout.
