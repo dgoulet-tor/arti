@@ -277,9 +277,8 @@ where
     S: AsyncRead + Unpin,
     SP: SleepProvider,
 {
-    let mut buf = [0_u8; 1024];
+    let buffer_window_size = 1024;
     let mut written_total: usize = 0;
-
     // XXXX should be an option and is maybe too long.  Though for some
     // users this may be too short?
     let read_timeout = Duration::from_secs(10);
@@ -287,23 +286,38 @@ where
     futures::pin_mut!(timer);
 
     loop {
+        // allocate buffer for next read
+        result.resize(written_total + buffer_window_size, 0);
+        let buf: &mut [u8] = &mut result[written_total..written_total + buffer_window_size];
+
         let status = futures::select! {
-            status = stream.read(&mut buf[..]).fuse() => status,
+            status = stream.read(buf).fuse() => status,
             _ = timer => {
                 return Err(Error::DirTimeout);
             }
         };
-        let n = match status {
+        let written_in_this_loop = match status {
             Ok(n) => n,
             Err(other) => {
                 return Err(other.into());
             }
         };
-        if n == 0 {
+
+        written_total += written_in_this_loop;
+
+        // exit conditions below
+
+        if written_in_this_loop == 0 {
+            /*
+            in case we read less than `buffer_window_size` in last `read`
+            we need to shrink result because otherwise we'll return those
+            un-read 0s
+            */
+            if written_total < result.len() {
+                result.resize(written_total, 0);
+            }
             return Ok(());
         }
-        result.extend(&buf[..n]);
-        written_total += n;
 
         // TODO: It would be good to detect compression bombs, but
         // that would require access to the internal stream, which
