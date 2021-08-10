@@ -54,6 +54,7 @@ pub struct PathConfig {
 /// This type is immutable once constructd. To create an object of this
 /// type, use [`CircTimingBuilder`].
 #[derive(Debug, Clone, Builder, Deserialize)]
+#[builder(setter(prefix = "set"))]
 pub struct CircuitTiming {
     /// How long after a circuit has first been used should we give
     /// it out for new requests?

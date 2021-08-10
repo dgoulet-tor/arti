@@ -145,9 +145,6 @@ pub struct CircMgr<R: Runtime> {
     /// think we'll want to have more before too much time is up. In any
     /// case I don't want to parameterize on this type.)
     storage: state::DynStateMgr,
-
-    /// Information about when to expire circuits.
-    circuit_timing: config::CircuitTiming,
 }
 
 impl<R: Runtime> CircMgr<R> {
@@ -171,11 +168,10 @@ impl<R: Runtime> CircMgr<R> {
 
         let builder =
             build::CircuitBuilder::new(runtime.clone(), chanmgr, path_config, Arc::clone(&storage));
-        let mgr = mgr::AbstractCircMgr::new(builder, runtime, request_timing);
+        let mgr = mgr::AbstractCircMgr::new(builder, runtime, request_timing, circuit_timing);
         Arc::new(CircMgr {
             mgr: Arc::new(mgr),
             storage,
-            circuit_timing,
         })
     }
 
@@ -195,7 +191,7 @@ impl<R: Runtime> CircMgr<R> {
     /// Return a circuit suitable for sending one-hop BEGINDIR streams,
     /// launching it if necessary.
     pub async fn get_or_launch_dir(&self, netdir: DirInfo<'_>) -> Result<Arc<ClientCirc>> {
-        self.expire_dirty_circuits();
+        self.expire_circuits();
         let usage = TargetCircUsage::Dir;
         self.mgr.get_or_launch(&usage, netdir).await
     }
@@ -208,7 +204,7 @@ impl<R: Runtime> CircMgr<R> {
         ports: &[TargetPort],
         isolation_group: IsolationToken,
     ) -> Result<Arc<ClientCirc>> {
-        self.expire_dirty_circuits();
+        self.expire_circuits();
         let ports = ports.iter().map(Clone::clone).collect();
         let usage = TargetCircUsage::Exit {
             ports,
@@ -227,11 +223,11 @@ impl<R: Runtime> CircMgr<R> {
     ///
     /// Expired circuits are not closed while they still have users,
     /// but they are no longer given out for new requests.
-    fn expire_dirty_circuits(&self) {
+    fn expire_circuits(&self) {
         // TODO: I would prefer not to call this at every request, but it
         // should be fine for now.
-        let cutoff = self.mgr.peek_runtime().now() - self.circuit_timing.max_dirtiness;
-        self.mgr.expire_dirty_before(cutoff);
+        let now = self.mgr.peek_runtime().now();
+        self.mgr.expire_circs(now);
     }
 }
 

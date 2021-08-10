@@ -22,7 +22,7 @@
 //    - Error from pick_action()
 //    - Error reported by restrict_mut?
 
-use crate::config::RequestTiming;
+use crate::config::{CircuitTiming, RequestTiming};
 use crate::{DirInfo, Error, Result};
 
 use retry_error::RetryError;
@@ -201,23 +201,64 @@ pub(crate) trait AbstractCircBuilder: Send + Sync {
     }
 }
 
+/// Enumeration to track the expiration state of a circuit.
+///
+/// A circuit an either be unused (at which point it should expire if it is
+/// _still unused_ by a certain time, or dirty (at which point it should
+/// expire after a certain duration).
+///
+/// All circuits start out "unused" and become "dirty" when their spec
+/// is first restricted -- that is, when they are first handed out to be
+/// used for a request.
+enum ExpirationInfo {
+    /// The circuit has never been used.
+    Unused {
+        /// A time when the circuit should expire.
+        use_before: Instant,
+    },
+    /// The circuit has been used (or at least, restricted for use with a
+    /// request) at least once.
+    Dirty {
+        /// The time at which this circuit's spec was first restricted.
+        dirty_since: Instant,
+    },
+}
+
+impl ExpirationInfo {
+    /// Return an ExpirationInfo for a newly created circuit.
+    fn new(use_before: Instant) -> Self {
+        ExpirationInfo::Unused { use_before }
+    }
+
+    /// Mark this ExpirationInfo as dirty, if it is not already dirty.
+    fn mark_dirty(&mut self, now: Instant) {
+        if matches!(self, ExpirationInfo::Unused { .. }) {
+            *self = ExpirationInfo::Dirty { dirty_since: now };
+        }
+    }
+}
+
 /// An entry for an open circuit held by an `AbstractCircMgr`.
 struct OpenEntry<B: AbstractCircBuilder> {
     /// Current AbstractCircSpec for this circuit's permitted usages.
     spec: B::Spec,
     /// The circuit under management.
     circ: Arc<B::Circ>,
-    /// The time at which this circuit's spec was first restricted.
-    dirty_since: Option<Instant>,
+    /// When does this circuit expire?
+    ///
+    /// (Note that expired circuits are removed from the manager,
+    /// which does not actually close them until there are no more
+    /// references to them.)
+    expiration: ExpirationInfo,
 }
 
 impl<B: AbstractCircBuilder> OpenEntry<B> {
     /// Make a new OpenEntry for a given circuit and spec.
-    fn new(spec: B::Spec, circ: Arc<B::Circ>) -> Self {
+    fn new(spec: B::Spec, circ: Arc<B::Circ>, expiration: ExpirationInfo) -> Self {
         OpenEntry {
             spec,
             circ,
-            dirty_since: None,
+            expiration,
         }
     }
 
@@ -236,7 +277,7 @@ impl<B: AbstractCircBuilder> OpenEntry<B> {
         now: Instant,
     ) -> Result<()> {
         self.spec.restrict_mut(usage)?;
-        self.dirty_since.get_or_insert(now);
+        self.expiration.mark_dirty(now);
         Ok(())
     }
 
@@ -264,11 +305,13 @@ impl<B: AbstractCircBuilder> OpenEntry<B> {
         slice.choose_mut(&mut rng).expect("Input list was empty")
     }
 
-    /// Return true if this circuit has been marked as dirty before `cutoff`.
-    fn marked_dirty_before(&self, when: Instant) -> bool {
-        match self.dirty_since {
-            Some(dirty) => dirty < when,
-            None => false,
+    /// Return true if this circuit has been marked as dirty before
+    /// `dirty_cutoff`, or if it is an unused circuit set to expire before
+    /// `unused_cutoff`.
+    fn should_expire(&self, unused_cutoff: Instant, dirty_cutoff: Instant) -> bool {
+        match self.expiration {
+            ExpirationInfo::Unused { use_before } => use_before <= unused_cutoff,
+            ExpirationInfo::Dirty { dirty_since } => dirty_since <= dirty_cutoff,
         }
     }
 }
@@ -452,10 +495,14 @@ impl<B: AbstractCircBuilder> CircList<B> {
         self.open_circs.remove(id)
     }
 
-    /// Remove every open circuit marked as dirty before `cutoff`.
-    fn expire_dirty_before(&mut self, cutoff: Instant) {
+    /// Remove circuits based on expiration times.
+    ///
+    /// We remove every unused circuit that is set to expire by
+    /// `unused_cutoff`, and every dirty circuit that has been dirty
+    /// since before `dirty_cutoff`.
+    fn expire_circs(&mut self, unused_cutoff: Instant, dirty_cutoff: Instant) {
         self.open_circs
-            .retain(|_k, v| !v.marked_dirty_before(cutoff))
+            .retain(|_k, v| !v.should_expire(unused_cutoff, dirty_cutoff));
     }
 
     /// Add `pending` to the set of in-progress circuits.
@@ -526,11 +573,13 @@ pub(crate) struct AbstractCircMgr<B: AbstractCircBuilder, R: Runtime> {
     /// An asynchronous runtime to use for launching tasks and
     /// checking timeouts.
     runtime: R,
-    /// Timing and retry rules for attaching requests to circuits.
-    timing: RequestTiming,
     /// A CircList to manage our list of circuits, requests, and
     /// pending circuits.
     circs: sync::Mutex<CircList<B>>,
+    /// Timing and retry rules for attaching requests to circuits.
+    request_timing: RequestTiming,
+    /// Information about when to expire circuits.
+    circuit_timing: CircuitTiming,
 }
 
 /// An action to take in order to satisfy a request for a circuit.
@@ -547,12 +596,19 @@ enum Action<B: AbstractCircBuilder> {
 
 impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
     /// Construct a new AbstractCircMgr.
-    pub(crate) fn new(builder: B, runtime: R, timing: RequestTiming) -> Self {
+    pub(crate) fn new(
+        builder: B,
+        runtime: R,
+        request_timing: RequestTiming,
+        circuit_timing: CircuitTiming,
+    ) -> Self {
+        let circs = sync::Mutex::new(CircList::new());
         AbstractCircMgr {
             builder,
             runtime,
-            timing,
-            circs: sync::Mutex::new(CircList::new()),
+            circs,
+            request_timing,
+            circuit_timing,
         }
     }
 
@@ -566,9 +622,9 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         usage: &<B::Spec as AbstractSpec>::Usage,
         dir: DirInfo<'_>,
     ) -> Result<Arc<B::Circ>> {
-        let wait_for_circ = self.timing.request_timeout;
+        let wait_for_circ = self.request_timing.request_timeout;
         let timeout_at = self.runtime.now() + wait_for_circ;
-        let max_tries = self.timing.request_max_retries;
+        let max_tries = self.request_timing.request_max_retries;
 
         let mut retry_err =
             RetryError /* ::<Box<Error>> */::in_attempt_to("find or build a circuit");
@@ -841,7 +897,8 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
                         // assignment.
                         //
                         // new_spec.restrict_mut(&usage_copy).unwrap();
-                        let open_ent = OpenEntry::new(new_spec.clone(), circ);
+                        let use_before = self.pick_use_before_time();
+                        let open_ent = OpenEntry::new(new_spec.clone(), circ, use_before);
                         {
                             let mut list = self.circs.lock().expect("poisoned lock");
                             list.add_open(open_ent);
@@ -895,14 +952,15 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         list.take_open(id).map(|e| e.circ)
     }
 
-    /// Expire every circuit that was marked as dirty at a time before
-    /// `cutoff`.
+    /// Expire circuits according to the rules in `config` and the
+    /// current time `now`.
     ///
     /// Expired circuits will not be automatically closed, but they will
     /// no longer be given out for new circuits.
-    pub(crate) fn expire_dirty_before(&self, cutoff: Instant) {
+    pub(crate) fn expire_circs(&self, now: Instant) {
         let mut list = self.circs.lock().expect("poisoned lock");
-        list.expire_dirty_before(cutoff)
+        let dirty_cutoff = now - self.circuit_timing.max_dirtiness;
+        list.expire_circs(now, dirty_cutoff)
     }
 
     /// Get a reference to this manager's runtime.
@@ -913,6 +971,14 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
     /// Get a reference to this manager's builder.
     pub(crate) fn peek_builder(&self) -> &B {
         &self.builder
+    }
+
+    /// Pick a time when a new circuit should expire if it has not yet
+    /// been used.
+    fn pick_use_before_time(&self) -> ExpirationInfo {
+        let now = self.runtime.now();
+        let delay = Duration::from_secs(1800); // XXXX: make this configurable
+        ExpirationInfo::new(now + delay)
     }
 }
 
@@ -1114,6 +1180,7 @@ mod test {
                 builder,
                 rt.clone(),
                 RequestTiming::default(),
+                CircuitTiming::default(),
             ));
 
             let webports = FakeSpec::new(vec![80_u16, 443]);
@@ -1179,6 +1246,7 @@ mod test {
                 builder,
                 rt.clone(),
                 RequestTiming::default(),
+                CircuitTiming::default(),
             ));
             let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
@@ -1201,6 +1269,7 @@ mod test {
                 builder,
                 rt.clone(),
                 RequestTiming::default(),
+                CircuitTiming::default(),
             ));
             let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
@@ -1223,6 +1292,7 @@ mod test {
                 builder,
                 rt.clone(),
                 RequestTiming::default(),
+                CircuitTiming::default(),
             ));
             let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
@@ -1244,6 +1314,7 @@ mod test {
                 builder,
                 rt.clone(),
                 RequestTiming::default(),
+                CircuitTiming::default(),
             ));
             let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
@@ -1270,6 +1341,7 @@ mod test {
                 builder,
                 rt.clone(),
                 RequestTiming::default(),
+                CircuitTiming::default(),
             ));
             let c1 = rt.wait_for(mgr.get_or_launch(&ports, di())).await;
 
@@ -1292,6 +1364,7 @@ mod test {
                 builder,
                 rt.clone(),
                 RequestTiming::default(),
+                CircuitTiming::default(),
             ));
 
             let (c1, c2) = rt
@@ -1317,6 +1390,7 @@ mod test {
                 builder,
                 rt.clone(),
                 RequestTiming::default(),
+                CircuitTiming::default(),
             ));
 
             let ports = FakeSpec::new(vec![443_u16]);
@@ -1384,6 +1458,7 @@ mod test {
                 builder,
                 rt.clone(),
                 RequestTiming::default(),
+                CircuitTiming::default(),
             ));
             // Note that ports2 will be wider than ports1, so the second
             // request will have to launch a new circuit.
@@ -1418,6 +1493,7 @@ mod test {
                 builder,
                 rt.clone(),
                 RequestTiming::default(),
+                CircuitTiming::default(),
             ));
 
             let ports1 = FakeSpec::new(vec![80_u16, 443]);
@@ -1451,14 +1527,22 @@ mod test {
     #[test]
     fn expiration() {
         tor_rtcompat::test_with_one_runtime!(|rt| async {
+            use crate::config::CircuitTimingBuilder;
             // Now let's make some circuits -- one dirty, one clean, and
             // make sure that one expires and one doesn't.
             let rt = MockSleepRuntime::new(rt);
             let builder = FakeBuilder::new(&rt);
+
+            let circuit_timing = CircuitTimingBuilder::default()
+                .set_max_dirtiness(Duration::from_secs(15))
+                .build()
+                .unwrap();
+
             let mgr = Arc::new(AbstractCircMgr::new(
                 builder,
                 rt.clone(),
                 RequestTiming::default(),
+                circuit_timing,
             ));
 
             let imap = FakeSpec::new(vec![993_u16]);
@@ -1474,8 +1558,7 @@ mod test {
             assert!(ok.is_ok());
             let pop1 = pop1.unwrap();
 
-            rt.advance(Duration::from_secs(15)).await;
-            let expiration_cutoff = mgr.peek_runtime().now();
+            rt.advance(Duration::from_secs(30)).await;
             rt.advance(Duration::from_secs(15)).await;
             let imap1 = rt.wait_for(mgr.get_or_launch(&imap, di())).await.unwrap();
 
@@ -1483,7 +1566,9 @@ mod test {
             // get_or_launch() [which marks the circuit as being
             // used].  It should not expire the imap circuit, since
             // it was not dirty until 15 seconds after the cutoff.
-            mgr.expire_dirty_before(expiration_cutoff);
+            let now = rt.now();
+
+            mgr.expire_circs(now);
 
             let (pop2, imap2) = rt
                 .wait_for(futures::future::join(
