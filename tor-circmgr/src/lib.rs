@@ -185,6 +185,7 @@ impl<R: Runtime> CircMgr<R> {
     ///
     /// (NOTE: for now, this only affects circuit timeout estimation.)
     pub fn update_network_parameters(&self, p: &tor_netdir::params::NetParameters) {
+        self.mgr.update_network_parameters(p);
         self.mgr.peek_builder().update_network_parameters(p);
     }
 

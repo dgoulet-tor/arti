@@ -35,6 +35,7 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use futures::task::SpawnExt;
 use log::{info, log};
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::{self, Arc, Weak};
@@ -549,6 +550,33 @@ impl<B: AbstractCircBuilder> CircList<B> {
     }
 }
 
+/// Timing information for circuits that have been built but never used.
+///
+/// Currently taken from the network parameters.
+struct UnusedTimings {
+    /// Minimum lifetime of a circuit created while learning
+    /// circuit timeouts.
+    learning: Duration,
+    /// Minimum lifetime of a circuit created while not learning
+    /// circuit timeouts.
+    not_learning: Duration,
+}
+
+// This isn't really fallible, given the definition of the underlying
+// types.
+#[allow(clippy::fallible_impl_from)]
+impl From<&tor_netdir::params::NetParameters> for UnusedTimings {
+    fn from(v: &tor_netdir::params::NetParameters) -> Self {
+        UnusedTimings {
+            learning: v
+                .unused_client_circ_timeout_while_learning_cbt
+                .try_into()
+                .unwrap(),
+            not_learning: v.unused_client_circ_timeout.try_into().unwrap(),
+        }
+    }
+}
+
 /// Abstract implementation for circuit management.
 ///
 /// The algorithm provided here is fairly simple. In its simplest form:
@@ -576,10 +604,14 @@ pub(crate) struct AbstractCircMgr<B: AbstractCircBuilder, R: Runtime> {
     /// A CircList to manage our list of circuits, requests, and
     /// pending circuits.
     circs: sync::Mutex<CircList<B>>,
-    /// Timing and retry rules for attaching requests to circuits.
+
+    /// Configured timing and retry rules for attaching requests to circuits.
     request_timing: RequestTiming,
-    /// Information about when to expire circuits.
+    /// Configured information about when to expire circuits.
     circuit_timing: CircuitTiming,
+
+    /// Minimum lifetime of an unused circuit.
+    unused_timing: sync::Mutex<UnusedTimings>,
 }
 
 /// An action to take in order to satisfy a request for a circuit.
@@ -603,13 +635,22 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         circuit_timing: CircuitTiming,
     ) -> Self {
         let circs = sync::Mutex::new(CircList::new());
+        let dflt_params = tor_netdir::params::NetParameters::default();
+        let unused_timing = (&dflt_params).into();
         AbstractCircMgr {
             builder,
             runtime,
             circs,
             request_timing,
             circuit_timing,
+            unused_timing: sync::Mutex::new(unused_timing),
         }
+    }
+
+    /// Reconfigure this manager using the latest set of network parameters.
+    pub(crate) fn update_network_parameters(&self, p: &tor_netdir::params::NetParameters) {
+        let mut u = self.unused_timing.lock().unwrap();
+        *u = p.into();
     }
 
     /// Return a circuit suitable for use with a given `usage`,
@@ -976,8 +1017,23 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
     /// Pick a time when a new circuit should expire if it has not yet
     /// been used.
     fn pick_use_before_time(&self) -> ExpirationInfo {
+        let delay = {
+            let timings = self.unused_timing.lock().unwrap();
+            if true {
+                // XXXX check whether learning.
+
+                // TODO: In Tor, this calculation also depends on
+                // stuff related to predicted ports and channel
+                // padding.
+                use rand::Rng;
+                let mut rng = rand::thread_rng();
+                rng.gen_range(timings.not_learning..timings.not_learning * 2)
+            } else {
+                timings.learning
+            }
+        };
+
         let now = self.runtime.now();
-        let delay = Duration::from_secs(1800); // XXXX: make this configurable
         ExpirationInfo::new(now + delay)
     }
 }

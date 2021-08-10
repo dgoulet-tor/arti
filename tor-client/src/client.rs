@@ -145,6 +145,8 @@ impl<R: Runtime> TorClient<R> {
         )
         .await?;
 
+        circmgr.update_network_parameters(dirmgr.netdir().params());
+
         // Launch a daemon task to inform the circmgr about new
         // network parameters.
         runtime.spawn(keep_circmgr_params_updated(
