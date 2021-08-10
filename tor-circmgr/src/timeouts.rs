@@ -44,6 +44,10 @@ pub(crate) trait TimeoutEstimator {
     /// has elapsed since circuit launch, the circuit should be
     /// abandoned completely.
     fn timeouts(&self, action: &Action) -> (Duration, Duration);
+
+    /// Return true if we're currently trying to learn more timeouts
+    /// by launching testing circuits.
+    fn learning_timeouts(&self) -> bool;
 }
 
 /// A possible action for which we can try to estimate a timeout.

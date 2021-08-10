@@ -328,6 +328,11 @@ impl<R: Runtime> CircuitBuilder<R> {
     pub(crate) fn path_config(&self) -> &crate::PathConfig {
         &self.path_config
     }
+
+    /// Return true if this builder is currently learning timeout info.
+    pub(crate) fn learning_timeouts(&self) -> bool {
+        self.builder.timeouts.learning_timeouts()
+    }
 }
 
 /// Helper function: spawn a future as a background task, and run it with
@@ -568,6 +573,9 @@ mod test {
         }
         fn timeouts(&self, _action: &Action) -> (Duration, Duration) {
             (Duration::from_secs(3), Duration::from_secs(100))
+        }
+        fn learning_timeouts(&self) -> bool {
+            false
         }
     }
 

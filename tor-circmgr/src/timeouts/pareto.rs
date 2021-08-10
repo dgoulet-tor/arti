@@ -592,6 +592,11 @@ impl super::TimeoutEstimator for ParetoTimeoutEstimator {
         // XXXX `mul_f64()` can panic if we overflow Duration.
         (base_t.mul_f64(multiplier), base_a.mul_f64(multiplier))
     }
+
+    fn learning_timeouts(&self) -> bool {
+        let this = self.est.lock().unwrap();
+        this.p.use_estimates && this.history.n_times() < this.p.min_observations.into()
+    }
 }
 
 impl ParetoEstimatorInner {

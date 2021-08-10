@@ -200,6 +200,10 @@ pub(crate) trait AbstractCircBuilder: Send + Sync {
         let _ = usage; // default implementation ignores this.
         1
     }
+
+    /// Return true if we are currently attempting to learn circuit
+    /// timeouts by building testing circuits.
+    fn learning_timeouts(&self) -> bool;
 }
 
 /// Enumeration to track the expiration state of a circuit.
@@ -1019,17 +1023,15 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
     fn pick_use_before_time(&self) -> ExpirationInfo {
         let delay = {
             let timings = self.unused_timing.lock().unwrap();
-            if true {
-                // XXXX check whether learning.
-
+            if self.builder.learning_timeouts() {
+                timings.learning
+            } else {
                 // TODO: In Tor, this calculation also depends on
                 // stuff related to predicted ports and channel
                 // padding.
                 use rand::Rng;
                 let mut rng = rand::thread_rng();
                 rng.gen_range(timings.not_learning..timings.not_learning * 2)
-            } else {
-                timings.learning
             }
         };
 
@@ -1193,6 +1195,10 @@ mod test {
                 }
                 FakeOp::NoPlan => unreachable!(),
             }
+        }
+
+        fn learning_timeouts(&self) -> bool {
+            false
         }
     }
 

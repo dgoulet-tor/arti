@@ -78,4 +78,8 @@ impl<R: Runtime> crate::mgr::AbstractCircBuilder for crate::build::CircuitBuilde
     fn select_parallelism(&self, spec: &TargetCircUsage) -> usize {
         self.launch_parallelism(spec)
     }
+
+    fn learning_timeouts(&self) -> bool {
+        crate::build::CircuitBuilder::learning_timeouts(self)
+    }
 }
