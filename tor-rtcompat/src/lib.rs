@@ -37,11 +37,11 @@
 //!
 //! # Using `tor-rtcompat`
 //!
-//! The `tor-rtcompat` crate provide several traits that that
+//! The `tor-rtcompat` crate provides several traits that
 //! encapsulate different runtime capabilities.
 //!
 //!  * A runtime is a [`SpawnBlocking`] if it can block on a future.
-//!  * A runtime if a [`SleepProvider`] if it can make timer futures that
+//!  * A runtime is a [`SleepProvider`] if it can make timer futures that
 //!    become Ready after a given interval of time.
 //!  * A runtime is a [`TcpProvider`] if it can make and receive TCP
 //!    connections
