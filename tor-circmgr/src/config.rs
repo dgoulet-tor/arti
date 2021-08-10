@@ -49,10 +49,29 @@ pub struct PathConfig {
     pub(crate) enforce_distance: tor_netdir::SubnetConfig,
 }
 
+/// Configuration for circuit timeouts, expiration, and so on.
+///
+/// This type is immutable once constructd. To create an object of this
+/// type, use [`CircTimingBuilder`].
+#[derive(Debug, Clone, Builder, Deserialize)]
+pub struct CircuitTiming {
+    /// How long after a circuit has first been used should we give
+    /// it out for new requests?
+    #[builder(default = "Duration::from_secs(60 * 10)")]
+    #[serde(with = "humantime_serde")]
+    pub(crate) max_dirtiness: Duration,
+}
+
+impl Default for CircuitTiming {
+    fn default() -> Self {
+        CircuitTimingBuilder::default().build().unwrap()
+    }
+}
+
 /// Configuration for a circuit manager.
 ///
 /// This type is immutable once constructed.  To create an object of
-/// this type, use [`CircMgrConfigBuilder`]
+/// this type, use [`CircMgrConfigBuilder`].
 #[derive(Debug, Clone, Builder)]
 #[builder(setter(prefix = "set"))]
 pub struct CircMgrConfig {
@@ -64,4 +83,8 @@ pub struct CircMgrConfig {
     /// Timing and retry information related to requests for circuits.
     #[builder(default)]
     pub(crate) request_timing: RequestTiming,
+
+    /// Timing and retry information related to circuits themselves.
+    #[builder(default)]
+    pub(crate) circuit_timing: CircuitTiming,
 }

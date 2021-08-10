@@ -140,8 +140,11 @@ pub struct ArtiConfig {
     /// Information about how to build paths through the network.
     path_rules: tor_circmgr::PathConfig,
 
-    /// Information about how to retry circuits.
+    /// Information about how to retry requests for circuits.
     request_timing: tor_circmgr::RequestTiming,
+
+    /// Information about how to expire circuits.
+    circuit_timing: tor_circmgr::CircuitTiming,
 }
 
 /// Configuration for where information should be stored on disk.
@@ -177,6 +180,7 @@ impl ArtiConfig {
         Ok(builder
             .set_path_config(self.path_rules.clone())
             .set_request_timing(self.request_timing.clone())
+            .set_circuit_timing(self.circuit_timing.clone())
             .build()?)
     }
 }

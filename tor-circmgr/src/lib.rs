@@ -53,7 +53,6 @@ use tor_rtcompat::Runtime;
 
 use log::warn;
 use std::sync::Arc;
-use std::time::Duration;
 
 pub mod build;
 mod config;
@@ -69,22 +68,14 @@ pub use err::Error;
 pub use usage::{IsolationToken, TargetPort};
 
 pub use config::{
-    CircMgrConfig, CircMgrConfigBuilder, PathConfig, PathConfigBuilder, RequestTiming,
-    RequestTimingBuilder,
+    CircMgrConfig, CircMgrConfigBuilder, CircuitTiming, CircuitTimingBuilder, PathConfig,
+    PathConfigBuilder, RequestTiming, RequestTimingBuilder,
 };
 
 use usage::TargetCircUsage;
 
 /// A Result type as returned from this crate.
 pub type Result<T> = std::result::Result<T, Error>;
-
-/// How long do we let a circuit be dirty before we won't hand it out any
-/// more?
-///
-/// TODO: this should be an option.
-///
-/// TODO: The rules should be different for different kinds of circuits.
-const MAX_CIRC_DIRTINESS: Duration = Duration::from_secs(60 * 15);
 
 /// Represents what we know about the Tor network.
 ///
@@ -154,6 +145,9 @@ pub struct CircMgr<R: Runtime> {
     /// think we'll want to have more before too much time is up. In any
     /// case I don't want to parameterize on this type.)
     storage: state::DynStateMgr,
+
+    /// Information about when to expire circuits.
+    circuit_timing: config::CircuitTiming,
 }
 
 impl<R: Runtime> CircMgr<R> {
@@ -170,6 +164,7 @@ impl<R: Runtime> CircMgr<R> {
         let CircMgrConfig {
             path_config,
             request_timing,
+            circuit_timing,
         } = config;
 
         let storage: state::DynStateMgr = Arc::new(storage);
@@ -180,6 +175,7 @@ impl<R: Runtime> CircMgr<R> {
         Arc::new(CircMgr {
             mgr: Arc::new(mgr),
             storage,
+            circuit_timing,
         })
     }
 
@@ -232,7 +228,9 @@ impl<R: Runtime> CircMgr<R> {
     /// Expired circuits are not closed while they still have users,
     /// but they are no longer given out for new requests.
     fn expire_dirty_circuits(&self) {
-        let cutoff = self.mgr.peek_runtime().now() - MAX_CIRC_DIRTINESS;
+        // TODO: I would prefer not to call this at every request, but it
+        // should be fine for now.
+        let cutoff = self.mgr.peek_runtime().now() - self.circuit_timing.max_dirtiness;
         self.mgr.expire_dirty_before(cutoff);
     }
 }
