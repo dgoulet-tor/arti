@@ -51,8 +51,10 @@ use tor_netdir::{fallback::FallbackDir, NetDir};
 use tor_proto::circuit::{CircParameters, ClientCirc, UniqId};
 use tor_rtcompat::Runtime;
 
+use futures::task::SpawnExt;
 use log::warn;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
+use std::time::Duration;
 
 pub mod build;
 mod config;
@@ -152,7 +154,7 @@ impl<R: Runtime> CircMgr<R> {
     pub fn new<SM>(
         config: CircMgrConfig,
         storage: SM,
-        runtime: R,
+        runtime: &R,
         chanmgr: Arc<ChanMgr<R>>,
     ) -> Arc<Self>
     where
@@ -168,11 +170,21 @@ impl<R: Runtime> CircMgr<R> {
 
         let builder =
             build::CircuitBuilder::new(runtime.clone(), chanmgr, path_config, Arc::clone(&storage));
-        let mgr = mgr::AbstractCircMgr::new(builder, runtime, request_timing, circuit_timing);
-        Arc::new(CircMgr {
+        let mgr =
+            mgr::AbstractCircMgr::new(builder, runtime.clone(), request_timing, circuit_timing);
+        let circmgr = Arc::new(CircMgr {
             mgr: Arc::new(mgr),
             storage,
-        })
+        });
+
+        runtime
+            .spawn(continually_expire_circuits(
+                runtime.clone(),
+                Arc::downgrade(&circmgr),
+            ))
+            .unwrap(); //XXXX unwrap is not so good here!
+
+        circmgr
     }
 
     /// Flush state to the state manager, if there is any unsaved state.
@@ -229,6 +241,29 @@ impl<R: Runtime> CircMgr<R> {
         // should be fine for now.
         let now = self.mgr.peek_runtime().now();
         self.mgr.expire_circs(now);
+    }
+}
+
+/// Periodically expire any circuits that should no longer be given
+/// out for requests.
+///
+/// Exit when we find that `circmgr` is dropped.
+///
+/// This is a daemon task: it runs indefinitely in the background.
+async fn continually_expire_circuits<R: Runtime>(runtime: R, circmgr: Weak<CircMgr<R>>) {
+    // TODO: This is too long for accuracy and too short for
+    // efficiency.  Instead we should have a more clever scheduling
+    // algorithm somehow that gets updated when we have new or newly
+    // dirty circuits only.
+    let interval = Duration::from_secs(5);
+
+    loop {
+        runtime.sleep(interval).await;
+        if let Some(cm) = Weak::upgrade(&circmgr) {
+            cm.expire_circuits();
+        } else {
+            break;
+        }
     }
 }
 
