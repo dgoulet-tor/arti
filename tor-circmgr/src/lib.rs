@@ -158,7 +158,12 @@ pub struct CircMgr<R: Runtime> {
 
 impl<R: Runtime> CircMgr<R> {
     /// Construct a new circuit manager.
-    pub fn new<SM>(config: CircMgrConfig, storage: SM, runtime: R, chanmgr: Arc<ChanMgr<R>>) -> Self
+    pub fn new<SM>(
+        config: CircMgrConfig,
+        storage: SM,
+        runtime: R,
+        chanmgr: Arc<ChanMgr<R>>,
+    ) -> Arc<Self>
     where
         SM: tor_persist::StateMgr + Send + Sync + 'static,
     {
@@ -172,10 +177,10 @@ impl<R: Runtime> CircMgr<R> {
         let builder =
             build::CircuitBuilder::new(runtime.clone(), chanmgr, path_config, Arc::clone(&storage));
         let mgr = mgr::AbstractCircMgr::new(builder, runtime, request_timing);
-        CircMgr {
+        Arc::new(CircMgr {
             mgr: Arc::new(mgr),
             storage,
-        }
+        })
     }
 
     /// Flush state to the state manager, if there is any unsaved state.
