@@ -332,6 +332,9 @@ async fn keep_circmgr_params_updated<R: Runtime>(
 ///
 /// This is a daemon task: it runs indefinitely in the background.
 async fn flush_state_to_disk<R: Runtime>(runtime: R, circmgr: Weak<tor_circmgr::CircMgr<R>>) {
+    // TODO: Consider moving this into tor-circmgr after we have more
+    // experience with the state system.
+
     loop {
         if let Some(circmgr) = Weak::upgrade(&circmgr) {
             if let Err(e) = circmgr.update_persistent_state() {
@@ -353,6 +356,8 @@ async fn flush_state_to_disk<R: Runtime>(runtime: R, circmgr: Weak<tor_circmgr::
 }
 
 impl<R: Runtime> Drop for TorClient<R> {
+    // TODO: Consider moving this into tor-circmgr after we have more
+    // experience with the state system.
     fn drop(&mut self) {
         if let Err(e) = self.update_persistent_state() {
             error!("Unable to flush state on client exit: {}", e);
