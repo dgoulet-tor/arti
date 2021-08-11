@@ -93,6 +93,11 @@ impl ExitPolicy {
         let policy = if p.ipv6 { &self.v6 } else { &self.v4 };
         policy.allows_port(p.port)
     }
+
+    /// Returns true if this policy allows any ports at all.
+    fn allows_some_port(&self) -> bool {
+        self.v4.allows_some_port() || self.v6.allows_some_port()
+    }
 }
 
 /// The purpose for which a circuit is being created.
@@ -113,6 +118,8 @@ pub(crate) enum TargetCircUsage {
         /// Isolation group the circuit shall be part of
         isolation_group: IsolationToken,
     },
+    /// For a circuit is only used for the purpose of building it.
+    TimeoutTesting,
 }
 
 /// The purposes for which a circuit is usable.
@@ -131,6 +138,8 @@ pub(crate) enum SupportedCircUsage {
         /// isolation group.
         isolation_group: Option<IsolationToken>,
     },
+    /// This circuit is not suitable for any usage.
+    NoUsage,
 }
 
 impl TargetCircUsage {
@@ -164,6 +173,19 @@ impl TargetCircUsage {
                     },
                 ))
             }
+            TargetCircUsage::TimeoutTesting => {
+                let path = ExitPathBuilder::for_timeout_testing().pick_path(rng, netdir, config)?;
+                let policy = path.exit_policy();
+                let usage = match policy {
+                    Some(policy) if policy.allows_some_port() => SupportedCircUsage::Exit {
+                        policy,
+                        isolation_group: None,
+                    },
+                    _ => SupportedCircUsage::NoUsage,
+                };
+
+                Ok((path, usage))
+            }
         }
     }
 }
@@ -188,6 +210,7 @@ impl crate::mgr::AbstractSpec for SupportedCircUsage {
                 i1.map(|i1| i1 == *i2).unwrap_or(true)
                     && p2.iter().all(|port| p1.allows_port(*port))
             }
+            (Exit { .. } | NoUsage, TargetCircUsage::TimeoutTesting) => true,
             (_, _) => false,
         }
     }
@@ -213,6 +236,7 @@ impl crate::mgr::AbstractSpec for SupportedCircUsage {
             (Exit { .. }, TargetCircUsage::Exit { .. }) => {
                 Err(Error::UsageNotSupported("Bad isolation".into()))
             }
+            (Exit { .. } | NoUsage, TargetCircUsage::TimeoutTesting) => Ok(()),
             (_, _) => Err(Error::UsageNotSupported("Incompatible usage".into())),
         }
     }

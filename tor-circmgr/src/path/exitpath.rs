@@ -58,6 +58,14 @@ impl<'a> ExitPathBuilder<'a> {
         }
     }
 
+    /// Create a new builder that will try to get an exit relay, but which
+    /// will be satisfied with a non-exit relay.
+    pub(crate) fn for_timeout_testing() -> Self {
+        Self {
+            inner: ExitPathBuilderInner::AnyExit { strict: false },
+        }
+    }
+
     /// Find a suitable exit node from either the chosen exit or from the network directory.
     fn pick_exit<R: Rng>(&self, rng: &mut R, netdir: &'a NetDir) -> Result<Relay<'a>> {
         match &self.inner {
