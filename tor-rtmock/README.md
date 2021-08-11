@@ -59,6 +59,7 @@ to replace the internet _and_ the passage of time.  (Here we're only
 replacing the internet.)
 
 ```rust
+#
 use tor_rtmock::{MockSleepRuntime,MockNetRuntime,net::MockNetwork};
 use tor_rtcompat::{TcpProvider,TcpListener};
 use futures::io::AsyncReadExt;
