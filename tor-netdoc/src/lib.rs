@@ -17,7 +17,7 @@
 //!
 //! ## Design notes
 //!
-//! The crate is derived into three main parts.  In the `parse`
+//! The crate is derived into three main parts.  In the [`parse`]
 //! module, we have the generic code that we use to parse different
 //! kinds of network documents.  In the [`types`] module we have
 //! implementations for parsing specific data structures that are used

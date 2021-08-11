@@ -53,8 +53,8 @@
 //! You can get a [`Runtime`] in several ways:
 //!
 //!   * If you already have an asynchronous backend (for example, one
-//!     that you built with tokio, or by running with
-//!     `#[tokio::main]`, you can wrap it as a [`Runtime`] with
+//!     that you built with tokio by running with
+//!     `#[tokio::main]`), you can wrap it as a [`Runtime`] with
 //!     [`current_user_runtime()`].
 //!
 //!   * If you want to construct a default runtime that you won't be
