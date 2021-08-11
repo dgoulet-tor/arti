@@ -907,6 +907,32 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         Err(retry_error)
     }
 
+    /// Launch a managed circuit for a target usage, without checking
+    /// whether one already exists or is pending.
+    ///
+    /// Return a listener that will be informed when the circuit is done.
+    pub(crate) fn launch_by_usage(
+        self: Arc<Self>,
+        dir: DirInfo<'_>,
+        usage: &<B::Spec as AbstractSpec>::Usage,
+    ) -> Result<Shared<oneshot::Receiver<PendResult<B>>>> {
+        // XXXX duplicate code with pick_action
+        let (plan, bspec) = self.builder.plan_circuit(usage, dir)?;
+        let (pending, sender) = PendingEntry::new(bspec);
+        let pending = Arc::new(pending);
+        self.circs
+            .lock()
+            .unwrap()
+            .add_pending_circ(Arc::clone(&pending));
+        let plan = CircBuildPlan {
+            plan,
+            sender,
+            pending,
+        };
+
+        Ok(self.launch(usage, plan))
+    }
+
     /// Actually launch a circuit in a background task.
     ///
     /// The `usage` argument is the usage from the original request that made
@@ -1006,6 +1032,12 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         let mut list = self.circs.lock().expect("poisoned lock");
         let dirty_cutoff = now - self.circuit_timing.max_dirtiness;
         list.expire_circs(now, dirty_cutoff)
+    }
+
+    /// Return the number of open circuits held by this circuit manager.
+    pub(crate) fn n_circs(&self) -> usize {
+        let list = self.circs.lock().expect("poisoned lock");
+        list.open_circs.len()
     }
 
     /// Get a reference to this manager's runtime.

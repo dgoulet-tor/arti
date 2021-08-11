@@ -270,6 +270,38 @@ async fn continually_expire_circuits<R: Runtime>(runtime: R, circmgr: Weak<CircM
     }
 }
 
+/// As necessary, launch testing circuits so that we will eventually
+/// have enough circuit timeout data.
+///
+/// Exit when we find that `circmgr` is dropped.
+///
+/// This is a daemon task: it runs indefinitely in the background.
+async fn continually_build_timeout_testing_circuits<R: Runtime>(
+    runtime: R,
+    circmgr: Weak<CircMgr<R>>,
+) {
+    use crate::mgr::AbstractCircBuilder;
+    let mut delay = Duration::from_secs(1);
+    loop {
+        if let Some(circmgr) = Weak::upgrade(&circmgr) {
+            if circmgr.mgr.peek_builder().learning_timeouts() {
+                circmgr.expire_circuits(); // note why xxxx
+                let max_circs = 10; // FROM A REAL SOURCE XXXX
+                if circmgr.mgr.n_circs() < max_circs {
+                    // Actually launch the circuit!
+                    let usage = TargetCircUsage::TimeoutTesting;
+                    let dirinfo = { todo!() }; //XXXXXXARGH
+                    let _ = circmgr.mgr.launch_by_usage(dirinfo, &usage);
+                }
+            }
+            // delay = ... // UPDATE THE DELAY. XXXX
+        } else {
+            break;
+        }
+        runtime.sleep(delay).await;
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
