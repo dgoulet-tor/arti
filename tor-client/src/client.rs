@@ -274,16 +274,6 @@ impl<R: Runtime> TorClient<R> {
         exit_ports: &[TargetPort],
         flags: &ConnectPrefs,
     ) -> Result<Arc<ClientCirc>> {
-        let port_443 = &[TargetPort::ipv4(443)]; // XXXX remove this.
-        let exit_ports = if exit_ports.is_empty() {
-            // XXXX We use "no ports" above to indicate a circuit that
-            // is going to try to do a hostname lookup.  That actually
-            // requires "any" port, but we don't have a way to express
-            // that with TargetPort and/or CircMgr right now.
-            port_443
-        } else {
-            exit_ports
-        };
         let dir = self.dirmgr.netdir();
         let circ = self
             .circmgr
