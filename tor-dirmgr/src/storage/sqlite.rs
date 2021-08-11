@@ -40,8 +40,6 @@ pub(crate) struct SqliteStore {
     ///
     /// (sqlite supports that with connection locking, but we want to
     /// be a little more coarse-grained here)
-    // XXXX This can behave oddly or fail if this process already has
-    // XXXX another instance of this file; see fslock documentation.
     lockfile: Option<fslock::LockFile>,
 }
 
@@ -79,7 +77,7 @@ impl SqliteStore {
                 .with_context(|| format!("Creating directory at {:?}", &blobpath))?;
         }
 
-        let mut lockfile = fslock::LockFile::open(&lockpath)?;
+        let mut lockfile = fslock::LockFile::open_excl(&lockpath)?;
         if !readonly && !lockfile.try_lock()? {
             readonly = true; // we couldn't get the lock!
         };

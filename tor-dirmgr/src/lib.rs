@@ -92,12 +92,6 @@ pub use storage::DocumentText;
 ///     writing to the cache, and it takes responsibility for fetching
 ///     data from the network and updating the directory with new
 ///     directory information.
-///
-/// # Limitations
-///
-/// Because of portability issues in [`fslock::LockFile`], you might
-/// get weird results if you run two of these in the same process with
-/// the same underlying cache.
 pub struct DirMgr<R: Runtime> {
     /// Configuration information: where to find directories, how to
     /// validate them, and so on.

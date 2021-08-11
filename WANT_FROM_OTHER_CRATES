@@ -46,10 +46,6 @@ ed25519 trait:
 native-tls:
 * Support for RFC5705 exporters where available.
 
-fslock:
-* Reliable behavior when locking file twice in the same process
-  (See https://github.com/brunoczim/fslock/pull/3)
-* Ability to get fd or handle for file, if above not implemented.
 
 # Not actually using these crates:
 

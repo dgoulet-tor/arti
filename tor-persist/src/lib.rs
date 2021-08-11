@@ -96,13 +96,7 @@ pub trait StateMgr {
 /// types that cannot appear at the head of a document.  You'll be
 /// able to store them, but reloading them later on will fail.
 ///
-/// 2) This manager uses the `fslock` crate to prevent concurrent
-/// access.  At present, fslock cannot prevent concurrent access
-/// _within the same process_ on Unix systems.  Thus, for now, you
-/// need to make sure not to create two of these with the same path in
-/// the same process, or Strange Results may occur.
-///
-/// 3) This manager normalizes keys to an fs-safe format before saving
+/// 2) This manager normalizes keys to an fs-safe format before saving
 /// data with them.  This keeps you from accidentally creating or
 /// reading files elsewhere in the filesystem, but it doesn't prevent
 /// collisions when two keys collapse to the same fs-safe filename.
@@ -142,7 +136,7 @@ impl FsStateMgr {
             builder.recursive(true).create(&statepath)?;
         }
 
-        let lockfile = Mutex::new(fslock::LockFile::open(&lockpath)?);
+        let lockfile = Mutex::new(fslock::LockFile::open_excl(&lockpath)?);
 
         Ok(FsStateMgr {
             inner: Arc::new(FsStateMgrInner {
