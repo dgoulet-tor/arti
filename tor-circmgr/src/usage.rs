@@ -105,7 +105,10 @@ pub(crate) enum TargetCircUsage {
     Dir,
     /// Use to exit to one or more ports.
     Exit {
-        /// List of ports the circuit has to allow
+        /// List of ports the circuit has to allow.
+        ///
+        /// If this list of ports is empty, then the circuit doesn't need
+        /// to support any particular port, but it still needs to be an exit.
         ports: Vec<TargetPort>,
         /// Isolation group the circuit shall be part of
         isolation_group: IsolationToken,

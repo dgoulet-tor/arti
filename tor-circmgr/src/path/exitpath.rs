@@ -7,8 +7,15 @@ use tor_netdir::{NetDir, Relay, SubnetConfig, WeightRole};
 
 /// Internal representation of PathBuilder.
 enum ExitPathBuilderInner<'a> {
-    /// Request a path that allows exit to the given TargetPort's.
+    /// Request a path that allows exit to the given `TargetPort]`s.
     WantsPorts(Vec<TargetPort>),
+
+    /// Request a path that allows exit to _any_ port.
+    AnyExit {
+        /// If false, then we fall back to non-exit nodes if we can't find an
+        /// exit.
+        strict: bool,
+    },
 
     /// Request a path that uses a given relay as exit node.
     ChosenExit(Relay<'a>),
@@ -24,9 +31,15 @@ pub struct ExitPathBuilder<'a> {
 impl<'a> ExitPathBuilder<'a> {
     /// Create a new builder that will try to get an exit relay
     /// containing all the ports in `ports`.
+    ///
+    /// If the list of ports is empty, tries to get any exit relay at all.
     pub fn from_target_ports(wantports: impl IntoIterator<Item = TargetPort>) -> Self {
+        let ports: Vec<TargetPort> = wantports.into_iter().collect();
+        if ports.is_empty() {
+            return Self::for_any_exit();
+        }
         Self {
-            inner: ExitPathBuilderInner::WantsPorts(wantports.into_iter().collect()),
+            inner: ExitPathBuilderInner::WantsPorts(ports),
         }
     }
 
@@ -38,9 +51,32 @@ impl<'a> ExitPathBuilder<'a> {
         }
     }
 
+    /// Create a new builder that will try to get any exit relay at all.
+    pub fn for_any_exit() -> Self {
+        Self {
+            inner: ExitPathBuilderInner::AnyExit { strict: true },
+        }
+    }
+
     /// Find a suitable exit node from either the chosen exit or from the network directory.
     fn pick_exit<R: Rng>(&self, rng: &mut R, netdir: &'a NetDir) -> Result<Relay<'a>> {
         match &self.inner {
+            ExitPathBuilderInner::AnyExit { strict } => {
+                let exit =
+                    netdir.pick_relay(rng, WeightRole::Exit, Relay::policies_allow_some_port);
+                match (exit, strict) {
+                    (Some(exit), _) => return Ok(exit),
+                    (None, true) => return Err(Error::NoRelays("No exit relay found".into())),
+                    (None, false) => {}
+                }
+
+                // Non-strict case.  Arguably this doesn't belong in
+                // ExitPathBuilder.
+                netdir
+                    .pick_relay(rng, WeightRole::Exit, |_| true)
+                    .ok_or_else(|| Error::NoRelays("No relay found".into()))
+            }
+
             ExitPathBuilderInner::WantsPorts(wantports) => Ok(netdir
                 .pick_relay(rng, WeightRole::Exit, |r| {
                     wantports.iter().all(|p| p.is_supported_by(r))
@@ -156,6 +192,28 @@ mod test {
                 assert_exit_path_ok(&p[..]);
                 let exit = &p[2];
                 assert_eq!(exit.ed_identity(), chosen.ed_identity());
+            } else {
+                panic!("Generated the wrong kind of path");
+            }
+        }
+    }
+
+    #[test]
+    fn any_exit() {
+        let mut rng = rand::thread_rng();
+        let netdir = testnet::construct_netdir();
+        let dirinfo = (&netdir).into();
+
+        let config = PathConfig::default();
+        for _ in 0..1000 {
+            let path = ExitPathBuilder::for_any_exit()
+                .pick_path(&mut rng, dirinfo, &config)
+                .unwrap();
+            assert_same_path_when_owned(&path);
+            if let TorPathInner::Path(p) = path.inner {
+                assert_exit_path_ok(&p[..]);
+                let exit = &p[2];
+                assert!(exit.policies_allow_some_port());
             } else {
                 panic!("Generated the wrong kind of path");
             }

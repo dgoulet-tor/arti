@@ -211,6 +211,9 @@ impl<R: Runtime> CircMgr<R> {
 
     /// Return a circuit suitable for exiting to all of the provided
     /// `ports`, launching it if necessary.
+    ///
+    /// If the list of ports is empty, then the chosen circuit will
+    /// still end at _some_ exit.
     pub async fn get_or_launch_exit(
         &self,
         netdir: DirInfo<'_>,
