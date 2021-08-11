@@ -566,6 +566,19 @@ impl<'a> Relay<'a> {
         self.md.family().contains(other.rsa_id()) && other.md.family().contains(self.rsa_id())
     }
 
+    /// Return true if there are any ports for which this Relay can be
+    /// used for exit traffic.
+    ///
+    /// (Returns false if this relay doesn't allow exit traffic, or if it
+    /// has been flagged as a bad exit.)
+    pub fn policies_allow_some_port(&self) -> bool {
+        if self.rs.is_flagged_bad_exit() {
+            return false;
+        }
+
+        self.md.ipv4_policy().allows_some_port() || self.md.ipv6_policy().allows_some_port()
+    }
+
     /// Return the IPv4 exit policy for this relay. If the relay has been marked BadExit, return an
     /// empty policy
     pub fn ipv4_policy(&self) -> Arc<PortPolicy> {
@@ -592,7 +605,6 @@ impl<'a> Relay<'a> {
     /// Return the IPv6 exit policy declared by this relay. Contrary to [`Relay::ipv6_policy`],
     /// this does not verify if the relay is marked BadExit.
     pub fn ipv6_declared_policy(&self) -> &Arc<PortPolicy> {
-        // XXXX: Return Reject * if the BadExit flag is present.
         self.md.ipv6_policy()
     }
 
@@ -865,6 +877,12 @@ mod test {
         assert!(!r1.supports_exit_port_ipv4(80));
         assert!(!r2.supports_exit_port_ipv4(80));
         assert!(!r3.supports_exit_port_ipv4(80));
+
+        assert!(!r0.policies_allow_some_port());
+        assert!(!r1.policies_allow_some_port());
+        assert!(!r2.policies_allow_some_port());
+        assert!(!r3.policies_allow_some_port());
+        assert!(r10.policies_allow_some_port());
 
         assert!(r0.in_same_family(&r0));
         assert!(r0.in_same_family(&r1));
