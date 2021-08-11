@@ -10,7 +10,7 @@ encountered in the wild.
 
 The `tor-socksproto` crate tries to hide the actual details of the
 protocol, and expose a stateful handshake type that eventually
-provides a [SocksRequest] or an error.  It is part of
+provides a [`SocksRequest`] or an error.  It is part of
 [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
 implement [Tor](https://www.torproject.org/) in Rust.
 At present, it is only used to provide a
