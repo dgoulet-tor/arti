@@ -53,6 +53,7 @@ use tor_rtcompat::Runtime;
 
 use futures::task::SpawnExt;
 use log::{debug, warn};
+use std::convert::TryInto;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -268,8 +269,12 @@ impl<R: Runtime> CircMgr<R> {
         // We expire any too-old circuits here, so they don't get
         // counted towards max_circs.
         self.expire_circuits();
-        let max_circs = 10; // XXXX: Get this from the network params.
-        if self.mgr.n_circs() < max_circs {
+        let max_circs: u64 = netdir
+            .params()
+            .cbt_max_open_circuits_for_testing
+            .try_into()
+            .expect("Out-of-bounds result from BoundedInt32");
+        if (self.mgr.n_circs() as u64) < max_circs {
             // Actually launch the circuit!
             let usage = TargetCircUsage::TimeoutTesting;
             let dirinfo = netdir.into();

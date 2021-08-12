@@ -12,6 +12,7 @@ use tor_rtcompat::{Runtime, SleepProviderExt};
 
 use futures::stream::StreamExt;
 use futures::task::SpawnExt;
+use std::convert::TryInto;
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -376,7 +377,11 @@ async fn continually_launch_timeout_testing_circuits<R: Runtime>(
             if let Err(e) = cm.launch_timeout_testing_circuit_if_appropriate(&netdir) {
                 warn!("Problem launching a timeout testing circuit: {}", e)
             }
-            delay = Duration::from_secs(10); // XXXX Take this from the network params.
+            delay = netdir
+                .params()
+                .cbt_testing_delay
+                .try_into()
+                .expect("Out-of-bounds value from BoundedInt32");
         } else {
             break;
         };

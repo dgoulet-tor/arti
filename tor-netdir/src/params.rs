@@ -56,6 +56,14 @@ pub struct NetParameters {
     /// Timeout value to use for our Pareto timeout estimator when we have
     /// no initial estimate.
     pub cbt_initial_timeout: IntegerMilliseconds<BoundedInt32<10, { i32::MAX }>>,
+    /// When we don't have a good build-time estimate yet, how long
+    /// (in seconds) do we wait between trying to launch build-time
+    /// testing circuits through the network?
+    pub cbt_testing_delay: IntegerSeconds<BoundedInt32<1, { i32::MAX }>>,
+    /// How many circuits can be open before we will no longer
+    /// consider launching testing circuits to learn average build
+    /// times?
+    pub cbt_max_open_circuits_for_testing: BoundedInt32<0, 14>,
 
     /// The maximum cell window size?
     pub circuit_window: BoundedInt32<100, 1000>,
@@ -70,9 +78,7 @@ pub struct NetParameters {
     pub sendme_accept_min_version: SendMeVersion,
     /// The minimum sendme version to transmit.
     pub sendme_emit_min_version: SendMeVersion,
-    // TODO: We're not ready for these yet. See #145.
-    //pub cbt_testing_delay: BoundedInt32<1, i32::MAX>,
-    //pub cbt_max_circuits_when_learning: BoundedInt32<0,14>,
+
     /// How long should never-used client circuits stay available,
     /// in the steady state?
     pub unused_client_circ_timeout: IntegerSeconds<BoundedInt32<60, 86_400>>,
@@ -96,6 +102,8 @@ impl Default for NetParameters {
             cbt_num_xm_modes: BoundedInt32::checked_new(10).unwrap(),
             cbt_success_count: BoundedInt32::checked_new(20).unwrap(),
             cbt_timeout_quantile: Percentage::new(BoundedInt32::checked_new(80).unwrap()),
+            cbt_testing_delay: IntegerSeconds::new(BoundedInt32::checked_new(10).unwrap()),
+            cbt_max_open_circuits_for_testing: BoundedInt32::checked_new(10).unwrap(),
             circuit_window: BoundedInt32::checked_new(1000).unwrap(),
             circuit_priority_half_life: IntegerMilliseconds::new(
                 BoundedInt32::checked_new(30000).unwrap(),
@@ -156,6 +164,12 @@ impl NetParameters {
             "cbtinitialtimeout" => {
                 self.cbt_initial_timeout =
                     IntegerMilliseconds::new(BoundedInt32::saturating_from(value));
+            }
+            "cbttestfreq" => {
+                self.cbt_testing_delay = IntegerSeconds::new(BoundedInt32::saturating_from(value));
+            }
+            "cbtmaxopencircs" => {
+                self.cbt_max_open_circuits_for_testing = BoundedInt32::saturating_from(value);
             }
             "circwindow" => {
                 self.circuit_window = BoundedInt32::saturating_from(value);
