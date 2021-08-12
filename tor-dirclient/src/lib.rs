@@ -178,9 +178,7 @@ where
         (_, Ok(()), _) => Ok(()),
     };
 
-    let output = String::from_utf8(result)?;
-
-    Ok(DirResponse::new(200, ok.err(), output, source))
+    Ok(DirResponse::new(200, ok.err(), result, source))
 }
 
 /// Read and parse HTTP/1 headers from `stream`.
@@ -602,7 +600,7 @@ mod test {
         assert!(response.error().is_none());
         assert!(response.source().is_none());
         let out = response.into_output();
-        assert_eq!(&out, "This is where the descs would go.");
+        assert_eq!(&out, b"This is where the descs would go.");
 
         Ok(())
     }
