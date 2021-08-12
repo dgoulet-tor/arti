@@ -52,7 +52,7 @@ use tor_proto::circuit::{CircParameters, ClientCirc, UniqId};
 use tor_rtcompat::Runtime;
 
 use futures::task::SpawnExt;
-use log::warn;
+use log::{debug, warn};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -216,7 +216,7 @@ impl<R: Runtime> CircMgr<R> {
     /// still end at _some_ exit.
     pub async fn get_or_launch_exit(
         &self,
-        netdir: DirInfo<'_>,
+        netdir: DirInfo<'_>, // TODO: This has to be a NetDir.
         ports: &[TargetPort],
         isolation_group: IsolationToken,
     ) -> Result<Arc<ClientCirc>> {
@@ -245,6 +245,41 @@ impl<R: Runtime> CircMgr<R> {
         let now = self.mgr.peek_runtime().now();
         self.mgr.expire_circs(now);
     }
+
+    /// If we need to launch a testing circuit to judge our circuit
+    /// build timeouts timeouts, do so.
+    ///
+    /// # Note
+    ///
+    /// This function is invoked periodically from the
+    /// `arti-tor-client` crate, based on timings from the network
+    /// parameters.  Please don't invoke it on your own; I hope we can
+    /// have this API go away in the future.
+    ///
+    /// I would much prefer to have this _not_ be a public API, and
+    /// instead have it be a daemon task.  The trouble is that it
+    /// needs to get a NetDir as input, and that isn't possible with
+    /// the current CircMgr design.  See
+    /// [arti#161](https://gitlab.torproject.org/tpo/core/arti/-/issues/161).
+    pub fn launch_timeout_testing_circuit_if_appropriate(&self, netdir: &NetDir) -> Result<()> {
+        if !self.mgr.peek_builder().learning_timeouts() {
+            return Ok(());
+        }
+        // We expire any too-old circuits here, so they don't get
+        // counted towards max_circs.
+        self.expire_circuits();
+        let max_circs = 10; // XXXX: Get this from the network params.
+        if self.mgr.n_circs() < max_circs {
+            // Actually launch the circuit!
+            let usage = TargetCircUsage::TimeoutTesting;
+            let dirinfo = netdir.into();
+            let mgr = Arc::clone(&self.mgr);
+            debug!("Launching a circuit to test build times.");
+            let _ = mgr.launch_by_usage(dirinfo, &usage)?;
+        }
+
+        Ok(())
+    }
 }
 
 /// Periodically expire any circuits that should no longer be given
@@ -267,38 +302,6 @@ async fn continually_expire_circuits<R: Runtime>(runtime: R, circmgr: Weak<CircM
         } else {
             break;
         }
-    }
-}
-
-/// As necessary, launch testing circuits so that we will eventually
-/// have enough circuit timeout data.
-///
-/// Exit when we find that `circmgr` is dropped.
-///
-/// This is a daemon task: it runs indefinitely in the background.
-async fn continually_build_timeout_testing_circuits<R: Runtime>(
-    runtime: R,
-    circmgr: Weak<CircMgr<R>>,
-) {
-    use crate::mgr::AbstractCircBuilder;
-    let mut delay = Duration::from_secs(1);
-    loop {
-        if let Some(circmgr) = Weak::upgrade(&circmgr) {
-            if circmgr.mgr.peek_builder().learning_timeouts() {
-                circmgr.expire_circuits(); // note why xxxx
-                let max_circs = 10; // FROM A REAL SOURCE XXXX
-                if circmgr.mgr.n_circs() < max_circs {
-                    // Actually launch the circuit!
-                    let usage = TargetCircUsage::TimeoutTesting;
-                    let dirinfo = { todo!() }; //XXXXXXARGH
-                    let _ = circmgr.mgr.launch_by_usage(dirinfo, &usage);
-                }
-            }
-            // delay = ... // UPDATE THE DELAY. XXXX
-        } else {
-            break;
-        }
-        runtime.sleep(delay).await;
     }
 }
 

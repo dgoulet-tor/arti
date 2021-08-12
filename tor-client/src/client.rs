@@ -19,7 +19,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 
 /// An active client session on the Tor network.
 ///
@@ -157,6 +157,12 @@ impl<R: Runtime> TorClient<R> {
         runtime.spawn(flush_state_to_disk(
             runtime.clone(),
             Arc::downgrade(&circmgr),
+        ))?;
+
+        runtime.spawn(continually_launch_timeout_testing_circuits(
+            runtime.clone(),
+            Arc::downgrade(&circmgr),
+            Arc::downgrade(&dirmgr),
         ))?;
 
         Ok(TorClient {
@@ -346,10 +352,44 @@ async fn flush_state_to_disk<R: Runtime>(runtime: R, circmgr: Weak<tor_circmgr::
     }
 }
 
+/// Run indefinitly, launching circuits as needed to get a good
+/// estimate for our circuit build timeouts.
+///
+/// Exit when we notice that `circmgr` or `dirmgr` has been dropped.
+///
+/// This is a daemon task: it runs indefinitely in the background.
+///
+/// # Note
+///
+/// I'd prefer this to be handled entirely within the tor-circmgr crate;
+/// see [`tor_circmgr::CircMgr::launch_timeout_testing_circuit_if_appropriate`]
+/// for more information.
+async fn continually_launch_timeout_testing_circuits<R: Runtime>(
+    rt: R,
+    circmgr: Weak<tor_circmgr::CircMgr<R>>,
+    dirmgr: Weak<tor_dirmgr::DirMgr<R>>,
+) {
+    loop {
+        let delay;
+        if let (Some(cm), Some(dm)) = (Weak::upgrade(&circmgr), Weak::upgrade(&dirmgr)) {
+            let netdir = dm.netdir();
+            if let Err(e) = cm.launch_timeout_testing_circuit_if_appropriate(&netdir) {
+                warn!("Problem launching a timeout testing circuit: {}", e)
+            }
+            delay = Duration::from_secs(10); // XXXX Take this from the network params.
+        } else {
+            break;
+        };
+
+        rt.sleep(delay).await;
+    }
+}
+
 impl<R: Runtime> Drop for TorClient<R> {
     // TODO: Consider moving this into tor-circmgr after we have more
     // experience with the state system.
     fn drop(&mut self) {
+        info!("Flushing persistent state at exit.");
         if let Err(e) = self.update_persistent_state() {
             error!("Unable to flush state on client exit: {}", e);
         }
