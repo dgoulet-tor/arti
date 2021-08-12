@@ -6,7 +6,7 @@
 //!
 //! For now, users should construct storage objects directly with (for
 //! example) [`FsStateMgr::new()`], but use them primarily via the
-//! interfaces of the [`Statemgr`] trait.
+//! interfaces of the [`StateMgr`] trait.
 
 #![deny(missing_docs)]
 #![warn(noop_method_call)]

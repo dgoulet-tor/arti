@@ -8,6 +8,6 @@ implement [Tor](https://www.torproject.org/) in Rust.
 
 For now, users should construct storage objects directly with (for
 example) [`FsStateMgr::new()`], but use them primarily via the
-interfaces of the [`Statemgr`] trait.
+interfaces of the [`StateMgr`] trait.
 
 License: MIT OR Apache-2.0
