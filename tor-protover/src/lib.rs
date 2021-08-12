@@ -5,8 +5,8 @@
 //! The Tor system is built out of numerous "subprotocols" that are
 //! versioned more or less independently. The `tor-protover` crate
 //! implements parsing and handling for these subprotocol versions, so
-//! that different Tor instances can one another which which parts of
-//! the protocol they support.
+//! that different Tor instances know which parts of the protocol
+//! they support.
 //!
 //! Subprotocol versions are also used to determine which versions of
 //! the protocol are required to connect to the network (or just

@@ -18,7 +18,7 @@
 //! Arti, and the one that nearly all client-only programs should use.
 //! Most of its functionality is provided by lower-level crates in Arti.
 //!
-//! ## ⚠️Warnings ⚠
+//! ## ⚠️️ Warnings ⚠️
 //! ️
 //! **Do not expect ANY privacy from this code yet.**
 //!

@@ -41,7 +41,7 @@
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
 //! implement [Tor](https://www.torproject.org/) in Rust.
 //!
-//! # Futureproofing note:
+//! # Futureproofing note
 //!
 //! There are two pending proposals to remove the one-to-one
 //! correspondence between relay cells and relay messages.

@@ -1,6 +1,6 @@
 //! `tor-circmgr`: circuits through the Tor network on demand.
 //!
-//! # Limitations
+//! # Overview
 //!
 //! This crate is part of
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
@@ -13,6 +13,8 @@
 //! anticipate those needs.  If a client request can be satisfied with
 //! an existing circuit, it should return that circuit instead of
 //! constructing a new one.
+//!
+//! # Limitations
 //!
 //! But for now, this `tor-circmgr` code is extremely preliminary; its
 //! data structures are all pretty bad, and it's likely that the API
