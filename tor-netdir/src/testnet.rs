@@ -124,7 +124,7 @@ pub fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
         } else {
             "".parse().unwrap()
         };
-        let weight = RelayWeight::Measured(1000 * (idx % 10 + 1) as u32);
+        let weight = RelayWeight::Measured(1000 * u32::from(idx % 10 + 1));
         bld.rs()
             .identity([idx; 20].into())
             .add_or_port(format!("{}.0.0.3:9001", idx % 5).parse().unwrap())

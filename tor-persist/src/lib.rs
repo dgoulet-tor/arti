@@ -30,6 +30,7 @@
 #![deny(clippy::ref_option_ref)]
 #![warn(clippy::trait_duplication_in_bounds)]
 #![warn(clippy::unseparated_literal_suffix)]
+#![deny(clippy::cast_lossless)]
 
 use serde::{de::DeserializeOwned, Serialize};
 use std::path::{Path, PathBuf};
