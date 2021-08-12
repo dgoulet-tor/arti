@@ -25,7 +25,7 @@ the configuration.
 configuration file to the list of configuration file.  You can use
 this multiple times: All files will be loaded and merged.
 
-'-c <key>=<value>` sets a configuration option to be applied after all
+`-c <key>=<value>` sets a configuration option to be applied after all
 configuration files are loaded.
 
 ## Configuration
