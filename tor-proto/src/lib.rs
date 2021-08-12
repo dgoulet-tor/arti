@@ -24,8 +24,8 @@
 //! each corresponding roughly to an application-level request.
 //!
 //! This crate implements the logic, protocols, and cryptography that
-//! implement these [channel::Channel]s, [circuit::ClientCirc]s, and
-//! [stream::DataStream]s.  It uses rust async code and future-related
+//! implement these [`channel::Channel`]s, [`circuit::ClientCirc`]s, and
+//! [`stream::DataStream`]s.  It uses rust async code and future-related
 //! traits, and is intended to work with (nearly) any executor
 //! implementation that complies with the futures API.  It should also
 //! work with nearly any TLS implementation that exposes AsyncRead and
@@ -45,10 +45,10 @@
 //!
 //! In order to create channels and circuits, you'll need to know
 //! about some Tor relays, and expose their information via
-//! [tor_linkspec::ChanTarget] and [tor_linkspec::CircTarget].
-//! Currently, the [tor-netdir] crate is the easiest way to do so.
+//! [`tor_linkspec::ChanTarget`] and [`tor_linkspec::CircTarget`].
+//! Currently, the [`tor-netdir`] crate is the easiest way to do so.
 //!
-//! For an example of this crate in action, see the `tor-client`
+//! For an example of this crate in action, see the [`tor-client`]
 //! library, or the `arti` CLI.
 //!
 //! # Design notes
