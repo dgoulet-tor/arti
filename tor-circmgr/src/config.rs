@@ -8,7 +8,7 @@ use std::time::Duration;
 /// Configuration for circuit timeouts and retries.
 ///
 /// This type is immutable once constructed. To create an object of this type,
-/// use [`RequestTimingConfigBuilder`].
+/// use [`RequestTimingBuilder`].
 #[derive(Debug, Clone, Builder, Deserialize)]
 #[builder(setter(prefix = "set"))]
 pub struct RequestTiming {
@@ -40,6 +40,9 @@ impl Default for RequestTiming {
 }
 
 /// Rules for building paths over the network.
+///
+/// This type is immutable once constructed.  To build one, use
+/// [`PathConfigBuilder`].
 #[derive(Debug, Clone, Builder, Deserialize, Default)]
 #[builder(setter(prefix = "set"))]
 pub struct PathConfig {
@@ -52,7 +55,7 @@ pub struct PathConfig {
 /// Configuration for circuit timeouts, expiration, and so on.
 ///
 /// This type is immutable once constructd. To create an object of this
-/// type, use [`CircTimingBuilder`].
+/// type, use [`CircuitTimingBuilder`].
 #[derive(Debug, Clone, Builder, Deserialize)]
 #[builder(setter(prefix = "set"))]
 pub struct CircuitTiming {
