@@ -233,6 +233,8 @@ impl History {
         // to break ties in favor of the _smallest_ values.  So we
         // apply Reverse only to the counts before passing the tuples
         // to k_smallest.
+        // TODO-SPEC: Does the spec _say_ that we break ties in favor
+        // of the smallest values?  If not we should fix it.
 
         self.sparse_histogram()
             .map(|(center, count)| (Reverse(count), center))
@@ -505,8 +507,22 @@ impl ParetoTimeoutEstimator {
     /// Create a new ParetoTimeoutEstimator based on a loaded
     /// ParetoTimeoutState.
     pub(crate) fn from_state(state: ParetoTimeoutState) -> Self {
-        let history = History::from_sparse_histogram(state.histogram.into_iter());
-        // TODO: For now, we just forget abandoned and successful circuits.
+        let mut history = History::from_sparse_histogram(state.histogram.into_iter());
+        // We cap these numbers at the largest number that could be recorded,
+        // so that we don't run away adding too much if the state file is
+        // corrupt.
+        let failed = std::cmp::max(state.abandoned_circs, SUCCESS_HISTORY_DEFAULT_LEN);
+        let succeeded = std::cmp::max(state.successful_circs, SUCCESS_HISTORY_DEFAULT_LEN);
+        // We add failures before successes so that they expire first;
+        // this is biased against throwing away data.
+        // TODO-SPEC: path-spec.txt doesn't say what order to restore this
+        // history in.
+        for _ in 0..failed {
+            history.add_success(false);
+        }
+        for _ in 0..succeeded {
+            history.add_success(true);
+        }
         Self::from_history(history)
     }
 
