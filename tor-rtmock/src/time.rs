@@ -110,6 +110,10 @@ impl MockSleepProvider {
 
     /// Simulate a discontinuity in the system clock, by jumping to
     /// `new_wallclock`.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if unwrapping `LockResult` from `self.state.lock` is not `Ok`
     pub fn jump_to(&self, new_wallclock: SystemTime) {
         let mut state = self.state.lock().unwrap();
         state.wallclock = new_wallclock;
