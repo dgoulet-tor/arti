@@ -29,6 +29,7 @@ struct Example {
     ops: Vec<Op>
 }
 
+#[cfg(fuzzing)]
 impl Example {
     fn run(self) {
         let mut r = Reader::from_slice(&self.input[..]);
@@ -39,6 +40,7 @@ impl Example {
     }
 }
 
+#[cfg(fuzzing)]
 impl Op {
     fn run(self, r: &mut Reader) {
         use Op::*;
