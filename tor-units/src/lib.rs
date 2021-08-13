@@ -331,8 +331,8 @@ impl SendMeVersion {
 
 #[cfg(test)]
 mod tests {
-    use crate::BoundedInt32;
-    use crate::Error;
+    use super::*;
+    use std::convert::TryInto;
 
     type TestFoo = BoundedInt32<1, 5>;
     type TestBar = BoundedInt32<-45, 17>;
@@ -372,6 +372,19 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn uninhabited_saturating_new() {
+        // This value should be uncreatable.
+        let _: BoundedInt32<10, 5> = BoundedInt32::saturating_new(7);
+    }
+
+    #[test]
+    fn uninhabited_from_string() {
+        let v: Result<BoundedInt32<10, 5>, Error> = BoundedInt32::saturating_from_str("7");
+        assert!(matches!(v, Err(Error::Uninhabited)));
+    }
+
+    #[test]
     fn errors_correct() {
         let x: Result<TestBar, Error> = "1000".parse();
         assert!(x.unwrap_err() == Error::AboveUpperBound(1000, TestBar::UPPER));
@@ -401,7 +414,6 @@ mod tests {
 
     #[test]
     fn bounded_to_u64() {
-        use std::convert::TryInto;
         let b: BoundedInt32<-100, 100> = BoundedInt32::checked_new(77).unwrap();
         let u: u64 = b.try_into().unwrap();
         assert_eq!(u, 77);
@@ -409,5 +421,101 @@ mod tests {
         let b: BoundedInt32<-100, 100> = BoundedInt32::checked_new(-77).unwrap();
         let u: Result<u64, Error> = b.try_into();
         assert!(u.is_err());
+    }
+
+    #[test]
+    fn bounded_to_f64() {
+        let x: BoundedInt32<-100, 100> = BoundedInt32::checked_new(77).unwrap();
+        let f: f64 = x.into();
+        assert_eq!(f, 77.0);
+    }
+
+    #[test]
+    fn bounded_from_i32() {
+        let mut x: Result<BoundedInt32<-100, 100>, Error>;
+
+        x = (50).try_into();
+        let y: i32 = x.unwrap().into();
+        assert_eq!(y, 50);
+
+        x = (1000).try_into();
+        assert!(x.is_err());
+    }
+
+    #[test]
+    fn into_bool() {
+        let zero: BoundedInt32<0, 1> = BoundedInt32::saturating_from(0);
+        let one: BoundedInt32<0, 1> = BoundedInt32::saturating_from(1);
+
+        let f: bool = zero.into();
+        let t: bool = one.into();
+        assert_eq!(f, false);
+        assert_eq!(t, true);
+    }
+
+    #[test]
+    fn into_u8() {
+        let zero: BoundedInt32<0, 255> = BoundedInt32::saturating_from(0);
+        let one: BoundedInt32<0, 255> = BoundedInt32::saturating_from(1);
+        let ninety: BoundedInt32<0, 255> = BoundedInt32::saturating_from(90);
+        let max: BoundedInt32<0, 255> = BoundedInt32::saturating_from(1000);
+
+        let a: u8 = zero.into();
+        let b: u8 = one.into();
+        let c: u8 = ninety.into();
+        let d: u8 = max.into();
+
+        assert_eq!(a, 0);
+        assert_eq!(b, 1);
+        assert_eq!(c, 90);
+        assert_eq!(d, 255);
+    }
+
+    #[test]
+    fn percents() {
+        type Pct = Percentage<u8>;
+        let p = Pct::new(100);
+        assert_eq!(p.as_percent(), 100);
+        assert_eq!(p.as_fraction(), 1.0);
+
+        let p = Pct::new(0);
+        assert_eq!(p.as_percent(), 0);
+        assert_eq!(p.as_fraction(), 0.0);
+
+        let p = Pct::new(25);
+        assert_eq!(p.as_percent(), 25);
+        assert_eq!(p.as_fraction(), 0.25);
+    }
+
+    #[test]
+    fn milliseconds() {
+        type Msec = IntegerMilliseconds<i32>;
+
+        let ms = Msec::new(500);
+        let d: Result<Duration, _> = ms.try_into();
+        assert_eq!(d.unwrap(), Duration::from_millis(500));
+
+        let ms = Msec::new(-100);
+        let d: Result<Duration, _> = ms.try_into();
+        assert!(d.is_err());
+    }
+
+    #[test]
+    fn seconds() {
+        type Sec = IntegerSeconds<i32>;
+
+        let ms = Sec::new(500);
+        let d: Result<Duration, _> = ms.try_into();
+        assert_eq!(d.unwrap(), Duration::from_secs(500));
+
+        let ms = Sec::new(-100);
+        let d: Result<Duration, _> = ms.try_into();
+        assert!(d.is_err());
+    }
+
+    #[test]
+    fn sendme() {
+        let smv = SendMeVersion::new(5);
+        assert_eq!(smv.get(), 5);
     }
 }
