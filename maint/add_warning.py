@@ -31,6 +31,7 @@ WANT_LINTS = """
 #![warn(clippy::trait_duplication_in_bounds)]
 #![warn(clippy::unseparated_literal_suffix)]
 #![deny(clippy::unnecessary_wraps)]
+#![deny(clippy::cast_lossless)]
 """
 WANT_LINTS = [ "%s\n" % w for w in WANT_LINTS.split() ]
 
