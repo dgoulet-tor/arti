@@ -54,6 +54,7 @@
 #![warn(clippy::trait_duplication_in_bounds)]
 #![deny(clippy::unnecessary_wraps)]
 #![warn(clippy::unseparated_literal_suffix)]
+#![deny(clippy::cast_lossless)]
 
 use std::error::Error;
 use std::fmt::{Debug, Display, Error as FmtError, Formatter};

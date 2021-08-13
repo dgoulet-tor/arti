@@ -73,6 +73,7 @@
 #![warn(clippy::trait_duplication_in_bounds)]
 #![deny(clippy::unnecessary_wraps)]
 #![warn(clippy::unseparated_literal_suffix)]
+#![deny(clippy::cast_lossless)]
 
 pub mod rsa;
 
@@ -455,7 +456,7 @@ impl Ed25519Cert {
 
     /// Return the time at which this certificate becomes expired
     pub fn expiry(&self) -> std::time::SystemTime {
-        let d = std::time::Duration::new((self.exp_hours as u64) * 3600, 0);
+        let d = std::time::Duration::new(u64::from(self.exp_hours) * 3600, 0);
         std::time::SystemTime::UNIX_EPOCH + d
     }
 

@@ -44,7 +44,7 @@ impl MsecDuration {
     /// Convert a Duration into a MsecDuration, saturating
     /// extra-high values to u32::MAX milliseconds.
     fn new_saturating(d: &Duration) -> Self {
-        let msec = std::cmp::min(d.as_millis(), u32::MAX as u128) as u32;
+        let msec = std::cmp::min(d.as_millis(), u128::from(u32::MAX)) as u32;
         MsecDuration(msec)
     }
 }
@@ -265,12 +265,15 @@ impl History {
         // Total number of observations in these bins.
         let n_observations: u16 = bins.iter().map(|(_, n)| n).sum();
         // Sum of all observations in these bins.
-        let total_observations: u64 = bins.iter().map(|(d, n)| (d.0 * (*n as u32)) as u64).sum();
+        let total_observations: u64 = bins
+            .iter()
+            .map(|(d, n)| u64::from(d.0 * u32::from(*n)))
+            .sum();
 
         if n_observations == 0 {
             None
         } else {
-            Some((total_observations / n_observations as u64) as u32)
+            Some((total_observations / u64::from(n_observations)) as u32)
         }
     }
 
@@ -289,9 +292,9 @@ impl History {
         let sum_of_log_observations: f64 = self
             .time_history
             .iter()
-            .map(|m| (std::cmp::max(m.0, xm) as f64).ln())
+            .map(|m| f64::from(std::cmp::max(m.0, xm)).ln())
             .sum();
-        let sum_of_log_xm = (n as f64) * (xm as f64).ln();
+        let sum_of_log_xm = (n as f64) * f64::from(xm).ln();
 
         // We're computing 1/alpha here, instead of alpha.  This avoids
         // division by zero, and has the advantage of being what our
@@ -299,7 +302,7 @@ impl History {
         let inv_alpha = (sum_of_log_observations - sum_of_log_xm) / (n as f64);
 
         Some(ParetoDist {
-            x_m: xm as f64,
+            x_m: f64::from(xm),
             inv_alpha,
         })
     }
@@ -819,7 +822,7 @@ mod test {
         }
         let expected_log_sum: f64 = [401, 500, 542, 401, 543, 401, 401, 401, 617, 413]
             .iter()
-            .map(|x| (*x as f64).ln())
+            .map(|x| f64::from(*x).ln())
             .sum();
         let expected_log_xm: f64 = (401_f64).ln() * 10.0;
         let expected_alpha = 10.0 / (expected_log_sum - expected_log_xm);

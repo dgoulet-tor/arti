@@ -109,6 +109,7 @@
 #![allow(clippy::unnecessary_wraps)]
 #![deny(clippy::unnecessary_wraps)]
 #![warn(clippy::unseparated_literal_suffix)]
+#![deny(clippy::cast_lossless)]
 
 pub mod channel;
 pub mod circuit;

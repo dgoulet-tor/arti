@@ -58,6 +58,7 @@
 #![deny(clippy::unnecessary_wraps)]
 #![warn(clippy::unseparated_literal_suffix)]
 #![allow(clippy::upper_case_acronyms)]
+#![deny(clippy::cast_lossless)]
 
 use caret::caret_int;
 
@@ -239,7 +240,7 @@ impl Protocols {
         match ent.proto {
             Protocol::Proto(k) => {
                 let idx = k.get() as usize;
-                let bit = 1 << (k.get() as u64);
+                let bit = 1 << u64::from(k.get());
                 if (*foundmask & bit) != 0 {
                     return Err(ParseError::Duplicate);
                 }
