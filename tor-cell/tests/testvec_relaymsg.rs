@@ -1,3 +1,4 @@
+use tor_bytes::Error as BytesError;
 /// Example relay messages to encode and decode.
 ///
 /// Except where noted, these were taken by instrumenting Tor
@@ -10,16 +11,28 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use hex_literal::hex;
 
-fn msg(cmd: RelayCmd, s: &str, msg: &msg::RelayMsg) {
-    assert_eq!(msg.cmd(), cmd);
-    let body = {
-        let mut s = s.to_string();
-        s.retain(|c| !c.is_whitespace());
-        hex::decode(s).unwrap()
-    };
-    let mut r = tor_bytes::Reader::from_slice(&body[..]);
+/// Decode `s`, a hexadecimal value that may have spaces in it.
+///
+/// Panic if the input is not valid hexadecimal
+fn unhex(s: &str) -> Vec<u8> {
+    let mut s = s.to_string();
+    s.retain(|c| !c.is_whitespace());
+    hex::decode(s).unwrap()
+}
 
-    let decoded = msg::RelayMsg::decode_from_reader(cmd, &mut r).unwrap();
+fn decode(cmd: RelayCmd, body: &[u8]) -> Result<msg::RelayMsg, BytesError> {
+    let mut r = tor_bytes::Reader::from_slice(&body[..]);
+    msg::RelayMsg::decode_from_reader(cmd, &mut r)
+}
+
+/// Assert that, when treated as a cell of type `cmd`, the hexadecimal
+/// body `s` decodes into the message `msg`, and then re-encodes into
+/// `s2`.
+fn msg_noncanonical(cmd: RelayCmd, s: &str, s2: &str, msg: &msg::RelayMsg) {
+    assert_eq!(msg.cmd(), cmd);
+    let body = unhex(s);
+    let body2 = unhex(s2);
+    let decoded = decode(cmd, &body[..]).unwrap();
 
     // This is a bit kludgey: we don't implement PartialEq for
     // messages, but we do implement Debug.  That actually seems a
@@ -31,7 +44,22 @@ fn msg(cmd: RelayCmd, s: &str, msg: &msg::RelayMsg) {
     decoded.encode_onto(&mut encoded1);
     msg.clone().encode_onto(&mut encoded2);
     assert_eq!(encoded1, encoded2);
-    assert_eq!(body, encoded2);
+    assert_eq!(body2, encoded2);
+}
+
+/// Assert that, when treated as a cell of type `cmd`, the hexadecimal
+/// body `s` decodes into the message `msg`, and then re-encodes into
+/// `s`.
+fn msg(cmd: RelayCmd, s: &str, msg: &msg::RelayMsg) {
+    msg_noncanonical(cmd, s, s, msg);
+}
+
+/// Assert that, when treated as a cell of type `cmd`, the hexadecimal
+/// body `s` does not decode, and gives an error equal to `err`.
+fn msg_error(cmd: RelayCmd, s: &str, e: BytesError) {
+    let body = unhex(s);
+    let decoded = decode(cmd, &body[..]);
+    assert_eq!(decoded.unwrap_err(), e);
 }
 
 #[test]
@@ -58,6 +86,26 @@ fn test_begin() {
         "5b323030313a6462383a3a315d3a323200",
         &msg::Begin::new("2001:db8::1", 22, 0).unwrap().into(),
     );
+
+    // hand-generated failure case: no port after ipv6.
+    msg_error(
+        cmd,
+        "5b3a3a5d21", // [::]!
+        BytesError::BadMessage("missing port in begin cell"),
+    );
+
+    // hand-generated failure case: not ascii.
+    msg_error(
+        cmd,
+        "746f7270726f6a656374e284a22e6f72673a34343300", // torproject™.org:443
+        BytesError::BadMessage("target address in begin cell not ascii"),
+    );
+
+    // failure on construction: bad address.
+    assert!(matches!(
+        msg::Begin::new("www.torproject™.org", 443, 0),
+        Err(tor_cell::Error::BadStreamAddress)
+    ));
 }
 
 #[test]
@@ -87,6 +135,13 @@ fn test_connected() {
         cmd,
         "00000000 06 20010db8 00000000 00000000 00001122 00000E10",
         &msg::Connected::new_with_addr(addr, 0xe10).into(),
+    );
+
+    // hand-generated: bogus address type.
+    msg_error(
+        cmd,
+        "00000000 07 20010db8 00000000 00000000 00001122 00000E10",
+        BytesError::BadMessage("Invalid address type in CONNECTED cell"),
     );
 }
 
@@ -119,6 +174,17 @@ fn test_end() {
         "04 20010db8 00000000 00000000 0000f00b 00000200",
         &msg::End::new_exitpolicy(addr, 512).into(),
     );
+
+    // hand-generated to be empty.
+    msg_noncanonical(cmd, "", "01", &msg::End::new_misc().into());
+
+    // hand-generated with no TTL.
+    msg_noncanonical(
+        cmd,
+        "04 7f000007",
+        "04 7f000007 ffffffff",
+        &msg::End::new_exitpolicy(localhost, 0xffffffff).into(),
+    );
 }
 
 #[test]
@@ -142,7 +208,19 @@ fn test_extend2() {
     let addr = "127.0.0.1:5000".parse::<SocketAddr>().unwrap();
 
     let ls = vec![addr.into(), rsa.into()];
-    msg(cmd, body, &msg::Extend2::new(ls, 2, handshake).into());
+    msg(
+        cmd,
+        body,
+        &msg::Extend2::new(ls, 2, handshake.clone()).into(),
+    );
+
+    let message = decode(cmd, &unhex(body)[..]).unwrap();
+    if let msg::RelayMsg::Extend2(message) = message {
+        assert_eq!(message.handshake_type(), 2);
+        assert_eq!(message.handshake(), &handshake[..]);
+    } else {
+        panic!("that wasn't an extend2");
+    }
 }
 
 #[test]
@@ -292,6 +370,19 @@ fn test_resolved() {
         "06 10 12340000000000000000000000005678 00000080",
         &r.into(),
     );
+    let message = decode(
+        cmd,
+        &unhex("06 10 12340000000000000000000000005678 00000080")[..],
+    )
+    .unwrap();
+    if let msg::RelayMsg::Resolved(res) = message {
+        assert_eq!(
+            res.into_answers(),
+            vec![(msg::ResolvedVal::Ip("1234::5678".parse().unwrap()), 128_u32)]
+        );
+    } else {
+        panic!("wrong message type");
+    }
 
     let mut r = msg::Resolved::new_empty();
     r.add_answer(msg::ResolvedVal::Hostname("www.torproject.org".into()), 600);
@@ -311,6 +402,13 @@ fn test_resolved() {
         cmd,
         "63 12 7777772e746f7270726f6a6563742e6f7267 00000258",
         &r.into(),
+    );
+
+    // Hand-generated for incorrect length.
+    msg_error(
+        cmd,
+        "04 03 010203 00000001",
+        BytesError::BadMessage("Wrong length for RESOLVED answer"),
     );
 }
 

@@ -906,7 +906,7 @@ impl Body for Resolve {
 }
 
 /// Possible response to a DNS lookup
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ResolvedVal {
     /// We found an IP address
