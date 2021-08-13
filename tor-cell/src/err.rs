@@ -1,12 +1,12 @@
-//! Define an error type for the tor-proto crate.
+//! Define an error type for the tor-cell crate.
 use std::sync::Arc;
 use thiserror::Error;
 
-/// An error type for the tor-proto crate.
+/// An error type for the tor-cell crate.
 ///
 /// This type should probably be split into several.  There's more
 /// than one kind of error that can occur while doing something with
-/// the Tor protocol.
+/// tor cells.
 #[derive(Error, Debug, Clone)]
 #[non_exhaustive]
 pub enum Error {
