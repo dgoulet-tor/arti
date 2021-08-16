@@ -85,7 +85,7 @@ impl PortPolicy {
     fn push_policy(&mut self, item: PortRange) -> Result<(), PolicyError> {
         if let Some(prev) = self.allowed.last() {
             // TODO SPEC: We don't enforce this in Tor, but we probably
-            // should.
+            // should.  See torspec#60.
             if prev.hi >= item.lo {
                 return Err(PolicyError::InvalidPolicy);
             } else if prev.hi == item.lo - 1 {

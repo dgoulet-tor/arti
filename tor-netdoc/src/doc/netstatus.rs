@@ -398,7 +398,6 @@ bitflags! {
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub enum RelayWeight {
-    // TODO SPEC: Document that these are u32 in dir-spec.txt
     /// An unmeasured weight for a relay.
     Unmeasured(u32),
     /// An measured weight for a relay.
