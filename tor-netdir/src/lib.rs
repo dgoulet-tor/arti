@@ -360,15 +360,19 @@ impl NetDir {
     /// consider relays that match the predicate `usable`.  We weight
     /// this bandwidth according to the provided `role`.
     ///
-    /// Note that this function can return NaN if the consensus contains
-    /// no relays that match the predicate, or if those relays have
-    /// no weighted bandwidth.
+    /// If _no_ matching relays in the consensus have a nonzero
+    /// weighted bandwidth value, we fall back to looking at the
+    /// unweighted fraction of matching relays.
+    ///
+    /// If there are no matching relays in the consensus, we return 0.0.
     fn frac_for_role<'a, F>(&'a self, role: WeightRole, usable: F) -> f64
     where
         F: Fn(&UncheckedRelay<'a>) -> bool,
     {
         let mut total_weight = 0_u64;
         let mut have_weight = 0_u64;
+        let mut have_count = 0_usize;
+        let mut total_count = 0_usize;
 
         for r in self.all_relays() {
             if !usable(&r) {
@@ -376,22 +380,41 @@ impl NetDir {
             }
             let w = self.weights.weight_rs_for_role(r.rs, role);
             total_weight += w;
+            total_count += 1;
             if r.is_usable() {
-                have_weight += w
+                have_weight += w;
+                have_count += 1;
             }
         }
 
-        (have_weight as f64) / (total_weight as f64)
+        if total_weight > 0 {
+            // The consensus lists some weighted bandwidth so return the
+            // fraction of the weighted bandwidth for which we have
+            // descriptors.
+            (have_weight as f64) / (total_weight as f64)
+        } else if total_count > 0 {
+            // The consensus lists no weighted bandwidth for these relays,
+            // but at least it does list relays. Return the fraction of
+            // relays for which it we have descriptors.
+            (have_count as f64) / (total_count as f64)
+        } else {
+            // There are no relays of this kind in the consensus.  Return
+            // 0.0, to avoid dividing by zero and giving NaN.
+            0.0
+        }
     }
     /// Return the estimated fraction of possible paths that we have
     /// enough microdescriptors to build.
-    ///
-    /// NOTE: This function can return NaN if the consensus contained
-    /// zero bandwidth for some type of relay we need.
     fn frac_usable_paths(&self) -> f64 {
-        self.frac_for_role(WeightRole::Guard, |u| u.rs.is_flagged_guard())
-            * self.frac_for_role(WeightRole::Middle, |_| true)
-            * self.frac_for_role(WeightRole::Exit, |u| u.rs.is_flagged_exit())
+        let f_g = self.frac_for_role(WeightRole::Guard, |u| u.rs.is_flagged_guard());
+        let f_m = self.frac_for_role(WeightRole::Middle, |_| true);
+        let f_e = if self.all_relays().any(|u| u.rs.is_flagged_exit()) {
+            self.frac_for_role(WeightRole::Exit, |u| u.rs.is_flagged_exit())
+        } else {
+            // If there are no exits at all, we use f_m here.
+            f_m
+        };
+        f_g * f_m * f_e
     }
     /// Return true if there is enough information in this NetDir to build
     /// multihop circuits.
@@ -405,10 +428,6 @@ impl NetDir {
 
         // What fraction of paths can we build?
         let available = self.frac_usable_paths();
-
-        // TODO: `available` could be NaN if the consensus is sufficiently
-        // messed-up.  If so it's not 100% clear what to fall back on.
-        // What does C Tor do? XXXX-SPEC
 
         available >= min_frac_paths
     }
