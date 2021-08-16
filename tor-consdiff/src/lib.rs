@@ -235,8 +235,7 @@ impl<'a> DiffCommand<'a> {
                 // This '+1' seems off, but it's what the spec says. I wonder
                 // if the spec is wrong.
                 target.insert_at(*pos + 1, lines)?;
-            } // TODO SPEC: In theory there is an 'InsertHere' command
-              // that we should be implementing, but Tor doesn't use it.
+            }
         };
         Ok(())
     }
