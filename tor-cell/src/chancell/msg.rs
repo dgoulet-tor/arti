@@ -787,9 +787,6 @@ impl Readable for PaddingNegotiate {
         let command = r.take_u8()?;
         let ito_low_ms = r.take_u16()?;
         let ito_high_ms = r.take_u16()?;
-        if ito_high_ms < ito_low_ms {
-            return Err(Error::BadMessage("Invalid timeout range bounds"));
-        }
         Ok(PaddingNegotiate {
             command,
             ito_low_ms,

@@ -398,9 +398,4 @@ fn test_padding_negotiate() {
         decode_err(cmd, "90 0303", true),
         BytesError::BadMessage("Unrecognized padding negotiation version")
     );
-
-    assert_eq!(
-        decode_err(cmd, "00 02 0200 0100", true),
-        BytesError::BadMessage("Invalid timeout range bounds")
-    )
 }
