@@ -1,3 +1,4 @@
+use tor_bytes::Error as BytesError;
 /// Example channel messages to encode and decode.
 ///
 /// Except where noted, these were taken by instrumenting Tor
@@ -11,17 +12,25 @@ use hex_literal::hex;
 
 const CELL_SIZE: usize = 509;
 
+fn unhex(s: &str, pad_to_len: bool) -> Vec<u8> {
+    let mut s = s.to_string();
+    s.retain(|c| !c.is_whitespace());
+    let mut body = hex::decode(s).unwrap();
+    if pad_to_len {
+        assert!(body.len() <= CELL_SIZE);
+        body.resize(CELL_SIZE, 0);
+    }
+    body
+}
+
+fn decode_err(cmd: ChanCmd, s: &str, pad_to_len: bool) -> BytesError {
+    let body = unhex(s, pad_to_len);
+    let mut r = tor_bytes::Reader::from_slice(&body[..]);
+    msg::ChanMsg::take(&mut r, cmd).unwrap_err()
+}
+
 fn test_decode(cmd: ChanCmd, s: &str, pad_to_len: bool) -> (Vec<u8>, msg::ChanMsg) {
-    let body = {
-        let mut s = s.to_string();
-        s.retain(|c| !c.is_whitespace());
-        let mut body = hex::decode(s).unwrap();
-        if pad_to_len {
-            assert!(body.len() <= CELL_SIZE);
-            body.resize(CELL_SIZE, 0);
-        }
-        body
-    };
+    let body = unhex(s, pad_to_len);
     let mut r = tor_bytes::Reader::from_slice(&body[..]);
     let msg = msg::ChanMsg::take(&mut r, cmd).unwrap();
 
@@ -122,7 +131,7 @@ fn test_certs() {
     certs.push_cert_body(2.into(), cert2body);
     certs.push_cert_body(4.into(), &cert3body[..]);
     certs.push_cert_body(5.into(), cert4body);
-    certs.push_cert_body(7.into(), cert5body);
+    certs.push_cert_body(7.into(), cert5body.clone());
 
     vbody(cmd, body, &certs.clone().into());
 
@@ -134,6 +143,11 @@ fn test_certs() {
 
     let cert3 = certs.parse_ed_cert(4.into());
     assert!(cert3.is_ok());
+
+    // Try a mismatched cell.
+    let mut badcerts = msg::Certs::new_empty();
+    badcerts.push_cert_body(5.into(), cert5body); // not the correct cert type
+    assert!(badcerts.parse_ed_cert(5.into()).is_err());
 }
 
 #[test]
@@ -152,7 +166,10 @@ fn test_create2() {
     let body = "0002 0054 09164430E84D3BC56EC7E1D22734742345E2DECE0DE535B66B8E8A0EBBDAE3263C53E02EC2215685CD3A977DC7946FF47F84CD7025F75D252D1B35DEA28F32FA912513889A207E5049992DBC9BC541194C13624A";
     let handshake = hex::decode("09164430E84D3BC56EC7E1D22734742345E2DECE0DE535B66B8E8A0EBBDAE3263C53E02EC2215685CD3A977DC7946FF47F84CD7025F75D252D1B35DEA28F32FA912513889A207E5049992DBC9BC541194C13624A").unwrap();
 
-    fbody(cmd, body, &msg::Create2::new(2, handshake).into());
+    fbody(cmd, body, &msg::Create2::new(2, handshake.clone()).into());
+    let create2 = msg::Create2::new(2, handshake.clone());
+    assert_eq!(create2.handshake_type(), 2);
+    assert_eq!(create2.body(), &handshake[..]);
 }
 
 #[test]
@@ -162,7 +179,9 @@ fn test_create_fast() {
     let body = "0DC2A5EB921EF4B71F41184A99F4FAD99620A648";
     let handshake = hex::decode(body).unwrap();
 
-    fbody(cmd, body, &msg::CreateFast::new(handshake).into());
+    fbody(cmd, body, &msg::CreateFast::new(handshake.clone()).into());
+    let create_fast = msg::CreateFast::new(handshake.clone());
+    assert_eq!(create_fast.body(), &handshake[..]);
 }
 
 #[test]
@@ -183,7 +202,9 @@ fn test_created2() {
     let body = "0040 0108907A701030ADB6CA9C6AF097DC4855614655659B6A7BF21C1097DCE7C66EE0E4EF287DE7CED40BEECA8B90140C05DB6138AEB551CE0C037068C315E307A0";
     let handshake = hex::decode("0108907A701030ADB6CA9C6AF097DC4855614655659B6A7BF21C1097DCE7C66EE0E4EF287DE7CED40BEECA8B90140C05DB6138AEB551CE0C037068C315E307A0").unwrap();
 
-    fbody(cmd, body, &msg::Created2::new(handshake).into());
+    fbody(cmd, body, &msg::Created2::new(handshake.clone()).into());
+    let created2 = msg::Created2::new(handshake.clone());
+    assert_eq!(created2.into_body(), handshake);
 }
 
 #[test]
@@ -193,7 +214,9 @@ fn test_created_fast() {
     let body = "03B74250B01D09FDA72B70D63AE7994926F13055BED23485F6B3C8C3CEAFE1DF48A9FF8BAC4993FC";
     let handshake = hex::decode(body).unwrap();
 
-    fbody(cmd, body, &msg::CreatedFast::new(handshake).into());
+    fbody(cmd, body, &msg::CreatedFast::new(handshake.clone()).into());
+    let created_fast = msg::CreatedFast::new(handshake.clone());
+    assert_eq!(created_fast.into_body(), handshake);
 }
 
 #[test]
@@ -254,6 +277,13 @@ fn test_netinfo() {
     let expect: msg::ChanMsg =
         msg::Netinfo::for_relay(0x5f6f859c, None, &[localhost_v6][..]).into();
     assert_eq!(format!("{:?}", netinfo), format!("{:?}", expect));
+
+    // Zero-valued their_address are None (hand-generated from above)
+    fbody(
+        cmd,
+        "00000000 04 04 00000000 00",
+        &msg::Netinfo::for_client(None).into(),
+    );
 }
 
 #[test]
@@ -261,7 +291,7 @@ fn test_padding() {
     let cmd = ChanCmd::PADDING;
     assert_eq!(Into::<u8>::into(cmd), 0_u8);
 
-    fbody(cmd, "", &msg::Padding::new().into());
+    fbody(cmd, "", &msg::Padding::default().into());
 }
 
 #[test]
@@ -319,6 +349,12 @@ fn test_relay() {
         "6e6f742076616c6964617465642061742074686973207374616765",
         &msg::Relay::new(&body).into_early(),
     );
+
+    // Try converting to/from raw bodies.
+    let body = [3_u8; 509];
+    let cell = msg::Relay::from_raw(body.clone());
+    let body2 = cell.into_relay_body();
+    assert_eq!(&body2[..], &body[..]);
 }
 
 #[test]
@@ -346,6 +382,25 @@ fn test_vpadding() {
     vbody(cmd, "00000000000000000000", &msg::VPadding::new(10).into());
 }
 
-// TODO: not generated or recorded in the chutney run:
-//
-// PaddingNegotiate
+#[test]
+fn test_padding_negotiate() {
+    // Generated by hand since we don't have it from the Chutney run.
+    let cmd = ChanCmd::PADDING_NEGOTIATE;
+    assert_eq!(Into::<u8>::into(cmd), 12_u8);
+
+    fbody(
+        cmd,
+        "00 02 0100 0200",
+        &msg::PaddingNegotiate::new(true, 256, 512).into(),
+    );
+
+    assert_eq!(
+        decode_err(cmd, "90 0303", true),
+        BytesError::BadMessage("Unrecognized padding negotiation version")
+    );
+
+    assert_eq!(
+        decode_err(cmd, "00 02 0200 0100", true),
+        BytesError::BadMessage("Invalid timeout range bounds")
+    )
+}

@@ -177,4 +177,8 @@ fn versions() {
     assert_eq!(v.best_shared_link_protocol(&[4, 5, 6, 7]), Some(6));
     assert_eq!(v.best_shared_link_protocol(&[4, 5, 11]), Some(5));
     assert_eq!(v.best_shared_link_protocol(&[4, 5]), Some(5));
+
+    // Try converting into a ChanCell.
+    let cc: ChanCell = v.into();
+    assert_eq!(cc.circid(), 0.into());
 }
