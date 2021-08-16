@@ -221,7 +221,7 @@ impl Begin {
             return Err(crate::Error::BadStreamAddress);
         }
         let mut addr = addr.to_string();
-        addr.make_ascii_lowercase(); // SPEC: the spec doesn't say to do this.
+        addr.make_ascii_lowercase();
         Ok(Begin {
             addr: addr.into_bytes(),
             port,
@@ -417,7 +417,6 @@ impl Body for End {
     }
     fn decode_from_reader(r: &mut Reader<'_>) -> Result<Self> {
         if r.remaining() == 0 {
-            // TODO SPEC Document this behavior; tor does it too.
             return Ok(End {
                 reason: EndReason::MISC,
                 addr: None,
@@ -429,7 +428,6 @@ impl Body for End {
                 4 | 8 => IpAddr::V4(r.extract()?),
                 16 | 20 => IpAddr::V6(r.extract()?),
                 _ => {
-                    // TODO SPEC document this behavior.
                     // Ignores other message lengths.
                     return Ok(End { reason, addr: None });
                 }
@@ -606,8 +604,6 @@ impl Body for Sendme {
     }
     fn encode_onto(self, w: &mut Vec<u8>) {
         match self.digest {
-            // SPEC: we should be clear in the spec that this is what we
-            // do when linkauth is off.
             None => (),
             Some(mut x) => {
                 w.write_u8(1);
