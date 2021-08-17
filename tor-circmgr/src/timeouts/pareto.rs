@@ -233,8 +233,6 @@ impl History {
         // to break ties in favor of the _smallest_ values.  So we
         // apply Reverse only to the counts before passing the tuples
         // to k_smallest.
-        // TODO-SPEC: Does the spec _say_ that we break ties in favor
-        // of the smallest values?  If not we should fix it.
 
         self.sparse_histogram()
             .map(|(center, count)| (Reverse(count), center))
