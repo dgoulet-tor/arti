@@ -46,13 +46,13 @@ pub struct NodeBuilders {
 /// Helper: a customization function that does nothing.
 fn simple_net_func(_idx: usize, _nb: &mut NodeBuilders) {}
 
-/// As [`construct_network()`], but return a [`NetDir`].
-pub fn construct_netdir() -> NetDir {
+/// As [`construct_network()`], but return a [`PartialNetDir`].
+pub fn construct_netdir() -> PartialNetDir {
     construct_custom_netdir(simple_net_func)
 }
 
-/// As [`construct_custom_network()`], but return a [`NetDir`].
-pub fn construct_custom_netdir<F>(func: F) -> NetDir
+/// As [`construct_custom_network()`], but return a [`PartialNetDir`].
+pub fn construct_custom_netdir<F>(func: F) -> PartialNetDir
 where
     F: FnMut(usize, &mut NodeBuilders),
 {
@@ -62,7 +62,7 @@ where
         dir.add_microdesc(md);
     }
 
-    dir.unwrap_if_sufficient().unwrap()
+    dir
 }
 
 /// As [`construct_custom_network`], but do not require a

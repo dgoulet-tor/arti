@@ -249,7 +249,7 @@ mod test {
 
     #[test]
     fn exit_policy() {
-        let network = testnet::construct_netdir();
+        let network = testnet::construct_netdir().unwrap_if_sufficient().unwrap();
 
         // Nodes with ID 0x0a through 0x13 and 0x1e through 0x27 are
         // exits.  Odd-numbered ones allow only ports 80 and 443;
@@ -431,7 +431,7 @@ mod test {
     fn buildpath() {
         use crate::mgr::AbstractSpec;
         let mut rng = rand::thread_rng();
-        let netdir = testnet::construct_netdir();
+        let netdir = testnet::construct_netdir().unwrap_if_sufficient().unwrap();
         let di = (&netdir).into();
         let config = crate::PathConfig::default();
 

@@ -54,7 +54,7 @@ mod test {
 
     #[test]
     fn dirpath_relay() {
-        let netdir = testnet::construct_netdir();
+        let netdir = testnet::construct_netdir().unwrap_if_sufficient().unwrap();
         let mut rng = rand::thread_rng();
         let dirinfo = (&netdir).into();
 

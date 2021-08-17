@@ -955,7 +955,9 @@ mod test {
                 nb.rs.add_flags(RelayFlags::BAD_EXIT);
             }
             nb.md.parse_ipv6_policy("accept 443").unwrap();
-        });
+        })
+        .unwrap_if_sufficient()
+        .unwrap();
 
         let e12 = netdir.by_id(&[12; 32].into()).unwrap();
         let e32 = netdir.by_id(&[32; 32].into()).unwrap();
