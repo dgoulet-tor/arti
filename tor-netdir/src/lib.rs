@@ -68,7 +68,7 @@ use tor_netdoc::types::policy::PortPolicy;
 use log::warn;
 use serde::Deserialize;
 use std::collections::HashSet;
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 use std::sync::Arc;
 
 pub use err::Error;
@@ -96,6 +96,33 @@ impl Default for SubnetConfig {
         Self {
             subnets_family_v4: 16,
             subnets_family_v6: 32,
+        }
+    }
+}
+
+impl SubnetConfig {
+    /// Are two addresses in the same subnet according to this configuration
+    fn addrs_in_same_subnet(&self, a: &IpAddr, b: &IpAddr) -> bool {
+        match (a, b) {
+            (IpAddr::V4(a), IpAddr::V4(b)) => {
+                let bits = self.subnets_family_v4;
+                if bits > 32 {
+                    return false;
+                }
+                let a = u32::from_be_bytes(a.octets());
+                let b = u32::from_be_bytes(b.octets());
+                (a >> (32 - bits)) == (b >> (32 - bits))
+            }
+            (IpAddr::V6(a), IpAddr::V6(b)) => {
+                let bits = self.subnets_family_v6;
+                if bits > 128 {
+                    return false;
+                }
+                let a = u128::from_be_bytes(a.octets());
+                let b = u128::from_be_bytes(b.octets());
+                (a >> (128 - bits)) == (b >> (128 - bits))
+            }
+            _ => false,
         }
     }
 }
@@ -543,38 +570,11 @@ impl<'a> Relay<'a> {
     /// prefix, or if they have IPv6 addresses with the same
     /// `subnets_family_v6`-bit prefix.
     pub fn in_same_subnet<'b>(&self, other: &Relay<'b>, subnet_config: &SubnetConfig) -> bool {
-        /// Do the two addresses share the same n leading bits?
-        fn addrs_equal(a: &SocketAddr, b: &SocketAddr, v4_bits: u8, v6_bits: u8) -> bool {
-            dbg!(a.ip(), b.ip());
-            match (a.ip(), b.ip()) {
-                (IpAddr::V4(a), IpAddr::V4(b)) => {
-                    if v4_bits > 32 {
-                        return false;
-                    }
-                    let a = u32::from_be_bytes(a.octets());
-                    let b = u32::from_be_bytes(b.octets());
-                    (a >> (32 - v4_bits)) == (b >> (32 - v4_bits))
-                }
-                (IpAddr::V6(a), IpAddr::V6(b)) => {
-                    if v6_bits > 128 {
-                        return false;
-                    }
-                    let a = u128::from_be_bytes(a.octets());
-                    let b = u128::from_be_bytes(b.octets());
-                    (a >> (128 - v4_bits)) == (b >> (128 - v4_bits))
-                }
-                _ => false,
-            }
-        }
         self.rs.orport_addrs().any(|addr| {
-            other.rs.orport_addrs().any(|other| {
-                addrs_equal(
-                    addr,
-                    other,
-                    subnet_config.subnets_family_v4,
-                    subnet_config.subnets_family_v6,
-                )
-            })
+            other
+                .rs
+                .orport_addrs()
+                .any(|other| subnet_config.addrs_in_same_subnet(&addr.ip(), &other.ip()))
         })
     }
     /// Return true if both relays are in the same family.
@@ -681,7 +681,7 @@ impl<'a> tor_linkspec::CircTarget for Relay<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::testnet::{construct_custom_netdir, construct_custom_network, construct_network};
+    use crate::testnet::*;
     use std::collections::HashSet;
     use std::time::Duration;
 
@@ -863,6 +863,41 @@ mod test {
     }
 
     #[test]
+    fn subnets() {
+        let cfg = SubnetConfig::default();
+
+        fn same_net(cfg: &SubnetConfig, a: &str, b: &str) -> bool {
+            cfg.addrs_in_same_subnet(&a.parse().unwrap(), &b.parse().unwrap())
+        }
+
+        assert!(same_net(&cfg, "127.15.3.3", "127.15.9.9"));
+        assert!(!same_net(&cfg, "127.15.3.3", "127.16.9.9"));
+
+        assert!(!same_net(&cfg, "127.15.3.3", "127::"));
+
+        assert!(same_net(&cfg, "ffff:ffff:90:33::", "ffff:ffff:91:34::"));
+        assert!(!same_net(&cfg, "ffff:ffff:90:33::", "ffff:fffe:91:34::"));
+
+        let cfg = SubnetConfig {
+            subnets_family_v4: 32,
+            subnets_family_v6: 128,
+        };
+        assert!(!same_net(&cfg, "127.15.3.3", "127.15.9.9"));
+        assert!(!same_net(&cfg, "ffff:ffff:90:33::", "ffff:ffff:91:34::"));
+
+        assert!(same_net(&cfg, "127.0.0.1", "127.0.0.1"));
+        assert!(!same_net(&cfg, "127.0.0.1", "127.0.0.2"));
+        assert!(same_net(&cfg, "ffff:ffff:90:33::", "ffff:ffff:90:33::"));
+
+        let cfg = SubnetConfig {
+            subnets_family_v4: 33,
+            subnets_family_v6: 129,
+        };
+        assert!(!same_net(&cfg, "127.0.0.1", "127.0.0.1"));
+        assert!(!same_net(&cfg, "::", "::"));
+    }
+
+    #[test]
     fn relay_funcs() {
         let (consensus, microdescs) = construct_custom_network(|idx, nb| {
             if idx == 15 {
@@ -931,7 +966,7 @@ mod test {
 
         // Make sure IPv6 families work.
         let subnet_config = SubnetConfig {
-            subnets_family_v4: 32,
+            subnets_family_v4: 128,
             subnets_family_v6: 96,
         };
         assert!(r15.in_same_subnet(&r20, &subnet_config));
@@ -979,5 +1014,20 @@ mod test {
 
         assert!(e12.ipv4_declared_policy().allows_some_port());
         assert!(e12.ipv6_declared_policy().allows_some_port());
+    }
+
+    #[cfg(feature = "experimental-api")]
+    #[test]
+    fn test_accessors() {
+        let netdir = construct_netdir().unwrap_if_sufficient().unwrap();
+
+        let r4 = netdir.by_id(&[4; 32].into()).unwrap();
+        let r16 = netdir.by_id(&[16; 32].into()).unwrap();
+
+        assert!(!r4.md().ipv4_policy().allows_some_port());
+        assert!(r16.md().ipv4_policy().allows_some_port());
+
+        assert!(!r4.rs().is_flagged_exit());
+        assert!(r16.rs().is_flagged_exit());
     }
 }
