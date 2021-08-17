@@ -288,7 +288,7 @@ where
     // ciphertext to create the body of the MAC tag
     let mut mac_body: Vec<u8> = Vec::new();
     mac_body.extend(proto_input.intro_cell_data.clone());
-    mac_body.extend(ciphertext.to_vec());
+    mac_body.extend(ciphertext.clone());
     let my_mac_tag = hs_ntor_mac(&mac_body, &mac_key)?;
 
     if my_mac_tag != mac_tag {
@@ -317,7 +317,7 @@ where
     reply.write(&Y);
     reply.write(&auth_input_mac);
 
-    Ok((keygen, reply, plaintext.to_vec()))
+    Ok((keygen, reply, plaintext.clone()))
 }
 
 /*********************** Helper functions ************************************/

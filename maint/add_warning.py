@@ -18,6 +18,7 @@ WANT_LINTS = """
 #![deny(clippy::exhaustive_structs)]
 #![deny(clippy::expl_impl_clone_on_copy)]
 #![deny(clippy::fallible_impl_from)]
+#![deny(clippy::implicit_clone)]
 #![deny(clippy::large_stack_arrays)]
 #![deny(clippy::missing_docs_in_private_items)]
 #![deny(clippy::ref_option_ref)]
@@ -44,7 +45,6 @@ SOON="""
 #![deny(clippy::expect_used)]
 #![deny(clippy::checked_conversions)]
 #![deny(clippy::if_then_some_else_none)]
-#![deny(clippy::implicit_clone)]
 #![deny(missing_debug_implementations)]
 #![deny(unused_crate_dependencies)]
 """
