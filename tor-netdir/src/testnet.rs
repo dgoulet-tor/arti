@@ -9,7 +9,8 @@ use super::*;
 use hex_literal::hex;
 use std::time::{Duration, SystemTime};
 use tor_llcrypto::pk::rsa;
-use tor_netdoc::doc::netstatus::{Lifetime, RelayFlags, RelayWeight};
+use tor_netdoc::doc::microdesc::MicrodescBuilder;
+use tor_netdoc::doc::netstatus::{Lifetime, RelayFlags, RelayWeight, RouterStatusBuilder};
 
 /// Helper: make a dummy 1024-bit RSA public key.
 ///
@@ -20,9 +21,42 @@ fn rsa_example() -> rsa::PublicKey {
     rsa::PublicKey::from_der(&der).unwrap()
 }
 
+/// A set of builder objects for a single node.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct NodeBuilders {
+    /// Builds a routerstatus for a single node.
+    ///
+    /// Adjust fields in this builder to change the node's properties.
+    pub rs: RouterStatusBuilder<MdDigest>,
+
+    /// Builds a microdescriptor for a single node.
+    ///
+    /// Adjust fields in this builder in order to change the node's
+    /// properties.
+    pub md: MicrodescBuilder,
+
+    /// Set this value to `true` to omit the microdesc from the network.
+    pub omit_md: bool,
+
+    /// Set this value to `true` to omit the routerdesc from the network.
+    pub omit_rs: bool,
+}
+
+/// Helper: a customization function that does nothing.
+fn simple_net_func(_idx: usize, _nb: &mut NodeBuilders) {}
+
 /// As [`construct_network()`], but return a [`NetDir`].
 pub fn construct_netdir() -> NetDir {
-    let (consensus, microdescs) = construct_network();
+    construct_custom_netdir(simple_net_func)
+}
+
+/// As [`construct_custom_network()`], but return a [`NetDir`].
+pub fn construct_custom_netdir<F>(func: F) -> NetDir
+where
+    F: FnMut(usize, &mut NodeBuilders),
+{
+    let (consensus, microdescs) = construct_custom_network(func);
     let mut dir = PartialNetDir::new(consensus, None);
     for md in microdescs {
         dir.add_microdesc(md);
@@ -31,13 +65,20 @@ pub fn construct_netdir() -> NetDir {
     dir.unwrap_if_sufficient().unwrap()
 }
 
+/// As [`construct_custom_network`], but do not require a
+/// customization function.
+pub fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
+    construct_custom_network(simple_net_func)
+}
+
 /// Build a fake network with enough information to enable some basic
 /// tests.
 ///
-/// The constructed network will contain 40 relays, numbered 0 through
-/// 39. They will have with RSA and Ed25519 identity fingerprints set to
-/// 0x0000...00 through 0x2727...27.  Each pair of relays is in a
-/// family with one another: 0x00..00 with 0x01..01, and so on.
+/// By default, the constructed network will contain 40 relays,
+/// numbered 0 through 39. They will have with RSA and Ed25519
+/// identity fingerprints set to 0x0000...00 through 0x2727...27.
+/// Each pair of relays is in a family with one another: 0x00..00 with
+/// 0x01..01, and so on.
 ///
 /// All relays are marked as usable.  The first ten are marked with no
 /// additional flags.  The next ten are marked with the exit flag.
@@ -60,6 +101,17 @@ pub fn construct_netdir() -> NetDir {
 /// The consensus is declared as using method 34, and as being valid for
 /// one day (in realtime) after the current `SystemTime`.
 ///
+/// # Customization
+///
+/// Before each relay is added to the consensus or the network, it is
+/// passed through the provided filtering function.  This function
+/// receives as its arguments the current index (in range 0..40), a
+/// [`RouterStatusBuilder`], and a [`MicrodescBuilder`].  If it
+/// returns a `RouterStatusBuilder`, the corresponding router status
+/// is added to the consensus.  If it returns a `MicrodescBuilder`,
+/// the corresponding microdescriptor is added to the vector of
+/// microdescriptor.
+///
 /// # Notes for future expansion
 ///
 /// _Resist the temptation to make unconditional changes to this
@@ -69,10 +121,13 @@ pub fn construct_netdir() -> NetDir {
 /// we'll have to throw the whole thing away.  (We ran into this
 /// problem with Tor's unit tests.)
 ///
-/// Instead, I'd suggest refactoring this function so that it takes a
+/// Instead, refactor this function so that it takes a
 /// description of what kind of network to build, and then builds it from
 /// that description.
-pub fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
+pub fn construct_custom_network<F>(mut func: F) -> (MdConsensus, Vec<Microdesc>)
+where
+    F: FnMut(usize, &mut NodeBuilders),
+{
     let f = RelayFlags::RUNNING | RelayFlags::VALID | RelayFlags::V2DIR;
     // define 4 groups of flags
     let flags = [
@@ -109,14 +164,13 @@ pub fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
         let fam_id = [idx ^ 1; 20];
         let family = hex::encode(&fam_id);
 
-        let md = Microdesc::builder()
+        let mut md_builder = Microdesc::builder();
+        md_builder
             .tap_key(rsa_example())
             .ntor_key((*b"----nothing in dirmgr uses this-").into())
             .ed25519_id([idx; 32].into())
             .family(family.parse().unwrap())
             .parse_ipv4_policy(policy)
-            .unwrap()
-            .testing_md()
             .unwrap();
         let protocols = if idx % 2 == 0 {
             // even-numbered relays are dircaches.
@@ -125,19 +179,52 @@ pub fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
             "".parse().unwrap()
         };
         let weight = RelayWeight::Measured(1000 * u32::from(idx % 10 + 1));
-        bld.rs()
+        let mut rs_builder = bld.rs();
+        rs_builder
             .identity([idx; 20].into())
             .add_or_port(format!("{}.0.0.3:9001", idx % 5).parse().unwrap())
-            .doc_digest(*md.digest())
             .protos(protocols)
             .set_flags(flags)
-            .weight(weight)
-            .build_into(&mut bld)
-            .unwrap();
-        microdescs.push(md);
+            .weight(weight);
+
+        let mut node_builders = NodeBuilders {
+            rs: rs_builder,
+            md: md_builder,
+            omit_rs: false,
+            omit_md: false,
+        };
+
+        func(idx as usize, &mut node_builders);
+
+        let md = node_builders.md.testing_md().unwrap();
+        let md_digest = *md.digest();
+        if !node_builders.omit_md {
+            microdescs.push(md);
+        }
+
+        if !node_builders.omit_rs {
+            node_builders
+                .rs
+                .doc_digest(md_digest)
+                .build_into(&mut bld)
+                .unwrap();
+        }
     }
 
     let consensus = bld.testing_consensus().unwrap();
 
     (consensus, microdescs)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn try_with_function() {
+        let mut val = 0_u32;
+        let _net = construct_custom_netdir(|_idx, _nb| {
+            val += 1;
+        });
+        assert_eq!(val, 40)
+    }
 }
