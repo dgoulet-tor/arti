@@ -545,6 +545,7 @@ impl<'a> Relay<'a> {
     pub fn in_same_subnet<'b>(&self, other: &Relay<'b>, subnet_config: &SubnetConfig) -> bool {
         /// Do the two addresses share the same n leading bits?
         fn addrs_equal(a: &SocketAddr, b: &SocketAddr, v4_bits: u8, v6_bits: u8) -> bool {
+            dbg!(a.ip(), b.ip());
             match (a.ip(), b.ip()) {
                 (IpAddr::V4(a), IpAddr::V4(b)) => {
                     if v4_bits > 32 {
@@ -680,7 +681,7 @@ impl<'a> tor_linkspec::CircTarget for Relay<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::testnet::construct_network;
+    use crate::testnet::{construct_custom_netdir, construct_custom_network, construct_network};
     use std::collections::HashSet;
     use std::time::Duration;
 
@@ -863,7 +864,13 @@ mod test {
 
     #[test]
     fn relay_funcs() {
-        let (consensus, microdescs) = construct_network();
+        let (consensus, microdescs) = construct_custom_network(|idx, nb| {
+            if idx == 15 {
+                nb.rs.add_or_port("[f0f0::30]:9001".parse().unwrap());
+            } else if idx == 20 {
+                nb.rs.add_or_port("[f0f0::3131]:9001".parse().unwrap());
+            }
+        });
         let subnet_config = SubnetConfig::default();
         let mut dir = PartialNetDir::new(consensus, None);
         for md in microdescs.into_iter() {
@@ -878,6 +885,8 @@ mod test {
         let r2 = dir.by_id(&[2; 32].into()).unwrap();
         let r3 = dir.by_id(&[3; 32].into()).unwrap();
         let r10 = dir.by_id(&[10; 32].into()).unwrap();
+        let r15 = dir.by_id(&[15; 32].into()).unwrap();
+        let r20 = dir.by_id(&[20; 32].into()).unwrap();
 
         assert_eq!(r0.id(), &[0; 32].into());
         assert_eq!(r0.rsa_id(), &[0; 20].into());
@@ -919,5 +928,54 @@ mod test {
         assert!(r1.in_same_subnet(&r1, &subnet_config));
         assert!(!r1.in_same_subnet(&r2, &subnet_config));
         assert!(!r2.in_same_subnet(&r3, &subnet_config));
+
+        // Make sure IPv6 families work.
+        let subnet_config = SubnetConfig {
+            subnets_family_v4: 32,
+            subnets_family_v6: 96,
+        };
+        assert!(r15.in_same_subnet(&r20, &subnet_config));
+        assert!(!r15.in_same_subnet(&r1, &subnet_config));
+
+        // Make sure that subnet configs can be disabled.
+        let subnet_config = SubnetConfig {
+            subnets_family_v4: 255,
+            subnets_family_v6: 255,
+        };
+        assert!(!r15.in_same_subnet(&r20, &subnet_config));
+    }
+
+    #[test]
+    fn test_badexit() {
+        // make a netdir where relays 10-19 are badexit, and everybody
+        // exits to 443 on IPv6.
+        use tor_netdoc::doc::netstatus::RelayFlags;
+        let netdir = construct_custom_netdir(|idx, nb| {
+            if 10 <= idx && idx < 20 {
+                nb.rs.add_flags(RelayFlags::BAD_EXIT);
+            }
+            nb.md.parse_ipv6_policy("accept 443").unwrap();
+        });
+
+        let e12 = netdir.by_id(&[12; 32].into()).unwrap();
+        let e32 = netdir.by_id(&[32; 32].into()).unwrap();
+
+        assert!(!e12.supports_exit_port_ipv4(80));
+        assert!(e32.supports_exit_port_ipv4(80));
+
+        assert!(!e12.supports_exit_port_ipv6(443));
+        assert!(e32.supports_exit_port_ipv6(443));
+        assert!(!e32.supports_exit_port_ipv6(555));
+
+        assert!(!e12.policies_allow_some_port());
+        assert!(e32.policies_allow_some_port());
+
+        assert!(!e12.ipv4_policy().allows_some_port());
+        assert!(!e12.ipv6_policy().allows_some_port());
+        assert!(e32.ipv4_policy().allows_some_port());
+        assert!(e32.ipv6_policy().allows_some_port());
+
+        assert!(e12.ipv4_declared_policy().allows_some_port());
+        assert!(e12.ipv6_declared_policy().allows_some_port());
     }
 }
