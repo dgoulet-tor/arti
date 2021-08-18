@@ -55,17 +55,22 @@ impl TargetPort {
     }
 }
 
-/// This type represent a token used to isolate unrelated streams on different circuits.
+/// A token used to isolate unrelated streams on different circuits.
 ///
-/// Tokens created with [`IsolationToken::new`] are all different from one another, and different
-/// from tokens created with [`IsolationToken::no_isolation`], however tokens created with [`IsolationToken::no_isolation`]
-/// are all equals.
+/// When two streams are associated with different isolation tokens, they
+/// can never share the same circuit.
+///
+/// Tokens created with [`IsolationToken::new`] are all different from
+/// one another, and different from tokens created with
+/// [`IsolationToken::no_isolation`]. However, tokens created with
+/// [`IsolationToken::no_isolation`] are all equal to one another.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct IsolationToken(u64);
 
 #[allow(clippy::new_without_default)]
 impl IsolationToken {
-    /// Create a new IsolationToken which is different from all other tokens this function created.
+    /// Create a new IsolationToken, unequal to any other token this function
+    /// has created.
     ///
     /// # Panics
     ///
@@ -82,8 +87,10 @@ impl IsolationToken {
         IsolationToken(token)
     }
 
-    /// Create a new IsolationToken equals to every other token created with this fuction, but
-    /// different from all tokens created with `new`.
+    /// Create a new IsolationToken equal to every other token created
+    /// with this fuction, but different from all tokens created with
+    /// `new`.
+    ///
     /// This can be used when no isolation is wanted for some streams.
     pub fn no_isolation() -> Self {
         IsolationToken(0)
