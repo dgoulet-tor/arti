@@ -4,6 +4,13 @@
 //!
 //! It is not covered by semver for the `tor-netdir` crate: see notes
 //! on [`construct_network`].
+//!
+//! # Panics
+//!
+//! These functions can panic on numerous possible internal failures:
+//! only use these functions for testing.
+
+#![allow(clippy::missing_panics_doc)]
 
 use super::*;
 use hex_literal::hex;
@@ -124,11 +131,6 @@ pub fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
 /// Instead, refactor this function so that it takes a
 /// description of what kind of network to build, and then builds it from
 /// that description.
-///
-/// # Panics
-///
-/// Panics on numerous possible internal failures: only use this function
-/// for testing.
 pub fn construct_custom_network<F>(mut func: F) -> (MdConsensus, Vec<Microdesc>)
 where
     F: FnMut(usize, &mut NodeBuilders),
