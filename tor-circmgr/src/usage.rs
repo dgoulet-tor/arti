@@ -88,7 +88,7 @@ impl IsolationToken {
     }
 
     /// Create a new IsolationToken equal to every other token created
-    /// with this fuction, but different from all tokens created with
+    /// with this function, but different from all tokens created with
     /// `new`.
     ///
     /// This can be used when no isolation is wanted for some streams.
