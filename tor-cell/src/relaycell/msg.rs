@@ -313,6 +313,17 @@ impl Data {
         Ok(Self::new_unchecked(inp.into()))
     }
 
+    /// Construct a new data cell, taking as many bytes from `inp`
+    /// as possible.
+    ///
+    /// Return the data cell, and a slice holding any bytes that
+    /// wouldn't fit (if any).
+    pub fn split_from(inp: &[u8]) -> (Self, &[u8]) {
+        let len = std::cmp::min(inp.len(), Data::MAXLEN);
+        let (data, remainder) = inp.split_at(len);
+        (Self::new_unchecked(data.into()), remainder)
+    }
+
     /// Construct a new data cell from a provided vector of bytes.
     ///
     /// The vector _must_ have fewer than [`Data::MAXLEN`] bytes.

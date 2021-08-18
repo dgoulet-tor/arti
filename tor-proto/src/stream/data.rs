@@ -132,7 +132,9 @@ struct DataWriterImpl {
 
     /// Buffered data to send over the connection.
     // TODO: this buffer is probably smaller than we want, but it's good
-    // enough for now.
+    // enough for now.  If we _do_ make it bigger, we'll have to change
+    // our use of Data::split_from to handle the case where we can't fit
+    // all the data.
     buf: Box<[u8; Data::MAXLEN]>,
 
     /// Number of unflushed bytes in buf.
@@ -250,8 +252,10 @@ impl DataWriterImpl {
     /// Try to flush the current buffer contents as a data cell.
     async fn flush_buf(mut self) -> (Self, Result<()>) {
         let result = if self.n_pending != 0 {
-            // XXXX Use a better API.
-            let cell = Data::new(&self.buf[..self.n_pending]).unwrap();
+            let (cell, remainder) = Data::split_from(&self.buf[..self.n_pending]);
+            // TODO: Eventually we may want a larger buffer; if we do,
+            // this invariant will become false.
+            assert!(remainder.is_empty());
             self.n_pending = 0;
             self.s.send(cell.into()).await
         } else {

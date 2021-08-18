@@ -461,6 +461,17 @@ fn test_data() {
             .unwrap()
             .into(),
     );
+
+    // Try creating a data cell from too much data.
+    use rand::RngCore;
+    let mut b = vec![0_u8; 3000];
+    rand::thread_rng().fill_bytes(&mut b[..]);
+    let d = msg::Data::new(&b[..]);
+    assert!(d.is_err());
+
+    let (d, rest) = msg::Data::split_from(&b[..]);
+    assert_eq!(d.as_ref(), &b[0..498]);
+    assert_eq!(rest, &b[498..]);
 }
 
 // TODO: need to add tests for:
