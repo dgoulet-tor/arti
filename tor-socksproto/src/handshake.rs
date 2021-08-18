@@ -248,6 +248,10 @@ impl SocksRequest {
     ///
     /// Note that an address should be provided only when the request
     /// was for a RESOLVE.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if `self.version` does not return `4` or `5`
     pub fn reply(&self, status: SocksStatus, addr: Option<&SocksAddr>) -> Vec<u8> {
         match self.version() {
             4 => self.s4(status, addr),

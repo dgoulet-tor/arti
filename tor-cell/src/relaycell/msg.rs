@@ -304,6 +304,10 @@ impl Data {
     pub const MAXLEN: usize = CELL_DATA_LEN - 11;
 
     /// Construct a new data cell.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if `inp` length is greater than `Data::MAXLEN`
     pub fn new(inp: &[u8]) -> Self {
         assert!(inp.len() <= Data::MAXLEN);
         Data { body: inp.into() }

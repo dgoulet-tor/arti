@@ -680,6 +680,10 @@ pub struct Versions {
 impl Versions {
     /// Construct a new Versions message using a provided list of link
     /// protocols
+    ///
+    /// # Panics
+    ///
+    /// Will panic if `vs` length is greater or equal to half of `u16::MAX`
     pub fn new<B>(vs: B) -> Self
     where
         B: Into<Vec<u16>>,

@@ -41,6 +41,7 @@
 #![deny(clippy::large_stack_arrays)]
 #![warn(clippy::manual_ok_or)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![deny(clippy::missing_panics_doc)]
 #![warn(clippy::needless_borrow)]
 #![warn(clippy::needless_pass_by_value)]
 #![warn(clippy::option_option)]
@@ -156,6 +157,10 @@ pub struct CircMgr<R: Runtime> {
 
 impl<R: Runtime> CircMgr<R> {
     /// Construct a new circuit manager.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if unwrapping the `Result` of `runtime.spawn` is a `SpawnError`
     pub fn new<SM>(
         config: CircMgrConfig,
         storage: SM,

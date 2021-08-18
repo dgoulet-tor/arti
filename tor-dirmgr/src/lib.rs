@@ -31,6 +31,7 @@
 #![deny(clippy::large_stack_arrays)]
 #![warn(clippy::manual_ok_or)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![deny(clippy::missing_panics_doc)]
 #![warn(clippy::needless_borrow)]
 #![warn(clippy::needless_pass_by_value)]
 #![warn(clippy::option_option)]
@@ -422,6 +423,11 @@ impl<R: Runtime> DirMgr<R> {
 
     /// Try to load the text of a single document described by `doc` from
     /// storage.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if provided `doc` does not equal `docid` returned by
+    /// `self.load_documents_into`
     pub async fn text(&self, doc: &DocId) -> Result<Option<DocumentText>> {
         let mut result = HashMap::new();
         let query = (*doc).into();

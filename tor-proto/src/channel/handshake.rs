@@ -97,6 +97,11 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
 
     /// Negotiate a link protocol version with the relay, and read
     /// the relay's handshake information.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if `netinfo` is not `None`, and message enum from
+    /// `futures_codec::Framed` instance is of `Netinfo` type
     pub async fn connect(mut self) -> Result<UnverifiedChannel<T>> {
         match self.target_addr {
             Some(addr) => debug!("{}: starting Tor handshake with {}", self.unique_id, addr),
