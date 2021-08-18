@@ -559,7 +559,7 @@ pub(crate) mod test {
         );
 
         // Can't get handshaking cells while channel is open.
-        let versions_cell = msg::Versions::new([3]).into();
+        let versions_cell = msg::Versions::new([3]).unwrap().into();
         input
             .send(Ok(ChanCell::new(0.into(), versions_cell)))
             .await

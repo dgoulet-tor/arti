@@ -75,7 +75,7 @@ fn test_cells() {
     cell(
         "02 0000 9999 12345678 000c 6e6565642d746f2d6b6e6f77 00000000",
         0x9999.into(),
-        msg::Data::new(&b"need-to-know"[..]).into(),
+        msg::Data::new(&b"need-to-know"[..]).unwrap().into(),
     );
 
     // length too big: 0x1f3 is one byte too many.

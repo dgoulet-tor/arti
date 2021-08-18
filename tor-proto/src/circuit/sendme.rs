@@ -294,7 +294,7 @@ mod test {
         assert!(!msg_counts_towards_windows(&m));
         assert!(!cell_counts_towards_windows(&RelayCell::new(77.into(), m)));
 
-        let m = msg::Data::new(&b"Education is not a prerequisite to political control-political control is the cause of popular education."[..]).into(); // Du Bois
+        let m = msg::Data::new(&b"Education is not a prerequisite to political control-political control is the cause of popular education."[..]).unwrap().into(); // Du Bois
         assert!(msg_counts_towards_windows(&m));
         assert!(cell_counts_towards_windows(&RelayCell::new(128.into(), m)));
     }

@@ -457,7 +457,9 @@ fn test_data() {
     msg(
         cmd,
         "474554202f20485454502f312e310d0a0d0a",
-        &msg::Data::new(&b"GET / HTTP/1.1\r\n\r\n"[..]).into(),
+        &msg::Data::new(&b"GET / HTTP/1.1\r\n\r\n"[..])
+            .unwrap()
+            .into(),
     );
 }
 

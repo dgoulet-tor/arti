@@ -83,7 +83,7 @@ mod test {
         good(msg::CreatedFast::new(&b"this offer is unrepeatable"[..]).into());
         good(msg::Created2::new(&b"guaranteed guaranteed"[..]).into());
         bad(msg::CreateFast::new(&b"for a lifetime or more"[..]).into());
-        bad(msg::Versions::new([1, 2, 3]).into());
+        bad(msg::Versions::new([1, 2, 3]).unwrap().into());
     }
 
     #[test]
@@ -103,6 +103,6 @@ mod test {
         bad(msg::ChanMsg::RelayEarly(msg::Relay::new(
             &b"for the world and its mother"[..],
         )));
-        bad(msg::Versions::new([1, 2, 3]).into());
+        bad(msg::Versions::new([1, 2, 3]).unwrap().into());
     }
 }

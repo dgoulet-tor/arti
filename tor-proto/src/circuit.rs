@@ -1675,7 +1675,9 @@ mod test {
             }
 
             // Write another data cell in reply!
-            let data = relaymsg::Data::new(b"HTTP/1.0 404 Not found\r\n").into();
+            let data = relaymsg::Data::new(b"HTTP/1.0 404 Not found\r\n")
+                .unwrap()
+                .into();
             sink.send(rmsg_to_ccmsg(streamid, data)).await.unwrap();
 
             // Send an END cell to say that the conversation is over.

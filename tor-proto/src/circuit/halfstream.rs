@@ -114,7 +114,9 @@ mod test {
         let mut hs = hs_new();
 
         // 20 data cells are okay.
-        let m = msg::Data::new(&b"this offer is unrepeatable"[..]).into();
+        let m = msg::Data::new(&b"this offer is unrepeatable"[..])
+            .unwrap()
+            .into();
         for _ in 0_u8..20 {
             assert!(hs.handle_msg(&m).await.is_ok());
         }

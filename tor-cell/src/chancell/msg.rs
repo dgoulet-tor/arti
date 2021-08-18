@@ -679,19 +679,19 @@ pub struct Versions {
 }
 impl Versions {
     /// Construct a new Versions message using a provided list of link
-    /// protocols
+    /// protocols.
     ///
-    /// # Panics
-    ///
-    /// Will panic if more versions are listed than will fit in a single
-    /// cell.  (Ths maximum is `u16::MAX / 2`.)
-    pub fn new<B>(vs: B) -> Self
+    /// Returns an error if the list of versions is too long.
+    pub fn new<B>(vs: B) -> crate::Result<Self>
     where
         B: Into<Vec<u16>>,
     {
         let versions = vs.into();
-        assert!(versions.len() < (std::u16::MAX / 2) as usize);
-        Self { versions }
+        if versions.len() < (std::u16::MAX / 2) as usize {
+            Ok(Self { versions })
+        } else {
+            Err(crate::Error::CantEncode)
+        }
     }
     /// Encode this VERSIONS cell in the manner expected for a handshake.
     ///

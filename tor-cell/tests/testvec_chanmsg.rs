@@ -302,7 +302,7 @@ fn test_versions() {
     vbody(
         cmd,
         "000300040005",
-        &msg::Versions::new(vec![3, 4, 5]).into(),
+        &msg::Versions::new(vec![3, 4, 5]).unwrap().into(),
     );
 }
 

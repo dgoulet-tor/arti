@@ -250,7 +250,8 @@ impl DataWriterImpl {
     /// Try to flush the current buffer contents as a data cell.
     async fn flush_buf(mut self) -> (Self, Result<()>) {
         let result = if self.n_pending != 0 {
-            let cell = Data::new(&self.buf[..self.n_pending]);
+            // XXXX Use a better API.
+            let cell = Data::new(&self.buf[..self.n_pending]).unwrap();
             self.n_pending = 0;
             self.s.send(cell.into()).await
         } else {

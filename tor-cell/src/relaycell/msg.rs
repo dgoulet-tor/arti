@@ -305,13 +305,19 @@ impl Data {
 
     /// Construct a new data cell.
     ///
-    /// # Panics
+    /// Returns an error if `inp` is longer than [`Data::MAXLEN`] bytes.
+    pub fn new(inp: &[u8]) -> crate::Result<Self> {
+        if inp.len() > Data::MAXLEN {
+            return Err(crate::Error::CantEncode);
+        }
+        Ok(Self::new_unchecked(inp.into()))
+    }
+
+    /// Construct a new data cell from a provided vector of bytes.
     ///
-    /// Will panic if `inp` is too long to fit into a cell.
-    /// The maximum is [`Data::MAXLEN`].
-    pub fn new(inp: &[u8]) -> Self {
-        assert!(inp.len() <= Data::MAXLEN);
-        Data { body: inp.into() }
+    /// The vector _must_ have fewer than [`Data::MAXLEN`] bytes.
+    fn new_unchecked(body: Vec<u8>) -> Self {
+        Data { body }
     }
 }
 impl From<Data> for Vec<u8> {

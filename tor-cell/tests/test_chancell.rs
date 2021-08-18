@@ -167,7 +167,7 @@ fn bad_circid_cells() {
 fn versions() {
     // Test the special encoding of the versions cell.  (It's special
     // because it uses a 2-byte circid.
-    let v = msg::Versions::new([4, 5, 6]);
+    let v = msg::Versions::new([4, 5, 6]).unwrap();
     let encoded = v.clone().encode_for_handshake();
     assert_eq!(encoded, hex!("0000 07 0006 0004 0005 0006"));
 

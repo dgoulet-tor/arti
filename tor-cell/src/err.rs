@@ -26,6 +26,9 @@ pub enum Error {
     /// Tried to make or use a stream to an invalid destination address.
     #[error("invalid stream target address")]
     BadStreamAddress,
+    /// Tried to construct a message that Tor can't represent.
+    #[error("Message can't be represented in a Tor cell.")]
+    CantEncode,
 }
 
 impl From<std::io::Error> for Error {

@@ -105,7 +105,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
         trace!("{}: sending versions", self.unique_id);
         // Send versions cell
         {
-            let my_versions = msg::Versions::new(LINK_PROTOCOLS);
+            let my_versions = msg::Versions::new(LINK_PROTOCOLS)?;
             self.tls.write(&my_versions.encode_for_handshake()).await?;
             self.tls.flush().await?;
         }
