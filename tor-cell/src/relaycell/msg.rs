@@ -307,7 +307,8 @@ impl Data {
     ///
     /// # Panics
     ///
-    /// Will panic if `inp` length is greater than `Data::MAXLEN`
+    /// Will panic if `inp` is too long to fit into a cell.
+    /// The maximum is [`Data::MAXLEN`].
     pub fn new(inp: &[u8]) -> Self {
         assert!(inp.len() <= Data::MAXLEN);
         Data { body: inp.into() }

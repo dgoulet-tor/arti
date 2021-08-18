@@ -89,7 +89,7 @@ mod msg;
 
 pub use err::Error;
 pub use handshake::{Action, SocksHandshake};
-pub use msg::{SocksAddr, SocksAuth, SocksCmd, SocksRequest, SocksStatus};
+pub use msg::{SocksAddr, SocksAuth, SocksCmd, SocksRequest, SocksStatus, SocksVersion};
 
 /// A Result type for the tor_socksproto crate.
 pub type Result<T> = std::result::Result<T, Error>;

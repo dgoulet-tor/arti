@@ -289,7 +289,8 @@ impl MockNetProvider {
     ///
     /// # Panics
     ///
-    /// We panic if we run out of unused port numbers here.
+    /// Panics if there are no remaining ports that this function hasn't
+    /// returned before.
     fn arbitrary_port(&self) -> u16 {
         let next = self.inner.next_port.fetch_add(1, Ordering::Relaxed);
         assert!(next != 0);

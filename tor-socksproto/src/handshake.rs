@@ -1,6 +1,6 @@
 //! Types to implement the SOCKS handshake.
 
-use crate::msg::{SocksAddr, SocksAuth, SocksCmd, SocksRequest, SocksStatus};
+use crate::msg::{SocksAddr, SocksAuth, SocksCmd, SocksRequest, SocksStatus, SocksVersion};
 use crate::{Error, Result};
 
 use tor_bytes::Error as BytesError;
@@ -106,8 +106,10 @@ impl SocksHandshake {
     /// Complete a socks4 or socks4a handshake.
     fn s4(&mut self, input: &[u8]) -> Result<Action> {
         let mut r = Reader::from_slice(input);
-        let version = r.take_u8()?;
-        assert_eq!(version, 4);
+        let version = r.take_u8()?.try_into()?;
+        if version != SocksVersion::V4 {
+            return Err(Error::Internal);
+        }
 
         let cmd: SocksCmd = r.take_u8()?.into();
         let port = r.take_u16()?;
@@ -145,8 +147,11 @@ impl SocksHandshake {
     /// Socks5: initial handshake to negotiate authentication method.
     fn s5_initial(&mut self, input: &[u8]) -> Result<Action> {
         let mut r = Reader::from_slice(input);
-        let version = r.take_u8()?;
-        assert_eq!(version, 5);
+        let version: SocksVersion = r.take_u8()?.try_into()?;
+        if version != SocksVersion::V5 {
+            return Err(Error::Internal);
+        }
+
         /// Constant for Username/Password-style authentication.
         /// (See RFC 1929)
         const USERNAME_PASSWORD: u8 = 0x02;
@@ -202,9 +207,9 @@ impl SocksHandshake {
     fn s5(&mut self, input: &[u8]) -> Result<Action> {
         let mut r = Reader::from_slice(input);
 
-        let version = r.take_u8()?;
-        if version != 5 {
-            return Err(Error::Syntax);
+        let version: SocksVersion = r.take_u8()?.try_into()?;
+        if version != SocksVersion::V5 {
+            return Err(Error::Internal);
         }
         let cmd = r.take_u8()?.into();
         let _ignore = r.take_u8()?;
@@ -248,15 +253,10 @@ impl SocksRequest {
     ///
     /// Note that an address should be provided only when the request
     /// was for a RESOLVE.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if `self.version` does not return `4` or `5`
     pub fn reply(&self, status: SocksStatus, addr: Option<&SocksAddr>) -> Vec<u8> {
         match self.version() {
-            4 => self.s4(status, addr),
-            5 => self.s5(status, addr),
-            _ => panic!(),
+            SocksVersion::V4 => self.s4(status, addr),
+            SocksVersion::V5 => self.s5(status, addr),
         }
     }
 
@@ -455,7 +455,7 @@ mod test {
         assert_eq!(h.state, State::Done);
 
         let req = h.into_request().unwrap();
-        assert_eq!(req.version(), 5);
+        assert_eq!(req.version(), SocksVersion::V5);
         assert_eq!(req.command(), SocksCmd::CONNECT);
         assert_eq!(req.addr().to_string(), "127.0.0.7");
         assert_eq!(req.port(), 8080);
@@ -487,7 +487,7 @@ mod test {
         assert_eq!(h.state, State::Done);
 
         let req = h.into_request().unwrap();
-        assert_eq!(req.version(), 5);
+        assert_eq!(req.version(), SocksVersion::V5);
         assert_eq!(req.command(), SocksCmd::CONNECT);
         assert_eq!(req.addr().to_string(), "f000::ff11");
         assert_eq!(req.port(), 8080);
@@ -512,7 +512,7 @@ mod test {
         assert_eq!(h.state, State::Done);
 
         let req = h.into_request().unwrap();
-        assert_eq!(req.version(), 5);
+        assert_eq!(req.version(), SocksVersion::V5);
         assert_eq!(req.command(), SocksCmd::CONNECT);
         assert_eq!(req.addr().to_string(), "foo.example.com");
         assert_eq!(req.port(), 8080);

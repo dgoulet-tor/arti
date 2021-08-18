@@ -423,17 +423,20 @@ impl<R: Runtime> DirMgr<R> {
 
     /// Try to load the text of a single document described by `doc` from
     /// storage.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if provided `doc` does not equal `docid` returned by
-    /// `self.load_documents_into`
     pub async fn text(&self, doc: &DocId) -> Result<Option<DocumentText>> {
+        use itertools::Itertools;
         let mut result = HashMap::new();
         let query = (*doc).into();
         self.load_documents_into(&query, &mut result).await?;
-        if let Some((docid, doctext)) = result.into_iter().next() {
-            assert_eq!(&docid, doc);
+        let item = result.into_iter().at_most_one().map_err(|_| {
+            Error::CacheCorruption("Found more than one entry in storage for given docid")
+        })?;
+        if let Some((docid, doctext)) = item {
+            if &docid != doc {
+                return Err(
+                    Error::CacheCorruption("Item from storage had incorrect docid.").into(),
+                );
+            }
             Ok(Some(doctext))
         } else {
             Ok(None)

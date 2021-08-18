@@ -124,6 +124,11 @@ pub fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
 /// Instead, refactor this function so that it takes a
 /// description of what kind of network to build, and then builds it from
 /// that description.
+///
+/// # Panics
+///
+/// Panics on numerous possible internal failures: only use this function
+/// for testing.
 pub fn construct_custom_network<F>(mut func: F) -> (MdConsensus, Vec<Microdesc>)
 where
     F: FnMut(usize, &mut NodeBuilders),

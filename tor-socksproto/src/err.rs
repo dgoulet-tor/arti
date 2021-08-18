@@ -32,6 +32,10 @@ pub enum Error {
     /// finished.  This is a programming error.
     #[error("SOCKS handshake was finished; no need to call this again")]
     AlreadyFinished,
+
+    /// Something went wrong with the programming of this module.
+    #[error("Internal programming error while handling SOCKS handshake")]
+    Internal,
 }
 
 impl From<tor_bytes::Error> for Error {

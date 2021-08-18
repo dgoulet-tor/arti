@@ -29,7 +29,7 @@ fn stream_preference(req: &SocksRequest, addr: &str) -> ConnectPrefs {
     } else if addr.parse::<Ipv6Addr>().is_ok() {
         // If they asked for an IPv6 address correctly, nothing else will do.
         prefs.ipv6_only();
-    } else if req.version() == 4 {
+    } else if req.version() == tor_socksproto::SocksVersion::V4 {
         // SOCKS4 and SOCKS4a only support IPv4
         prefs.ipv4_only();
     } else {

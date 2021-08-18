@@ -157,16 +157,12 @@ pub struct CircMgr<R: Runtime> {
 
 impl<R: Runtime> CircMgr<R> {
     /// Construct a new circuit manager.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if unwrapping the `Result` of `runtime.spawn` is a `SpawnError`
     pub fn new<SM>(
         config: CircMgrConfig,
         storage: SM,
         runtime: &R,
         chanmgr: Arc<ChanMgr<R>>,
-    ) -> Arc<Self>
+    ) -> Result<Arc<Self>>
     where
         SM: tor_persist::StateMgr + Send + Sync + 'static,
     {
@@ -187,14 +183,12 @@ impl<R: Runtime> CircMgr<R> {
             storage,
         });
 
-        runtime
-            .spawn(continually_expire_circuits(
-                runtime.clone(),
-                Arc::downgrade(&circmgr),
-            ))
-            .unwrap(); //XXXX unwrap is not so good here!
+        runtime.spawn(continually_expire_circuits(
+            runtime.clone(),
+            Arc::downgrade(&circmgr),
+        ))?;
 
-        circmgr
+        Ok(circmgr)
     }
 
     /// Flush state to the state manager, if there is any unsaved state.

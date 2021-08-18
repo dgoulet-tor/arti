@@ -7,6 +7,36 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::net::IpAddr;
 
+/// A supported SOCKS version.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum SocksVersion {
+    /// Socks v4.
+    V4,
+    /// Socks v5.
+    V5,
+}
+
+impl From<SocksVersion> for u8 {
+    fn from(v: SocksVersion) -> u8 {
+        match v {
+            SocksVersion::V4 => 4,
+            SocksVersion::V5 => 5,
+        }
+    }
+}
+
+impl TryFrom<u8> for SocksVersion {
+    type Error = Error;
+    fn try_from(v: u8) -> Result<SocksVersion> {
+        match v {
+            4 => Ok(SocksVersion::V4),
+            5 => Ok(SocksVersion::V5),
+            _ => Err(Error::BadProtocol(v)),
+        }
+    }
+}
+
 /// A completed SOCKS request, as negotiated on a SOCKS connection.
 ///
 /// Once this request is done, we know where to connect.  Don't
@@ -14,8 +44,8 @@ use std::net::IpAddr;
 /// failure.
 #[derive(Clone, Debug)]
 pub struct SocksRequest {
-    /// Negotiated SOCKS protocol version. This will be 4 or 5.
-    version: u8,
+    /// Negotiated SOCKS protocol version.
+    version: SocksVersion,
     /// The command requested by the SOCKS client.
     cmd: SocksCmd,
     /// The target address.
@@ -163,18 +193,12 @@ impl SocksRequest {
     ///
     /// Return an error if the inputs aren't supported or valid.
     pub(crate) fn new(
-        version: u8,
+        version: SocksVersion,
         cmd: SocksCmd,
         addr: SocksAddr,
         port: u16,
         auth: SocksAuth,
     ) -> Result<Self> {
-        match version {
-            4 | 5 => {}
-            _ => {
-                return Err(Error::NoSupport);
-            }
-        }
         if !cmd.recognized() {
             return Err(Error::NoSupport);
         }
@@ -192,7 +216,7 @@ impl SocksRequest {
     }
 
     /// Return the negotiated version (4 or 5).
-    pub fn version(&self) -> u8 {
+    pub fn version(&self) -> SocksVersion {
         self.version
     }
 
@@ -249,14 +273,14 @@ mod test {
     fn ok_request() {
         let localhost_v4 = SocksAddr::Ip(IpAddr::V4("127.0.0.1".parse().unwrap()));
         let r = SocksRequest::new(
-            4,
+            SocksVersion::V4,
             SocksCmd::CONNECT,
             localhost_v4.clone(),
             1024,
             SocksAuth::NoAuth,
         )
         .unwrap();
-        assert_eq!(r.version(), 4);
+        assert_eq!(r.version(), SocksVersion::V4);
         assert_eq!(r.command(), SocksCmd::CONNECT);
         assert_eq!(r.addr(), &localhost_v4);
         assert_eq!(r.auth(), &SocksAuth::NoAuth);
@@ -267,16 +291,7 @@ mod test {
         let localhost_v4 = SocksAddr::Ip(IpAddr::V4("127.0.0.1".parse().unwrap()));
 
         let e = SocksRequest::new(
-            9,
-            SocksCmd::CONNECT,
-            localhost_v4.clone(),
-            1024,
-            SocksAuth::NoAuth,
-        );
-        assert!(matches!(e, Err(Error::NoSupport)));
-
-        let e = SocksRequest::new(
-            4,
+            SocksVersion::V4,
             SocksCmd::BIND,
             localhost_v4.clone(),
             1024,
@@ -284,7 +299,13 @@ mod test {
         );
         assert!(matches!(e, Err(Error::NoSupport)));
 
-        let e = SocksRequest::new(4, SocksCmd::CONNECT, localhost_v4, 0, SocksAuth::NoAuth);
+        let e = SocksRequest::new(
+            SocksVersion::V4,
+            SocksCmd::CONNECT,
+            localhost_v4,
+            0,
+            SocksAuth::NoAuth,
+        );
         assert!(matches!(e, Err(Error::Syntax)));
     }
 }

@@ -97,11 +97,6 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
 
     /// Negotiate a link protocol version with the relay, and read
     /// the relay's handshake information.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if `netinfo` is not `None`, and message enum from
-    /// `futures_codec::Framed` instance is of `Netinfo` type
     pub async fn connect(mut self) -> Result<UnverifiedChannel<T>> {
         match self.target_addr {
             Some(addr) => debug!("{}: starting Tor handshake with {}", self.unique_id, addr),
@@ -174,7 +169,13 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> OutboundClientHandshake
                     certs = Some(c);
                 }
                 Netinfo(n) => {
-                    assert!(netinfo.is_none());
+                    if netinfo.is_some() {
+                        // This should be impossible, since we would
+                        // exit this loop on the first netinfo cell.
+                        return Err(Error::InternalError(
+                            "Somehow tried to record a duplicate NETINFO cell".into(),
+                        ));
+                    }
                     netinfo = Some(n);
                     break;
                 }

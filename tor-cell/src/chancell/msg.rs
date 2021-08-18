@@ -683,7 +683,8 @@ impl Versions {
     ///
     /// # Panics
     ///
-    /// Will panic if `vs` length is greater or equal to half of `u16::MAX`
+    /// Will panic if more versions are listed than will fit in a single
+    /// cell.  (Ths maximum is `u16::MAX / 2`.)
     pub fn new<B>(vs: B) -> Self
     where
         B: Into<Vec<u16>>,

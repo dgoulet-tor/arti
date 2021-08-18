@@ -67,7 +67,10 @@ impl IsolationToken {
     /// Create a new IsolationToken which is different from all other tokens this function created.
     ///
     /// # Panics
-    /// Panics after 2^64 calls to prevent looping.
+    ///
+    /// Panics if we have already allocated 2^64 isolation tokens: in that
+    /// case, we have exhausted the space of possible tokens, and it is
+    /// no longer possible to ensure isolation.
     pub fn new() -> Self {
         /// Internal counter used to generate different tokens each time
         static COUNTER: AtomicU64 = AtomicU64::new(1);

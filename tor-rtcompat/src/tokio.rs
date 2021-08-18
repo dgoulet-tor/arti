@@ -39,6 +39,10 @@ pub fn current_runtime() -> std::io::Result<impl Runtime> {
 }
 
 /// Run a test function using a freshly created tokio runtime.
+///
+/// # Panics
+///
+/// Panics if we can't create a tokio runtime.
 pub fn test_with_runtime<P, F, O>(func: P) -> O
 where
     P: FnOnce(async_executors::TokioTp) -> F,

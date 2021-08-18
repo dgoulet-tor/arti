@@ -63,7 +63,13 @@ pub fn convert_curve25519_to_ed25519_public(
 ///
 /// # Panics
 ///
-/// Will panic if `Option` from `convert_curve25519_to_ed25519_public` is `None`
+/// If the `debug_assertions` feature is enabled, this function will
+/// double-check that the key it is about to return is the right
+/// private key for the public key returned by
+/// `convert_curve25519_to_ed25519_public`.
+///
+/// This panic should be impossible unless there are implementation
+/// bugs.
 pub fn convert_curve25519_to_ed25519_private(
     privkey: &pk::curve25519::StaticSecret,
 ) -> Option<(pk::ed25519::ExpandedSecretKey, u8)> {
