@@ -63,6 +63,7 @@ impl TargetPort {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct IsolationToken(u64);
 
+#[allow(clippy::new_without_default)]
 impl IsolationToken {
     /// Create a new IsolationToken which is different from all other tokens this function created.
     ///
