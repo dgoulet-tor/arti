@@ -58,9 +58,9 @@ impl TargetPort {
 /// This type represent a token used to isolate unrelated streams on different circuits.
 ///
 /// Tokens created with [`IsolationToken::new`] are all different from one another, and different
-/// from tokens created with [`IsolationToken::default`], however tokens created with [`IsolationToken::default`]
+/// from tokens created with [`IsolationToken::no_isolation`], however tokens created with [`IsolationToken::no_isolation`]
 /// are all equals.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct IsolationToken(u64);
 
 impl IsolationToken {
@@ -79,6 +79,13 @@ impl IsolationToken {
         let token = COUNTER.fetch_add(1, Ordering::Relaxed);
         assert!(token < u64::MAX);
         IsolationToken(token)
+    }
+
+    /// Create a new IsolationToken equals to every other token created with this fuction, but
+    /// different from all tokens created with `new`.
+    /// This can be used when no isolation is wanted for some streams.
+    pub fn no_isolation() -> Self {
+        IsolationToken(0)
     }
 }
 

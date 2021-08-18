@@ -41,7 +41,7 @@ pub struct TorClient<R: Runtime> {
 }
 
 /// Preferences for how to route a stream over the Tor network.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct ConnectPrefs {
     /// What kind of IPv6/IPv4 we'd prefer, and how strongly.
     ip_ver_pref: IpVersionPreference,
@@ -120,6 +120,15 @@ impl ConnectPrefs {
     }
 
     // TODO: Add some way to be IPFlexible, and require exit to support both.
+}
+
+impl Default for ConnectPrefs {
+    fn default() -> Self {
+        ConnectPrefs {
+            ip_ver_pref: Default::default(),
+            isolation_group: IsolationToken::no_isolation(),
+        }
+    }
 }
 
 impl<R: Runtime> TorClient<R> {
