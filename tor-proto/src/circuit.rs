@@ -269,7 +269,7 @@ impl ClientCirc {
     /// Helper: extend the circuit by one hop.
     ///
     /// The `rng` is used to generate handshake material.  The
-    /// `handshake_id` is the numeric identifer for what kind of
+    /// `handshake_id` is the numeric identifier for what kind of
     /// handshake we're doing.  The `key is the relay's onion key that
     /// goes along with the handshake, and the `linkspecs` are the
     /// link specifiers to include in the EXTEND cell to tell the

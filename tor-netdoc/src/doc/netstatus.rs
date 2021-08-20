@@ -792,7 +792,7 @@ impl CommonHeader {
 
         {
             // this unwrap is safe because if there is not at least one
-            // token in the section, the section is unparseable.
+            // token in the section, the section is unparsable.
             let first = sec.first_item().unwrap();
             if first.kwd() != NETWORK_STATUS_VERSION {
                 return Err(Error::UnexpectedToken(first.kwd().to_str(), first.pos()));

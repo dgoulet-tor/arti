@@ -185,7 +185,7 @@ impl<T: Keyword> TokenFmtBuilder<T> {
             ..self.0
         })
     }
-    /// Indicate that this token takes an optional objet.
+    /// Indicate that this token takes an optional object.
     ///
     /// By default, objects are not allowed.
     pub(crate) fn obj_optional(self) -> Self {
@@ -194,7 +194,7 @@ impl<T: Keyword> TokenFmtBuilder<T> {
             ..self.0
         })
     }
-    /// Indicate that this token takes an required objet.
+    /// Indicate that this token takes an required object.
     ///
     /// By default, objects are not allowed.
     pub(crate) fn obj_required(self) -> Self {

@@ -562,7 +562,7 @@ impl RouterDesc {
                 ipv6addr = Some((*a.ip(), a.port()));
                 break;
             }
-            // We skip over unparseable addresses. Is that right?
+            // We skip over unparsable addresses. Is that right?
         }
 
         // platform

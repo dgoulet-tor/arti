@@ -363,7 +363,7 @@ async fn flush_state_to_disk<R: Runtime>(runtime: R, circmgr: Weak<tor_circmgr::
     }
 }
 
-/// Run indefinitly, launching circuits as needed to get a good
+/// Run indefinitely, launching circuits as needed to get a good
 /// estimate for our circuit build timeouts.
 ///
 /// Exit when we notice that `circmgr` or `dirmgr` has been dropped.

@@ -364,7 +364,7 @@ impl<DM: WriteNetDir> DirState for GetCertsState<DM> {
                 }
             } else {
                 // TODO: note the source.
-                warn!("Unparseable certificate received and discarded.");
+                warn!("Unparsable certificate received and discarded.");
             }
         }
 
