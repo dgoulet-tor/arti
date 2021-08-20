@@ -123,12 +123,12 @@ pub(crate) mod test {
     #[test]
     fn t_probabilistic() {
         let mut cnt = [0_isize; 4];
-        let arry: &[u64] = &[100, 0, 1000, 1];
+        let array: &[u64] = &[100, 0, 1000, 1];
         let mut rng = get_rng();
         let n_iters = get_iters() as isize;
         for _ in 1..n_iters {
-            let r = pick_weighted(&mut rng, arry.iter(), |x| **x).unwrap();
-            let pos = arry.iter().position(|x| x == r);
+            let r = pick_weighted(&mut rng, array.iter(), |x| **x).unwrap();
+            let pos = array.iter().position(|x| x == r);
             cnt[pos.unwrap()] += 1;
         }
 
@@ -146,8 +146,8 @@ pub(crate) mod test {
         // Now try again, with equal-probability weighting.
         let mut cnt = [0_isize; 4];
         for _ in 1..n_iters {
-            let r = pick_weighted(&mut rng, arry.iter(), |_| 1).unwrap();
-            let pos = arry.iter().position(|x| x == r);
+            let r = pick_weighted(&mut rng, array.iter(), |_| 1).unwrap();
+            let pos = array.iter().position(|x| x == r);
             cnt[pos.unwrap()] += 1;
         }
         check_close(cnt[0], n_iters / 4);
@@ -158,8 +158,8 @@ pub(crate) mod test {
         // Try with square-of-value weighting.
         let mut cnt = [0_isize; 4];
         for _ in 1..n_iters {
-            let r = pick_weighted(&mut rng, arry.iter(), |x| (*x) * (*x)).unwrap();
-            let pos = arry.iter().position(|x| x == r);
+            let r = pick_weighted(&mut rng, array.iter(), |x| (*x) * (*x)).unwrap();
+            let pos = array.iter().position(|x| x == r);
             cnt[pos.unwrap()] += 1;
         }
         fn check_fclose(a: f64, b: f64) {
@@ -175,8 +175,8 @@ pub(crate) mod test {
         #[cfg(not(feature = "stochastic_tests"))]
         let n_iters = n_iters * 2;
         for _ in 1..n_iters {
-            let r = pick_weighted(&mut rng, arry.iter(), |_| u64::MAX).unwrap();
-            let pos = arry.iter().position(|x| x == r);
+            let r = pick_weighted(&mut rng, array.iter(), |_| u64::MAX).unwrap();
+            let pos = array.iter().position(|x| x == r);
             cnt[pos.unwrap()] += 1;
         }
         check_close(cnt[0], n_iters / 4);
@@ -190,18 +190,18 @@ pub(crate) mod test {
     fn zero_prob() {
         // this isn't a stochastic test, we can use a real RNG.
         let mut rng = rand::thread_rng();
-        let arry: &[&str] = &["Several", "options", "none", "of", "which", "are", "ok"];
+        let array: &[&str] = &["Several", "options", "none", "of", "which", "are", "ok"];
 
         // give every member zero weight
         for _ in 1..1000 {
-            let r = pick_weighted(&mut rng, arry.iter(), |_| 0);
+            let r = pick_weighted(&mut rng, array.iter(), |_| 0);
             assert!(r.is_none());
         }
 
         // try an empty list with nonzero weights
-        let arry: &[&str] = &[];
+        let array: &[&str] = &[];
         for _ in 1..1000 {
-            let r = pick_weighted(&mut rng, arry.iter(), |_| 1);
+            let r = pick_weighted(&mut rng, array.iter(), |_| 1);
             assert!(r.is_none());
         }
     }
@@ -211,10 +211,10 @@ pub(crate) mod test {
     fn singleton() {
         // this isn't a stochastic test, we can use a real RNG.
         let mut rng = rand::thread_rng();
-        let arry: &[&str] = &["Singleton"];
+        let array: &[&str] = &["Singleton"];
 
         for _ in 1..1000 {
-            let r = pick_weighted(&mut rng, arry.iter(), |_| 7);
+            let r = pick_weighted(&mut rng, array.iter(), |_| 7);
             assert_eq!(r.unwrap(), &"Singleton");
         }
     }

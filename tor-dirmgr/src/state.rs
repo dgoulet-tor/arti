@@ -494,9 +494,9 @@ impl<DM: WriteNetDir> GetMicrodescsState<DM> {
             }
             return self.consider_upgrade();
         } else if let Some(wd) = Weak::upgrade(&self.writedir) {
-            let _ = wd.netdir().mutate(|nd| {
+            let _ = wd.netdir().mutate(|netdir| {
                 for md in mds {
-                    nd.add_microdesc(md);
+                    netdir.add_microdesc(md);
                 }
                 Ok(())
             });

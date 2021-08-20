@@ -207,7 +207,7 @@ pub enum Error {
     /// found it.
     #[error("found {0} out of place{1}")]
     MisplacedToken(&'static str, Pos),
-    /// We found more arguments on an entry than it is allowed to hav.e
+    /// We found more arguments on an entry than it is allowed to have.
     #[error("too many arguments for {0}{1}")]
     TooManyArguments(&'static str, Pos),
     /// We didn't fine enough arguments for some entry.

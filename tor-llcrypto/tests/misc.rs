@@ -78,7 +78,7 @@ fn batch_verify() {
 }
 
 #[test]
-fn ser_de_rsaid() {
+fn serde_rsaid() {
     use serde_test::{assert_tokens, Configure, Token};
 
     let rsa_id = ll::pk::rsa::RsaIdentity::from_bytes(b"example key id here!").unwrap();
@@ -91,7 +91,7 @@ fn ser_de_rsaid() {
 }
 
 #[test]
-fn ser_de_edid() {
+fn serde_edid() {
     use serde_test::{assert_tokens, Configure, Token};
 
     let rsa_id =

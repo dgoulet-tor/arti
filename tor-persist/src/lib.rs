@@ -87,7 +87,7 @@ pub trait StateMgr {
 /// # Locking
 ///
 /// This manager uses a lock file to determine whether it's allowed to
-/// write to the disk.  Only one processs should write to the disk at
+/// write to the disk.  Only one process should write to the disk at
 /// a time, though any number may read from the disk.
 ///
 /// By default, every `FsStateMgr` starts out unlocked, and only able

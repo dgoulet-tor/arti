@@ -119,10 +119,10 @@ mod curve25519impl {
         type Err = Error;
         fn from_str(s: &str) -> Result<Self> {
             let b64: B64 = s.parse()?;
-            let arry: [u8; 32] = b64.as_bytes().try_into().map_err(|_| {
+            let array: [u8; 32] = b64.as_bytes().try_into().map_err(|_| {
                 Error::BadArgument(Pos::at(s), "bad length for curve25519 key.".into())
             })?;
-            Ok(Curve25519Public(arry.into()))
+            Ok(Curve25519Public(array.into()))
         }
     }
 

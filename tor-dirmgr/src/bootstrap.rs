@@ -39,7 +39,7 @@ async fn fetch_single<R: Runtime>(
     let circmgr = dirmgr.circmgr()?;
     let cur_netdir = dirmgr.opt_netdir();
     let dirinfo = match cur_netdir {
-        Some(ref nd) => nd.as_ref().into(),
+        Some(ref netdir) => netdir.as_ref().into(),
         None => dirmgr.config.fallbacks().into(),
     };
     let resource =
