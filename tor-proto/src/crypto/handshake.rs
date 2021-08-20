@@ -14,6 +14,8 @@ pub(crate) mod fast;
 #[cfg(feature = "hs")]
 pub(crate) mod hs_ntor;
 pub(crate) mod ntor;
+#[cfg(feature = "ntor_v3")]
+pub(crate) mod ntor_v3;
 
 use crate::{Result, SecretBytes};
 //use zeroize::Zeroizing;
