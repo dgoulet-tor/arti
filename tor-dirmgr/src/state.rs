@@ -13,7 +13,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::lock::Mutex;
-use log::{info, warn};
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -21,6 +20,7 @@ use std::sync::Weak;
 use std::time::{Duration, SystemTime};
 use tor_netdir::{MdReceiver, NetDir, PartialNetDir};
 use tor_netdoc::doc::netstatus::Lifetime;
+use tracing::{info, warn};
 
 use crate::{
     docmeta::{AuthCertMeta, ConsensusMeta},

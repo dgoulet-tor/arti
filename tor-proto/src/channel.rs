@@ -79,8 +79,8 @@ use futures::stream::Stream;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
-use log::trace;
 use rand::Rng;
+use tracing::trace;
 
 // reexport
 pub use handshake::{OutboundClientHandshake, UnverifiedChannel, VerifiedChannel};

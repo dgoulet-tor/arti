@@ -76,7 +76,7 @@ use std::sync::Arc;
 
 use rand::{thread_rng, CryptoRng, Rng};
 
-use log::{debug, trace};
+use tracing::{debug, trace};
 
 /// A circuit that we have constructed over the Tor network.
 pub struct ClientCirc {

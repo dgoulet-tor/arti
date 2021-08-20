@@ -33,13 +33,13 @@ use futures::channel::{mpsc, oneshot};
 use futures::future::{FutureExt, Shared};
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures::task::SpawnExt;
-use log::{info, log};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::{self, Arc, Weak};
 use std::time::{Duration, Instant};
+use tracing::{debug, info};
 use weak_table::PtrWeakHashSet;
 
 mod streams;
@@ -874,17 +874,17 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
                         }
                         Err(e) => {
                             // TODO: as below, improve this log message.
-                            let level = match src {
-                                streams::Source::Left => log::Level::Info,
-                                _ => log::Level::Debug,
-                            };
-                            log!(
-                                level,
-                                "{:?} suggested we use {:?}, but restrictions failed: {:?}",
-                                src,
-                                id,
-                                &e
-                            );
+                            if src == streams::Source::Left {
+                                info!(
+                                    "{:?} suggested we use {:?}, but restrictions failed: {:?}",
+                                    src, id, &e
+                                );
+                            } else {
+                                debug!(
+                                    "{:?} suggested we use {:?}, but restrictions failed: {:?}",
+                                    src, id, &e
+                                );
+                            }
                             if src == streams::Source::Left {
                                 retry_error.push(e)
                             }

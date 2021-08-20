@@ -68,7 +68,7 @@ impl<R: Runtime> ChanBuilder<R> {
             .get(0)
             .ok_or_else(|| Error::UnusableTarget("No addresses for chosen relay".into()))?;
 
-        log::info!("Negotiating TLS with {}", addr);
+        tracing::info!("Negotiating TLS with {}", addr);
 
         // TODO: add a random hostname here if it will be used for SNI?
         let tls = self

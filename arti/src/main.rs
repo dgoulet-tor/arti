@@ -87,10 +87,11 @@ use tor_rtcompat::{Runtime, SpawnBlocking};
 
 use anyhow::Result;
 use argh::FromArgs;
-use log::{info, warn, LevelFilter};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use tracing::level_filters::LevelFilter;
+use tracing::{info, warn};
 
 #[derive(FromArgs, Debug, Clone)]
 /// Connect to the Tor network, open a SOCKS port, and proxy
@@ -221,11 +222,11 @@ fn main() -> Result<()> {
     let config: ArtiConfig = cfg.try_into()?;
 
     let filt = if config.trace {
-        LevelFilter::Trace
+        LevelFilter::TRACE
     } else {
-        LevelFilter::Debug
+        LevelFilter::DEBUG
     };
-    simple_logging::log_to_stderr(filt);
+    tracing_subscriber::fmt().with_max_level(filt).init();
 
     let statecfg = config.storage.state_dir.path()?;
     let dircfg = config.get_dir_config()?;

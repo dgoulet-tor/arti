@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 use rand::Rng;
 
-use log::info;
+use tracing::info;
 
 /// The entry for a stream.
 pub(super) enum StreamEnt {

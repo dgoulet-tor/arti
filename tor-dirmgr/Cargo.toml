@@ -35,7 +35,7 @@ futures = "0.3.13"
 fslock = { version = "0.1.7", features=["multilock"] }
 hex = "0.4.3"
 itertools = "0.10.1"
-log = "0.4.14"
+tracing = "0.1.26"
 memmap2 = { version="0.3.0", optional=true }
 postage = { version="0.4.1", default-features=false, features=["futures-traits"] }
 rand = "0.8.3"

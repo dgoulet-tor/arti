@@ -67,11 +67,11 @@ use tor_netdoc::doc::microdesc::{MdDigest, Microdesc};
 use tor_netdoc::doc::netstatus::{self, MdConsensus, RouterStatus};
 use tor_netdoc::types::policy::PortPolicy;
 
-use log::warn;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::net::IpAddr;
 use std::sync::Arc;
+use tracing::warn;
 
 pub use err::Error;
 pub use weight::WeightRole;

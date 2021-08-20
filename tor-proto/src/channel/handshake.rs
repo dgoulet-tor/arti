@@ -23,7 +23,7 @@ use digest::Digest;
 
 use super::CellFrame;
 
-use log::{debug, trace};
+use tracing::{debug, trace};
 
 /// A list of the link protocols that we support.
 // We only support version 4 for now, since we don't do padding right.

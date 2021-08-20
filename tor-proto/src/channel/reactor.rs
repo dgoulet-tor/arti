@@ -24,7 +24,7 @@ use std::convert::TryInto;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
-use log::{debug, trace};
+use tracing::{debug, trace};
 
 /// A message telling the channel reactor to do something.
 #[derive(Debug)]

@@ -26,7 +26,7 @@ tor-rtcompat = { path="../tor-rtcompat", version="0.0.0" }
 
 anyhow = "1.0.38"
 futures = "0.3.13"
-log = "0.4.14"
+tracing = "0.1.26"
 thiserror = "1.0.24"
 
 [dev-dependencies]

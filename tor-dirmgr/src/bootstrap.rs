@@ -15,9 +15,9 @@ use crate::{
 use futures::channel::oneshot;
 use futures::FutureExt;
 use futures::StreamExt;
-use log::{info, warn};
 use tor_dirclient::DirResponse;
 use tor_rtcompat::{Runtime, SleepProviderExt};
+use tracing::{info, warn};
 
 /// Try to read a set of documents from `dirmgr` by ID.
 async fn load_all<R: Runtime>(

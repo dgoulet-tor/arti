@@ -5,13 +5,13 @@ use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use futures::lock::Mutex;
 use futures::stream::StreamExt;
 use futures::task::SpawnExt;
-use log::{error, info, warn};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::io::Result as IoResult;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tracing::{error, info, warn};
 
 use tor_client::{ConnectPrefs, IsolationToken, TorClient};
 use tor_rtcompat::{Runtime, TcpListener, TimeoutError};

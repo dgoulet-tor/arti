@@ -20,7 +20,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
-use log::{debug, error, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// An active client session on the Tor network.
 ///

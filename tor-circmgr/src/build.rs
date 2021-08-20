@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use futures::channel::oneshot;
 use futures::task::SpawnExt;
 use futures::Future;
-use log::warn;
 use rand::{rngs::StdRng, CryptoRng, Rng, SeedableRng};
 use std::convert::TryInto;
 use std::sync::{
@@ -19,6 +18,7 @@ use tor_chanmgr::ChanMgr;
 use tor_linkspec::{ChanTarget, OwnedChanTarget, OwnedCircTarget};
 use tor_proto::circuit::{CircParameters, ClientCirc, PendingClientCirc};
 use tor_rtcompat::{Runtime, SleepProviderExt};
+use tracing::warn;
 
 /// Represents an objects that can be constructed in a circuit-like way.
 ///

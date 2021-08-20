@@ -57,10 +57,10 @@ use tor_proto::circuit::{CircParameters, ClientCirc, UniqId};
 use tor_rtcompat::Runtime;
 
 use futures::task::SpawnExt;
-use log::{debug, warn};
 use std::convert::TryInto;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+use tracing::{debug, warn};
 
 pub mod build;
 mod config;

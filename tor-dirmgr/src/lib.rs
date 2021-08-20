@@ -64,8 +64,8 @@ use tor_netdoc::doc::netstatus::ConsensusFlavor;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::{channel::oneshot, lock::Mutex, task::SpawnExt};
-use log::{info, warn};
 use tor_rtcompat::{Runtime, SleepProviderExt};
+use tracing::{info, warn};
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

@@ -30,7 +30,7 @@ hex = "0.4.3"
 http = "0.2.3"
 httpdate = "1.0.0"
 httparse = "1.4.0"
-log = "0.4.14"
+tracing = "0.1.26"
 memchr = "2.4.0"
 thiserror = "1.0.24"
 

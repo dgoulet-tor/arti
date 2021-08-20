@@ -61,10 +61,10 @@ use futures::io::{
     AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader,
 };
 use futures::FutureExt;
-use log::info;
 use memchr::memchr;
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::info;
 
 pub use err::Error;
 pub use response::{DirResponse, SourceInfo};
