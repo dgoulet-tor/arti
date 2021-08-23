@@ -305,7 +305,7 @@ where
             .get(RS_W)
             .map(RelayWeight::from_item)
             .transpose()?
-            .unwrap_or_else(Default::default);
+            .unwrap_or_default();
 
         // No p line
         // no ID line
