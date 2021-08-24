@@ -73,6 +73,15 @@ SOCKS proxy on port 9150.
 Again, do not use this program yet if you need anonymity, privacy, security,
 or stability.
 
+## Minimum supported Rust Version
+
+Arti should always build with the most recent _stable_ Rust release, and
+_may_ build with one or two older Rust releases.  Eventually, we may
+declare some long-term Minimum Supported Rust Version (MSRV), but while
+Arti is still in its early stages, you'll need to stay up-to-date.
+
+As of this writing (24 August 2021), Arti works with Rust 1.53 and later.
+
 ## Helping out
 
 Have a look at our [contributor guidelines](./CONTRIBUTING.md).

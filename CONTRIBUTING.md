@@ -30,11 +30,6 @@ working Git installation to fetch the code.
   check the
   [Other Installation Methods](https://forge.rust-lang.org/infra/other-installation-methods.html)
 
-  Arti should always build with the most recent _stable_ Rust release, and
-  _may_ build with one or two older Rust releases.  Eventually, we may
-  declare some long-term Minimum Supported Rust Version (MSRV), but while
-  Arti is still in its early stages, you'll need to stay up-to-date.
-
 - [Git](https://git-scm.com/downloads) note, for Linux, MacOS, and some
   Unix-like devices Git may be available via a package manager; `apt`, `brew`,
   `yum`, `pacman`, etc.
