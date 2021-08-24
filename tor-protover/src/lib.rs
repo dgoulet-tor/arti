@@ -444,11 +444,7 @@ fn dumpmask(mut mask: u64) -> String {
         let zeros = mask.trailing_zeros();
         mask >>= zeros;
         shift += zeros;
-        // TODO: We'd like to do it this way, but trailing_ones() is
-        // not yet in enough versions of stable Rust.  (It landed in
-        // Rust 1.46.)
-        //    let ones = mask.trailing_ones();
-        let ones = (!mask).trailing_zeros();
+        let ones = mask.trailing_ones();
         append(&mut result, shift, shift + ones - 1);
         shift += ones;
         if ones == 64 {
