@@ -12,8 +12,8 @@
 //! the protocol are required to connect to the network (or just
 //! recommended).
 //!
-//! For more details, see the Tor specifications. (TODO: Reference a
-//! particular section.)
+//! For more details, see [tor-spec.txt](https://spec.torproject.org/tor-spec)
+//! section 9.
 //!
 //! This crate is part of
 //! [Arti](https://gitlab.torproject.org/tpo/core/arti/), a project to
