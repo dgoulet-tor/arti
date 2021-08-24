@@ -127,11 +127,16 @@ impl SqliteStore {
     /// Return true on success; false if another process had the lock.
     pub(crate) fn upgrade_to_readwrite(&mut self) -> Result<bool> {
         if self.is_readonly() && self.sql_path.is_some() {
-            let lf = self.lockfile.as_mut().unwrap();
+            let lf = self
+                .lockfile
+                .as_mut()
+                .expect("Cannot obtain mutable control of lockfile");
             if !lf.try_lock()? {
                 // Somebody else has the lock.
                 return Ok(false);
             }
+            // Unwrap should be safe due to parent `.is_some()` check
+            #[allow(clippy::unwrap_used)]
             match rusqlite::Connection::open(self.sql_path.as_ref().unwrap()) {
                 Ok(conn) => {
                     self.conn = conn;

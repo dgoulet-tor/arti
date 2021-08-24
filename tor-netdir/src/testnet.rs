@@ -11,9 +11,11 @@
 //! only use these functions for testing.
 
 #![allow(clippy::missing_panics_doc)]
+#![allow(clippy::unwrap_used)]
 
 use super::*;
 use hex_literal::hex;
+use std::net::SocketAddr;
 use std::time::{Duration, SystemTime};
 use tor_llcrypto::pk::rsa;
 use tor_netdoc::doc::microdesc::MicrodescBuilder;
@@ -54,27 +56,27 @@ pub struct NodeBuilders {
 fn simple_net_func(_idx: usize, _nb: &mut NodeBuilders) {}
 
 /// As [`construct_network()`], but return a [`PartialNetDir`].
-pub fn construct_netdir() -> PartialNetDir {
+pub fn construct_netdir() -> Result<PartialNetDir> {
     construct_custom_netdir(simple_net_func)
 }
 
 /// As [`construct_custom_network()`], but return a [`PartialNetDir`].
-pub fn construct_custom_netdir<F>(func: F) -> PartialNetDir
+pub fn construct_custom_netdir<F>(func: F) -> Result<PartialNetDir>
 where
     F: FnMut(usize, &mut NodeBuilders),
 {
-    let (consensus, microdescs) = construct_custom_network(func);
+    let (consensus, microdescs) = construct_custom_network(func)?;
     let mut dir = PartialNetDir::new(consensus, None);
     for md in microdescs {
         dir.add_microdesc(md);
     }
 
-    dir
+    Ok(dir)
 }
 
 /// As [`construct_custom_network`], but do not require a
 /// customization function.
-pub fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
+pub fn construct_network() -> Result<(MdConsensus, Vec<Microdesc>)> {
     construct_custom_network(simple_net_func)
 }
 
@@ -131,7 +133,7 @@ pub fn construct_network() -> (MdConsensus, Vec<Microdesc>) {
 /// Instead, refactor this function so that it takes a
 /// description of what kind of network to build, and then builds it from
 /// that description.
-pub fn construct_custom_network<F>(mut func: F) -> (MdConsensus, Vec<Microdesc>)
+pub fn construct_custom_network<F>(mut func: F) -> Result<(MdConsensus, Vec<Microdesc>)>
 where
     F: FnMut(usize, &mut NodeBuilders),
 {
@@ -148,9 +150,9 @@ where
     let one_day = Duration::new(86400, 0);
     let mut bld = MdConsensus::builder();
     bld.consensus_method(34)
-        .lifetime(Lifetime::new(now, now + one_day / 2, now + one_day).unwrap())
+        .lifetime(Lifetime::new(now, now + one_day / 2, now + one_day)?)
         .param("bwweightscale", 1)
-        .weights("".parse().unwrap());
+        .weights("".parse()?);
 
     let mut microdescs = Vec::new();
     for idx in 0..40_u8 {
@@ -189,7 +191,7 @@ where
         let mut rs_builder = bld.rs();
         rs_builder
             .identity([idx; 20].into())
-            .add_or_port(format!("{}.0.0.3:9001", idx % 5).parse().unwrap())
+            .add_or_port(SocketAddr::from(([idx % 5, 0, 0, 3], 9001)))
             .protos(protocols)
             .set_flags(flags)
             .weight(weight);
@@ -203,7 +205,7 @@ where
 
         func(idx as usize, &mut node_builders);
 
-        let md = node_builders.md.testing_md().unwrap();
+        let md = node_builders.md.testing_md()?;
         let md_digest = *md.digest();
         if !node_builders.omit_md {
             microdescs.push(md);
@@ -213,14 +215,13 @@ where
             node_builders
                 .rs
                 .doc_digest(md_digest)
-                .build_into(&mut bld)
-                .unwrap();
+                .build_into(&mut bld)?;
         }
     }
 
-    let consensus = bld.testing_consensus().unwrap();
+    let consensus = bld.testing_consensus()?;
 
-    (consensus, microdescs)
+    Ok((consensus, microdescs))
 }
 
 #[cfg(test)]

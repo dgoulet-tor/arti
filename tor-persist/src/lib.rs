@@ -34,6 +34,7 @@
 #![warn(clippy::trait_duplication_in_bounds)]
 #![deny(clippy::unnecessary_wraps)]
 #![warn(clippy::unseparated_literal_suffix)]
+#![deny(clippy::unwrap_used)]
 
 use serde::{de::DeserializeOwned, Serialize};
 use std::path::{Path, PathBuf};
@@ -161,11 +162,13 @@ impl FsStateMgr {
 
 impl StateMgr for FsStateMgr {
     fn can_store(&self) -> bool {
-        let lockfile = self.inner.lockfile.lock().unwrap();
-        lockfile.owns_lock()
+        match self.inner.lockfile.lock() {
+            Ok(lockfile) => lockfile.owns_lock(),
+            Err(_) => false,
+        }
     }
     fn try_lock(&self) -> Result<bool> {
-        let mut lockfile = self.inner.lockfile.lock().unwrap();
+        let mut lockfile = self.inner.lockfile.lock().map_err(|_| Error::NoLock)?;
         if lockfile.owns_lock() {
             Ok(true)
         } else {

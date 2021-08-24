@@ -51,6 +51,7 @@
 #![warn(clippy::trait_duplication_in_bounds)]
 #![deny(clippy::unnecessary_wraps)]
 #![warn(clippy::unseparated_literal_suffix)]
+#![deny(clippy::unwrap_used)]
 
 mod err;
 pub mod fallback;
@@ -691,7 +692,7 @@ mod test {
     // then you have a netdir.
     #[test]
     fn partial_netdir() {
-        let (consensus, microdescs) = construct_network();
+        let (consensus, microdescs) = construct_network().unwrap();
         let dir = PartialNetDir::new(consensus, None);
 
         // Check the lifetime
@@ -736,7 +737,7 @@ mod test {
 
     #[test]
     fn override_params() {
-        let (consensus, _microdescs) = construct_network();
+        let (consensus, _microdescs) = construct_network().unwrap();
         let override_p = "bwweightscale=2 doesnotexist=77 circwindow=500"
             .parse()
             .unwrap();
@@ -754,7 +755,7 @@ mod test {
 
     #[test]
     fn fill_from_previous() {
-        let (consensus, microdescs) = construct_network();
+        let (consensus, microdescs) = construct_network().unwrap();
 
         let mut dir = PartialNetDir::new(consensus.clone(), None);
         for md in microdescs.iter().skip(2) {
@@ -775,7 +776,7 @@ mod test {
         let low_threshold = "min_paths_for_circs_pct=64".parse().unwrap();
         let high_threshold = "min_paths_for_circs_pct=65".parse().unwrap();
 
-        let (consensus, microdescs) = construct_network();
+        let (consensus, microdescs) = construct_network().unwrap();
 
         let mut dir = PartialNetDir::new(consensus.clone(), Some(&low_threshold));
         for (idx, md) in microdescs.iter().enumerate() {
@@ -834,7 +835,7 @@ mod test {
         use crate::pick::test::*; // for stochastic testing
         use tor_linkspec::ChanTarget;
 
-        let (consensus, microdescs) = construct_network();
+        let (consensus, microdescs) = construct_network().unwrap();
         let mut dir = PartialNetDir::new(consensus, None);
         for md in microdescs.into_iter() {
             let wanted = dir.add_microdesc(md.clone());
@@ -907,7 +908,8 @@ mod test {
             } else if idx == 20 {
                 nb.rs.add_or_port("[f0f0::3131]:9001".parse().unwrap());
             }
-        });
+        })
+        .unwrap();
         let subnet_config = SubnetConfig::default();
         let mut dir = PartialNetDir::new(consensus, None);
         for md in microdescs.into_iter() {
@@ -993,6 +995,7 @@ mod test {
             }
             nb.md.parse_ipv6_policy("accept 443").unwrap();
         })
+        .unwrap()
         .unwrap_if_sufficient()
         .unwrap();
 

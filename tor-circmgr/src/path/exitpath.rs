@@ -167,7 +167,10 @@ mod test {
     #[test]
     fn by_ports() {
         let mut rng = rand::thread_rng();
-        let netdir = testnet::construct_netdir().unwrap_if_sufficient().unwrap();
+        let netdir = testnet::construct_netdir()
+            .unwrap()
+            .unwrap_if_sufficient()
+            .unwrap();
         let ports = vec![TargetPort::ipv4(443), TargetPort::ipv4(1119)];
         let dirinfo = (&netdir).into();
         let config = PathConfig::default();
@@ -209,7 +212,10 @@ mod test {
     #[test]
     fn any_exit() {
         let mut rng = rand::thread_rng();
-        let netdir = testnet::construct_netdir().unwrap_if_sufficient().unwrap();
+        let netdir = testnet::construct_netdir()
+            .unwrap()
+            .unwrap_if_sufficient()
+            .unwrap();
         let dirinfo = (&netdir).into();
 
         let config = PathConfig::default();

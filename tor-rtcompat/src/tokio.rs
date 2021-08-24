@@ -48,6 +48,6 @@ where
     P: FnOnce(async_executors::TokioTp) -> F,
     F: futures::Future<Output = O>,
 {
-    let runtime = create_tokio_runtime().unwrap();
+    let runtime = create_tokio_runtime().expect("Failed to create a tokio runtime");
     runtime.block_on(func(runtime.clone()))
 }

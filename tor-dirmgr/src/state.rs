@@ -254,6 +254,8 @@ impl<DM: WriteNetDir> GetConsensusState<DM> {
             writedir: Weak::clone(&self.writedir),
         });
 
+        // Unwrap should be safe because `next` was just assigned
+        #[allow(clippy::unwrap_used)]
         Ok(Some(&self.next.as_ref().unwrap().consensus_meta))
     }
 

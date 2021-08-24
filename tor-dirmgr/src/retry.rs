@@ -137,6 +137,8 @@ impl RetryConfig {
     /// attempt, and at most `attempts`.  After a failure, it will
     /// wait at least `initial_delay` before trying again.
     pub fn new(attempts: u32, initial_delay: Duration) -> Self {
+        // If unwrapping `1.try_into()` is not safe there are bigger problems
+        #[allow(clippy::unwrap_used)]
         let num = attempts
             .try_into()
             .unwrap_or_else(|_| 1.try_into().unwrap());

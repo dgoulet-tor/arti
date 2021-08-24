@@ -33,6 +33,10 @@ pub struct RequestTiming {
     pub(crate) request_loyalty: Duration,
 }
 
+// NOTE: it seems that `unwrap` may be safe because of builder defaults
+// check `derive_builder` documentation for details
+// https://docs.rs/derive_builder/0.10.2/derive_builder/#default-values
+#[allow(clippy::unwrap_used)]
 impl Default for RequestTiming {
     fn default() -> Self {
         RequestTimingBuilder::default().build().unwrap()
@@ -66,6 +70,10 @@ pub struct CircuitTiming {
     pub(crate) max_dirtiness: Duration,
 }
 
+// NOTE: it seems that `unwrap` may be safe because of builder defaults
+// check `derive_builder` documentation for details
+// https://docs.rs/derive_builder/0.10.2/derive_builder/#default-values
+#[allow(clippy::unwrap_used)]
 impl Default for CircuitTiming {
     fn default() -> Self {
         CircuitTimingBuilder::default().build().unwrap()

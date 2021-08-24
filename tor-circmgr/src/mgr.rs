@@ -569,6 +569,7 @@ struct UnusedTimings {
 // This isn't really fallible, given the definition of the underlying
 // types.
 #[allow(clippy::fallible_impl_from)]
+#[allow(clippy::unwrap_used)]
 impl From<&tor_netdir::params::NetParameters> for UnusedTimings {
     fn from(v: &tor_netdir::params::NetParameters) -> Self {
         UnusedTimings {
@@ -653,7 +654,10 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
 
     /// Reconfigure this manager using the latest set of network parameters.
     pub(crate) fn update_network_parameters(&self, p: &tor_netdir::params::NetParameters) {
-        let mut u = self.unused_timing.lock().unwrap();
+        let mut u = self
+            .unused_timing
+            .lock()
+            .expect("Cannot to obtain lock for unused_timing");
         *u = p.into();
     }
 
@@ -920,10 +924,12 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         let (plan, bspec) = self.builder.plan_circuit(usage, dir)?;
         let (pending, sender) = PendingEntry::new(bspec);
         let pending = Arc::new(pending);
+
         self.circs
             .lock()
-            .unwrap()
+            .expect("Cannot to obtain lock for circuit list")
             .add_pending_circ(Arc::clone(&pending));
+
         let plan = CircBuildPlan {
             plan,
             sender,
@@ -1054,7 +1060,11 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
     /// been used.
     fn pick_use_before_time(&self) -> ExpirationInfo {
         let delay = {
-            let timings = self.unused_timing.lock().unwrap();
+            let timings = self
+                .unused_timing
+                .lock()
+                .expect("Cannot obtain lock for unused_timing");
+
             if self.builder.learning_timeouts() {
                 timings.learning
             } else {

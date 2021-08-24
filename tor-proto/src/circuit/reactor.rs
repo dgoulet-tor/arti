@@ -360,7 +360,10 @@ impl Reactor {
             } else {
                 return Err(Error::CircuitClosed);
             }
-            self.hop_mut(hopnum).unwrap().recvwindow.put();
+            self.hop_mut(hopnum)
+                .ok_or(Error::NoSuchHop)?
+                .recvwindow
+                .put();
         }
 
         // Break the message apart into its streamID and message.

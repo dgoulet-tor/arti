@@ -251,6 +251,8 @@ pub(crate) async fn download<R: Runtime>(
 
             // Report usable-ness if appropriate.
             if on_usable.is_some() && state.is_ready(Readiness::Usable) {
+                // Unwrap should be safe due to parent `.is_some()` check
+                #[allow(clippy::unwrap_used)]
                 let _ = on_usable.take().unwrap().send(());
             }
 

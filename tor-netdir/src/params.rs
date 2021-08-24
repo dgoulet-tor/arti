@@ -87,6 +87,8 @@ pub struct NetParameters {
     pub unused_client_circ_timeout_while_learning_cbt: IntegerSeconds<BoundedInt32<10, 60_000>>,
 }
 
+// TODO: Consider using macro for automating Result handling
+#[allow(clippy::unwrap_used)]
 impl Default for NetParameters {
     fn default() -> Self {
         NetParameters {

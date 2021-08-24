@@ -50,6 +50,7 @@
 #![warn(clippy::trait_duplication_in_bounds)]
 #![deny(clippy::unnecessary_wraps)]
 #![warn(clippy::unseparated_literal_suffix)]
+#![deny(clippy::unwrap_used)]
 
 use tor_chanmgr::ChanMgr;
 use tor_netdir::{fallback::FallbackDir, NetDir};
@@ -329,7 +330,7 @@ mod test {
         assert_eq!(p1.initial_send_window(), 1000);
 
         // Now try with a directory and configured parameters.
-        let (consensus, microdescs) = tor_netdir::testnet::construct_network();
+        let (consensus, microdescs) = tor_netdir::testnet::construct_network().unwrap();
         let mut params = NetParams::default();
         params.set("circwindow".into(), 100);
         params.set("ExtendByEd25519ID".into(), 1);
@@ -344,7 +345,7 @@ mod test {
         assert_eq!(p2.extend_by_ed25519_id(), true);
 
         // Now try with a bogus circwindow value.
-        let (consensus, microdescs) = tor_netdir::testnet::construct_network();
+        let (consensus, microdescs) = tor_netdir::testnet::construct_network().unwrap();
         let mut params = NetParams::default();
         params.set("circwindow".into(), 100_000);
         params.set("ExtendByEd25519ID".into(), 1);

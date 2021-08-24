@@ -258,6 +258,7 @@ impl Microdesc {
         let start_pos = {
             // unwrap here is safe because parsing would have failed
             // had there not been at least one item.
+            #[allow(clippy::unwrap_used)]
             let first = body.first_item().unwrap();
             if first.kwd() != ONION_KEY {
                 return Err(Error::WrongStartingToken(
@@ -266,6 +267,7 @@ impl Microdesc {
                 ));
             }
             // Unwrap is safe here because we are parsing these strings from s
+            #[allow(clippy::unwrap_used)]
             util::str::str_offset(s, first.kwd_str()).unwrap()
         };
 
@@ -316,6 +318,7 @@ impl Microdesc {
         let end_pos = {
             // unwrap here is safe because parsing would have failed
             // had there not been at least one item.
+            #[allow(clippy::unwrap_used)]
             let last_item = body.last_item().unwrap();
             last_item
                 .offset_after(s)

@@ -167,7 +167,7 @@ impl OutboundClientCrypt {
         }
 
         let mut layers = self.layers.iter_mut().take(hop + 1).rev();
-        let first_layer = layers.next().unwrap();
+        let first_layer = layers.next().ok_or(Error::InvalidOutputLength)?;
         let tag = first_layer.originate_for(cell);
         for layer in layers {
             layer.encrypt_outbound(cell);

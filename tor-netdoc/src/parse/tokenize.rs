@@ -413,6 +413,9 @@ impl<'a, K: Keyword> Item<'a, K> {
     /// as a given type that implements FromBytes.
     pub(crate) fn parse_obj<V: FromBytes>(&self, want_tag: &str) -> Result<V> {
         let bytes = self.obj(want_tag)?;
+        // Unwrap may be safe because above `.obj()` should return an Error if
+        // wanted tag was not present
+        #[allow(clippy::unwrap_used)]
         let p = Pos::at(self.object.unwrap().data);
         V::from_vec(bytes, p).map_err(|e| e.at_pos(p))
     }

@@ -109,6 +109,8 @@ impl<T: CryptoRng> CryptoRng for RngWrapper<T> {}
 
 /// Convert a new-ish Rng error into the error type that rng_core 0.5.1
 /// would deliver.
+// TODO: Investigate if `CUSTOM_START` conversion unwrap can panic
+#[allow(clippy::unwrap_used)]
 fn err_to_old(e: &Error) -> OldError {
     use std::num::NonZeroU32;
     if let Some(code) = e.code() {
