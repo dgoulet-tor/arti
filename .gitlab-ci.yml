@@ -39,7 +39,6 @@ build-repro:
   image: rust:1.54.0-alpine3.14
   script:
     - ./maint/reproducible_build.sh
-    - mv /arti/target/x86_64-unknown-linux-musl/release/arti ./arti-bin
   artifacts:
     paths:
       - arti-bin

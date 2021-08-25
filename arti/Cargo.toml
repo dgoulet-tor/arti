@@ -14,7 +14,7 @@ repository="https://gitlab.torproject.org/tpo/core/arti.git/"
 default = [ "tokio" ]
 async-std = [ "tor-client/async-std", "tor-rtcompat/async-std", "async-ctrlc", "once_cell" ]
 tokio = [ "tokio-crate", "tor-client/tokio", "tor-rtcompat/tokio" ]
-vendored = [ "tor-rtcompat/vendored" ]
+static = [ "tor-rtcompat/static", "tor-dirmgr/static" ]
 
 [dependencies]
 tor-client = { package="arti-tor-client", path = "../tor-client", version="0.0.0" }

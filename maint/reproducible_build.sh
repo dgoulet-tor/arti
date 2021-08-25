@@ -21,7 +21,9 @@ mkdir -p /sys/fs/cgroup/registry /usr/local/cargo/registry
 ln -s /sys/fs/cgroup/registry /usr/local/cargo/registry/src
 
 ## add missing dependancies
-apk add --no-cache musl-dev perl make sqlite-static sqlite-dev
+apk add --no-cache musl-dev perl make
 
-cargo build -p arti --target x86_64-unknown-linux-musl --release --features vendored
+cargo build -p arti --target x86_64-unknown-linux-musl --release --features static
 sha256sum target/x86_64-unknown-linux-musl/release/arti
+
+mv /arti/target/x86_64-unknown-linux-musl/release/arti "$here"/arti-bin
