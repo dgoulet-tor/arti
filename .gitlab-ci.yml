@@ -34,3 +34,13 @@ rust-nightly:
     - cargo clippy --all-features
     - RUSTDOCFLAGS="-Dwarnings" cargo doc --all-features --document-private-items
 
+build-repro:
+  stage: build
+  image: rust:1.54.0-alpine3.14
+  script:
+    - ./maint/reproducible_build.sh
+    - mv /arti/target/x86_64-unknown-linux-musl/release/arti ./arti-bin
+  artifacts:
+    paths:
+      - arti-bin
+    expire_in: 1 day
