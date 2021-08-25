@@ -380,6 +380,7 @@ fn log2_upper(n: u64) -> u32 {
 mod test {
     use super::*;
     use netstatus::RelayWeight as RW;
+    use std::net::SocketAddr;
     use std::time::{Duration, SystemTime};
     use tor_netdoc::doc::netstatus::{Lifetime, RelayFlags, RouterStatusBuilder};
 
@@ -557,7 +558,7 @@ mod test {
         MdConsensus::builder()
             .rs()
             .identity([9; 20].into())
-            .add_or_port("127.0.0.1:9001".parse().unwrap())
+            .add_or_port(SocketAddr::from(([127, 0, 0, 1], 9001)))
             .doc_digest([9; 32])
             .protos("".parse().unwrap())
             .clone()

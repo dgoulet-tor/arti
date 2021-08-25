@@ -388,6 +388,7 @@ mod test {
     use super::*;
     use crate::doc::netstatus::RelayFlags;
 
+    use std::net::SocketAddr;
     use std::time::{Duration, SystemTime};
 
     #[test]
@@ -431,7 +432,7 @@ mod test {
             .nickname("Fred".into())
             .identity([155; 20].into())
             .published(now - one_hour * 6)
-            .add_or_port("10.0.0.60:9100".parse().unwrap())
+            .add_or_port(SocketAddr::from(([10, 0, 0, 60], 9100)))
             .add_or_port("[f00f::1]:9200".parse().unwrap())
             .dir_port(66)
             .doc_digest([99; 32])
