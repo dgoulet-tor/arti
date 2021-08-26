@@ -2,6 +2,7 @@
 /target/
 /*/target/
 /*/fuzz/target/
+/*/fuzz/Cargo.lock
 /Cargo.lock
 *~
 .#*

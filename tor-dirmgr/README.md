@@ -16,4 +16,11 @@ This directory manager crate is responsible for figuring out which
 directory information we lack, downloading what we're missing, and
 keeping a cache of it on disk.
 
+## Compile-time features
+
+`mmap` (default) -- Use memory mapping to reduce the memory load for
+reading large directory objects from disk.
+
+`static` -- Try to link with a static copy of sqlite3.
+
 License: MIT OR Apache-2.0

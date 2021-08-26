@@ -1,8 +1,12 @@
 #!/bin/sh
+#
+# This script is run inside a docker container as part of our
+# reporoducible build process.
+#
 set -xeu
 if [ ! -f /.dockerenv ]; then
     echo Not running inside Docker, build will probably not be reproducible
-	echo Use docker_reproducible_build.sh instead to get the right environment
+    echo Use docker_reproducible_build.sh instead to get the right environment
 fi
 here=$(pwd)
 

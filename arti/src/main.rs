@@ -35,6 +35,16 @@
 //! The configuration file is TOML.  (We do not guarantee its stability.)
 //! For an example see [`arti_defaults.toml`](./arti_defaults.toml).
 //!
+//! # Compile-time features
+//!
+//! `tokio` (default): Use the tokio runtime library as our backend.
+//!
+//! `async-std`: Use the async-std runtime library as our backend.
+//! This feature has no effect unless building with `--no-default-features`
+//! to disable tokio.
+//!
+//! `static`: Try to link a single static binary.
+//!
 //! # Limitations
 //!
 //! There are many missing features.  Among them: there's no onion
