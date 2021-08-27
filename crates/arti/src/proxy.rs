@@ -1,4 +1,7 @@
 //! Implement a simple SOCKS proxy that relays connections over Tor.
+//!
+//! A proxy is launched with [`run_socks_proxy()`], which listens for new
+//! connections and then runs
 
 use futures::future::FutureExt;
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -20,7 +23,7 @@ use tor_socksproto::{SocksAddr, SocksAuth, SocksCmd, SocksRequest};
 use anyhow::{Context, Result};
 
 /// Find out which kind of address family we can/should use for a
-/// given socks request.
+/// given `SocksRequest`.
 fn stream_preference(req: &SocksRequest, addr: &str) -> ConnectPrefs {
     let mut prefs = ConnectPrefs::new();
     if addr.parse::<Ipv4Addr>().is_ok() {
@@ -39,9 +42,11 @@ fn stream_preference(req: &SocksRequest, addr: &str) -> ConnectPrefs {
     prefs
 }
 
-/// Key used to isolate connections.
-/// Composed of an usize representing the listener which accepted the connection,
-/// the IpAddr of the client, and the authentication provided by the client.
+/// A Key used to isolate connections.
+///
+/// Composed of an usize (representing which listener socket accepted
+/// the connection, the source IpAddr of the client, and the
+/// authentication string provided by the client).
 type IsolationKey = (usize, IpAddr, SocksAuth);
 
 /// Shared and garbage-collected Map used to isolate connections.
@@ -91,12 +96,16 @@ impl IsolationMap {
     }
 }
 
-/// Given a just-received TCP connection on a SOCKS port, handle the
+/// Given a just-received TCP connection `S` on a SOCKS port, handle the
 /// SOCKS handshake and relay the connection over the Tor network.
+///
+/// Uses `isolation_map` to decide which circuits circuits this connection
+/// may use.  Requires that `isolation_info` is a pair listeng the listener
+/// id and the source address for the socks request.
 async fn handle_socks_conn<R, S>(
     runtime: R,
-    client: Arc<TorClient<R>>,
-    stream: S,
+    tor_client: Arc<TorClient<R>>,
+    socks_stream: S,
     isolation_map: Arc<IsolationMap>,
     isolation_info: (usize, IpAddr),
 ) -> Result<()>
@@ -104,19 +113,26 @@ where
     R: Runtime,
     S: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
 {
+    // Part 1: Perform the SOCKS handshake, to learn where we are
+    // being asked to connect, and what we're being asked to do once
+    // we connect there.
+    //
+    // The SOCKS handshake can require multiple round trips (SOCKS5
+    // always does) so we we need to run this part of the process in a
+    // loop.
     let mut handshake = tor_socksproto::SocksHandshake::new();
 
-    let (mut r, mut w) = stream.split();
+    let (mut socks_r, mut socks_w) = socks_stream.split();
     let mut inbuf = [0_u8; 1024];
     let mut n_read = 0;
     let request = loop {
         // Read some more stuff.
-        n_read += r
+        n_read += socks_r
             .read(&mut inbuf[n_read..])
             .await
             .context("Error while reading SOCKS handshake")?;
 
-        // try to advance the handshake.
+        // try to advance the handshake to the next state.
         let action = match handshake.handshake(&inbuf[..n_read]) {
             Err(tor_socksproto::Error::Truncated) => continue,
             Err(e) => return Err(e.into()),
@@ -129,7 +145,8 @@ where
             n_read -= action.drain;
         }
         if !action.reply.is_empty() {
-            w.write(&action.reply[..])
+            socks_w
+                .write(&action.reply[..])
                 .await
                 .context("Error while writing reply to SOCKS handshake")?;
         }
@@ -145,6 +162,7 @@ where
         }
     };
 
+    // Unpack the socks request and find out where we're connecting to.
     let addr = request.addr().to_string();
     let port = request.port();
     info!(
@@ -154,27 +172,40 @@ where
         port
     );
 
+    // Use the source address, SOCKS authentication, and listener ID
+    // to determine the stream's isolation properties.  (Our current
+    // rule is that two streams may only share a circuit if they have
+    // the same values for all of these properties.)
     let auth = request.auth().clone();
-    let (socket, ip) = isolation_info;
-    let isolation_token = isolation_map.get_or_create((socket, ip, auth)).await;
+    let (source_address, ip) = isolation_info;
+    let isolation_token = isolation_map
+        .get_or_create((source_address, ip, auth))
+        .await;
 
+    // Determine whether we want to ask for IPv4/IPv6 addresses.
     let mut prefs = stream_preference(&request, &addr);
     prefs.set_isolation_group(isolation_token);
 
     match request.command() {
         SocksCmd::CONNECT => {
-            let stream = client.connect(&addr, port, Some(prefs)).await;
-            let stream = match stream {
+            // The SOCKS request wants us to connect to a given address.
+            // So, launch a connection over Tor.
+            let tor_stream = tor_client.connect(&addr, port, Some(prefs)).await;
+            let tor_stream = match tor_stream {
                 Ok(s) => s,
                 // In the case of a stream timeout, send the right SOCKS reply.
                 Err(e) => {
+                    // The connect attempt has failed.  We need to
+                    // send an error.  See what kind it is.
+                    //
                     // TODO: Using downcast_ref() here is ugly. maybe we shouldn't
                     // be using anyhow at this point?
                     match e.downcast_ref::<TimeoutError>() {
                         Some(_) => {
                             let reply =
                                 request.reply(tor_socksproto::SocksStatus::TTL_EXPIRED, None);
-                            w.write(&reply[..])
+                            socks_w
+                                .write(&reply[..])
                                 .await
                                 .context("Couldn't write SOCKS reply")?;
                             return Err(e);
@@ -183,44 +214,57 @@ where
                     }
                 }
             };
+            // Okay, great! We have a connection over the Tor network.
             info!("Got a stream for {}:{}", addr, port);
             // TODO: XXXX-A1 Should send a SOCKS reply if something fails.
 
+            // Send back a SOCKS response, telling the client that it
+            // successfully connected.
             let reply = request.reply(tor_socksproto::SocksStatus::SUCCEEDED, None);
-            w.write(&reply[..])
+            socks_w
+                .write(&reply[..])
                 .await
                 .context("Couldn't write SOCKS reply")?;
 
-            let (rstream, wstream) = stream.split();
+            let (tor_r, tor_w) = tor_stream.split();
 
-            runtime.spawn(copy_interactive(r, wstream).map(|_| ()))?;
-            runtime.spawn(copy_interactive(rstream, w).map(|_| ()))?;
+            // Finally, spawn two background tasks to relay traffic between
+            // the socks steam and the tor stream.
+            runtime.spawn(copy_interactive(socks_r, tor_w).map(|_| ()))?;
+            runtime.spawn(copy_interactive(tor_r, socks_w).map(|_| ()))?;
         }
         SocksCmd::RESOLVE => {
-            let addrs = client.resolve(&addr, Some(prefs)).await?;
+            // We've been asked to perform a regular hostname lookup.
+            // (This is a tor-specific SOCKS extension.)
+            let addrs = tor_client.resolve(&addr, Some(prefs)).await?;
             if let Some(addr) = addrs.first() {
                 let reply = request.reply(
                     tor_socksproto::SocksStatus::SUCCEEDED,
                     Some(&SocksAddr::Ip(*addr)),
                 );
-                w.write(&reply[..])
+                socks_w
+                    .write(&reply[..])
                     .await
                     .context("Couldn't write SOCKS reply")?;
             }
         }
         SocksCmd::RESOLVE_PTR => {
-            let hosts = client.resolve_ptr(&addr, Some(prefs)).await?;
+            // We've been asked to perform a reverse hostname lookup.
+            // (This is a tor-specific SOCKS extension.)
+            let hosts = tor_client.resolve_ptr(&addr, Some(prefs)).await?;
             if let Some(host) = hosts.into_iter().next() {
                 let reply = request.reply(
                     tor_socksproto::SocksStatus::SUCCEEDED,
                     Some(&SocksAddr::Hostname(host.try_into()?)),
                 );
-                w.write(&reply[..])
+                socks_w
+                    .write(&reply[..])
                     .await
                     .context("Couldn't write SOCKS reply")?;
             }
         }
         _ => {
+            // We don't support this SOCKS command.
             warn!("Dropping request; {:?} is unsupported", request.command());
         }
     };
@@ -235,10 +279,13 @@ where
 /// an error.
 ///
 /// Unlike as futures::io::copy(), this function is meant for use with
-/// interactive readers and writers, in which the writer might need to
-/// be flushed for any buffered data to be sent.  It tries to minimize
-/// the number of flushes, by only flushing the writer when the reader
-/// has no data.
+/// interactive readers and writers, where the reader might pause for
+/// a while, but where we want to send data on the writer as soon as
+/// it is available.
+///
+/// This function assumes that the writer might need to be flushed for
+/// any buffered data to be sent.  It tries to minimize the number of
+/// flushes, however, by only flushing the writer when the reader has no data.
 async fn copy_interactive<R, W>(mut reader: R, mut writer: W) -> IoResult<()>
 where
     R: AsyncRead + Unpin,
@@ -287,16 +334,23 @@ where
     loop_result.or(flush_result)
 }
 
-/// Launch a SOCKS proxy to listen on a given localhost port, and run until
+/// Launch a SOCKS proxy to listen on a given localhost port, and run
 /// indefinitely.
+///
+/// Requires a `runtime` to use for launching tasks and handling
+/// timeouts, and a `tor_client` to use in connecting over the Tor
+/// network.
 pub(crate) async fn run_socks_proxy<R: Runtime>(
     runtime: R,
-    client: Arc<TorClient<R>>,
+    tor_client: Arc<TorClient<R>>,
     socks_port: u16,
 ) -> Result<()> {
     let mut listeners = Vec::new();
 
+    // We actually listen on two ports: one for ipv4 and one for ipv6.
     let localhosts: [IpAddr; 2] = [Ipv4Addr::LOCALHOST.into(), Ipv6Addr::LOCALHOST.into()];
+
+    // Try to bind to the SOCKS ports.
     for localhost in &localhosts {
         let addr: SocketAddr = (*localhost, socks_port).into();
         match runtime.listen(&addr).await {
@@ -307,24 +361,33 @@ pub(crate) async fn run_socks_proxy<R: Runtime>(
             Err(e) => warn!("Can't listen on {:?}: {}", addr, e),
         }
     }
+    // We weren't able to bind any ports: There's nothing to do.
     if listeners.is_empty() {
         error!("Couldn't open any listeners.");
         return Ok(()); // XXXX should return an error.
     }
 
-    let mut incoming =
-        futures::stream::select_all(listeners.into_iter().map(TcpListener::incoming).scan(
-            0,
-            |sock_id, stream| {
-                let id = *sock_id;
-                *sock_id += 1;
-                Some(stream.map(move |stream| (stream, id)))
-            },
-        ));
+    // Create a stream of (incoming socket, listener_id) pairs, selected
+    // across all the listeners.
+    let mut incoming = futures::stream::select_all(
+        listeners
+            .into_iter()
+            .map(TcpListener::incoming)
+            .enumerate()
+            .map(|(listener_id, incoming_conns)| {
+                incoming_conns.map(move |socket| (socket, listener_id))
+            }),
+    );
+
+    // Make a new IsolationMap; We'll use this to register which incoming
+    // connections can and cannot share a circuit.
     let isolation_map = Arc::new(IsolationMap::new());
+
+    // Loop over all incoming connections.  For each one, call
+    // handle_socks_conn() in a new task.
     while let Some((stream, sock_id)) = incoming.next().await {
         let (stream, addr) = stream.context("Failed to receive incoming stream on SOCKS port")?;
-        let client_ref = Arc::clone(&client);
+        let client_ref = Arc::clone(&tor_client);
         let runtime_copy = runtime.clone();
         let isolation_map_ref = Arc::clone(&isolation_map);
         runtime.spawn(async move {
