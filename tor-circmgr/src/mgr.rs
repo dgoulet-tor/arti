@@ -566,12 +566,13 @@ struct UnusedTimings {
     not_learning: Duration,
 }
 
-// This isn't really fallible, given the definition of the underlying
+// This isn't really fallible, given the definitions of the underlying
 // types.
 #[allow(clippy::fallible_impl_from)]
-#[allow(clippy::unwrap_used)]
 impl From<&tor_netdir::params::NetParameters> for UnusedTimings {
     fn from(v: &tor_netdir::params::NetParameters) -> Self {
+        // These try_into() calls can't fail, so unwrap() can't panic.
+        #[allow(clippy::unwrap_used)]
         UnusedTimings {
             learning: v
                 .unused_client_circ_timeout_while_learning_cbt
@@ -657,7 +658,7 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
         let mut u = self
             .unused_timing
             .lock()
-            .expect("Cannot to obtain lock for unused_timing");
+            .expect("Poisoned lock for unused_timing");
         *u = p.into();
     }
 
@@ -927,7 +928,7 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
 
         self.circs
             .lock()
-            .expect("Cannot to obtain lock for circuit list")
+            .expect("Poisoned lock for circuit list")
             .add_pending_circ(Arc::clone(&pending));
 
         let plan = CircBuildPlan {
@@ -1063,7 +1064,7 @@ impl<B: AbstractCircBuilder + 'static, R: Runtime> AbstractCircMgr<B, R> {
             let timings = self
                 .unused_timing
                 .lock()
-                .expect("Cannot obtain lock for unused_timing");
+                .expect("Poisoned lock for unused_timing");
 
             if self.builder.learning_timeouts() {
                 timings.learning

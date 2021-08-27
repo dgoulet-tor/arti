@@ -533,7 +533,7 @@ impl ParetoTimeoutEstimator {
         let mut this = self
             .est
             .lock()
-            .expect("Cannot obtain lock for ParetoTimeoutEstimator");
+            .expect("Poisoned lock for ParetoTimeoutEstimator");
 
         let cur_timeout = MsecDuration::new_saturating(&this.base_timeouts().0);
         ParetoTimeoutState {
@@ -550,7 +550,7 @@ impl ParetoTimeoutEstimator {
         let mut this = self
             .est
             .lock()
-            .expect("Cannot obtain lock for ParetoTimeoutEstimator");
+            .expect("Poisoned lock for ParetoTimeoutEstimator");
 
         this.p = parameters;
         let new_success_len = this.p.success_history_len;
@@ -563,7 +563,7 @@ impl super::TimeoutEstimator for ParetoTimeoutEstimator {
         let mut this = self
             .est
             .lock()
-            .expect("Cannot obtain lock for ParetoTimeoutEstimator");
+            .expect("Poisoned lock for ParetoTimeoutEstimator");
 
         if hop == this.p.significant_hop {
             let time = MsecDuration::new_saturating(&delay);
@@ -582,7 +582,7 @@ impl super::TimeoutEstimator for ParetoTimeoutEstimator {
             let mut this = self
                 .est
                 .lock()
-                .expect("Cannot obtain lock for ParetoTimeoutEstimator");
+                .expect("Poisoned lock for ParetoTimeoutEstimator");
             this.history.add_success(false);
             if this.history.n_recent_timeouts() > this.p.reset_after_timeouts {
                 let base_timeouts = this.base_timeouts();
@@ -603,7 +603,7 @@ impl super::TimeoutEstimator for ParetoTimeoutEstimator {
         let mut this = self
             .est
             .lock()
-            .expect("Cannot obtain lock for ParetoTimeoutEstimator");
+            .expect("Poisoned lock for ParetoTimeoutEstimator");
 
         let (base_t, base_a) = if this.p.use_estimates {
             this.base_timeouts()
@@ -631,7 +631,7 @@ impl super::TimeoutEstimator for ParetoTimeoutEstimator {
         let this = self
             .est
             .lock()
-            .expect("Cannot obtain lock for ParetoTimeoutEstimator");
+            .expect("Poisoned lock for ParetoTimeoutEstimator");
         this.p.use_estimates && this.history.n_times() < this.p.min_observations.into()
     }
 }

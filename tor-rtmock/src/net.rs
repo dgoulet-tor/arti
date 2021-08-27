@@ -174,10 +174,7 @@ impl MockNetwork {
         want_tls: bool,
     ) -> IoResult<Option<Vec<u8>>> {
         let entry = {
-            let listener_map = self
-                .listening
-                .lock()
-                .expect("Failed to obtain lock for listener");
+            let listener_map = self.listening.lock().expect("Poisoned lock for listener");
             listener_map.get(&target_addr).map(Clone::clone)
         };
         if let Some(mut entry) = entry {
@@ -201,10 +198,7 @@ impl MockNetwork {
     ///
     /// Returns an error if the address is already in use.
     fn add_listener(&self, addr: SocketAddr, tls_cert: Option<Vec<u8>>) -> IoResult<ConnReceiver> {
-        let mut listener_map = self
-            .listening
-            .lock()
-            .expect("Failed to obtain lock for listener");
+        let mut listener_map = self.listening.lock().expect("Poisoned lock for listener");
         if listener_map.contains_key(&addr) {
             // TODO: Maybe this should ignore dangling Weak references?
             return Err(err(ErrorKind::AddrInUse));

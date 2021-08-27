@@ -361,7 +361,9 @@ impl Reactor {
                 return Err(Error::CircuitClosed);
             }
             self.hop_mut(hopnum)
-                .ok_or(Error::NoSuchHop)?
+                .ok_or_else(|| {
+                    Error::InternalError("Trying to send SENDME to nonexistent hop".to_string())
+                })?
                 .recvwindow
                 .put();
         }

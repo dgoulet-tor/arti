@@ -130,7 +130,7 @@ impl SqliteStore {
             let lf = self
                 .lockfile
                 .as_mut()
-                .expect("Cannot obtain mutable control of lockfile");
+                .expect("No lockfile open; cannot upgrade to read-write storage");
             if !lf.try_lock()? {
                 // Somebody else has the lock.
                 return Ok(false);

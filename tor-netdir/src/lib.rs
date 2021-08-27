@@ -1024,7 +1024,7 @@ mod test {
     #[cfg(feature = "experimental-api")]
     #[test]
     fn test_accessors() {
-        let netdir = construct_netdir().unwrap_if_sufficient().unwrap();
+        let netdir = construct_netdir().unwrap().unwrap_if_sufficient().unwrap();
 
         let r4 = netdir.by_id(&[4; 32].into()).unwrap();
         let r16 = netdir.by_id(&[16; 32].into()).unwrap();

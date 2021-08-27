@@ -583,7 +583,7 @@ impl tor_checkable::SelfSigned<SigCheckedCert> for UncheckedCert {
         let pubkey = &self
             .cert
             .signed_with
-            .ok_or(Error::BadMessage("Cannot verify Ed25519Cert cert"))?;
+            .ok_or(Error::BadMessage("Certificate was not in fact self-signed"))?;
 
         pubkey
             .verify(&self.text[..], &self.signature)
