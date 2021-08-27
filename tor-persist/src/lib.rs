@@ -162,13 +162,19 @@ impl FsStateMgr {
 
 impl StateMgr for FsStateMgr {
     fn can_store(&self) -> bool {
-        match self.inner.lockfile.lock() {
-            Ok(lockfile) => lockfile.owns_lock(),
-            Err(_) => false,
-        }
+        let lockfile = self
+            .inner
+            .lockfile
+            .lock()
+            .expect("Poisoned lock on state lockfile");
+        lockfile.owns_lock()
     }
     fn try_lock(&self) -> Result<bool> {
-        let mut lockfile = self.inner.lockfile.lock().map_err(|_| Error::NoLock)?;
+        let mut lockfile = self
+            .inner
+            .lockfile
+            .lock()
+            .expect("Poisoned lock on state lockfile");
         if lockfile.owns_lock() {
             Ok(true)
         } else {
