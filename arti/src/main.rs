@@ -101,8 +101,8 @@ use argh::FromArgs;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tracing::level_filters::LevelFilter;
 use tracing::{info, warn};
+use tracing_subscriber::EnvFilter;
 
 #[derive(FromArgs, Debug, Clone)]
 /// Connect to the Tor network, open a SOCKS port, and proxy
@@ -135,8 +135,10 @@ pub struct ArtiConfig {
     /// Port to listen on (at localhost) for incoming SOCKS
     /// connections.
     socks_port: Option<u16>,
-    /// Whether to log at trace level.
-    trace: bool,
+
+    /// Filtering directives that determine tracing levels as described at
+    /// <https://docs.rs/tracing-subscriber/0.2.20/tracing_subscriber/filter/struct.EnvFilter.html>
+    trace_filter: String,
 
     /// Information about the Tor network we want to connect to.
     network: NetworkConfig,
@@ -232,12 +234,12 @@ fn main() -> Result<()> {
 
     let config: ArtiConfig = cfg.try_into()?;
 
-    let filt = if config.trace {
-        LevelFilter::TRACE
-    } else {
-        LevelFilter::DEBUG
+    let env_filter = match EnvFilter::try_from_env("ARTI_LOG") {
+        Ok(f) => f,
+        Err(_e) => EnvFilter::new(config.trace_filter.as_str()),
     };
-    tracing_subscriber::fmt().with_max_level(filt).init();
+
+    tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
     let statecfg = config.storage.state_dir.path()?;
     let dircfg = config.get_dir_config()?;

@@ -6,9 +6,10 @@
 # Note that only one process can listen on a given port at a time.
 socks_port = 9150
 
-# Whether to log at the "trace" debugging level.  By default, we log at
-# "debug".
-trace = false
+# Specify filtering directives for tracing.
+# It can be as simple as a single loglevel or a list with per-module settings
+# like trace_filter = "info,tor_proto::channel=trace"
+trace_filter = "debug"
 
 # Locations to use for storing things on disk.
 #
