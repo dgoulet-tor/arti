@@ -7,8 +7,16 @@
 socks_port = 9150
 
 # Specify filtering directives for tracing.
-# It can be as simple as a single loglevel or a list with per-module settings
-# like trace_filter = "info,tor_proto::channel=trace"
+#
+# It can be as simple as a single loglevel, or as complicated as a
+# list with per-module settings.
+#
+# You can override this setting with the ARTI_LOG environment variable.
+#
+# Example:
+#     trace_filter = "info,tor_proto::channel=trace"
+#
+# For more information, see https://docs.rs/tracing-subscriber/0.2.20/tracing_subscriber/filter/struct.EnvFilter.html
 trace_filter = "debug"
 
 # Locations to use for storing things on disk.

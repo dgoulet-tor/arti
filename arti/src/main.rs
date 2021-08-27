@@ -138,6 +138,8 @@ pub struct ArtiConfig {
 
     /// Filtering directives that determine tracing levels as described at
     /// <https://docs.rs/tracing-subscriber/0.2.20/tracing_subscriber/filter/struct.EnvFilter.html>
+    ///
+    /// You can override this setting with the environment variable ARTI_LOG.
     trace_filter: String,
 
     /// Information about the Tor network we want to connect to.
