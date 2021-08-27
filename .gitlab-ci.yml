@@ -21,7 +21,7 @@ rust-latest-async-std:
   stage: build
   image: rust:latest
   script:
-    - cd tor-client && cargo check --no-default-features --features=async-std
+    - cd crates/tor-client && cargo check --no-default-features --features=async-std
 
 rust-nightly:
   stage: build
