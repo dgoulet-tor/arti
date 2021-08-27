@@ -530,7 +530,11 @@ impl ParetoTimeoutEstimator {
     /// Construct a new ParetoTimeoutState to represent the current state
     /// of this estimator.
     pub(crate) fn build_state(&self) -> ParetoTimeoutState {
-        let mut this = self.est.lock().unwrap();
+        let mut this = self
+            .est
+            .lock()
+            .expect("Cannot obtain lock for ParetoTimeoutEstimator");
+
         let cur_timeout = MsecDuration::new_saturating(&this.base_timeouts().0);
         ParetoTimeoutState {
             version: 1,
@@ -543,7 +547,11 @@ impl ParetoTimeoutEstimator {
 
     /// Change the parameters used for this estimator.
     pub(crate) fn update_params(&self, parameters: Params) {
-        let mut this = self.est.lock().unwrap();
+        let mut this = self
+            .est
+            .lock()
+            .expect("Cannot obtain lock for ParetoTimeoutEstimator");
+
         this.p = parameters;
         let new_success_len = this.p.success_history_len;
         this.history.set_success_history_len(new_success_len);
@@ -552,7 +560,10 @@ impl ParetoTimeoutEstimator {
 
 impl super::TimeoutEstimator for ParetoTimeoutEstimator {
     fn note_hop_completed(&self, hop: u8, delay: Duration, is_last: bool) {
-        let mut this = self.est.lock().unwrap();
+        let mut this = self
+            .est
+            .lock()
+            .expect("Cannot obtain lock for ParetoTimeoutEstimator");
 
         if hop == this.p.significant_hop {
             let time = MsecDuration::new_saturating(&delay);
@@ -568,7 +579,10 @@ impl super::TimeoutEstimator for ParetoTimeoutEstimator {
         // XXXXX This only counts if we have recent-enough
         // activity.  See circuit_build_times_network_check_live.
         if hop > 0 {
-            let mut this = self.est.lock().unwrap();
+            let mut this = self
+                .est
+                .lock()
+                .expect("Cannot obtain lock for ParetoTimeoutEstimator");
             this.history.add_success(false);
             if this.history.n_recent_timeouts() > this.p.reset_after_timeouts {
                 let base_timeouts = this.base_timeouts();
@@ -586,7 +600,10 @@ impl super::TimeoutEstimator for ParetoTimeoutEstimator {
     }
 
     fn timeouts(&self, action: &Action) -> (Duration, Duration) {
-        let mut this = self.est.lock().unwrap();
+        let mut this = self
+            .est
+            .lock()
+            .expect("Cannot obtain lock for ParetoTimeoutEstimator");
 
         let (base_t, base_a) = if this.p.use_estimates {
             this.base_timeouts()
@@ -611,7 +628,10 @@ impl super::TimeoutEstimator for ParetoTimeoutEstimator {
     }
 
     fn learning_timeouts(&self) -> bool {
-        let this = self.est.lock().unwrap();
+        let this = self
+            .est
+            .lock()
+            .expect("Cannot obtain lock for ParetoTimeoutEstimator");
         this.p.use_estimates && this.history.n_times() < this.p.min_observations.into()
     }
 }

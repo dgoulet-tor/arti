@@ -136,12 +136,14 @@ impl std::ops::Div<u32> for RelayWeight {
 
 impl RelayWeight {
     /// Return the largest weight that we give for this kind of relay.
+    // The unwrap() is safe because array is nonempty.
+    #[allow(clippy::unwrap_used)]
     fn max_weight(&self) -> u32 {
         [self.as_guard, self.as_middle, self.as_exit, self.as_dir]
             .iter()
             .max()
             .copied()
-            .unwrap() // unwrap is safe since the input is nonempty.
+            .unwrap()
     }
     /// Return the weight we should give this kind of relay's
     /// bandwidth for a given role.
@@ -310,6 +312,7 @@ impl WeightSet {
 
         // This is the largest weight value.
         // The unwrap() is safe because `w` is nonempty.
+        #[allow(clippy::unwrap_used)]
         let w_max = w.iter().map(RelayWeight::max_weight).max().unwrap();
 
         // We want "shift" such that (total * w_max) >> shift <= u64::max
@@ -377,6 +380,7 @@ fn log2_upper(n: u64) -> u32 {
 mod test {
     use super::*;
     use netstatus::RelayWeight as RW;
+    use std::net::SocketAddr;
     use std::time::{Duration, SystemTime};
     use tor_netdoc::doc::netstatus::{Lifetime, RelayFlags, RouterStatusBuilder};
 
@@ -554,7 +558,7 @@ mod test {
         MdConsensus::builder()
             .rs()
             .identity([9; 20].into())
-            .add_or_port("127.0.0.1:9001".parse().unwrap())
+            .add_or_port(SocketAddr::from(([127, 0, 0, 1], 9001)))
             .doc_digest([9; 32])
             .protos("".parse().unwrap())
             .clone()

@@ -102,7 +102,7 @@ impl MockSleepProvider {
     pub(crate) fn advance_noyield(&self, dur: Duration) {
         // It's not so great to unwrap here in general, but since this is
         // only testing code we don't really care.
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().expect("Failed to obtain lock for state");
         state.wallclock += dur;
         state.instant += dur;
         state.fire();
@@ -116,7 +116,7 @@ impl MockSleepProvider {
     /// Panics if we have already panicked while holding the lock on
     /// the internal timer state, and the lock is poisoned.
     pub fn jump_to(&self, new_wallclock: SystemTime) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().expect("Failed to obtain lock for state");
         state.wallclock = new_wallclock;
     }
 
@@ -126,7 +126,7 @@ impl MockSleepProvider {
     /// If there are no more timeouts, return None.  If the next
     /// timeout should elapse right now, return Some(0).
     pub(crate) fn time_until_next_timeout(&self) -> Option<Duration> {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock().expect("Failed to obtain lock for state");
         let now = state.instant;
         state
             .sleepers
@@ -160,7 +160,12 @@ impl SleepSchedule {
 impl SleepProvider for MockSleepProvider {
     type SleepFuture = Sleeping;
     fn sleep(&self, duration: Duration) -> Self::SleepFuture {
-        let when = self.state.lock().unwrap().instant + duration;
+        let when = self
+            .state
+            .lock()
+            .expect("Failed to obtain lock for state")
+            .instant
+            + duration;
 
         Sleeping {
             when,
@@ -170,11 +175,17 @@ impl SleepProvider for MockSleepProvider {
     }
 
     fn now(&self) -> Instant {
-        self.state.lock().unwrap().instant
+        self.state
+            .lock()
+            .expect("Failed to obtain lock for state")
+            .instant
     }
 
     fn wallclock(&self) -> SystemTime {
-        self.state.lock().unwrap().wallclock
+        self.state
+            .lock()
+            .expect("Failed to obtain lock for state")
+            .wallclock
     }
 }
 
@@ -199,7 +210,7 @@ impl Future for Sleeping {
     type Output = ();
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         if let Some(provider) = Weak::upgrade(&self.provider) {
-            let mut provider = provider.lock().unwrap();
+            let mut provider = provider.lock().expect("Failed to obtain lock for provider");
             let now = provider.instant;
 
             if now >= self.when {

@@ -128,6 +128,9 @@ impl FromStr for TorVersion {
         let status_part = parts.next();
         let dev_part = parts.next();
         if parts.next().is_some() {
+            // NOTE: If `dev_part` cannot be unwrapped then there are bigger
+            // problems with `s` input
+            #[allow(clippy::unwrap_used)]
             return Err(Error::BadTorVersion(Pos::at_end_of(dev_part.unwrap())));
         }
 

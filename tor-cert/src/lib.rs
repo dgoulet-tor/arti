@@ -76,6 +76,7 @@
 #![warn(clippy::trait_duplication_in_bounds)]
 #![deny(clippy::unnecessary_wraps)]
 #![warn(clippy::unseparated_literal_suffix)]
+#![deny(clippy::unwrap_used)]
 
 pub mod rsa;
 
@@ -579,7 +580,11 @@ impl tor_checkable::SelfSigned<SigCheckedCert> for UncheckedCert {
     type Error = Error;
 
     fn is_well_signed(&self) -> Result<()> {
-        let pubkey = &self.cert.signed_with.unwrap();
+        let pubkey = &self
+            .cert
+            .signed_with
+            .ok_or(Error::BadMessage("Cannot verify Ed25519Cert cert"))?;
+
         pubkey
             .verify(&self.text[..], &self.signature)
             .map_err(|_| Error::BadMessage("Invalid certificate signature"))?;

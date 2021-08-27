@@ -208,6 +208,9 @@ impl AuthCert {
         // tokens in the rules, so we know that at least one token will have
         // been parsed.
         let start_pos = {
+            // Unwrap should be safe because `.parse()` would have already
+            // returned an Error
+            #[allow(clippy::unwrap_used)]
             let first_item = body.first_item().unwrap();
             if first_item.kwd() != DIR_KEY_CERTIFICATE_VERSION {
                 return Err(Error::WrongStartingToken(
@@ -218,6 +221,9 @@ impl AuthCert {
             first_item.pos()
         };
         let end_pos = {
+            // Unwrap should be safe because `.parse()` would have already
+            // returned an Error
+            #[allow(clippy::unwrap_used)]
             let last_item = body.last_item().unwrap();
             if last_item.kwd() != DIR_KEY_CERTIFICATION {
                 return Err(Error::WrongEndingToken(
@@ -280,6 +286,9 @@ impl AuthCert {
         // check crosscert
         let v_crosscert = {
             let crosscert = body.required(DIR_KEY_CROSSCERT)?;
+            // Unwrap should be safe because `.parse()` and `required()` would
+            // have already returned an Error
+            #[allow(clippy::unwrap_used)]
             let mut tag = crosscert.obj_tag().unwrap();
             // we are required to support both.
             if tag != "ID SIGNATURE" && tag != "SIGNATURE" {
@@ -300,7 +309,11 @@ impl AuthCert {
 
             let mut sha1 = d::Sha1::new();
             let s = reader.str();
+            // Unwrap should be safe because `.parse()` would have already
+            // returned an Error
+            #[allow(clippy::unwrap_used)]
             let start_offset = body.first_item().unwrap().offset_in(s).unwrap();
+            #[allow(clippy::unwrap_used)]
             let end_offset = body.last_item().unwrap().offset_in(s).unwrap();
             let end_offset = end_offset + "dir-key-certification\n".len();
             sha1.update(&s[start_offset..end_offset]);

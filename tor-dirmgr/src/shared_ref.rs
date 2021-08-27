@@ -39,20 +39,20 @@ impl<T> SharedMutArc<T> {
 
     /// Replace the current value with `new_val`.
     pub fn replace(&self, new_val: T) {
-        let mut w = self.dir.write().unwrap();
+        let mut w = self.dir.write().expect("Cannot write to dir");
         *w = Some(Arc::new(new_val));
     }
 
     /// Remove the current value of this SharedMutArc.
     #[allow(unused)]
     pub fn clear(&self) {
-        let mut w = self.dir.write().unwrap();
+        let mut w = self.dir.write().expect("Cannot write to dir");
         *w = None;
     }
 
     /// Return a new reference to the current value, if there is one.
     pub fn get(&self) -> Option<Arc<T>> {
-        let r = self.dir.read().unwrap();
+        let r = self.dir.read().expect("Cannot read from dir");
         r.as_ref().map(Arc::clone)
     }
 
@@ -75,7 +75,7 @@ impl<T> SharedMutArc<T> {
         F: FnOnce(&mut T) -> Result<U>,
         T: Clone,
     {
-        match self.dir.write().unwrap().as_mut() {
+        match self.dir.write().expect("Cannot write to dir").as_mut() {
             None => Err(Error::DirectoryNotPresent.into()), // Kinda bogus.
             Some(arc) => func(Arc::make_mut(arc)),
         }

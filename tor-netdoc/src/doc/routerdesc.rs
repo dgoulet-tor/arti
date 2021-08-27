@@ -381,11 +381,17 @@ impl RouterDesc {
         let s = r.str();
         let (header, body, sig) = RouterDesc::parse_sections(r)?;
 
+        // Unwrap should be safe because inline `required` call should return
+        // `Error::MissingToken` if `ROUTER` is not `Ok`
+        #[allow(clippy::unwrap_used)]
         let start_offset = header.required(ROUTER)?.offset_in(s).unwrap();
 
         // ed25519 identity and signing key.
         let (identity_cert, ed25519_signing_key) = {
             let cert_tok = header.required(IDENTITY_ED25519)?;
+            // Unwrap should be safe because above `required` call should
+            // return `Error::MissingToken` if `IDENTITY_ED25519` is not `Ok`
+            #[allow(clippy::unwrap_used)]
             if cert_tok.offset_in(s).unwrap() < start_offset {
                 return Err(Error::MisplacedToken("identity-ed25519", cert_tok.pos()));
             }
@@ -425,7 +431,11 @@ impl RouterDesc {
 
         let ed_sig = sig.required(ROUTER_SIG_ED25519)?;
         let rsa_sig = sig.required(ROUTER_SIGNATURE)?;
+        // Unwrap should be safe because above `required` calls should return
+        // an `Error::MissingToken` if `ROUTER_...` is not `Ok`
+        #[allow(clippy::unwrap_used)]
         let ed_sig_pos = ed_sig.offset_in(s).unwrap();
+        #[allow(clippy::unwrap_used)]
         let rsa_sig_pos = rsa_sig.offset_in(s).unwrap();
 
         if ed_sig_pos > rsa_sig_pos {
@@ -467,6 +477,9 @@ impl RouterDesc {
         let (nickname, ipv4addr, orport, dirport) = {
             let rtrline = header.required(ROUTER)?;
             (
+                // Unwrap should be safe because above `required` should return
+                // an `Error::MissingToken` if `ROUTER` is not `Ok`
+                #[allow(clippy::unwrap_used)]
                 rtrline.arg(0).unwrap().to_string(),
                 Some(rtrline.parse_arg::<net::Ipv4Addr>(1)?),
                 rtrline.parse_arg(2)?,
@@ -592,6 +605,8 @@ impl RouterDesc {
                 .args_as_str()
                 .parse()
                 .map_err(|e| Error::BadPolicy(p.pos(), e))?,
+            // Unwrap is safe here because str is not empty
+            #[allow(clippy::unwrap_used)]
             None => "reject 1-65535".parse::<PortPolicy>().unwrap(),
         };
 
@@ -613,6 +628,8 @@ impl RouterDesc {
             identity_cert.expiry(),
             crosscert_cert.expiry(),
         ];
+        // Unwrap is safe here because `expirations` array is not empty
+        #[allow(clippy::unwrap_used)]
         let expiry = *expirations.iter().max().unwrap();
 
         let start_time = published - time::Duration::new(ROUTER_PRE_VALIDITY_SECONDS, 0);

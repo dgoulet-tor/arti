@@ -265,7 +265,10 @@ impl<P: WindowParams> RecvWindow<P> {
 
     /// Called when we've just sent a SENDME.
     pub(crate) fn put(&mut self) {
-        self.window = self.window.checked_add(P::increment()).unwrap();
+        self.window = self
+            .window
+            .checked_add(P::increment())
+            .expect("Overflow detected while attempting to increment window");
     }
 }
 

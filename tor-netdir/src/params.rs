@@ -90,33 +90,52 @@ pub struct NetParameters {
 impl Default for NetParameters {
     fn default() -> Self {
         NetParameters {
-            bw_weight_scale: BoundedInt32::checked_new(10000).unwrap(),
-            cbt_abandon_quantile: Percentage::new(BoundedInt32::checked_new(99).unwrap()),
+            bw_weight_scale: BoundedInt32::checked_new(10000)
+                .expect("Out-of-bounds result from BoundedInt32"),
+            cbt_abandon_quantile: Percentage::new(
+                BoundedInt32::checked_new(99).expect("Out-of-bounds result from BoundedInt32"),
+            ),
             cbt_initial_timeout: IntegerMilliseconds::new(
-                BoundedInt32::checked_new(60_000).unwrap(),
+                BoundedInt32::checked_new(60_000).expect("Out-of-bounds result from BoundedInt32"),
             ),
-            cbt_learning_disabled: BoundedInt32::checked_new(0).unwrap(),
-            cbt_max_timeouts: BoundedInt32::checked_new(18).unwrap(),
-            cbt_min_circs_for_estimate: BoundedInt32::checked_new(100).unwrap(),
-            cbt_min_timeout: IntegerMilliseconds::new(BoundedInt32::checked_new(10).unwrap()),
-            cbt_num_xm_modes: BoundedInt32::checked_new(10).unwrap(),
-            cbt_success_count: BoundedInt32::checked_new(20).unwrap(),
-            cbt_timeout_quantile: Percentage::new(BoundedInt32::checked_new(80).unwrap()),
-            cbt_testing_delay: IntegerSeconds::new(BoundedInt32::checked_new(10).unwrap()),
-            cbt_max_open_circuits_for_testing: BoundedInt32::checked_new(10).unwrap(),
-            circuit_window: BoundedInt32::checked_new(1000).unwrap(),
+            cbt_learning_disabled: BoundedInt32::checked_new(0)
+                .expect("Out-of-bounds result from BoundedInt32"),
+            cbt_max_timeouts: BoundedInt32::checked_new(18)
+                .expect("Out-of-bounds result from BoundedInt32"),
+            cbt_min_circs_for_estimate: BoundedInt32::checked_new(100)
+                .expect("Out-of-bounds result from BoundedInt32"),
+            cbt_min_timeout: IntegerMilliseconds::new(
+                BoundedInt32::checked_new(10).expect("Out-of-bounds result from BoundedInt32"),
+            ),
+            cbt_num_xm_modes: BoundedInt32::checked_new(10)
+                .expect("Out-of-bounds result from BoundedInt32"),
+            cbt_success_count: BoundedInt32::checked_new(20)
+                .expect("Out-of-bounds result from BoundedInt32"),
+            cbt_timeout_quantile: Percentage::new(
+                BoundedInt32::checked_new(80).expect("Out-of-bounds result from BoundedInt32"),
+            ),
+            cbt_testing_delay: IntegerSeconds::new(
+                BoundedInt32::checked_new(10).expect("Out-of-bounds result from BoundedInt32"),
+            ),
+            cbt_max_open_circuits_for_testing: BoundedInt32::checked_new(10)
+                .expect("Out-of-bounds result from BoundedInt32"),
+            circuit_window: BoundedInt32::checked_new(1000)
+                .expect("Out-of-bounds result from BoundedInt32"),
             circuit_priority_half_life: IntegerMilliseconds::new(
-                BoundedInt32::checked_new(30000).unwrap(),
+                BoundedInt32::checked_new(30000).expect("Out-of-bounds result from BoundedInt32"),
             ),
-            extend_by_ed25519_id: BoundedInt32::checked_new(0).unwrap(),
-            min_circuit_path_threshold: Percentage::new(BoundedInt32::checked_new(60).unwrap()),
+            extend_by_ed25519_id: BoundedInt32::checked_new(0)
+                .expect("Out-of-bounds result from BoundedInt32"),
+            min_circuit_path_threshold: Percentage::new(
+                BoundedInt32::checked_new(60).expect("Out-of-bounds result from BoundedInt32"),
+            ),
             sendme_accept_min_version: SendMeVersion::new(0),
             sendme_emit_min_version: SendMeVersion::new(0),
             unused_client_circ_timeout: IntegerSeconds::new(
-                BoundedInt32::checked_new(30 * 60).unwrap(),
+                BoundedInt32::checked_new(30 * 60).expect("Out-of-bounds result from BoundedInt32"),
             ),
             unused_client_circ_timeout_while_learning_cbt: IntegerSeconds::new(
-                BoundedInt32::checked_new(3 * 60).unwrap(),
+                BoundedInt32::checked_new(3 * 60).expect("Out-of-bounds result from BoundedInt32"),
             ),
         }
     }

@@ -92,7 +92,7 @@ pub fn convert_curve25519_to_ed25519_private(
     #[cfg(debug_assertions)]
     {
         let curve_pubkey1 = pk::curve25519::PublicKey::from(privkey);
-        let ed_pubkey1 = convert_curve25519_to_ed25519_public(&curve_pubkey1, signbit).unwrap();
+        let ed_pubkey1 = convert_curve25519_to_ed25519_public(&curve_pubkey1, signbit)?;
         assert_eq!(ed_pubkey1, pubkey);
     }
 

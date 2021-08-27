@@ -216,7 +216,7 @@ impl SocksHandshake {
         let addr = r.extract()?;
         let port = r.take_u16()?;
 
-        let auth = self.socks5_auth.take().unwrap();
+        let auth = self.socks5_auth.take().ok_or(Error::Syntax)?;
 
         let request = SocksRequest::new(version, cmd, addr, port, auth)?;
 

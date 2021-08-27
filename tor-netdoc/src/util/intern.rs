@@ -33,7 +33,9 @@ impl<T: Eq + Hash> InternCache<T> {
     /// Helper: initialize the cache if needed, then lock it.
     fn cache(&self) -> MutexGuard<'_, WeakHashSet<Weak<T>>> {
         let cache = self.cache.get_or_init(|| Mutex::new(WeakHashSet::new()));
-        cache.lock().unwrap()
+        cache
+            .lock()
+            .expect("Cannot obtain or initialize lock for cache")
     }
 
     /// Intern a given value into this cache.

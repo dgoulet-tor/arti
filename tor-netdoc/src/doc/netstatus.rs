@@ -793,6 +793,7 @@ impl CommonHeader {
         {
             // this unwrap is safe because if there is not at least one
             // token in the section, the section is unparsable.
+            #[allow(clippy::unwrap_used)]
             let first = sec.first_item().unwrap();
             if first.kwd() != NETWORK_STATUS_VERSION {
                 return Err(Error::UnexpectedToken(first.kwd().to_str(), first.pos()));
@@ -948,8 +949,12 @@ impl ConsensusVoterInfo {
     /// Parse a single ConsensusVoterInfo from a voter info section.
     fn from_section(sec: &Section<'_, NetstatusKwd>) -> Result<ConsensusVoterInfo> {
         use NetstatusKwd::*;
-        if sec.first_item().unwrap().kwd() != DIR_SOURCE {
-            return Err(Error::Internal(sec.first_item().unwrap().pos()));
+        // this unwrap should be safe because if there is not at least one
+        // token in the section, the section is unparseable.
+        #[allow(clippy::unwrap_used)]
+        let first = sec.first_item().unwrap();
+        if first.kwd() != DIR_SOURCE {
+            return Err(Error::Internal(first.pos()));
         }
         let dir_source = DirSource::from_item(sec.required(DIR_SOURCE)?)?;
 
@@ -1006,9 +1011,18 @@ impl RelayFlags {
                     ));
                 }
             }
-            let fl = s.parse().unwrap();
-            flags |= fl;
-            prev = Some(s);
+            match s.parse() {
+                Ok(fl) => {
+                    flags |= fl;
+                    prev = Some(s);
+                }
+                Err(_e) => {
+                    return Err(Error::BadArgument(
+                        item.pos(),
+                        "failed to parse flag".to_string(),
+                    ))
+                }
+            };
         }
 
         Ok(flags)
@@ -1256,8 +1270,11 @@ impl<RS: RouterStatus + ParseRouterStatus> Consensus<RS> {
         let (header, start_pos) = {
             let mut h = r.pause_at(|i| i.is_ok_with_kwd_in(&[DIR_SOURCE]));
             let header_sec = NS_HEADER_RULES_CONSENSUS.parse(&mut h)?;
-            let pos = header_sec.first_item().unwrap().offset_in(r.str());
-            (ConsensusHeader::from_section(&header_sec)?, pos.unwrap())
+            // Unwrapping should be safe because above `.parse` would have
+            // returned an Error
+            #[allow(clippy::unwrap_used)]
+            let pos = header_sec.first_item().unwrap().offset_in(r.str()).unwrap();
+            (ConsensusHeader::from_section(&header_sec)?, pos)
         };
         if RS::flavor() != header.hdr.flavor {
             return Err(Error::BadDocumentType);
@@ -1304,11 +1321,12 @@ impl<RS: RouterStatus + ParseRouterStatus> Consensus<RS> {
             signatures.push(sig);
         }
 
-        if first_sig.is_none() {
-            return Err(Error::MissingToken("directory-signature"));
-        }
-
-        let end_pos = first_sig.unwrap().offset_in(r.str()).unwrap() + "directory-signature ".len();
+        let end_pos = match first_sig {
+            None => return Err(Error::MissingToken("directory-signature")),
+            // Unwrap should be safe because `first_sig` was parsed from `r`
+            #[allow(clippy::unwrap_used)]
+            Some(sig) => sig.offset_in(r.str()).unwrap() + "directory-signature ".len(),
+        };
 
         // Find the appropriate digest.
         let signed_str = &r.str()[start_pos..end_pos];
@@ -1413,13 +1431,15 @@ impl<RS> ExternallySigned<Consensus<RS>> for UnvalidatedConsensus<RS> {
         }
     }
     fn is_well_signed(&self, k: &Self::Key) -> result::Result<(), Self::Error> {
-        if self.n_authorities.is_none() {
-            return Err(Error::Internal(Pos::None));
-        }
-        if self.siggroup.validate(self.n_authorities.unwrap(), k) {
-            Ok(())
-        } else {
-            Err(Error::BadSignature(Pos::None))
+        match self.n_authorities {
+            None => Err(Error::Internal(Pos::None)),
+            Some(authority) => {
+                if self.siggroup.validate(authority, k) {
+                    Ok(())
+                } else {
+                    Err(Error::BadSignature(Pos::None))
+                }
+            }
         }
     }
     fn dangerously_assume_wellsigned(self) -> Consensus<RS> {
@@ -1502,6 +1522,8 @@ impl SignatureGroup {
                 continue;
             }
 
+            // Unwrap should be safe because of above `d.is_none()` check
+            #[allow(clippy::unwrap_used)]
             match sig.check_signature(d.as_ref().unwrap(), certs) {
                 SigCheckResult::Valid => {
                     ok.insert(*id_fingerprint);
