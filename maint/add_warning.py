@@ -98,13 +98,13 @@ def process(lints, fn):
     shutil.move(bak_name, fn)
 
 def main(lints,files):
-    if not os.path.exists("./tor-proto/src/lib.rs"):
+    if not os.path.exists("./crates/tor-proto/src/lib.rs"):
         print("Run this from the top level of an arti repo.")
         sys.exit(1)
 
     if not files:
         print("No files provided.  Example usage:")
-        print("   ./maint/add_warnings.py ./maint/add_warning.py */src/{lib,main}.rs")
+        print("   ./maint/add_warning.py ./maint/add_warning.py crates/*/src/{lib,main}.rs")
 
     for fn in files:
         process(lints, fn)

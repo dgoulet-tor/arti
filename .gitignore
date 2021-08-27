@@ -1,8 +1,8 @@
 /coverage/
 /target/
-/*/target/
-/*/fuzz/target/
-/*/fuzz/Cargo.lock
+/crates/*/target/
+/crates/*/fuzz/target/
+/crates/*/fuzz/Cargo.lock
 /Cargo.lock
 *~
 .#*

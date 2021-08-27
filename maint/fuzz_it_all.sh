@@ -4,7 +4,7 @@ set -e
 
 trap 'kill $(jobs -p)' EXIT
 
-for d in ./*/fuzz; do
+for d in ./crates/*/fuzz; do
     pushd "$(dirname "$d")"
     for fuzzer in $(cargo +nightly fuzz list); do
 	echo "$fuzzer"
@@ -17,7 +17,7 @@ done
 #JOBS=4
 
 while true; do
-    for d in ./*/fuzz; do
+    for d in ./crates/*/fuzz; do
 	pushd "$(dirname "$d")"
 	for fuzzer in $(cargo +nightly fuzz list); do
 	    set +e
